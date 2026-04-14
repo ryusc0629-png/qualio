@@ -33,6 +33,8 @@ export default function OnboardingPage() {
   const { execute, isPending } = useAction(createBusinessAction, {
     onSuccess: () => {
       toast.success('업체가 등록되었습니다!')
+      // refresh(): 서버 컴포넌트 캐시 초기화 후 이동
+      router.refresh()
       router.push('/dashboard')
     },
     onError: ({ error }) => {
