@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 // 인증이 필요한 경로 (미로그인 시 /login으로 리디렉션)
-const protectedRoutes = ['/dashboard']
+const protectedRoutes = ['/dashboard', '/onboarding']
 
 // 이미 로그인된 사용자가 접근하면 /dashboard로 리디렉션할 경로
 const authRoutes = ['/login', '/signup']
