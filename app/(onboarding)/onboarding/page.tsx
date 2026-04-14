@@ -14,7 +14,7 @@ import { createBusinessAction } from '@/lib/actions/onboarding'
 
 const onboardingSchema = z.object({
   name: z.string().min(2, '업체명은 2자 이상이어야 합니다'),
-  phone: z.string().optional(),
+  phone: z.string().min(1, '전화번호를 입력해주세요'),
 })
 
 type OnboardingInput = z.infer<typeof onboardingSchema>
@@ -66,18 +66,21 @@ export default function OnboardingPage() {
             )}
           </div>
 
-          {/* 전화번호 (선택) */}
+          {/* 전화번호 (필수) */}
           <div className="space-y-2">
-            <Label htmlFor="phone">
-              전화번호{' '}
-              <span className="text-muted-foreground text-xs">(선택)</span>
-            </Label>
+            <Label htmlFor="phone">전화번호 *</Label>
             <Input
               id="phone"
               type="tel"
-              placeholder="010-0000-0000"
+              placeholder="010-1234-5678 또는 01012345678"
               {...register('phone')}
             />
+            {errors.phone && (
+              <p className="text-sm text-destructive">{errors.phone.message}</p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              하이픈(-) 있어도 없어도 됩니다
+            </p>
           </div>
 
           {/* 등록 버튼 */}

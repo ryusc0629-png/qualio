@@ -58,10 +58,12 @@ export const signupAction = action
     })
 
     if (error) {
+      // 원인 파악용 실제 오류 메시지 노출 (진단 후 한국어로 교체 예정)
+      console.error('[signupAction] Supabase error:', error.message, error.code)
       if (error.message.includes('already registered')) {
         throw new Error('이미 가입된 이메일입니다')
       }
-      throw new Error('회원가입에 실패했습니다. 다시 시도해주세요')
+      throw new Error(`[Supabase] ${error.message}`)
     }
 
     return { redirectTo: '/onboarding' }
