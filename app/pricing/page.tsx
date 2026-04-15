@@ -37,13 +37,6 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* 베타 안내 배너 */}
-        <div className="bg-primary/5 border border-primary/20 rounded-lg px-6 py-4 mb-10 text-center">
-          <p className="text-sm font-medium">
-            현재 <span className="text-primary font-bold">무료 베타</span> 기간입니다. 지금 가입하면 베타 종료 시 30% 할인 혜택을 드립니다.
-          </p>
-        </div>
-
         {/* 플랜 카드 */}
         <div className="grid md:grid-cols-3 gap-6 mb-16">
           {PAID_PLANS.map((plan) => (
@@ -92,32 +85,11 @@ export default function PricingPage() {
                   className="w-full"
                   variant={plan.highlight ? 'default' : 'outline'}
                 >
-                  무료로 시작하기
+                  시작하기
                 </Button>
               </Link>
             </div>
           ))}
-        </div>
-
-        {/* 무료 베타 플랜 안내 */}
-        <div className="border rounded-lg p-6 mb-16 flex items-start gap-4">
-          <div className="flex-1">
-            <h3 className="font-semibold mb-1">무료 베타 플랜</h3>
-            <p className="text-sm text-muted-foreground mb-3">
-              퀄리오의 모든 기능을 무료로 체험해보세요. 베타 기간 동안은 결제 없이 이용 가능합니다.
-            </p>
-            <ul className="grid grid-cols-2 gap-1">
-              {PLANS.beta.features.map((f) => (
-                <li key={f} className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Check className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  {f}
-                </li>
-              ))}
-            </ul>
-          </div>
-          <Link href="/signup">
-            <Button variant="outline" size="sm">무료로 시작</Button>
-          </Link>
         </div>
 
         {/* FAQ */}

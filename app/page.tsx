@@ -45,9 +45,6 @@ export default async function RootPage() {
 
         {/* 히어로 */}
         <section className="max-w-6xl mx-auto px-6 py-24 text-center">
-          <div className="inline-block bg-primary/10 text-primary text-sm font-medium px-3 py-1 rounded-full mb-6">
-            현재 무료 베타 운영 중
-          </div>
           <h1 className="text-4xl md:text-5xl font-bold leading-tight mb-6">
             동네 청소업체도<br />
             <span className="text-primary">프리미엄처럼</span>
@@ -57,11 +54,11 @@ export default async function RootPage() {
             고객은 링크 하나로 견적을 받고, 사장님은 카카오 알림톡으로 바로 확인합니다.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Link href="/signup">
-              <Button size="lg" className="w-full sm:w-auto">무료로 시작하기</Button>
-            </Link>
             <Link href="/pricing">
-              <Button size="lg" variant="outline" className="w-full sm:w-auto">요금제 보기</Button>
+              <Button size="lg" className="w-full sm:w-auto">요금제 보기</Button>
+            </Link>
+            <Link href="/signup">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto">시작하기</Button>
             </Link>
           </div>
         </section>
@@ -150,13 +147,13 @@ export default async function RootPage() {
         {/* CTA 배너 */}
         <section className="bg-primary text-primary-foreground">
           <div className="max-w-4xl mx-auto px-6 py-16 text-center">
-            <h2 className="text-2xl font-bold mb-3">지금 바로 시작해보세요</h2>
+            <h2 className="text-2xl font-bold mb-3">지금 바로 시작하세요</h2>
             <p className="text-primary-foreground/80 mb-8">
-              베타 기간 동안 무료로 모든 기능을 사용할 수 있습니다.
+              업체 규모에 맞는 플랜을 선택하고 바로 운영을 시작하세요.
             </p>
-            <Link href="/signup">
+            <Link href="/pricing">
               <Button size="lg" variant="secondary">
-                무료로 시작하기
+                요금제 확인하기
               </Button>
             </Link>
           </div>

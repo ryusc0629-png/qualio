@@ -26,6 +26,15 @@ export default async function DashboardLayout({
 
   if (!profile?.business_id) redirect('/onboarding')
 
+  // 구독 플랜 확인 — 무료(beta) 플랜이면 결제 페이지로 이동
+  const { data: subscription } = await db
+    .from('subscriptions')
+    .select('plan')
+    .eq('business_id', profile.business_id)
+    .maybeSingle()
+
+  if (!subscription || subscription.plan === 'beta') redirect('/upgrade')
+
   const businessName =
     (profile.businesses as { name: string } | null)?.name ?? '내 업체'
 

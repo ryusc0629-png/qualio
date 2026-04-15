@@ -58,7 +58,7 @@ export function CurrentPlanCard({ planId, currentPeriodEnd, status }: CurrentPla
           )}
         </div>
 
-        <Link href="/dashboard/upgrade">
+        <Link href="/upgrade">
           <Button size="sm" variant={isBeta ? 'default' : 'outline'}>
             {isBeta ? '업그레이드' : '플랜 변경'}
           </Button>

@@ -30,8 +30,8 @@ export default function OnboardingPage() {
   const { execute, isPending } = useAction(createBusinessAction, {
     onSuccess: () => {
       toast.success('업체가 등록되었습니다!')
-      // 하드 내비게이션: 서버 컴포넌트 캐시를 완전히 우회
-      window.location.replace('/dashboard')
+      // 결제 페이지로 이동 (유료 플랜 선택 필수)
+      window.location.replace('/upgrade')
     },
     onError: ({ error }) => {
       toast.error(error.serverError ?? '업체 등록에 실패했습니다')
@@ -83,7 +83,7 @@ export default function OnboardingPage() {
 
           {/* 등록 버튼 */}
           <Button type="submit" className="w-full" disabled={isPending}>
-            {isPending ? '등록 중...' : '대시보드 시작하기'}
+            {isPending ? '등록 중...' : '다음 — 플랜 선택하기'}
           </Button>
         </form>
       </CardContent>

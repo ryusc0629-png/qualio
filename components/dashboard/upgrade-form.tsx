@@ -50,8 +50,8 @@ export function UpgradeForm({ businessId, currentPlan, businessName }: UpgradeFo
         },
         orderId,
         orderName: `퀄리오 ${plan.label} 플랜 1개월`,
-        successUrl: `${window.location.origin}/dashboard/upgrade/success`,
-        failUrl: `${window.location.origin}/dashboard/upgrade`,
+        successUrl: `${window.location.origin}/upgrade/success`,
+        failUrl: `${window.location.origin}/upgrade`,
         customerName: businessName,
       })
     } catch (e) {

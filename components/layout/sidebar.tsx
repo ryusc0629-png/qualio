@@ -37,7 +37,7 @@ export function Sidebar({ businessName }: SidebarProps) {
       {/* 업체명 */}
       <div className="p-5 border-b">
         <p className="font-bold text-lg truncate">{businessName}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">퀄리오 베타</p>
+        <p className="text-xs text-muted-foreground mt-0.5">퀄리오</p>
       </div>
 
       {/* 네비게이션 */}
