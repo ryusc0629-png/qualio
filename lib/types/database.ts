@@ -246,6 +246,45 @@ export type Database = {
           },
         ]
       }
+      quote_tier_services: {
+        Row: {
+          created_at: string
+          id: string
+          service_id: string
+          sort_order: number
+          tier_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          service_id: string
+          sort_order?: number
+          tier_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          service_id?: string
+          sort_order?: number
+          tier_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quote_tier_services_tier_id_fkey"
+            columns: ["tier_id"]
+            isOneToOne: false
+            referencedRelation: "quote_tiers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quote_tier_services_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "service_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       quotes: {
         Row: {
           best_price: number | null

@@ -39,6 +39,7 @@ interface TierResult {
   label: string
   price: number
   highlight: boolean
+  descriptions: string[]
 }
 
 interface ServiceItem {
@@ -143,28 +144,40 @@ export function QuoteForm({ businessId, services }: QuoteFormProps) {
         </div>
 
         {/* 가격 카드 3개 */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="flex flex-col gap-3">
           {tiers.map((tier) => (
             <button
               key={tier.tier}
               type="button"
               onClick={() => setSelectedTier(tier.tier)}
               className={[
-                'relative rounded-lg border-2 p-3 text-center transition-colors',
+                'relative rounded-lg border-2 p-4 text-left transition-colors',
                 selectedTier === tier.tier
                   ? 'border-primary bg-primary/5'
                   : 'border-border hover:border-primary/50',
               ].join(' ')}
             >
               {tier.highlight && (
-                <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-primary px-2 py-0.5 text-[10px] text-primary-foreground font-medium">
+                <span className="absolute -top-2.5 right-4 rounded-full bg-primary px-2.5 py-0.5 text-[10px] text-primary-foreground font-medium">
                   추천
                 </span>
               )}
-              <div className="text-xs text-muted-foreground mb-1">{tier.label}</div>
-              <div className="font-bold text-sm">
-                {tier.price.toLocaleString()}원
+              {/* 플랜명 + 가격 */}
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold">{tier.label}</span>
+                <span className="font-bold text-base">{tier.price.toLocaleString()}원</span>
               </div>
+              {/* AI 생성 설명 bullet */}
+              {tier.descriptions.length > 0 && (
+                <ul className="space-y-1 border-t border-border/50 pt-2">
+                  {tier.descriptions.map((desc, i) => (
+                    <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <span className="text-primary shrink-0 mt-0.5">✓</span>
+                      <span>{desc}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </button>
           ))}
         </div>

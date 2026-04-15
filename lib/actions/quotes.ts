@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { createSafeActionClient } from 'next-safe-action'
 import { createServiceClient } from '@/lib/supabase/server'
+import { generateTierDescriptions } from '@/lib/ai/tier-descriptions'
 
 // 공개 폼용 액션 클라이언트 (인증 불필요)
 const publicAction = createSafeActionClient({
@@ -64,25 +65,90 @@ export const calculateAndCreateQuoteAction = publicAction
         ? service.base_price * (parsedInput.space_size || 1)
         : service.base_price
 
-    // 업체의 quote_tiers 조회 (없으면 기본값 사용)
+    // 업체의 quote_tiers 조회
     const { data: dbTiers } = await db
       .from('quote_tiers')
-      .select('tier, label, price_multiplier, highlight')
+      .select('id, tier, label, price_multiplier, highlight')
       .eq('business_id', parsedInput.business_id)
       .order('sort_order')
 
     const tiers = dbTiers && dbTiers.length > 0 ? dbTiers : DEFAULT_TIERS
-
-    // 각 tier 가격 계산 (천 원 단위 반올림)
     const roundToThousand = (n: number) => Math.round(n / 1000) * 1000
+
+    // 번들 기반 가격 계산 (quote_tier_services 조회)
+    const tierIds = tiers
+      .filter((t): t is typeof t & { id: string } => 'id' in t && typeof t.id === 'string')
+      .map((t) => t.id)
+
+    const { data: tierServicesRows } = tierIds.length > 0
+      ? await db
+          .from('quote_tier_services')
+          .select('tier_id, service_id')
+          .in('tier_id', tierIds)
+      : { data: [] }
+
+    // tier_id → service_ids 맵
+    const bundleMap: Record<string, string[]> = {}
+    for (const row of tierServicesRows ?? []) {
+      if (!bundleMap[row.tier_id]) bundleMap[row.tier_id] = []
+      bundleMap[row.tier_id].push(row.service_id)
+    }
+
+    // 번들 포함 서비스들의 합산 가격 계산
+    const calcBundlePrice = async (tierId: string): Promise<number | null> => {
+      const svcIds = bundleMap[tierId]
+      if (!svcIds || svcIds.length === 0) return null
+
+      const { data: svcItems } = await db
+        .from('service_items')
+        .select('id, base_price, unit')
+        .in('id', svcIds)
+
+      if (!svcItems) return null
+
+      return roundToThousand(
+        svcItems.reduce((sum, s) => {
+          const price = s.unit === '평당'
+            ? s.base_price * (parsedInput.space_size || 1)
+            : s.base_price
+          return sum + price
+        }, 0)
+      )
+    }
 
     const goodTier   = tiers.find((t) => t.tier === 'good')
     const betterTier = tiers.find((t) => t.tier === 'better')
     const bestTier   = tiers.find((t) => t.tier === 'best')
 
-    const goodPrice   = roundToThousand(baseCalc * Number(goodTier?.price_multiplier   ?? 1.0))
-    const betterPrice = roundToThousand(baseCalc * Number(betterTier?.price_multiplier ?? 1.2))
-    const bestPrice   = roundToThousand(baseCalc * Number(bestTier?.price_multiplier   ?? 1.5))
+    const goodId   = 'id' in (goodTier   ?? {}) ? (goodTier   as { id: string }).id : null
+    const betterId = 'id' in (betterTier ?? {}) ? (betterTier as { id: string }).id : null
+    const bestId   = 'id' in (bestTier   ?? {}) ? (bestTier   as { id: string }).id : null
+
+    const [bundleGood, bundleBetter, bundleBest] = await Promise.all([
+      goodId   ? calcBundlePrice(goodId)   : Promise.resolve(null),
+      betterId ? calcBundlePrice(betterId) : Promise.resolve(null),
+      bestId   ? calcBundlePrice(bestId)   : Promise.resolve(null),
+    ])
+
+    // 번들 가격 없으면 multiplier 방식 fallback
+    const goodPrice   = bundleGood   ?? roundToThousand(baseCalc * Number(goodTier?.price_multiplier   ?? 1.0))
+    const betterPrice = bundleBetter ?? roundToThousand(baseCalc * Number(betterTier?.price_multiplier ?? 1.2))
+    const bestPrice   = bundleBest   ?? roundToThousand(baseCalc * Number(bestTier?.price_multiplier   ?? 1.5))
+
+    // AI 설명에 전달할 번들 서비스 목록
+    const getBundleServiceNames = async (tierId: string | null): Promise<string[]> => {
+      if (!tierId) return []
+      const svcIds = bundleMap[tierId]
+      if (!svcIds || svcIds.length === 0) return []
+      const { data } = await db.from('service_items').select('name').in('id', svcIds)
+      return data?.map((s) => s.name) ?? []
+    }
+
+    const [goodNames, betterNames, bestNames] = await Promise.all([
+      getBundleServiceNames(goodId),
+      getBundleServiceNames(betterId),
+      getBundleServiceNames(bestId),
+    ])
 
     // 견적 생성 (개인정보 없음 — customer_name/phone은 null)
     const { data: quote, error } = await db
@@ -103,6 +169,25 @@ export const calculateAndCreateQuoteAction = publicAction
 
     if (error) throw new Error('[APP] 견적 생성에 실패했습니다')
 
+    // AI 플랜 설명 생성 (실패해도 가격 카드는 정상 표시)
+    let descriptions: { good: string[]; better: string[]; best: string[] } = {
+      good: [], better: [], best: [],
+    }
+    try {
+      descriptions = await generateTierDescriptions({
+        serviceName: service.name,
+        spaceSize: parsedInput.space_size,
+        goodPrice,
+        betterPrice,
+        bestPrice,
+        goodServices: goodNames,
+        betterServices: betterNames,
+        bestServices: bestNames,
+      })
+    } catch {
+      console.error('[AI] tier descriptions 생성 실패')
+    }
+
     // 클라이언트에 반환 (가격 카드 렌더링용)
     return {
       quoteId: quote.id,
@@ -114,6 +199,7 @@ export const calculateAndCreateQuoteAction = publicAction
           t.tier === 'better' ? betterPrice :
           bestPrice,
         highlight: t.highlight,
+        descriptions: descriptions[t.tier as 'good' | 'better' | 'best'] ?? [],
       })),
     }
   })
