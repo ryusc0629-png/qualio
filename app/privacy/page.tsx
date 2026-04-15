@@ -115,7 +115,7 @@ export default function PrivacyPage() {
 
         <section className="border-t pt-6">
           <p className="text-sm text-muted-foreground">
-            문의: help@qualio.kr
+            상호: 다트챌린지 | 서비스명: 퀄리오 | 문의: help@qualio.kr
           </p>
         </section>
 
