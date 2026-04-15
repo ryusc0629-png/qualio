@@ -46,8 +46,6 @@ export function TierBundleEditor({ services, tiers, currentBundles }: Props) {
     return init
   })
 
-  const [aiReason, setAiReason] = useState<string | null>(null)
-
   // 저장 액션
   const { execute: save, isPending: isSaving } = useAction(saveTierBundleAction, {
     onSuccess: () => toast.success('플랜 설정이 저장되었습니다'),
@@ -80,7 +78,6 @@ export function TierBundleEditor({ services, tiers, currentBundles }: Props) {
       }
 
       setSelected(next)
-      setAiReason(data.reason ?? null)
       toast.success('AI 추천이 적용되었습니다. 검토 후 저장해주세요.')
     },
     onError: ({ error }) => toast.error(error.serverError ?? 'AI 추천에 실패했습니다'),
@@ -142,13 +139,6 @@ export function TierBundleEditor({ services, tiers, currentBundles }: Props) {
           {isSaving ? '저장 중...' : '저장'}
         </Button>
       </div>
-
-      {/* AI 추천 이유 */}
-      {aiReason && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-          <span className="font-medium">AI 추천 이유:</span> {aiReason}
-        </div>
-      )}
 
       {/* 3열 번들 편집기 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

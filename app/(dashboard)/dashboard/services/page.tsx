@@ -2,6 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AddServiceForm } from '@/components/dashboard/add-service-form'
 import { DeleteServiceButton } from '@/components/dashboard/delete-service-button'
+import { ShowInQuoteToggle } from '@/components/dashboard/show-in-quote-toggle'
 
 // 서비스 항목 관리 페이지
 export default async function ServicesPage() {
@@ -23,7 +24,7 @@ export default async function ServicesPage() {
   // 서비스 목록 조회 (삭제되지 않은 항목만)
   const { data: services } = await db
     .from('service_items')
-    .select('id, name, category, base_price, unit, is_active')
+    .select('id, name, category, base_price, unit, is_active, show_in_quote')
     .eq('business_id', profile.business_id)
     .is('deleted_at', null)
     .order('sort_order')
@@ -56,6 +57,7 @@ export default async function ServicesPage() {
                 <th className="text-left px-4 py-3 font-medium">카테고리</th>
                 <th className="text-right px-4 py-3 font-medium">기본가</th>
                 <th className="text-center px-4 py-3 font-medium">단위</th>
+                <th className="text-center px-4 py-3 font-medium">견적폼</th>
                 <th className="w-12 px-4 py-3" />
               </tr>
             </thead>
@@ -68,6 +70,9 @@ export default async function ServicesPage() {
                     {service.base_price.toLocaleString()}원
                   </td>
                   <td className="px-4 py-3 text-center text-muted-foreground">{service.unit}</td>
+                  <td className="px-4 py-3 text-center">
+                    <ShowInQuoteToggle id={service.id} showInQuote={service.show_in_quote} />
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <DeleteServiceButton id={service.id} />
                   </td>

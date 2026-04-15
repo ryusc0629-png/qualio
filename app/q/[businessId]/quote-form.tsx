@@ -248,7 +248,7 @@ export function QuoteForm({ businessId, services }: QuoteFormProps) {
             <option value="" disabled>서비스를 선택해주세요</option>
             {services.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} — {s.base_price.toLocaleString()}원/{s.unit}부터
+                {s.name}
               </option>
             ))}
           </select>

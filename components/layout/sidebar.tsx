@@ -5,7 +5,7 @@ import { useTransition } from 'react'
 import { logoutAction } from '@/lib/actions/auth'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { LayoutDashboard, LogOut, Wrench, FileText, Calendar, Settings2 } from 'lucide-react'
+import { LayoutDashboard, LogOut, Wrench, FileText, Calendar } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -27,7 +27,6 @@ export function Sidebar({ businessName }: SidebarProps) {
   const navItems = [
     { href: '/dashboard', label: '대시보드', icon: LayoutDashboard },
     { href: '/dashboard/services', label: '서비스', icon: Wrench },
-    { href: '/dashboard/tiers', label: '견적 플랜', icon: Settings2 },
     { href: '/dashboard/quotes', label: '견적', icon: FileText },
     { href: '/dashboard/bookings', label: '예약', icon: Calendar },
   ]

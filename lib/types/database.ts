@@ -440,6 +440,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          show_in_quote: boolean
           sort_order: number
           unit: string
           updated_at: string
@@ -453,6 +454,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          show_in_quote?: boolean
           sort_order?: number
           unit?: string
           updated_at?: string
@@ -466,6 +468,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          show_in_quote?: boolean
           sort_order?: number
           unit?: string
           updated_at?: string

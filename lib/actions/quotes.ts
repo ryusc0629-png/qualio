@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { createSafeActionClient } from 'next-safe-action'
 import { createServiceClient } from '@/lib/supabase/server'
 import { generateTierDescriptions } from '@/lib/ai/tier-descriptions'
+import { recommendBundles } from '@/lib/ai/bundle-recommendation'
 
 // 공개 폼용 액션 클라이언트 (인증 불필요)
 const publicAction = createSafeActionClient({
@@ -75,17 +76,71 @@ export const calculateAndCreateQuoteAction = publicAction
     const tiers = dbTiers && dbTiers.length > 0 ? dbTiers : DEFAULT_TIERS
     const roundToThousand = (n: number) => Math.round(n / 1000) * 1000
 
+    // 업체의 전체 활성 서비스 목록 (AI 번들 추천용)
+    const { data: allServices } = await db
+      .from('service_items')
+      .select('id, name, base_price, unit, category')
+      .eq('business_id', parsedInput.business_id)
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('sort_order')
+
     // 번들 기반 가격 계산 (quote_tier_services 조회)
     const tierIds = tiers
       .filter((t): t is typeof t & { id: string } => 'id' in t && typeof t.id === 'string')
       .map((t) => t.id)
 
-    const { data: tierServicesRows } = tierIds.length > 0
+    let { data: tierServicesRows } = tierIds.length > 0
       ? await db
           .from('quote_tier_services')
           .select('tier_id, service_id')
           .in('tier_id', tierIds)
       : { data: [] }
+
+    // 번들 미설정 시 AI가 자동으로 생성하고 DB에 저장 (캐시)
+    const hasNoBundle = !tierServicesRows || tierServicesRows.length === 0
+    if (hasNoBundle && allServices && allServices.length >= 2) {
+      try {
+        console.log('[AI] 번들 미설정 — AI 자동 번들 생성 시작')
+        const recommendation = await recommendBundles(allServices)
+
+        // service_name → service_id 변환용 맵
+        const serviceIdMap: Record<string, string> = {}
+        for (const s of allServices) serviceIdMap[s.id] = s.id
+
+        // 각 tier에 AI 추천 서비스 저장
+        const tierKeyMap: Record<string, string> = {}
+        for (const t of tiers) {
+          if ('id' in t) tierKeyMap[t.tier] = (t as { id: string }).id
+        }
+
+        const newRows: { tier_id: string; service_id: string; sort_order: number }[] = []
+        const bundlePlan: Record<string, string[]> = {
+          good: recommendation.good,
+          better: recommendation.better,
+          best: recommendation.best,
+        }
+
+        for (const [tierKey, svcIds] of Object.entries(bundlePlan)) {
+          const tierId = tierKeyMap[tierKey]
+          if (!tierId) continue
+          svcIds.forEach((svcId, idx) => {
+            // AI가 반환한 ID가 실제 서비스인지 검증
+            if (allServices.some((s) => s.id === svcId)) {
+              newRows.push({ tier_id: tierId, service_id: svcId, sort_order: idx })
+            }
+          })
+        }
+
+        if (newRows.length > 0) {
+          await db.from('quote_tier_services').insert(newRows)
+          tierServicesRows = newRows.map((r) => ({ tier_id: r.tier_id, service_id: r.service_id }))
+          console.log('[AI] 번들 자동 생성 완료:', newRows.length, '개 연결')
+        }
+      } catch (e) {
+        console.error('[AI] 번들 자동 생성 실패 — multiplier fallback 사용', e)
+      }
+    }
 
     // tier_id → service_ids 맵
     const bundleMap: Record<string, string[]> = {}

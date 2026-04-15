@@ -12,6 +12,16 @@ import { Label } from '@/components/ui/label'
 import { createServiceItemAction } from '@/lib/actions/services'
 import { Plus, X } from 'lucide-react'
 
+// 표준 카테고리 목록 (데이터 일관성을 위해 고정값 사용)
+const CATEGORIES = [
+  '주거 공간',   // 이사/입주/거주 청소
+  '가전 케어',   // 에어컨, 세탁기, 냉장고 등
+  '특수/시공',   // 줄눈, 나노코팅, 방역 등
+  '상업 공간',   // 카페, 식당, 매장
+  '사무실',      // 오피스 청소
+  '기타',
+] as const
+
 // 단위 옵션 (한스클린 등 업계 표준 기준)
 const UNITS = [
   { value: '정액', label: '정액 (1회 고정가)' },
@@ -120,7 +130,16 @@ export function AddServiceForm() {
           {/* 카테고리 */}
           <div className="space-y-1">
             <Label htmlFor="category">카테고리</Label>
-            <Input id="category" placeholder="예) 주거 공간" {...register('category')} />
+            <select
+              id="category"
+              {...register('category')}
+              className="w-full h-9 rounded-md border bg-background px-3 text-sm"
+            >
+              <option value="">선택 안 함</option>
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </div>
 
           {/* 단위 */}

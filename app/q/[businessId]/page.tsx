@@ -21,12 +21,13 @@ export default async function PublicQuotePage({ params }: Props) {
 
   if (!business) notFound()
 
-  // 활성화된 서비스 목록 조회 (id 포함 — 가격 계산에 사용)
+  // 견적폼 노출 서비스 목록 조회 (show_in_quote=true인 것만)
   const { data: services } = await db
     .from('service_items')
     .select('id, name, base_price, unit')
     .eq('business_id', businessId)
     .eq('is_active', true)
+    .eq('show_in_quote', true)
     .is('deleted_at', null)
     .order('sort_order')
     .order('created_at')
