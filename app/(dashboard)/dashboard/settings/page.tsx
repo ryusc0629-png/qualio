@@ -2,6 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { SettingsForm } from './settings-form'
 import { CurrentPlanCard } from '@/components/dashboard/current-plan-card'
+import { CancelSubscriptionButton } from '@/components/dashboard/cancel-subscription-button'
 import type { PlanId } from '@/lib/config/plans'
 
 export default async function SettingsPage() {
@@ -52,6 +53,13 @@ export default async function SettingsPage() {
         status={subscription.status ?? 'active'}
         currentPeriodEnd={subscription.current_period_end ?? null}
       />
+
+      {/* 구독 취소 — 유료 플랜 + 활성 상태일 때만 노출 */}
+      {subscription.plan !== 'beta' && subscription.status === 'active' && (
+        <div className="flex justify-end">
+          <CancelSubscriptionButton />
+        </div>
+      )}
 
       {/* 업체 정보 */}
       <SettingsForm business={businessResult.data} />

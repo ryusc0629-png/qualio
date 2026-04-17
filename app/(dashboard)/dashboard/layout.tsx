@@ -31,14 +31,23 @@ export default async function DashboardLayout({
   const isAdmin = adminEmails.includes(user.email ?? '')
 
   if (!isAdmin) {
-    // 구독 플랜 확인 — 무료(beta) 플랜이면 결제 페이지로 이동
+    // 구독 플랜 확인 — 베타 또는 만료된 취소 구독이면 결제 페이지로 이동
     const { data: subscription } = await db
       .from('subscriptions')
-      .select('plan')
+      .select('plan, status, current_period_end')
       .eq('business_id', profile.business_id)
       .maybeSingle()
 
     if (!subscription || subscription.plan === 'beta') redirect('/upgrade')
+
+    // 취소된 구독 + 결제 기간 만료 시 접근 차단
+    if (
+      subscription.status === 'cancelled' &&
+      subscription.current_period_end &&
+      new Date(subscription.current_period_end) < new Date()
+    ) {
+      redirect('/upgrade')
+    }
   }
 
   const businessName =

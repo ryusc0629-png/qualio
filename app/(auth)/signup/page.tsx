@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -21,6 +22,8 @@ const signupSchema = z.object({
 type SignupInput = z.infer<typeof signupSchema>
 
 export default function SignupPage() {
+  const [emailSent, setEmailSent] = useState(false)
+
   const {
     register,
     handleSubmit,
@@ -31,6 +34,11 @@ export default function SignupPage() {
 
   const { execute, isPending } = useAction(signupAction, {
     onSuccess: ({ data }) => {
+      // 이메일 인증 필요 (Supabase Email Confirm 활성화 상태)
+      if (data?.emailConfirmation) {
+        setEmailSent(true)
+        return
+      }
       if (data?.redirectTo) window.location.replace(data.redirectTo)
     },
     onError: ({ error }) => {
@@ -39,6 +47,30 @@ export default function SignupPage() {
   })
 
   const onSubmit = (data: SignupInput) => execute(data)
+
+  // 이메일 인증 안내 화면
+  if (emailSent) {
+    return (
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl">이메일을 확인해주세요</CardTitle>
+          <CardDescription>가입 확인 이메일을 발송했습니다</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-center">
+          <p className="text-sm text-muted-foreground">
+            이메일 받은편지함을 확인하고<br />
+            링크를 클릭하면 자동으로 로그인됩니다.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            이메일이 오지 않으면 스팸함을 확인해주세요.
+          </p>
+          <Link href="/login" className="block text-sm text-primary font-medium hover:underline">
+            로그인 페이지로 이동
+          </Link>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card className="w-full max-w-md">

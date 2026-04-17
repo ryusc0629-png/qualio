@@ -44,13 +44,14 @@ export const loginAction = action
     }
   })
 
-// 회원가입 액션 — 성공 시 온보딩으로 이동
+// 회원가입 액션 — 이메일 인증 활성화 여부에 따라 분기
+// session이 있으면 바로 온보딩으로, 없으면 이메일 확인 안내
 export const signupAction = action
   .schema(signupSchema)
   .action(async ({ parsedInput }) => {
     const supabase = await createClient()
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: parsedInput.email,
       password: parsedInput.password,
       options: {
@@ -64,6 +65,11 @@ export const signupAction = action
         throw new Error('[APP] 이미 가입된 이메일입니다')
       }
       throw new Error('[APP] 회원가입에 실패했습니다. 잠시 후 다시 시도해주세요.')
+    }
+
+    // 세션이 없으면 이메일 인증이 필요한 상태 (Supabase Email Confirm 활성화)
+    if (!data.session) {
+      return { emailConfirmation: true }
     }
 
     return { redirectTo: '/onboarding' }
