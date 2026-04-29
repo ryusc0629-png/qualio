@@ -45,6 +45,7 @@ export type Database = {
           cancel_reason: string | null
           cancelled_at: string | null
           created_at: string
+          customer_id: string | null
           customer_name: string
           customer_phone: string
           deleted_at: string | null
@@ -64,6 +65,7 @@ export type Database = {
           cancel_reason?: string | null
           cancelled_at?: string | null
           created_at?: string
+          customer_id?: string | null
           customer_name: string
           customer_phone: string
           deleted_at?: string | null
@@ -83,6 +85,7 @@ export type Database = {
           cancel_reason?: string | null
           cancelled_at?: string | null
           created_at?: string
+          customer_id?: string | null
           customer_name?: string
           customer_phone?: string
           deleted_at?: string | null
@@ -106,10 +109,134 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bookings_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "bookings_quote_id_fkey"
             columns: ["quote_id"]
             isOneToOne: false
             referencedRelation: "quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contracts: {
+        Row: {
+          id: string
+          business_id: string
+          customer_id: string
+          service_type: string
+          frequency: string
+          contract_price: number
+          start_date: string
+          end_date: string | null
+          status: string
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          customer_id: string
+          service_type: string
+          frequency: string
+          contract_price: number
+          start_date: string
+          end_date?: string | null
+          status?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          customer_id?: string
+          service_type?: string
+          frequency?: string
+          contract_price?: number
+          start_date?: string
+          end_date?: string | null
+          status?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contracts_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contracts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customers: {
+        Row: {
+          id: string
+          business_id: string
+          name: string
+          phone: string
+          address: string | null
+          category: string | null
+          type: string
+          lead_id: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          name: string
+          phone: string
+          address?: string | null
+          category?: string | null
+          type?: string
+          lead_id?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          name?: string
+          phone?: string
+          address?: string | null
+          category?: string | null
+          type?: string
+          lead_id?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customers_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
         ]

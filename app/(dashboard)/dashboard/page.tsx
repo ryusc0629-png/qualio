@@ -37,12 +37,13 @@ export default async function DashboardPage() {
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
   const monthLabel = `${now.getMonth() + 1}월`
 
-  // 4개 쿼리 병렬 실행
+  // 5개 쿼리 병렬 실행
   const [
     { data: monthBookings },
     { count: pendingQuoteCount },
     { count: totalCompletedCount },
     { data: recentBookings },
+    { data: activeContracts },
   ] = await Promise.all([
     // 이번 달 예약 (취소/노쇼 제외)
     db.from('bookings')
@@ -72,13 +73,18 @@ export default async function DashboardPage() {
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(5),
+
+    // 활성 정기계약 (확정 정기 매출 계산)
+    db.from('contracts')
+      .select('contract_price')
+      .eq('business_id', businessId)
+      .eq('status', 'active'),
   ])
 
   // 통계 계산
   const monthBookingCount = monthBookings?.length ?? 0
-  const monthRevenue = monthBookings
-    ?.filter((b) => b.status === 'completed')
-    .reduce((sum, b) => sum + (b.final_price ?? 0), 0) ?? 0
+  const recurringRevenue = (activeContracts ?? [])
+    .reduce((sum, c) => sum + (c.contract_price ?? 0), 0)
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   const quoteUrl = `${baseUrl}/q/${businessId}`
@@ -92,12 +98,13 @@ export default async function DashboardPage() {
       bg: 'bg-blue-50',
     },
     {
-      label: `${monthLabel} 매출`,
-      value: monthRevenue > 0 ? `${monthRevenue.toLocaleString('ko-KR')}원` : '—',
-      sub: '완료된 예약 기준',
+      label: '확정 정기 매출',
+      value: recurringRevenue > 0 ? `${recurringRevenue.toLocaleString('ko-KR')}원` : '—',
+      sub: '활성 계약 월 합계',
       icon: TrendingUp,
       color: 'text-green-600',
       bg: 'bg-green-50',
+      href: '/dashboard/contracts',
     },
     {
       label: '미처리 견적',
