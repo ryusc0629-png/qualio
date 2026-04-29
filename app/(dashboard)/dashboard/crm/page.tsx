@@ -2,8 +2,8 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AddLeadForm } from '@/components/dashboard/add-lead-form'
 import { LeadStatusSelect } from '@/components/dashboard/lead-status-select'
+import { RegisterFromLeadButton } from '@/components/dashboard/register-from-lead-button'
 
-// 상태 정의
 const STATUS_META: Record<string, { label: string; className: string }> = {
   new:        { label: '신규',    className: 'bg-gray-100 text-gray-700' },
   contacted:  { label: '1차방문', className: 'bg-blue-100 text-blue-700' },
@@ -12,9 +12,6 @@ const STATUS_META: Record<string, { label: string; className: string }> = {
   contracted: { label: '계약완료', className: 'bg-green-100 text-green-700' },
   rejected:   { label: '거절',    className: 'bg-red-100 text-red-600' },
 }
-
-// 상태 요약 카드에 표시할 항목
-const SUMMARY_STATUSES = ['new', 'contacted', 'follow_up', 'contracted']
 
 export default async function CrmPage() {
   const authClient = await createClient()
@@ -30,11 +27,23 @@ export default async function CrmPage() {
 
   if (!profile?.business_id) redirect('/onboarding')
 
-  const { data: leads } = await db
-    .from('leads')
-    .select('id, company_name, contact_name, phone, address, category, status, next_follow_up_date, notes, created_at')
-    .eq('business_id', profile.business_id)
-    .order('created_at', { ascending: false })
+  const [
+    { data: leads },
+    { data: registeredLeads },
+  ] = await Promise.all([
+    db.from('leads')
+      .select('id, company_name, contact_name, phone, address, category, status, next_follow_up_date, notes, created_at')
+      .eq('business_id', profile.business_id)
+      .order('created_at', { ascending: false }),
+
+    // 이미 고객으로 등록된 lead_id 목록
+    db.from('customers')
+      .select('lead_id')
+      .eq('business_id', profile.business_id)
+      .not('lead_id', 'is', null),
+  ])
+
+  const registeredLeadIds = new Set((registeredLeads ?? []).map((c) => c.lead_id))
 
   const today = new Date().toISOString().slice(0, 10)
 
@@ -76,6 +85,13 @@ export default async function CrmPage() {
         ))}
       </div>
 
+      {/* 안내 배너: 계약완료 → 고객 등록 유도 */}
+      {(counts['contracted'] ?? 0) > 0 && (
+        <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
+          💡 <strong>계약완료</strong> 업체는 오른쪽 <strong>"고객 등록"</strong> 버튼을 눌러 고객으로 전환하세요. 정기계약 금액도 함께 입력하면 매출이 자동 집계됩니다.
+        </div>
+      )}
+
       {/* 리드 목록 */}
       {!leads || leads.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center">
@@ -96,6 +112,7 @@ export default async function CrmPage() {
                 <th className="text-left px-4 py-3 font-medium">다음 방문일</th>
                 <th className="text-center px-4 py-3 font-medium">상태</th>
                 <th className="text-left px-4 py-3 font-medium">메모</th>
+                <th className="text-center px-4 py-3 font-medium"></th>
               </tr>
             </thead>
             <tbody>
@@ -106,8 +123,11 @@ export default async function CrmPage() {
                   lead.status !== 'contracted' &&
                   lead.status !== 'rejected'
 
+                const isContracted = lead.status === 'contracted'
+                const alreadyRegistered = registeredLeadIds.has(lead.id)
+
                 return (
-                  <tr key={lead.id} className="border-b last:border-0 hover:bg-muted/30">
+                  <tr key={lead.id} className={`border-b last:border-0 hover:bg-muted/30 ${isContracted ? 'bg-green-50/30' : ''}`}>
                     <td className="px-4 py-3 font-medium">{lead.company_name}</td>
                     <td className="px-4 py-3 text-muted-foreground">{lead.category ?? '—'}</td>
                     <td className="px-4 py-3 text-muted-foreground">{lead.contact_name ?? '—'}</td>
@@ -121,8 +141,22 @@ export default async function CrmPage() {
                     <td className="px-4 py-3 text-center">
                       <LeadStatusSelect leadId={lead.id} currentStatus={lead.status} />
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground max-w-[180px] truncate">
+                    <td className="px-4 py-3 text-muted-foreground max-w-[160px] truncate">
                       {lead.notes ?? '—'}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {isContracted && (
+                        <RegisterFromLeadButton
+                          lead={{
+                            id: lead.id,
+                            company_name: lead.company_name,
+                            phone: lead.phone,
+                            address: lead.address,
+                            category: lead.category,
+                          }}
+                          alreadyRegistered={alreadyRegistered}
+                        />
+                      )}
                     </td>
                   </tr>
                 )
