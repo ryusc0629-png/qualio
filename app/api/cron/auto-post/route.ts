@@ -4,30 +4,93 @@ import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-cont
 import { getAutoPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
-// Vercel Cron: 매일 00:00 UTC (한국 오전 9시) + 12:00 UTC (한국 오후 9시) 실행
-// → 하루 2회 실행으로 월 60건(스케일) 지원
+// Vercel Cron: 매일 00:00 UTC (한국 오전 9시) 실행
+// 1회 실행 시 오늘 발행해야 할 건수만큼 반복 발행 (스케일 플랜 하루 2건 지원)
 // vercel.json에 등록된 cron만 호출 가능 — CRON_SECRET으로 인증
 
 function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate()
 }
 
-// 오늘 발행해야 하는지 판단 — 목표 건수를 한 달에 균등 분포
-function shouldPostToday(
+// 오늘 발행해야 할 건수 계산 — 목표를 월 전체에 균등 분포
+function postsToPublishToday(
   postsThisMonth: number,
   target: number,
   dayOfMonth: number,
   daysInMonth: number,
-): boolean {
-  if (postsThisMonth >= target) return false
-  // 이번 달 진행률이 발행 진행률보다 앞서 있으면 오늘 발행
-  const monthProgress = dayOfMonth / daysInMonth
-  const postProgress = postsThisMonth / target
-  return monthProgress >= postProgress
+): number {
+  if (postsThisMonth >= target) return 0
+  // 오늘까지 발행됐어야 할 누적 건수
+  const expectedSoFar = Math.floor(target * dayOfMonth / daysInMonth)
+  return Math.max(0, expectedSoFar - postsThisMonth)
+}
+
+// 포스트 1건 생성 및 저장
+async function publishOnePost(
+  db: ReturnType<typeof createServiceClient>,
+  business: { id: string; name: string; address: string | null; description: string | null },
+  services: { name: string; base_price: number; unit: string }[],
+  publishedTitles: string[],
+  month: number,
+): Promise<string> {
+  // AI로 주제 추천
+  let selectedTopic: string | undefined
+  try {
+    const suggestions = await generateTopicSuggestions({
+      businessName: business.name,
+      services,
+      currentMonth: month,
+    })
+    const unused = suggestions.find(
+      (s) => !publishedTitles.some((t) => t.includes(s.title.slice(0, 10)))
+    )
+    selectedTopic = unused?.topic ?? suggestions[0]?.topic
+  } catch {
+    // 주제 추천 실패 시 AI 자유 선택
+  }
+
+  const postContent = await generatePostContent({
+    businessName: business.name,
+    address: business.address,
+    description: business.description,
+    services,
+    topic: selectedTopic,
+  })
+
+  // slug 중복 방지
+  const baseSlug = postContent.slug
+  let slug = baseSlug
+  const { data: existing } = await db
+    .from('biz_posts')
+    .select('slug')
+    .eq('business_id', business.id)
+    .eq('slug', slug)
+    .maybeSingle()
+  if (existing) slug = `${baseSlug}-${Date.now().toString(36)}`
+
+  const metaBlock = (postContent.keyPoints?.length || postContent.faqs?.length)
+    ? `\`\`\`json\n${JSON.stringify({ keyPoints: postContent.keyPoints ?? [], faqs: postContent.faqs ?? [] })}\n\`\`\`\n`
+    : ''
+
+  const { error } = await db.from('biz_posts').insert({
+    business_id: business.id,
+    slug,
+    title: postContent.title,
+    content: metaBlock + postContent.content,
+    summary: postContent.summary,
+    ai_generated: true,
+    published: true,
+  })
+
+  if (error) throw new Error(error.message)
+
+  // 다음 반복에서 중복 방지
+  publishedTitles.push(postContent.title)
+
+  return postContent.title
 }
 
 export async function GET(request: NextRequest) {
-  // Vercel Cron 인증 확인
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -36,11 +99,10 @@ export async function GET(request: NextRequest) {
   const db = createServiceClient()
   const now = new Date()
   const year = now.getUTCFullYear()
-  const month = now.getUTCMonth() + 1   // 1~12
+  const month = now.getUTCMonth() + 1
   const dayOfMonth = now.getUTCDate()
   const daysInMonth = getDaysInMonth(year, month)
 
-  // 자동 발행이 켜진 업체 전체 조회
   const { data: businesses, error: bizError } = await db
     .from('businesses')
     .select('id, name, address, description, monthly_post_target')
@@ -55,11 +117,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ message: '자동 발행 업체 없음', processed: 0 })
   }
 
-  const results: { businessId: string; action: string; title?: string; error?: string }[] = []
+  const results: { businessId: string; action: string; titles?: string[]; count?: number; error?: string }[] = []
 
   for (const business of businesses) {
     try {
-      // 구독 플랜 조회 → 실제 한도 계산 (설정값이 플랜 한도 초과 방지)
       const { data: sub } = await db
         .from('subscriptions')
         .select('plan')
@@ -71,7 +132,6 @@ export async function GET(request: NextRequest) {
       const planLimit = getAutoPostLimit(planId)
       const effectiveTarget = Math.min(business.monthly_post_target, planLimit)
 
-      // 이번 달 발행 건수 확인
       const monthStart = new Date(year, month - 1, 1).toISOString()
       const { count } = await db
         .from('biz_posts')
@@ -81,91 +141,39 @@ export async function GET(request: NextRequest) {
         .gte('published_at', monthStart)
 
       const postsThisMonth = count ?? 0
+      const needed = postsToPublishToday(postsThisMonth, effectiveTarget, dayOfMonth, daysInMonth)
 
-      if (!shouldPostToday(postsThisMonth, effectiveTarget, dayOfMonth, daysInMonth)) {
+      if (needed === 0) {
         results.push({ businessId: business.id, action: 'skipped' })
         continue
       }
 
-      // 이번 달 이미 발행된 제목 조회 (중복 주제 방지)
+      // 이번 달 발행 제목 목록 (중복 방지용)
       const { data: publishedThisMonth } = await db
         .from('biz_posts')
         .select('title')
         .eq('business_id', business.id)
         .gte('published_at', monthStart)
-
       const publishedTitles = (publishedThisMonth ?? []).map((p) => p.title)
 
-      // 업체 서비스 조회
       const { data: services } = await db
         .from('service_items')
         .select('name, base_price, unit')
         .eq('business_id', business.id)
         .eq('is_active', true)
         .is('deleted_at', null)
+        .not('base_price', 'is', null)
+        .not('unit', 'is', null)
 
-      // AI로 주제 추천 — 이미 발행된 주제와 다른 것 선택
-      let selectedTopic: string | undefined
-      try {
-        const suggestions = await generateTopicSuggestions({
-          businessName: business.name,
-          services: services ?? [],
-          currentMonth: month,
-        })
-        // 발행된 제목과 겹치지 않는 첫 번째 주제 선택
-        const unused = suggestions.find(
-          (s) => !publishedTitles.some((t) => t.includes(s.title.slice(0, 10)))
-        )
-        selectedTopic = unused?.topic ?? suggestions[0]?.topic
-      } catch {
-        // 주제 추천 실패해도 AI가 자유 선택으로 진행
+      // 오늘 필요한 건수만큼 순차 발행
+      const publishedTitlesThisRun: string[] = []
+      for (let i = 0; i < needed; i++) {
+        const title = await publishOnePost(db, business, services ?? [], publishedTitles, month)
+        publishedTitlesThisRun.push(title)
+        console.log(`[Cron] 자동 발행 완료 (${i + 1}/${needed}): ${business.name} — "${title}"`)
       }
 
-      // 포스트 생성
-      const postContent = await generatePostContent({
-        businessName: business.name,
-        address: business.address,
-        description: business.description,
-        services: services ?? [],
-        topic: selectedTopic,
-      })
-
-      // slug 중복 방지
-      const baseSlug = postContent.slug
-      let slug = baseSlug
-      const { data: existing } = await db
-        .from('biz_posts')
-        .select('slug')
-        .eq('business_id', business.id)
-        .eq('slug', slug)
-        .maybeSingle()
-
-      if (existing) {
-        slug = `${baseSlug}-${Date.now().toString(36)}`
-      }
-
-      // keyPoints/faqs 메타 블록 앞에 붙이기
-      const metaBlock = (postContent.keyPoints?.length || postContent.faqs?.length)
-        ? `\`\`\`json\n${JSON.stringify({ keyPoints: postContent.keyPoints ?? [], faqs: postContent.faqs ?? [] })}\n\`\`\`\n`
-        : ''
-      const fullContent = metaBlock + postContent.content
-
-      const { error: insertError } = await db
-        .from('biz_posts')
-        .insert({
-          business_id: business.id,
-          slug,
-          title: postContent.title,
-          content: fullContent,
-          summary: postContent.summary,
-          ai_generated: true,
-          published: true,
-        })
-
-      if (insertError) throw new Error(insertError.message)
-
-      results.push({ businessId: business.id, action: 'posted', title: postContent.title })
-      console.log(`[Cron] 자동 발행 완료: ${business.name} — "${postContent.title}"`)
+      results.push({ businessId: business.id, action: 'posted', count: needed, titles: publishedTitlesThisRun })
 
     } catch (err) {
       const message = err instanceof Error ? err.message : '알 수 없는 오류'
@@ -174,9 +182,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({
-    date: now.toISOString(),
-    processed: businesses.length,
-    results,
-  })
+  return NextResponse.json({ date: now.toISOString(), processed: businesses.length, results })
 }

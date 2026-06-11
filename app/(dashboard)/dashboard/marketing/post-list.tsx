@@ -273,7 +273,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
         <div className="flex items-center gap-2 mb-4">
           <Zap className="h-4 w-4 text-primary" />
           <p className="font-semibold text-sm">자동 발행 현황</p>
-          <span className="text-xs text-muted-foreground ml-1">하루 2회 (오전 9시·오후 9시) 자동 발행 중</span>
+          <span className="text-xs text-muted-foreground ml-1">매일 오전 9시 자동 발행 중</span>
         </div>
         <div className="space-y-2">
           <div className="flex items-end justify-between">
