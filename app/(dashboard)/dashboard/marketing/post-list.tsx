@@ -158,7 +158,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
     onError: ({ error }) => {
       uploadingTopicRef.current = null
       setUploadingTopic(null)
-      toast.error(error.serverError ?? '포스트 생성에 실패했습니다')
+      toast.error(error.serverError ?? '포스트 생성에 실패했어요. 다시 눌러주세요')
     },
   })
 
@@ -218,11 +218,12 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
     })
   }
 
-  // 추천 주제 카드에서 바로 업로드
+  // 추천 주제 카드에서 바로 업로드 (topic 300자 초과 방지)
   const handleSuggestionUpload = (suggestion: TopicSuggestion) => {
-    uploadingTopicRef.current = suggestion.topic
-    setUploadingTopic(suggestion.topic)
-    generatePost({ topic: suggestion.topic })
+    const safeTopic = suggestion.topic.slice(0, 300)
+    uploadingTopicRef.current = safeTopic
+    setUploadingTopic(safeTopic)
+    generatePost({ topic: safeTopic })
   }
 
   const postUrl = (slug: string) =>

@@ -26,7 +26,7 @@ async function getBusinessId() {
 // AI 포스트 자동 생성 액션
 export const generatePostAction = action
   .schema(z.object({
-    topic: z.string().max(100).optional(),
+    topic: z.string().max(300).optional(),
     imageUrl: z.string().url().optional(),
   }))
   .action(async ({ parsedInput }) => {
