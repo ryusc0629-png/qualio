@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
+import { generatePostImage } from '@/lib/ai/image-gen'
 import { getAutoPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
@@ -72,12 +73,18 @@ async function publishOnePost(
     ? `\`\`\`json\n${JSON.stringify({ keyPoints: postContent.keyPoints ?? [], faqs: postContent.faqs ?? [] })}\n\`\`\`\n`
     : ''
 
+  // 포스트 주제에 맞는 이미지 자동 생성 (실패해도 포스팅 진행)
+  const imageUrl = postContent.imagePrompt
+    ? await generatePostImage(postContent.imagePrompt)
+    : null
+
   const { error } = await db.from('biz_posts').insert({
     business_id: business.id,
     slug,
     title: postContent.title,
     content: metaBlock + postContent.content,
     summary: postContent.summary,
+    image_url: imageUrl,
     ai_generated: true,
     published: true,
   })

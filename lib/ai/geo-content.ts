@@ -139,6 +139,7 @@ export interface PostContent {
   content: string       // 본문 (마크다운)
   faqs: FaqItem[]       // 포스트 전용 FAQ 3개
   slug: string          // URL용 slug
+  imagePrompt: string   // Flux 이미지 생성용 영문 프롬프트
 }
 
 interface PostInput {
@@ -204,6 +205,10 @@ faqs: 이 주제에서 독자가 실제로 궁금해할 질문 3개 + 명확한 
 
 slug: 제목을 영문 URL slug로 변환 (예: "air-conditioner-cleaning-guide")
 
+imagePrompt: 이 포스트 주제에 어울리는 AI 이미지 생성용 영문 프롬프트 (50자 이내)
+  예시: "professional air conditioner cleaning service, Korean apartment, bright clean room"
+  규칙: 영문만, 청소 현장 묘사, 사실적 사진 스타일
+
 === 반드시 아래 JSON 형식으로만 응답 ===
 {
   "title": "...",
@@ -215,7 +220,8 @@ slug: 제목을 영문 URL slug로 변환 (예: "air-conditioner-cleaning-guide"
     { "question": "...", "answer": "..." },
     { "question": "...", "answer": "..." }
   ],
-  "slug": "..."
+  "slug": "...",
+  "imagePrompt": "..."
 }`
 
   // 이미지가 있으면 URL로 직접 전달 (Claude vision)
