@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createBookingAction } from '@/lib/actions/quotes'
-import { Check, Plus } from 'lucide-react'
+import { Check, Plus, Lightbulb } from 'lucide-react'
 
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
 
@@ -37,27 +37,48 @@ interface QuoteBookingSectionProps {
   tiers: Tier[]
   defaultName?: string
   defaultPhone?: string
+  tierReasons?: {
+    better: string
+    best: string
+  }
 }
 
 const TIER_CONTENT: Record<string, {
   base: string[]
-  addons: string[]
+  addons: { name: string; detail: string }[]
 }> = {
   good: {
-    base: ['주방 전체 (싱크대·타일·레인지후드)', '욕실 전체 (줄눈·변기·세면대)', '전 실 바닥·창틀·문틀·벽면', '베란다·다용도실'],
+    base: [
+      '주방 전체 (싱크대·타일·레인지후드)',
+      '욕실 전체 (줄눈·변기·세면대)',
+      '전 실 바닥·창틀·문틀·벽면',
+      '베란다·다용도실',
+    ],
     addons: [],
   },
   better: {
     base: ['기본 청소 전 항목 완전 포함'],
-    addons: ['새집증후군 케어 (VOC·포름알데히드 제거)'],
+    addons: [
+      { name: '새집증후군 케어', detail: 'VOC·포름알데히드 전문 제거' },
+    ],
   },
   best: {
     base: ['기본 청소 전 항목 완전 포함'],
-    addons: ['새집증후군 케어 (VOC·포름알데히드 제거)', '상판 연마 처리', '마루 코팅 처리'],
+    addons: [
+      { name: '새집증후군 케어', detail: 'VOC·포름알데히드 전문 제거' },
+      { name: '상판 연마 처리', detail: '주방·욕실 상판 전용 연마' },
+      { name: '마루 코팅 처리', detail: '전 실 마루 보호 코팅' },
+    ],
   },
 }
 
-export function QuoteBookingSection({ quoteId, tiers, defaultName, defaultPhone }: QuoteBookingSectionProps) {
+export function QuoteBookingSection({
+  quoteId,
+  tiers,
+  defaultName,
+  defaultPhone,
+  tierReasons,
+}: QuoteBookingSectionProps) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const [done, setDone] = useState(false)
 
@@ -89,17 +110,15 @@ export function QuoteBookingSection({ quoteId, tiers, defaultName, defaultPhone 
   const selectedTierData = tiers.find((t) => t.tier === selectedTier)
 
   return (
-    <div className="space-y-5">
-      <div>
-        <p className="font-extrabold text-[17px] text-[#1A1A1A]">플랜을 선택해주세요</p>
-        <p className="text-xs text-[#8D8D8D] mt-0.5">모든 플랜은 동일한 최고 품질로 시공됩니다</p>
-      </div>
-
+    <div className="space-y-4">
       {/* 플랜 카드 */}
       <div className="space-y-3">
         {tiers.map((tier) => {
           const isSelected = selectedTier === tier.tier
           const content = TIER_CONTENT[tier.tier]
+          const upsellReason =
+            tier.tier === 'better' ? tierReasons?.better :
+            tier.tier === 'best'   ? tierReasons?.best   : undefined
 
           return (
             <button
@@ -122,9 +141,9 @@ export function QuoteBookingSection({ quoteId, tiers, defaultName, defaultPhone 
                 </div>
               )}
 
+              {/* 플랜명 + 가격 */}
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  {/* 선택 인디케이터 */}
                   <div className={[
                     'w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
                     isSelected ? 'border-[#FF7D00] bg-[#FF7D00]' : 'border-[#D4C9BE]',
@@ -149,12 +168,27 @@ export function QuoteBookingSection({ quoteId, tiers, defaultName, defaultPhone 
                       <span>{item}</span>
                     </div>
                   ))}
-                  {content.addons.map((item, i) => (
-                    <div key={i} className="flex items-center gap-1.5 text-xs font-semibold text-[#FF7D00]">
-                      <Plus className="h-3 w-3 shrink-0" />
-                      <span>{item}</span>
+                  {content.addons.map((addon, i) => (
+                    <div key={i} className="flex items-start gap-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Plus className="h-3 w-3 text-[#FF7D00] shrink-0 mt-[1px]" />
+                        <div>
+                          <span className="text-xs font-bold text-[#FF7D00]">{addon.name}</span>
+                          <span className="text-xs text-[#8D8D8D] ml-1">({addon.detail})</span>
+                        </div>
+                      </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* 업셀 이유 callout */}
+              {upsellReason && (
+                <div className="mt-3 ml-7 bg-[#FFF3E8] border border-[#FFD4A8] rounded-xl p-3 flex gap-2">
+                  <Lightbulb className="h-3.5 w-3.5 text-[#FF7D00] shrink-0 mt-0.5" />
+                  <p className="text-xs text-[#995200] leading-relaxed break-keep">
+                    {upsellReason}
+                  </p>
                 </div>
               )}
             </button>
@@ -187,8 +221,14 @@ export function QuoteBookingSection({ quoteId, tiers, defaultName, defaultPhone 
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <Label className="text-xs text-[#6B6B6B]">이름 (필수)</Label>
-                <Input placeholder="홍길동" className="h-11 bg-white border-[#F0EBE3] rounded-xl text-sm" {...register('customer_name')} />
-                {errors.customer_name && <p className="text-xs text-red-500">{errors.customer_name.message}</p>}
+                <Input
+                  placeholder="홍길동"
+                  className="h-11 bg-white border-[#F0EBE3] rounded-xl text-sm"
+                  {...register('customer_name')}
+                />
+                {errors.customer_name && (
+                  <p className="text-xs text-red-500">{errors.customer_name.message}</p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-[#6B6B6B]">연락처 (필수)</Label>
@@ -202,7 +242,9 @@ export function QuoteBookingSection({ quoteId, tiers, defaultName, defaultPhone 
                     e.target.value = numOnly
                   }}
                 />
-                {errors.customer_phone && <p className="text-xs text-red-500">{errors.customer_phone.message}</p>}
+                {errors.customer_phone && (
+                  <p className="text-xs text-red-500">{errors.customer_phone.message}</p>
+                )}
               </div>
             </div>
 
@@ -213,7 +255,9 @@ export function QuoteBookingSection({ quoteId, tiers, defaultName, defaultPhone 
                 className="h-11 bg-white border-[#F0EBE3] rounded-xl text-sm"
                 {...register('service_address')}
               />
-              {errors.service_address && <p className="text-xs text-red-500">{errors.service_address.message}</p>}
+              {errors.service_address && (
+                <p className="text-xs text-red-500">{errors.service_address.message}</p>
+              )}
             </div>
 
             <button

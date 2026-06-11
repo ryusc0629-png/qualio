@@ -7,9 +7,9 @@ export interface QuotePitchReason {
 }
 
 export interface CleaningFact {
-  number: string   // "3배", "47종", "99%"
-  label: string    // "VOC 초과", "세균 번식"
-  detail: string   // "새 아파트 입주 직후"
+  number: string
+  label: string
+  detail: string
 }
 
 export interface QuotePitch {
@@ -18,22 +18,30 @@ export interface QuotePitch {
   reasons: [QuotePitchReason, QuotePitchReason, QuotePitchReason]
   urgencyText: string
   cleaningFacts: [CleaningFact, CleaningFact, CleaningFact]
+  tierReasons: {
+    better: string  // 기본 → 추천 업셀 이유 (새집증후군 케어가 지금 필요한 이유)
+    best: string    // 추천 → 프리미엄 업셀 이유 (상판연마·마루코팅이 지금 필요한 이유)
+  }
 }
 
 const FALLBACK_PITCH: QuotePitch = {
-  headline: '입주 전, 한 번의 청소가 평생 위생을 결정합니다',
-  subheadline: '눈에 보이지 않는 유해물질과 세균까지 전문가가 완벽하게 제거합니다',
+  headline: '고객님을 위한 맞춤 클리닝 제안',
+  subheadline: '전문 팀이 직접 투입되어 숨은 오염까지 완벽하게 제거합니다',
   reasons: [
-    { emoji: '🧪', title: '새집증후군 제거', description: '입주 직후 유해화학물질(VOC) 농도는 기준치의 최대 3배. 전문 처리 없이는 자연 휘발에 수개월이 걸립니다.' },
-    { emoji: '🦠', title: '세균 서식지 제거', description: '욕실 줄눈, 싱크대 배수구는 일반 청소로 제거되지 않는 세균의 온상입니다.' },
-    { emoji: '✨', title: '입주 첫 날의 선물', description: '가구와 짐이 들어오기 전 딱 한 번. 이후엔 절대 할 수 없는 완벽한 청소를 지금 하세요.' },
+    { emoji: '✅', title: '전 항목 직접 시공', description: '하청 없이 숙련된 자사 팀이 처음부터 끝까지 작업합니다' },
+    { emoji: '🛡️', title: '3일 무상 재방문', description: '작업 후 미흡한 부분은 3일 이내 추가 비용 없이 재방문합니다' },
+    { emoji: '📋', title: '작업 완료 보고서', description: '청소 전·후 사진과 체크리스트를 카카오톡으로 전달합니다' },
   ],
-  urgencyText: '짐 들어오기 전 지금이 유일한 기회입니다',
+  urgencyText: '지금 바로 예약하고 깔끔한 시작을 만드세요',
   cleaningFacts: [
-    { number: '3배', label: 'VOC 농도', detail: '새 아파트 입주 직후' },
-    { number: '47종', label: '세균 서식', detail: '주방 싱크대 배수구' },
-    { number: '6개월', label: '자연 휘발', detail: '방치 시 유해물질 제거 기간' },
+    { number: '100%', label: '자사 직접 시공', detail: '하청 없는 책임 작업' },
+    { number: '3일', label: '무상 A/S', detail: '작업 후 불만족 시' },
+    { number: '24시', label: '예약 확정', detail: '빠른 일정 조율' },
   ],
+  tierReasons: {
+    better: '새 아파트의 벽지·바닥재·접착제에서 발생하는 포름알데히드는 입주 직후가 농도 최고점입니다. 짐이 들어오기 전 지금이 유일한 전문 처리 타이밍입니다. 입주 후에는 가구와 생활용품이 방해해 처리 효율이 크게 떨어집니다.',
+    best: '상판 연마와 마루 코팅은 반드시 새것일 때 시공해야 5년 이상 효과가 지속됩니다. 생활 스크래치가 생긴 후 코팅하면 흠집이 코팅 안에 그대로 남고, 연마 효과도 30% 이상 떨어집니다. 입주 청소와 함께 지금 하는 것이 가장 효율적입니다.',
+  },
 }
 
 export async function generateQuotePitch({
@@ -60,40 +68,46 @@ export async function generateQuotePitch({
   ].filter(Boolean).join('\n')
 
   const prompt = `당신은 프리미엄 청소 서비스의 '맞춤 제안서' 작성 전문가입니다.
-이 문서는 불특정 다수를 위한 광고가 아니라, 해당 고객 한 명만을 위해 발행된 공식 견적 제안서입니다.
-블로그 카피, 공포 마케팅, 일반적 문구는 절대 사용하지 마세요.
+이 문서는 이미 견적 폼을 작성한 고객(= 서비스 필요성은 인지한 상태)을 위한 공식 제안서입니다.
+"왜 청소가 필요한가"는 설명하지 않습니다. "왜 이 업체의 이 플랜이어야 하는가"에 집중하세요.
 
 고객 상황:
 ${contextText}
 
-작성 규칙:
-- headline: "고객님을 위한 [구체적 상황] 맞춤 제안" 형식 (예: "고객님을 위한 42평 프리미엄 입주 클리닝 제안")
-- subheadline: 업체가 직접 이 고객을 위해 팀을 투입한다는 뉘앙스 (예: "다트클린 전문 팀이 직접 투입되어 숨은 분진까지 완벽하게 제거합니다")
-- cleaningFacts: 이 서비스가 왜 해당 고객 상황에 꼭 필요한지 — 공포 통계 금지, 대신 고객이 직접 체감할 수 있는 구체적 작업 포인트 3가지 (숫자 포함)
-- reasons: 이 업체를 선택해야 하는 이유 3가지 — 작업 전문성, 사후 보증, 고객 편의 관점
-- 한국어, 정중하고 전문적인 어조
+핵심 작성 규칙:
+- headline: "고객님을 위한 [상황] 맞춤 제안" 형식 (예: "고객님을 위한 42평 프리미엄 입주 클리닝 제안")
+- subheadline: 이 업체 팀이 직접 투입된다는 전문성 강조
+- tierReasons.better: 기본 → 추천 업그레이드 이유 — 새집증후군 케어가 '이 고객 상황'에서 지금 당장 필요한 구체적 이유 (2-3문장, 타이밍 강조)
+- tierReasons.best: 추천 → 프리미엄 업그레이드 이유 — 상판연마·마루코팅을 지금 함께 해야 하는 구체적 이유 (2-3문장, 비용 효율·타이밍 강조)
+- reasons: 이 업체를 신뢰할 수 있는 이유 3가지 (작업 방식, 보증, 편의)
+- cleaningFacts: 이 서비스에서 실제로 작업하는 포인트 3가지 (숫자+구체적 설명)
+- 블로그 카피, 공포 마케팅 금지
 
 아래 JSON 형식으로만 응답하세요:
 {
-  "headline": "25자 이내, '고객님을 위한 ~' 형식",
-  "subheadline": "50자 이내, 업체+팀 투입 뉘앙스",
+  "headline": "25자 이내",
+  "subheadline": "50자 이내",
   "cleaningFacts": [
-    {"number": "숫자+단위", "label": "10자 이내 작업 포인트", "detail": "20자 이내 설명"},
-    {"number": "숫자+단위", "label": "10자 이내 작업 포인트", "detail": "20자 이내 설명"},
-    {"number": "숫자+단위", "label": "10자 이내 작업 포인트", "detail": "20자 이내 설명"}
+    {"number": "숫자+단위", "label": "10자 이내", "detail": "20자 이내"},
+    {"number": "숫자+단위", "label": "10자 이내", "detail": "20자 이내"},
+    {"number": "숫자+단위", "label": "10자 이내", "detail": "20자 이내"}
   ],
+  "tierReasons": {
+    "better": "2-3문장, 지금 이 고객 상황에서 새집증후군 케어가 필요한 이유",
+    "best": "2-3문장, 상판연마+마루코팅을 지금 함께 해야 하는 이유"
+  },
   "reasons": [
-    {"emoji": "이모지", "title": "12자 이내 제목", "description": "60자 이내 설명"},
-    {"emoji": "이모지", "title": "12자 이내 제목", "description": "60자 이내 설명"},
-    {"emoji": "이모지", "title": "12자 이내 제목", "description": "60자 이내 설명"}
+    {"emoji": "이모지", "title": "12자 이내", "description": "50자 이내"},
+    {"emoji": "이모지", "title": "12자 이내", "description": "50자 이내"},
+    {"emoji": "이모지", "title": "12자 이내", "description": "50자 이내"}
   ],
-  "urgencyText": "20자 이내, 정중한 행동 촉구"
+  "urgencyText": "20자 이내"
 }`
 
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 800,
+      max_tokens: 900,
       messages: [{ role: 'user', content: prompt }],
     })
 
@@ -102,7 +116,7 @@ ${contextText}
     if (!jsonMatch) return FALLBACK_PITCH
 
     const parsed = JSON.parse(jsonMatch[0]) as QuotePitch
-    if (!parsed.headline || !parsed.reasons?.length || !parsed.cleaningFacts?.length) return FALLBACK_PITCH
+    if (!parsed.headline || !parsed.tierReasons) return FALLBACK_PITCH
 
     return parsed
   } catch (e) {

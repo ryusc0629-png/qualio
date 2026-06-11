@@ -4,7 +4,7 @@ import { generateQuotePitch } from '@/lib/ai/quote-pitch'
 import { QuoteBookingSection } from '@/components/quote/quote-booking-section'
 import type { QuotePitch } from '@/lib/ai/quote-pitch'
 import type { Json } from '@/lib/types/database'
-import { Phone } from 'lucide-react'
+import { Phone, ShieldCheck, Star } from 'lucide-react'
 
 interface PageProps {
   params: Promise<{ businessId: string; quoteId: string }>
@@ -17,7 +17,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
   const [{ data: quote }, { data: business }] = await Promise.all([
     db
       .from('quotes')
-      .select('id, cleaning_type, space_size, preferred_date, good_price, better_price, best_price, status, customer_name, customer_phone, ai_pitch')
+      .select('id, cleaning_type, space_size, good_price, better_price, best_price, status, customer_name, customer_phone, ai_pitch')
       .eq('id', quoteId)
       .eq('business_id', businessId)
       .maybeSingle(),
@@ -41,8 +41,14 @@ export default async function QuoteLandingPage({ params }: PageProps) {
   const servicePhotos = serviceItem?.photos?.filter(Boolean) ?? []
 
   let pitch: QuotePitch
-  if (quote.ai_pitch && typeof quote.ai_pitch === 'object' && 'headline' in quote.ai_pitch) {
-    pitch = quote.ai_pitch as unknown as QuotePitch
+  const cached = quote.ai_pitch
+  if (
+    cached &&
+    typeof cached === 'object' &&
+    'headline' in cached &&
+    'tierReasons' in cached
+  ) {
+    pitch = cached as unknown as QuotePitch
   } else {
     pitch = await generateQuotePitch({
       businessName: business.name,
@@ -52,12 +58,6 @@ export default async function QuoteLandingPage({ params }: PageProps) {
     })
     db.from('quotes').update({ ai_pitch: pitch as unknown as Json }).eq('id', quoteId).then()
   }
-
-  const facts = pitch.cleaningFacts ?? [
-    { number: '3배', label: 'VOC 농도', detail: '새 아파트 입주 직후' },
-    { number: '47종', label: '세균 서식', detail: '주방 싱크대 배수구' },
-    { number: '6개월', label: '자연 휘발', detail: '방치 시 제거 기간' },
-  ]
 
   const tiers = [
     { tier: 'good',   label: '기본',     price: quote.good_price   ?? 0, highlight: false },
@@ -94,63 +94,92 @@ export default async function QuoteLandingPage({ params }: PageProps) {
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 pb-20 space-y-5 pt-5">
+      <main className="max-w-lg mx-auto px-4 pb-20 pt-5 space-y-4">
 
-        {/* 히어로 카드 */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm">
-          {quote.space_size && (
-            <div className="inline-flex items-center gap-1.5 bg-[#FFF3E8] text-[#FF7D00] text-xs font-bold px-3 py-1.5 rounded-full mb-4">
-              {quote.cleaning_type} · {quote.space_size}평
+        {/* ① 견적 확인 카드 (짧고 명확하게) */}
+        <div className="bg-white rounded-3xl px-5 py-5 shadow-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              {quote.cleaning_type && (
+                <div className="inline-flex items-center gap-1.5 bg-[#FFF3E8] text-[#FF7D00] text-xs font-bold px-2.5 py-1 rounded-full mb-3">
+                  {quote.cleaning_type}{quote.space_size ? ` · ${quote.space_size}평` : ''}
+                </div>
+              )}
+              <h1 className="text-[20px] font-extrabold leading-snug text-[#1A1A1A] break-keep">
+                {pitch.headline}
+              </h1>
+              <p className="text-xs text-[#8D8D8D] mt-1.5 leading-relaxed break-keep">
+                {pitch.subheadline}
+              </p>
             </div>
-          )}
-          <h1 className="text-[22px] font-extrabold leading-snug text-[#1A1A1A] break-keep">
-            {pitch.headline}
-          </h1>
-          <p className="text-sm text-[#8D8D8D] mt-2 leading-relaxed break-keep">
-            {pitch.subheadline}
-          </p>
-        </div>
-
-        {/* 사진 */}
-        {servicePhotos.length > 0 && (
-          <div className={`grid gap-2 ${servicePhotos.length === 1 ? 'grid-cols-1' : servicePhotos.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-            {servicePhotos.map((url, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={i}
-                src={url}
-                alt="시공 사진"
-                className="w-full aspect-square object-cover rounded-2xl"
-              />
-            ))}
           </div>
-        )}
 
-        {/* A/S 보증 배너 */}
-        <div className="bg-white rounded-3xl p-5 shadow-sm flex items-start gap-4">
-          <div className="w-12 h-12 bg-[#FFF3E8] rounded-2xl flex items-center justify-center shrink-0">
-            <span className="text-2xl">🛡️</span>
-          </div>
-          <div>
-            <p className="font-extrabold text-[15px] text-[#1A1A1A]">작업 후 3일 이내 무상 재방문 보증</p>
-            <p className="text-xs text-[#8D8D8D] mt-1 leading-relaxed">
-              작업 완료 후 미흡한 부분이 있으면 3일 이내 추가 비용 없이 재방문해 드립니다. 만족하실 때까지 책임집니다.
+          {/* A/S 보증 인라인 */}
+          <div className="mt-4 flex items-center gap-2 bg-[#F5F0EB] rounded-xl px-3 py-2.5">
+            <ShieldCheck className="h-4 w-4 text-[#FF7D00] shrink-0" />
+            <p className="text-xs font-semibold text-[#6B6B6B]">
+              작업 후 <span className="text-[#1A1A1A]">3일 이내 무상 재방문</span> 보증
             </p>
           </div>
         </div>
 
-        {/* 작업 포인트 3가지 */}
-        <div className="grid grid-cols-3 gap-3">
-          {facts.map((fact, i) => (
-            <div key={i} className="bg-white rounded-2xl p-4 text-center shadow-sm">
-              <p className="text-[22px] font-black text-[#FF7D00] tabular-nums leading-none">{fact.number}</p>
-              <p className="text-[11px] font-bold text-[#1A1A1A] mt-1.5">{fact.label}</p>
-              <p className="text-[10px] text-[#8D8D8D] mt-0.5 leading-tight">{fact.detail}</p>
+        {/* ② 플랜 선택 (핵심 — 최대한 빠르게 노출) */}
+        <div className="bg-white rounded-3xl p-5 shadow-sm">
+          <div className="mb-4">
+            <p className="font-extrabold text-[17px] text-[#1A1A1A]">플랜을 선택하고 예약하세요</p>
+            <p className="text-xs text-[#8D8D8D] mt-0.5">3가지 플랜 모두 동일한 최고 품질로 시공됩니다</p>
+          </div>
+
+          {isBooked ? (
+            <div className="text-center py-8 space-y-3">
+              <div className="text-4xl">✅</div>
+              <p className="font-bold text-lg">예약이 완료된 견적입니다</p>
+              <p className="text-sm text-[#8D8D8D]">담당자가 곧 연락드릴 예정입니다.</p>
+            </div>
+          ) : (
+            <QuoteBookingSection
+              quoteId={quoteId}
+              tiers={tiers}
+              defaultName={quote.customer_name ?? undefined}
+              defaultPhone={quote.customer_phone ?? undefined}
+              tierReasons={pitch.tierReasons}
+            />
+          )}
+        </div>
+
+        {/* ③ 작업 사진 (아래 배치 — 설득용 보조 증거) */}
+        {servicePhotos.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-bold text-[#8D8D8D] px-1">실제 작업 사진</p>
+            <div className={`grid gap-2 ${servicePhotos.length === 1 ? 'grid-cols-1' : servicePhotos.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+              {servicePhotos.map((url, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={i}
+                  src={url}
+                  alt="시공 사진"
+                  className="w-full aspect-square object-cover rounded-2xl"
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ④ 왜 이 업체인가 (3가지 이유 — 간결하게) */}
+        <div className="bg-white rounded-3xl p-5 shadow-sm space-y-2">
+          <p className="text-xs font-bold text-[#FF7D00] mb-1">이 업체를 선택하는 이유</p>
+          {pitch.reasons.map((reason, i) => (
+            <div key={i} className="flex gap-3 items-start py-2 border-b border-[#F5F0EB] last:border-0">
+              <span className="text-lg shrink-0 mt-0.5">{reason.emoji}</span>
+              <div>
+                <p className="font-bold text-sm text-[#1A1A1A]">{reason.title}</p>
+                <p className="text-xs text-[#8D8D8D] mt-0.5 leading-relaxed break-keep">{reason.description}</p>
+              </div>
             </div>
           ))}
         </div>
 
-        {/* 네이버 리뷰 링크 */}
+        {/* ⑤ 네이버 리뷰 */}
         {business.naver_place_url && (
           <a
             href={business.naver_place_url}
@@ -167,49 +196,25 @@ export default async function QuoteLandingPage({ params }: PageProps) {
                 <p className="text-xs text-[#8D8D8D]">직접 확인해보세요</p>
               </div>
             </div>
-            <span className="text-[#8D8D8D] text-lg">›</span>
+            <div className="flex items-center gap-1 text-[#8D8D8D]">
+              <Star className="h-3.5 w-3.5 fill-[#FFB800] text-[#FFB800]" />
+              <span className="text-sm">›</span>
+            </div>
           </a>
         )}
 
-        {/* 왜 필요한가 */}
-        <div className="bg-white rounded-3xl p-5 shadow-sm space-y-1">
-          <p className="text-xs font-bold text-[#FF7D00] mb-3">전문 청소가 필요한 이유</p>
-          {pitch.reasons.map((reason, i) => (
-            <div key={i} className={`flex gap-3 p-3 rounded-2xl ${i % 2 === 0 ? 'bg-[#F5F0EB]' : ''}`}>
-              <span className="text-xl shrink-0">{reason.emoji}</span>
-              <div>
-                <p className="font-bold text-sm text-[#1A1A1A]">{reason.title}</p>
-                <p className="text-xs text-[#8D8D8D] mt-0.5 leading-relaxed break-keep">{reason.description}</p>
+        {/* ⑥ 작업 포인트 3가지 (숫자 지표) */}
+        {pitch.cleaningFacts && (
+          <div className="grid grid-cols-3 gap-3">
+            {pitch.cleaningFacts.map((fact, i) => (
+              <div key={i} className="bg-white rounded-2xl p-4 text-center shadow-sm">
+                <p className="text-[22px] font-black text-[#FF7D00] tabular-nums leading-none">{fact.number}</p>
+                <p className="text-[11px] font-bold text-[#1A1A1A] mt-1.5">{fact.label}</p>
+                <p className="text-[10px] text-[#8D8D8D] mt-0.5 leading-tight">{fact.detail}</p>
               </div>
-            </div>
-          ))}
-        </div>
-
-        {/* 긴급성 */}
-        {!isBooked && (
-          <div className="bg-[#FFF3E8] rounded-2xl px-5 py-4 flex items-center gap-3">
-            <span className="text-xl shrink-0">⏰</span>
-            <p className="text-sm font-semibold text-[#CC6400] break-keep">{pitch.urgencyText}</p>
+            ))}
           </div>
         )}
-
-        {/* 예약 섹션 */}
-        <div className="bg-white rounded-3xl p-5 shadow-sm">
-          {isBooked ? (
-            <div className="text-center py-8 space-y-3">
-              <div className="text-4xl">✅</div>
-              <p className="font-bold text-lg">예약이 완료된 견적입니다</p>
-              <p className="text-sm text-[#8D8D8D]">담당자가 곧 연락드릴 예정입니다.</p>
-            </div>
-          ) : (
-            <QuoteBookingSection
-              quoteId={quoteId}
-              tiers={tiers}
-              defaultName={quote.customer_name ?? undefined}
-              defaultPhone={quote.customer_phone ?? undefined}
-            />
-          )}
-        </div>
 
         {/* 하단 */}
         <div className="text-center text-xs text-[#B0B0B0] space-y-1 pb-4">
