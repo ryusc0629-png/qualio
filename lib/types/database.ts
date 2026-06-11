@@ -703,6 +703,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          photos: string[] | null
           show_in_quote: boolean
           sort_order: number
           unit: string
@@ -717,6 +718,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          photos?: string[] | null
           show_in_quote?: boolean
           sort_order?: number
           unit?: string
@@ -731,6 +733,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          photos?: string[] | null
           show_in_quote?: boolean
           sort_order?: number
           unit?: string

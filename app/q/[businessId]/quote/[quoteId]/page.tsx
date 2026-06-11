@@ -28,6 +28,17 @@ export default async function QuoteLandingPage({ params }: PageProps) {
       .maybeSingle(),
   ])
 
+  // 해당 서비스의 사진 조회 (견적의 cleaning_type으로 서비스명 매칭)
+  const { data: serviceItem } = await db
+    .from('service_items')
+    .select('photos')
+    .eq('business_id', businessId)
+    .eq('name', quote?.cleaning_type ?? '')
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  const servicePhotos = serviceItem?.photos?.filter(Boolean) ?? []
+
   if (!quote || !business) notFound()
 
   let pitch: QuotePitch
@@ -114,6 +125,21 @@ export default async function QuoteLandingPage({ params }: PageProps) {
 
       {/* ── CONTENT ── */}
       <main className="max-w-lg mx-auto px-5 pb-20 -mt-2 space-y-10">
+
+        {/* 서비스 사진 */}
+        {servicePhotos.length > 0 && (
+          <section className="grid grid-cols-3 gap-2">
+            {servicePhotos.map((url, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={url}
+                alt={`${quote.cleaning_type} 시공 사진`}
+                className="w-full aspect-square object-cover rounded-xl"
+              />
+            ))}
+          </section>
+        )}
 
         {/* 왜 필요한가 */}
         <section className="space-y-3">

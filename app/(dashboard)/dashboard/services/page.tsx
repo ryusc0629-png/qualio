@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { AddServiceForm } from '@/components/dashboard/add-service-form'
 import { DeleteServiceButton } from '@/components/dashboard/delete-service-button'
 import { ShowInQuoteToggle } from '@/components/dashboard/show-in-quote-toggle'
+import { EditServiceButton } from '@/components/dashboard/edit-service-button'
 
 // 서비스 항목 관리 페이지
 export default async function ServicesPage() {
@@ -24,7 +25,7 @@ export default async function ServicesPage() {
   // 서비스 목록 조회 (삭제되지 않은 항목만)
   const { data: services } = await db
     .from('service_items')
-    .select('id, name, category, base_price, unit, is_active, show_in_quote')
+    .select('id, name, category, base_price, unit, is_active, show_in_quote, photos')
     .eq('business_id', profile.business_id)
     .is('deleted_at', null)
     .order('sort_order')
@@ -58,7 +59,8 @@ export default async function ServicesPage() {
                 <th className="text-right px-4 py-3 font-medium">기본가</th>
                 <th className="text-center px-4 py-3 font-medium">단위</th>
                 <th className="text-center px-4 py-3 font-medium">견적폼</th>
-                <th className="w-12 px-4 py-3" />
+                <th className="text-center px-4 py-3 font-medium">사진</th>
+                <th className="w-20 px-4 py-3" />
               </tr>
             </thead>
             <tbody>
@@ -73,8 +75,17 @@ export default async function ServicesPage() {
                   <td className="px-4 py-3 text-center">
                     <ShowInQuoteToggle id={service.id} showInQuote={service.show_in_quote} />
                   </td>
+                  <td className="px-4 py-3 text-center text-muted-foreground text-xs">
+                    {(service.photos?.length ?? 0) > 0
+                      ? <span className="text-primary font-medium">{service.photos!.length}장</span>
+                      : <span className="text-zinc-400">없음</span>
+                    }
+                  </td>
                   <td className="px-4 py-3 text-right">
-                    <DeleteServiceButton id={service.id} />
+                    <div className="flex items-center justify-end gap-1">
+                      <EditServiceButton service={service} />
+                      <DeleteServiceButton id={service.id} />
+                    </div>
                   </td>
                 </tr>
               ))}

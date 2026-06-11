@@ -24,6 +24,19 @@ const toggleShowInQuoteSchema = z.object({
   show_in_quote: z.boolean(),
 })
 
+// 서비스 항목 수정 스키마
+const updateServiceItemSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1, '서비스명을 입력해주세요'),
+  category: z.string().optional(),
+  base_price: z.coerce.number().min(0),
+  unit: z.string().refine(
+    (val): val is typeof VALID_UNITS[number] => (VALID_UNITS as readonly string[]).includes(val),
+    '올바른 단위를 선택해주세요'
+  ),
+  photos: z.array(z.string()).optional(),
+})
+
 // 서비스 항목 삭제 스키마
 const deleteServiceItemSchema = z.object({
   id: z.string().uuid(),
@@ -76,6 +89,42 @@ export const createServiceItemAction = action
     // 서비스 변경 시 번들 캐시 초기화 → 다음 견적 요청 시 AI가 새로 구성
     await invalidateBundleCache(db, profile.business_id)
 
+    revalidatePath('/dashboard/services')
+    return { success: true }
+  })
+
+// 서비스 항목 수정 액션
+export const updateServiceItemAction = action
+  .schema(updateServiceItemSchema)
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const { error } = await db
+      .from('service_items')
+      .update({
+        name:       parsedInput.name,
+        category:   parsedInput.category ?? null,
+        base_price: parsedInput.base_price,
+        unit:       parsedInput.unit,
+        photos:     parsedInput.photos ?? [],
+      })
+      .eq('id', parsedInput.id)
+      .eq('business_id', profile.business_id)
+
+    if (error) throw new Error('[APP] 서비스 수정에 실패했습니다')
+
+    await invalidateBundleCache(db, profile.business_id)
     revalidatePath('/dashboard/services')
     return { success: true }
   })
