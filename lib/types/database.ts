@@ -254,6 +254,12 @@ export type Database = {
           owner_id: string
           phone: string | null
           updated_at: string
+          slug: string | null
+          seo_title: string | null
+          seo_description: string | null
+          seo_keywords: string | null
+          seo_faqs: Json
+          seo_generated_at: string | null
         }
         Insert: {
           address?: string | null
@@ -267,6 +273,12 @@ export type Database = {
           owner_id: string
           phone?: string | null
           updated_at?: string
+          slug?: string | null
+          seo_title?: string | null
+          seo_description?: string | null
+          seo_keywords?: string | null
+          seo_faqs?: Json
+          seo_generated_at?: string | null
         }
         Update: {
           address?: string | null
@@ -280,6 +292,12 @@ export type Database = {
           owner_id?: string
           phone?: string | null
           updated_at?: string
+          slug?: string | null
+          seo_title?: string | null
+          seo_description?: string | null
+          seo_keywords?: string | null
+          seo_faqs?: Json
+          seo_generated_at?: string | null
         }
         Relationships: [
           {

@@ -3,7 +3,13 @@ import { redirect } from 'next/navigation'
 import { SettingsForm } from './settings-form'
 import { CurrentPlanCard } from '@/components/dashboard/current-plan-card'
 import { CancelSubscriptionButton } from '@/components/dashboard/cancel-subscription-button'
+import { GeoPanel } from '@/components/dashboard/geo-panel'
 import type { PlanId } from '@/lib/config/plans'
+
+interface FaqItem {
+  question: string
+  answer: string
+}
 
 export default async function SettingsPage() {
   const authClient = await createClient()
@@ -22,7 +28,7 @@ export default async function SettingsPage() {
   const [businessResult, subscriptionResult] = await Promise.all([
     db
       .from('businesses')
-      .select('name, phone, address, description, naver_place_url')
+      .select('id, name, phone, address, description, naver_place_url, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at')
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
@@ -34,6 +40,7 @@ export default async function SettingsPage() {
 
   if (!businessResult.data) redirect('/onboarding')
 
+  const business = businessResult.data
   const subscription = subscriptionResult.data ?? {
     plan: 'beta',
     status: 'active',
@@ -61,8 +68,19 @@ export default async function SettingsPage() {
         </div>
       )}
 
+      {/* GEO 자동화 패널 */}
+      <GeoPanel
+        businessId={business.id}
+        slug={business.slug ?? null}
+        seoTitle={business.seo_title ?? null}
+        seoDescription={business.seo_description ?? null}
+        seoKeywords={business.seo_keywords ?? null}
+        seoFaqs={(business.seo_faqs as unknown as FaqItem[]) ?? []}
+        seoGeneratedAt={business.seo_generated_at ?? null}
+      />
+
       {/* 업체 정보 */}
-      <SettingsForm business={businessResult.data} />
+      <SettingsForm business={business} />
     </div>
   )
 }
