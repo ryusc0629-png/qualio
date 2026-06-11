@@ -200,6 +200,25 @@ export const getTopicSuggestionsAction = action
     return { suggestions }
   })
 
+// 월간 자동 발행 목표 설정 액션
+export const setMonthlyTargetAction = action
+  .schema(z.object({
+    target: z.number().int().min(0).max(60),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { error } = await db
+      .from('businesses')
+      .update({ monthly_post_target: parsedInput.target })
+      .eq('id', businessId)
+
+    if (error) throw new Error('[APP] 설정 저장에 실패했습니다')
+
+    revalidatePath('/dashboard/marketing')
+    return { success: true }
+  })
+
 // 포스트 삭제 액션
 export const deletePostAction = action
   .schema(z.object({ id: z.string().uuid() }))

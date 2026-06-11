@@ -20,7 +20,7 @@ export default async function MarketingPage() {
   const [businessResult, postsResult] = await Promise.all([
     db
       .from('businesses')
-      .select('slug, name')
+      .select('slug, name, monthly_post_target')
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
@@ -46,6 +46,7 @@ export default async function MarketingPage() {
         posts={posts}
         businessSlug={business?.slug ?? null}
         businessId={profile.business_id}
+        monthlyTarget={business?.monthly_post_target ?? 0}
       />
     </div>
   )

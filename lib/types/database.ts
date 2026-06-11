@@ -260,6 +260,7 @@ export type Database = {
           seo_keywords: string | null
           seo_faqs: Json
           seo_generated_at: string | null
+          monthly_post_target: number
         }
         Insert: {
           address?: string | null
@@ -279,6 +280,7 @@ export type Database = {
           seo_keywords?: string | null
           seo_faqs?: Json
           seo_generated_at?: string | null
+          monthly_post_target?: number
         }
         Update: {
           address?: string | null
@@ -298,6 +300,7 @@ export type Database = {
           seo_keywords?: string | null
           seo_faqs?: Json
           seo_generated_at?: string | null
+          monthly_post_target?: number
         }
         Relationships: [
           {
@@ -538,6 +541,7 @@ export type Database = {
       }
       quotes: {
         Row: {
+          ai_pitch: Json | null
           best_price: number | null
           better_price: number | null
           business_id: string
@@ -556,6 +560,7 @@ export type Database = {
           utm_source: string | null
         }
         Insert: {
+          ai_pitch?: Json | null
           best_price?: number | null
           better_price?: number | null
           business_id: string
@@ -574,6 +579,7 @@ export type Database = {
           utm_source?: string | null
         }
         Update: {
+          ai_pitch?: Json | null
           best_price?: number | null
           better_price?: number | null
           business_id?: string

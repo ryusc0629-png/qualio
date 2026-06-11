@@ -2,12 +2,12 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
-import { generatePostAction, deletePostAction, getTopicSuggestionsAction } from '@/lib/actions/posts'
+import { generatePostAction, deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction } from '@/lib/actions/posts'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, ImagePlus, X, TrendingUp, ChevronRight, CheckCircle2, RefreshCw } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, ImagePlus, X, TrendingUp, ChevronRight, CheckCircle2, RefreshCw, Zap } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -73,11 +73,12 @@ interface PostListProps {
   posts: Post[]
   businessSlug: string | null
   businessId: string
+  monthlyTarget: number
 }
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
-export function PostList({ posts: initialPosts, businessSlug, businessId }: PostListProps) {
+export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget }: PostListProps) {
   const [posts] = useState(initialPosts)
   const [showGenerator, setShowGenerator] = useState(false)
   const [showEditor, setShowEditor] = useState(false)
@@ -96,6 +97,8 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
   // 이미 업로드 완료된 topic 목록
   const [completedTopics, setCompletedTopics] = useState<string[]>([])
   const completedTopicsRef = useRef<string[]>([])  // reload 전 동기 읽기용
+  // 월간 자동 발행 목표
+  const [monthlyTarget, setMonthlyTarget] = useState(initialTarget)
 
   // state + ref 동시 업데이트 헬퍼 (reload 전 동기 읽기 보장)
   const updateSuggestions = (s: TopicSuggestion[] | null) => {
@@ -168,6 +171,15 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
       uploadingTopicRef.current = null
       setUploadingTopic(null)
       toast.error(error.serverError ?? '포스트 생성에 실패했어요. 다시 눌러주세요')
+    },
+  })
+
+  const { execute: saveTarget, isPending: isSavingTarget } = useAction(setMonthlyTargetAction, {
+    onSuccess: ({ data }) => {
+      if (data?.success) toast.success('자동 발행 설정이 저장됐어요!')
+    },
+    onError: ({ error }) => {
+      toast.error(error.serverError ?? '설정 저장에 실패했어요. 다시 눌러주세요')
     },
   })
 
@@ -245,6 +257,40 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
 
   return (
     <div className="space-y-4">
+
+      {/* ── 자동 발행 설정 ── */}
+      <div className="rounded-xl border bg-white p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Zap className="h-4 w-4 text-primary" />
+          <p className="font-semibold text-sm">자동 발행 설정</p>
+          <span className="text-xs text-muted-foreground ml-1">매일 오전 9시 자동으로 발행해요</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[0, 5, 10, 20, 30].map((n) => (
+            <button
+              key={n}
+              onClick={() => {
+                setMonthlyTarget(n)
+                saveTarget({ target: n })
+              }}
+              disabled={isSavingTarget}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all ${
+                monthlyTarget === n
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-white text-foreground border-border hover:border-primary/50'
+              }`}
+            >
+              {n === 0 ? '꺼짐' : `월 ${n}건`}
+            </button>
+          ))}
+          {isSavingTarget && <Loader2 className="h-4 w-4 animate-spin self-center text-muted-foreground" />}
+        </div>
+        {monthlyTarget > 0 && (
+          <p className="text-xs text-muted-foreground mt-3">
+            약 {Math.round(30 / monthlyTarget)}일마다 1건 — 매달 {monthlyTarget}건 자동 발행됩니다
+          </p>
+        )}
+      </div>
 
       {/* ── 이번 달 인기 주제 추천 ── */}
       <div className="rounded-xl border bg-gradient-to-br from-primary/5 to-violet-500/5 p-5 space-y-3">
