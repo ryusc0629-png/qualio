@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { generatePostAction, deletePostAction } from '@/lib/actions/posts'
 import { Button } from '@/components/ui/button'
@@ -30,13 +30,15 @@ interface PostListProps {
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
 export function PostList({ posts: initialPosts, businessSlug, businessId }: PostListProps) {
-  const [posts, setPosts] = useState(initialPosts)
+  const [posts] = useState(initialPosts)
   const [showGenerator, setShowGenerator] = useState(false)
   const [showEditor, setShowEditor] = useState(false)
   const [topic, setTopic] = useState('')
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
+  // 여러 장 지원 — 첫 번째 사진을 AI 분석 + 대표 이미지로 사용
+  const [uploadedUrls, setUploadedUrls] = useState<string[]>([])
+  const [uploadingCount, setUploadingCount] = useState(0)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { execute: generatePost, isPending: isGenerating } = useAction(generatePostAction, {
     onSuccess: ({ data }) => {
@@ -44,8 +46,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
         toast.success('포스트가 생성됐습니다!')
         setShowGenerator(false)
         setTopic('')
-        setUploadedImageUrl(null)
-        // 목록 새로고침을 위해 페이지 리로드
+        setUploadedUrls([])
         window.location.reload()
       }
     },
@@ -65,35 +66,55 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
   })
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
 
-    setIsUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      const res = await fetch('/api/upload-image', { method: 'POST', body: formData })
-      const json = await res.json() as { url?: string; error?: string }
-      if (!res.ok || !json.url) throw new Error(json.error ?? '업로드 실패')
-      setUploadedImageUrl(json.url)
-      toast.success('사진이 업로드됐어요!')
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : '업로드에 실패했어요')
-    } finally {
-      setIsUploading(false)
-      e.target.value = ''
-    }
+    setUploadingCount(files.length)
+
+    // 모든 파일 병렬 업로드
+    const results = await Promise.allSettled(
+      files.map(async (file) => {
+        const formData = new FormData()
+        formData.append('file', file)
+        const res = await fetch('/api/upload-image', { method: 'POST', body: formData })
+        const json = await res.json() as { url?: string; error?: string }
+        if (!res.ok || !json.url) throw new Error(json.error ?? '업로드 실패')
+        return json.url
+      })
+    )
+
+    const succeeded: string[] = []
+    let failCount = 0
+    results.forEach((r) => {
+      if (r.status === 'fulfilled') succeeded.push(r.value)
+      else failCount++
+    })
+
+    setUploadedUrls((prev) => [...prev, ...succeeded])
+    setUploadingCount(0)
+
+    if (succeeded.length > 0) toast.success(`사진 ${succeeded.length}장이 올라갔어요!`)
+    if (failCount > 0) toast.error(`${failCount}장은 업로드에 실패했어요. 다시 시도해주세요`)
+
+    // 같은 파일 재선택 가능하도록 초기화
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const removeImage = (url: string) => {
+    setUploadedUrls((prev) => prev.filter((u) => u !== url))
   }
 
   const handleGenerate = () => {
     generatePost({
       topic: topic.trim() || undefined,
-      imageUrl: uploadedImageUrl ?? undefined,
+      imageUrl: uploadedUrls[0], // 첫 번째 사진을 AI가 분석
     })
   }
 
   const postUrl = (slug: string) =>
     businessSlug ? `${appUrl}/biz/${businessSlug}/posts/${slug}` : null
+
+  const isUploading = uploadingCount > 0
 
   return (
     <div className="space-y-4">
@@ -132,52 +153,60 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
                 disabled={isGenerating}
               />
             </div>
+
             <div>
               <Label className="text-xs text-muted-foreground mb-1 block">
-                사진 (선택) — 사진을 올리면 AI가 직접 보고 내용을 작성합니다
+                사진 (선택) — 여러 장 선택 가능, AI가 첫 번째 사진을 보고 내용 작성
               </Label>
 
-              {uploadedImageUrl ? (
-                /* 업로드된 이미지 미리보기 */
-                <div className="relative inline-block">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={uploadedImageUrl}
-                    alt="업로드된 사진"
-                    className="h-32 w-auto rounded-lg object-cover border"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setUploadedImageUrl(null)}
-                    className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-0.5"
-                    disabled={isGenerating}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+              {/* 업로드된 사진 썸네일 그리드 */}
+              {uploadedUrls.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {uploadedUrls.map((url) => (
+                    <div key={url} className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={url}
+                        alt="업로드된 사진"
+                        className="h-20 w-20 rounded-lg object-cover border"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(url)}
+                        className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full p-0.5"
+                        disabled={isGenerating}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ) : (
-                /* 사진 올리기 버튼 */
-                <label className={`flex items-center gap-2 w-fit cursor-pointer rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground hover:bg-accent transition-colors ${isUploading || isGenerating ? 'opacity-50 pointer-events-none' : ''}`}>
-                  {isUploading ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" />올리는 중...</>
-                  ) : (
-                    <><ImagePlus className="h-4 w-4" />사진 올리기</>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/heic"
-                    className="hidden"
-                    onChange={handleImageUpload}
-                    disabled={isUploading || isGenerating}
-                  />
-                </label>
               )}
+
+              {/* 사진 올리기 버튼 */}
+              <label className={`flex items-center gap-2 w-fit cursor-pointer rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground hover:bg-accent transition-colors ${isUploading || isGenerating ? 'opacity-50 pointer-events-none' : ''}`}>
+                {isUploading ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" />{uploadingCount}장 올리는 중...</>
+                ) : (
+                  <><ImagePlus className="h-4 w-4" />{uploadedUrls.length > 0 ? '사진 더 추가하기' : '사진 올리기'}</>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"           /* 아이폰 HEIC 포함 모든 이미지 허용 */
+                  multiple                   /* 여러 장 동시 선택 */
+                  className="hidden"
+                  onChange={handleImageUpload}
+                  disabled={isUploading || isGenerating}
+                />
+              </label>
             </div>
           </div>
+
           <div className="flex gap-2">
-            <Button onClick={handleGenerate} disabled={isGenerating} className="gap-2">
+            <Button onClick={handleGenerate} disabled={isGenerating || isUploading} className="gap-2">
               {isGenerating ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />생성 중...</>
+                <><Loader2 className="h-4 w-4 animate-spin" />AI가 작성 중이에요...</>
               ) : (
                 <><Sparkles className="h-4 w-4" />생성하기</>
               )}
@@ -211,7 +240,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
       {/* 포스트 목록 */}
       {posts.length === 0 ? (
         <div className="rounded-lg border bg-card p-10 text-center text-sm text-muted-foreground">
-          아직 포스트가 없습니다. AI로 첫 번째 포스트를 생성해보세요.
+          아직 포스트가 없어요. AI로 첫 번째 포스트를 만들어보세요!
         </div>
       ) : (
         <div className="space-y-2">
