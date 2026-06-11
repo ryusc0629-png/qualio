@@ -27,7 +27,7 @@ async function getBusinessId() {
 export const generatePostAction = action
   .schema(z.object({
     topic: z.string().max(100).optional(),
-    imageDescription: z.string().max(300).optional(),
+    imageUrl: z.string().url().optional(),
   }))
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getBusinessId()
@@ -59,7 +59,7 @@ export const generatePostAction = action
       description: business.description,
       services,
       topic: parsedInput.topic,
-      imageDescription: parsedInput.imageDescription,
+      imageUrl: parsedInput.imageUrl,
     })
 
     // slug 중복 방지 — 같은 slug가 이미 있으면 숫자 붙이기

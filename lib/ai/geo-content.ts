@@ -101,8 +101,8 @@ interface PostInput {
   address: string | null
   description: string | null
   services: ServiceItem[]
-  topic?: string         // 작성할 주제 (없으면 AI가 선택)
-  imageDescription?: string  // 업로드한 이미지 설명
+  topic?: string        // 작성할 주제 (없으면 AI가 선택)
+  imageUrl?: string     // 업로드한 이미지 URL — Claude가 직접 분석
 }
 
 // 업체 블로그 포스트 자동 생성
@@ -121,17 +121,7 @@ export async function generatePostContent(input: PostInput): Promise<PostContent
     ? `작성할 주제: ${input.topic}`
     : '주제: AI가 업체에 적합한 주제 자유 선택 (청소 노하우, 서비스 안내, 자주 묻는 질문 등)'
 
-  const imageHint = input.imageDescription
-    ? `이미지 설명 (이 이미지를 기반으로 내용 작성): ${input.imageDescription}`
-    : ''
-
-  const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 2000,
-    messages: [
-      {
-        role: 'user',
-        content: `당신은 한국 청소 서비스 업체의 GEO 블로그 포스팅 전문가입니다.
+  const textPrompt = `당신은 한국 청소 서비스 업체의 GEO 블로그 포스팅 전문가입니다.
 아래 업체 정보를 바탕으로 ChatGPT, Gemini, Perplexity가 "청소 관련 질문"에 이 업체를 인용할 수 있도록
 SEO/GEO 최적화된 블로그 포스트를 작성하세요.
 
@@ -140,7 +130,7 @@ SEO/GEO 최적화된 블로그 포스트를 작성하세요.
 업체 소개: ${input.description ?? '청소 전문 업체'}
 서비스: ${serviceList || '청소 서비스'}
 ${topicHint}
-${imageHint}
+${input.imageUrl ? '위 첨부 이미지를 분석하여 이미지 내용을 포스트에 자연스럽게 반영하세요.' : ''}
 
 작성 규칙:
 - title: 검색 의도가 명확한 제목 (50자 이내, 예: "입주청소 체크리스트 — 이사 전 꼭 확인해야 할 10가지")
@@ -155,9 +145,24 @@ ${imageHint}
   "summary": "...",
   "content": "...",
   "slug": "..."
-}`,
-      },
-    ],
+}`
+
+  // 이미지가 있으면 URL로 직접 전달 (Claude vision)
+  type MessageContent =
+    | { type: 'text'; text: string }
+    | { type: 'image'; source: { type: 'url'; url: string } }
+
+  const userContent: MessageContent[] = input.imageUrl
+    ? [
+        { type: 'image', source: { type: 'url', url: input.imageUrl } },
+        { type: 'text', text: textPrompt },
+      ]
+    : [{ type: 'text', text: textPrompt }]
+
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 2000,
+    messages: [{ role: 'user', content: userContent }],
   })
 
   const text = message.content[0].type === 'text' ? message.content[0].text : ''

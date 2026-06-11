@@ -5,10 +5,9 @@ import { useAction } from 'next-safe-action/hooks'
 import { generatePostAction, deletePostAction } from '@/lib/actions/posts'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, ImagePlus, X } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -35,7 +34,8 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
   const [showGenerator, setShowGenerator] = useState(false)
   const [showEditor, setShowEditor] = useState(false)
   const [topic, setTopic] = useState('')
-  const [imageDescription, setImageDescription] = useState('')
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
 
   const { execute: generatePost, isPending: isGenerating } = useAction(generatePostAction, {
@@ -44,7 +44,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
         toast.success('포스트가 생성됐습니다!')
         setShowGenerator(false)
         setTopic('')
-        setImageDescription('')
+        setUploadedImageUrl(null)
         // 목록 새로고침을 위해 페이지 리로드
         window.location.reload()
       }
@@ -64,10 +64,31 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
     },
   })
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/upload-image', { method: 'POST', body: formData })
+      const json = await res.json() as { url?: string; error?: string }
+      if (!res.ok || !json.url) throw new Error(json.error ?? '업로드 실패')
+      setUploadedImageUrl(json.url)
+      toast.success('사진이 업로드됐어요!')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '업로드에 실패했어요')
+    } finally {
+      setIsUploading(false)
+      e.target.value = ''
+    }
+  }
+
   const handleGenerate = () => {
     generatePost({
       topic: topic.trim() || undefined,
-      imageDescription: imageDescription.trim() || undefined,
+      imageUrl: uploadedImageUrl ?? undefined,
     })
   }
 
@@ -113,15 +134,44 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
             </div>
             <div>
               <Label className="text-xs text-muted-foreground mb-1 block">
-                이미지 설명 (선택) — 사진을 기반으로 내용을 작성합니다
+                사진 (선택) — 사진을 올리면 AI가 직접 보고 내용을 작성합니다
               </Label>
-              <Textarea
-                placeholder="예: 청소 전후 사진, 욕실 곰팡이 제거 작업 현장, 에어컨 분해 청소 사진..."
-                rows={2}
-                value={imageDescription}
-                onChange={(e) => setImageDescription(e.target.value)}
-                disabled={isGenerating}
-              />
+
+              {uploadedImageUrl ? (
+                /* 업로드된 이미지 미리보기 */
+                <div className="relative inline-block">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={uploadedImageUrl}
+                    alt="업로드된 사진"
+                    className="h-32 w-auto rounded-lg object-cover border"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setUploadedImageUrl(null)}
+                    className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-0.5"
+                    disabled={isGenerating}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                /* 사진 올리기 버튼 */
+                <label className={`flex items-center gap-2 w-fit cursor-pointer rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground hover:bg-accent transition-colors ${isUploading || isGenerating ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {isUploading ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" />올리는 중...</>
+                  ) : (
+                    <><ImagePlus className="h-4 w-4" />사진 올리기</>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/heic"
+                    className="hidden"
+                    onChange={handleImageUpload}
+                    disabled={isUploading || isGenerating}
+                  />
+                </label>
+              )}
             </div>
           </div>
           <div className="flex gap-2">
