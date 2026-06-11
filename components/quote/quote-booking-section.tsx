@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -41,6 +41,11 @@ interface QuoteBookingSectionProps {
     better: string
     best: string
   }
+  tierIncludes?: {
+    good: string[]
+    better: string[]
+    best: string[]
+  }
 }
 
 const TIER_CONTENT: Record<string, {
@@ -78,9 +83,11 @@ export function QuoteBookingSection({
   defaultName,
   defaultPhone,
   tierReasons,
+  tierIncludes,
 }: QuoteBookingSectionProps) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  const formRef = useRef<HTMLDivElement>(null)
 
   const { register, handleSubmit, formState: { errors } } = useForm<BookingInput>({
     resolver: zodResolver(bookingSchema),
@@ -110,12 +117,15 @@ export function QuoteBookingSection({
   const selectedTierData = tiers.find((t) => t.tier === selectedTier)
 
   return (
+    <>
     <div className="space-y-4">
       {/* 플랜 카드 */}
       <div className="space-y-3">
         {tiers.map((tier) => {
           const isSelected = selectedTier === tier.tier
-          const content = TIER_CONTENT[tier.tier]
+          // AI 생성 항목 우선, 없으면 정적 fallback
+          const aiItems = tierIncludes?.[tier.tier as keyof typeof tierIncludes]
+          const fallback = TIER_CONTENT[tier.tier]
           const upsellReason =
             tier.tier === 'better' ? tierReasons?.better :
             tier.tier === 'best'   ? tierReasons?.best   : undefined
@@ -124,7 +134,12 @@ export function QuoteBookingSection({
             <button
               key={tier.tier}
               type="button"
-              onClick={() => setSelectedTier(tier.tier)}
+              onClick={() => {
+                setSelectedTier(tier.tier)
+                setTimeout(() => {
+                  formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }, 80)
+              }}
               className={[
                 'relative w-full rounded-2xl border-2 text-left transition-all p-4',
                 isSelected
@@ -159,28 +174,42 @@ export function QuoteBookingSection({
                 </div>
               </div>
 
-              {/* 포함 항목 */}
-              {content && (
+              {/* 포함 항목 — AI 생성 우선, fallback은 정적 목록 */}
+              {aiItems ? (
                 <div className="space-y-1.5 pl-7">
-                  {content.base.map((item, i) => (
+                  {aiItems.map((item, i) => {
+                    const isAddon = item.startsWith('+')
+                    return (
+                      <div key={i} className="flex items-center gap-1.5 text-xs">
+                        {isAddon ? (
+                          <Plus className="h-3 w-3 text-[#FF7D00] shrink-0" />
+                        ) : (
+                          <Check className="h-3 w-3 text-[#B0B0B0] shrink-0" />
+                        )}
+                        <span className={isAddon ? 'font-bold text-[#FF7D00]' : 'text-[#6B6B6B]'}>
+                          {isAddon ? item.slice(1).trim() : item}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : fallback ? (
+                <div className="space-y-1.5 pl-7">
+                  {fallback.base.map((item, i) => (
                     <div key={i} className="flex items-center gap-1.5 text-xs text-[#6B6B6B]">
                       <Check className="h-3 w-3 text-[#B0B0B0] shrink-0" />
                       <span>{item}</span>
                     </div>
                   ))}
-                  {content.addons.map((addon, i) => (
-                    <div key={i} className="flex items-start gap-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <Plus className="h-3 w-3 text-[#FF7D00] shrink-0 mt-[1px]" />
-                        <div>
-                          <span className="text-xs font-bold text-[#FF7D00]">{addon.name}</span>
-                          <span className="text-xs text-[#8D8D8D] ml-1">({addon.detail})</span>
-                        </div>
-                      </div>
+                  {fallback.addons.map((addon, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <Plus className="h-3 w-3 text-[#FF7D00] shrink-0" />
+                      <span className="text-xs font-bold text-[#FF7D00]">{addon.name}</span>
+                      <span className="text-xs text-[#8D8D8D]">({addon.detail})</span>
                     </div>
                   ))}
                 </div>
-              )}
+              ) : null}
 
               {/* 업셀 이유 callout */}
               {upsellReason && (
@@ -198,7 +227,7 @@ export function QuoteBookingSection({
 
       {/* 예약 폼 */}
       {selectedTier && selectedTierData && (
-        <div className="rounded-2xl bg-[#F5F0EB] p-4 space-y-4">
+        <div ref={formRef} className="rounded-2xl bg-[#F5F0EB] p-4 space-y-4">
           <p className="font-bold text-sm text-[#1A1A1A]">
             {selectedTierData.label} 플랜
             <span className="ml-2 text-[#FF7D00] tabular-nums">
@@ -271,5 +300,30 @@ export function QuoteBookingSection({
         </div>
       )}
     </div>
+
+    {/* Sticky 하단 예약 바 — tier 선택 시 노출 */}
+    {selectedTier && selectedTierData && !done && (
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#F0EBE3] shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
+        <div className="max-w-lg mx-auto px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] text-[#8D8D8D] font-medium">선택한 플랜</p>
+            <p className="font-black text-[#1A1A1A] text-lg tabular-nums leading-tight">
+              {selectedTierData.label}&nbsp;
+              <span className="text-[#FF7D00]">
+                {selectedTierData.price.toLocaleString('ko-KR')}원
+              </span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            className="shrink-0 bg-[#FF7D00] text-white font-extrabold px-6 h-12 rounded-2xl text-sm active:scale-[0.97] transition-transform"
+          >
+            예약하기 →
+          </button>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
