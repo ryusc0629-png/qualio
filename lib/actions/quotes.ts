@@ -5,7 +5,7 @@ import { createSafeActionClient } from 'next-safe-action'
 import { createServiceClient } from '@/lib/supabase/server'
 import { generateTierDescriptions } from '@/lib/ai/tier-descriptions'
 import { recommendBundles } from '@/lib/ai/bundle-recommendation'
-import { sendBookingConfirmAlimtalk } from '@/lib/kakao/alimtalk'
+import { sendBookingConfirmAlimtalk, sendQuoteAlimtalk } from '@/lib/kakao/alimtalk'
 
 // 공개 폼용 액션 클라이언트 (인증 불필요)
 const publicAction = createSafeActionClient({
@@ -26,13 +26,15 @@ const DEFAULT_TIERS = [
   { tier: 'best',   label: '프리미엄', price_multiplier: 1.5, highlight: false },
 ] as const
 
-// Step 1: 가격 계산 + 견적 생성 (익명, 개인정보 없음)
+// Step 1: 가격 계산 + 견적 생성
 const calculateAndCreateQuoteSchema = z.object({
   business_id: z.string().uuid('올바른 업체 정보가 아닙니다'),
   service_id: z.string().uuid('서비스를 선택해주세요'),
   space_size: z.coerce.number().min(1).max(300).optional(),
   preferred_date: z.string().optional(),
   extra_notes: z.string().max(500).optional(),
+  customer_name: z.string().optional(),
+  customer_phone: z.string().optional(),
 })
 
 export const calculateAndCreateQuoteAction = publicAction
@@ -206,19 +208,21 @@ export const calculateAndCreateQuoteAction = publicAction
       getBundleServiceNames(bestId),
     ])
 
-    // 견적 생성 (개인정보 없음 — customer_name/phone은 null)
+    // 견적 생성
     const { data: quote, error } = await db
       .from('quotes')
       .insert({
-        business_id: parsedInput.business_id,
+        business_id:   parsedInput.business_id,
         cleaning_type: service.name,
-        space_size: parsedInput.space_size ?? null,
+        space_size:    parsedInput.space_size ?? null,
         preferred_date: parsedInput.preferred_date ?? null,
-        extra_notes: parsedInput.extra_notes ?? null,
-        good_price: goodPrice,
-        better_price: betterPrice,
-        best_price: bestPrice,
-        status: 'pending',
+        extra_notes:   parsedInput.extra_notes ?? null,
+        good_price:    goodPrice,
+        better_price:  betterPrice,
+        best_price:    bestPrice,
+        status:        'pending',
+        customer_name:  parsedInput.customer_name || null,
+        customer_phone: parsedInput.customer_phone || null,
       })
       .select('id')
       .single()
@@ -242,6 +246,36 @@ export const calculateAndCreateQuoteAction = publicAction
       })
     } catch {
       console.error('[AI] tier descriptions 생성 실패')
+    }
+
+    // 연락처 있으면 견적 알림톡 발송 (실패해도 가격 카드 정상 표시)
+    if (parsedInput.customer_phone && parsedInput.customer_name) {
+      try {
+        const { data: business } = await db
+          .from('businesses')
+          .select('name, phone, slug')
+          .eq('id', parsedInput.business_id)
+          .maybeSingle()
+
+        if (business) {
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+          await sendQuoteAlimtalk({
+            customerPhone: parsedInput.customer_phone,
+            customerName:  parsedInput.customer_name,
+            businessName:  business.name,
+            businessPhone: business.phone ?? null,
+            cleaningType:  service.name,
+            spaceSize:     parsedInput.space_size,
+            preferredDate: parsedInput.preferred_date,
+            goodPrice,
+            betterPrice,
+            bestPrice,
+            quoteUrl: `${appUrl}/q/${parsedInput.business_id}`,
+          })
+        }
+      } catch (e) {
+        console.error('[Alimtalk] 견적 알림톡 발송 실패 — 가격 표시는 정상', e)
+      }
     }
 
     // 클라이언트에 반환 (가격 카드 렌더링용)

@@ -41,6 +41,32 @@ const deleteLeadSchema = z.object({
   leadId: z.string().uuid(),
 })
 
+// 견적 → 잠재고객 전환 스키마
+const createLeadFromQuoteSchema = z.object({
+  customerName:  z.string().min(1),
+  customerPhone: z.string().min(1),
+  cleaningType:  z.string().optional(),
+})
+
+// 견적 → 잠재고객 전환
+export const createLeadFromQuoteAction = action
+  .schema(createLeadFromQuoteSchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuthenticatedBusinessId()
+
+    const { error } = await db.from('leads').insert({
+      business_id:  businessId,
+      company_name: parsedInput.customerName,
+      phone:        parsedInput.customerPhone,
+      notes:        parsedInput.cleaningType ? `견적 요청: ${parsedInput.cleaningType}` : '견적 요청 고객',
+      status:       'new',
+    })
+
+    if (error) throw new Error('[APP] 잠재고객 등록에 실패했습니다')
+    revalidatePath('/dashboard/clients')
+    return { success: true }
+  })
+
 // 인증 + business_id 조회 헬퍼
 async function getAuthenticatedBusinessId() {
   const authClient = await createClient()

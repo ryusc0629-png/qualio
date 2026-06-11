@@ -17,6 +17,8 @@ const step1Schema = z.object({
   space_size: z.string().optional(),
   preferred_date: z.string().optional(),
   extra_notes: z.string().max(500).optional(),
+  customer_name: z.string().optional(),
+  customer_phone: z.string().optional(),
 })
 
 // Step 2: 예약 확정 스키마
@@ -98,12 +100,18 @@ export function QuoteForm({ businessId, services }: QuoteFormProps) {
       form1.setError('space_size', { message: '평당 서비스는 평수를 입력해주세요' })
       return
     }
+    // Step 1 연락처 → Step 2 폼 미리 채우기
+    if (data.customer_name) form2.setValue('customer_name', data.customer_name)
+    if (data.customer_phone) form2.setValue('customer_phone', data.customer_phone)
+
     executeCalculate({
-      business_id: businessId,
-      service_id: data.service_id,
-      space_size: spaceSize,
+      business_id:    businessId,
+      service_id:     data.service_id,
+      space_size:     spaceSize,
       preferred_date: data.preferred_date || undefined,
-      extra_notes: data.extra_notes || undefined,
+      extra_notes:    data.extra_notes || undefined,
+      customer_name:  data.customer_name || undefined,
+      customer_phone: data.customer_phone || undefined,
     })
   }
 
@@ -293,6 +301,34 @@ export function QuoteForm({ businessId, services }: QuoteFormProps) {
           rows={3}
           className="w-full rounded-md border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
         />
+      </div>
+
+      {/* 연락처 (선택) — 카카오로 견적 받기 */}
+      <div className="rounded-lg border border-dashed p-4 space-y-3 bg-yellow-50/50">
+        <p className="text-xs font-medium text-yellow-800">
+          📱 연락처를 남기시면 카카오톡으로 견적을 보내드려요
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <Label htmlFor="customer_name" className="text-xs">이름</Label>
+            <Input
+              id="customer_name"
+              placeholder="홍길동"
+              {...form1.register('customer_name')}
+              className="h-9 text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="customer_phone" className="text-xs">연락처</Label>
+            <Input
+              id="customer_phone"
+              placeholder="010-1234-5678"
+              inputMode="tel"
+              {...form1.register('customer_phone')}
+              className="h-9 text-sm"
+            />
+          </div>
+        </div>
       </div>
 
       <Button type="submit" className="w-full" disabled={isCalculating || services.length === 0}>

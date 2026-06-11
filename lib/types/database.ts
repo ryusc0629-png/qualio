@@ -543,6 +543,8 @@ export type Database = {
           business_id: string
           cleaning_type: string | null
           created_at: string
+          customer_name: string | null
+          customer_phone: string | null
           expires_at: string
           extra_notes: string | null
           good_price: number | null
@@ -559,6 +561,8 @@ export type Database = {
           business_id: string
           cleaning_type?: string | null
           created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
           expires_at?: string
           extra_notes?: string | null
           good_price?: number | null
@@ -575,6 +579,8 @@ export type Database = {
           business_id?: string
           cleaning_type?: string | null
           created_at?: string
+          customer_name?: string | null
+          customer_phone?: string | null
           expires_at?: string
           extra_notes?: string | null
           good_price?: number | null
