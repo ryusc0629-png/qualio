@@ -205,6 +205,67 @@ slug: 제목을 영문 URL slug로 변환 (예: "air-conditioner-cleaning-guide"
   }
 }
 
+export interface TopicSuggestion {
+  title: string    // 제안 포스트 제목
+  reason: string   // 이 달에 인기인 이유 (한 줄, 15자 이내)
+  topic: string    // generatePostAction에 넘길 topic 문자열
+}
+
+// 이번 달 소비자들이 많이 찾는 청소 관련 주제 5개 자동 생성
+export async function generateTopicSuggestions(input: {
+  businessName: string
+  services: ServiceItem[]
+  currentMonth: number   // 1~12
+}): Promise<TopicSuggestion[]> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) throw new Error('[APP] AI 기능을 사용하려면 API 키가 필요합니다')
+
+  const client = new Anthropic({ apiKey })
+
+  const serviceNames = input.services.map((s) => s.name).join(', ')
+  const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
+  const currentMonthName = monthNames[input.currentMonth - 1]
+
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 800,
+    messages: [
+      {
+        role: 'user',
+        content: `당신은 한국 청소 서비스 업체의 블로그 콘텐츠 전략가입니다.
+${currentMonthName} 기준으로 소비자들이 네이버/구글에서 많이 검색하는 청소 관련 주제를 추천하세요.
+
+업체명: ${input.businessName}
+제공 서비스: ${serviceNames || '청소 서비스'}
+현재 월: ${currentMonthName}
+
+규칙:
+- 이 달에 실제로 검색이 많아지는 계절적 요인을 반영할 것
+- 업체가 제공하는 서비스와 관련된 주제 우선
+- 소비자가 직접 검색하는 질문형/정보형 제목
+- reason은 10~15자 이내 짧게 (예: "이사 시즌 검색 급증", "여름철 에어컨 필수")
+
+반드시 아래 JSON 배열로만 응답하세요 (5개):
+[
+  { "title": "포스트 제목", "reason": "이 달 인기 이유", "topic": "AI에게 전달할 작성 주제" },
+  ...
+]`,
+      },
+    ],
+  })
+
+  const text = message.content[0].type === 'text' ? message.content[0].text : ''
+
+  try {
+    const jsonMatch = text.match(/\[[\s\S]*\]/)
+    if (!jsonMatch) throw new Error('JSON not found')
+    return JSON.parse(jsonMatch[0]) as TopicSuggestion[]
+  } catch (e) {
+    console.error('[AI] 주제 추천 파싱 실패:', e, text)
+    throw new Error('[APP] 주제 추천 생성에 실패했습니다')
+  }
+}
+
 // 업체명 → URL slug 변환 유틸
 export function generateSlug(businessName: string, suffix: string): string {
   const normalized = businessName

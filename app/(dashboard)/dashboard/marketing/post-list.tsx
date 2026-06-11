@@ -1,15 +1,21 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
-import { generatePostAction, deletePostAction } from '@/lib/actions/posts'
+import { generatePostAction, deletePostAction, getTopicSuggestionsAction } from '@/lib/actions/posts'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, ImagePlus, X } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, ImagePlus, X, TrendingUp, ChevronRight } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
+
+interface TopicSuggestion {
+  title: string
+  reason: string
+  topic: string
+}
 
 interface Post {
   id: string
@@ -39,6 +45,28 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
   const [uploadingCount, setUploadingCount] = useState(0)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // 이번 달 주제 추천
+  const [suggestions, setSuggestions] = useState<TopicSuggestion[] | null>(null)
+  // 개별 카드에서 업로드 중인 topic 추적
+  const [uploadingTopic, setUploadingTopic] = useState<string | null>(null)
+
+  // 주제 추천 액션 — 마운트 시 자동 호출
+  const { execute: fetchSuggestions, isPending: isLoadingSuggestions } = useAction(
+    getTopicSuggestionsAction,
+    {
+      onSuccess: ({ data }) => {
+        if (data?.suggestions) setSuggestions(data.suggestions)
+      },
+      onError: () => {
+        // 조용히 실패 — 추천이 없어도 사용에 지장 없음
+      },
+    }
+  )
+
+  useEffect(() => {
+    fetchSuggestions({})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const { execute: generatePost, isPending: isGenerating } = useAction(generatePostAction, {
     onSuccess: ({ data }) => {
@@ -47,10 +75,12 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
         setShowGenerator(false)
         setTopic('')
         setUploadedUrls([])
+        setUploadingTopic(null)
         window.location.reload()
       }
     },
     onError: ({ error }) => {
+      setUploadingTopic(null)
       toast.error(error.serverError ?? '포스트 생성에 실패했습니다')
     },
   })
@@ -111,13 +141,74 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
     })
   }
 
+  // 추천 주제 카드에서 바로 업로드
+  const handleSuggestionUpload = (suggestion: TopicSuggestion) => {
+    setUploadingTopic(suggestion.topic)
+    generatePost({ topic: suggestion.topic })
+  }
+
   const postUrl = (slug: string) =>
     businessSlug ? `${appUrl}/biz/${businessSlug}/posts/${slug}` : null
 
   const isUploading = uploadingCount > 0
 
+  const currentMonth = new Date().getMonth() + 1
+
   return (
     <div className="space-y-4">
+
+      {/* ── 이번 달 인기 주제 추천 ── */}
+      <div className="rounded-xl border bg-gradient-to-br from-primary/5 to-violet-500/5 p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-primary" />
+          <p className="font-semibold text-sm">
+            {currentMonth}월에 소비자들이 많이 찾는 주제예요
+          </p>
+          <span className="text-xs text-muted-foreground ml-auto">바로 올리면 검색 노출에 유리해요</span>
+        </div>
+
+        {/* 로딩 중 */}
+        {isLoadingSuggestions && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            AI가 이번 달 인기 주제를 분석 중이에요...
+          </div>
+        )}
+
+        {/* 추천 카드 목록 */}
+        {suggestions && suggestions.length > 0 && (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {suggestions.slice(0, 5).map((s) => {
+              const isThisUploading = isGenerating && uploadingTopic === s.topic
+              return (
+                <div
+                  key={s.topic}
+                  className="rounded-lg border bg-white p-3.5 flex flex-col gap-2 hover:border-primary/40 transition-colors"
+                >
+                  <div className="flex-1">
+                    <p className="font-semibold text-xs leading-snug line-clamp-2">{s.title}</p>
+                    <p className="text-xs text-primary mt-1">{s.reason}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full gap-1.5 h-8 text-xs mt-1"
+                    onClick={() => handleSuggestionUpload(s)}
+                    disabled={isGenerating}
+                  >
+                    {isThisUploading ? (
+                      <><Loader2 className="h-3 w-3 animate-spin" />작성 중...</>
+                    ) : (
+                      <><Sparkles className="h-3 w-3" />이 글 올리기 <ChevronRight className="h-3 w-3" /></>
+                    )}
+                  </Button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       {/* 액션 버튼 */}
       <div className="flex gap-2 flex-wrap">
         <Button

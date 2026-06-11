@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { generatePostContent } from '@/lib/ai/geo-content'
+import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
 import { revalidatePath } from 'next/cache'
 
 // 공통: 현재 유저의 business_id 조회
@@ -161,6 +161,37 @@ export const savePostAction = action
 
     revalidatePath('/dashboard/marketing')
     return { success: true }
+  })
+
+// 이번 달 인기 주제 추천 액션
+export const getTopicSuggestionsAction = action
+  .schema(z.object({}))
+  .action(async () => {
+    const { db, businessId } = await getBusinessId()
+
+    const [businessResult, servicesResult] = await Promise.all([
+      db
+        .from('businesses')
+        .select('name')
+        .eq('id', businessId)
+        .maybeSingle(),
+      db
+        .from('service_items')
+        .select('name, base_price, unit')
+        .eq('business_id', businessId)
+        .eq('is_active', true)
+        .is('deleted_at', null),
+    ])
+
+    if (!businessResult.data) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const suggestions = await generateTopicSuggestions({
+      businessName: businessResult.data.name,
+      services: servicesResult.data ?? [],
+      currentMonth: new Date().getMonth() + 1,
+    })
+
+    return { suggestions }
   })
 
 // 포스트 삭제 액션
