@@ -154,17 +154,21 @@ export function QuoteForm({ businessId, services }: QuoteFormProps) {
             <Label htmlFor="customer_phone" className="text-xs">연락처</Label>
             <Input
               id="customer_phone"
-              placeholder="010-1234-5678"
-              inputMode="tel"
+              placeholder="01012345678"
+              inputMode="numeric"
               className="h-9 text-sm"
               {...form.register('customer_phone')}
+              onChange={(e) => {
+                const numOnly = e.target.value.replace(/\D/g, '')
+                form.setValue('customer_phone', numOnly)
+              }}
             />
           </div>
         </div>
       </div>
 
       <Button type="submit" className="w-full h-12 text-base font-semibold" disabled={isPending || services.length === 0}>
-        {isPending ? 'AI가 견적을 준비 중이에요...' : '견적 확인하기 →'}
+        {isPending ? '맞춤 견적을 계산하고 있어요...' : '견적 확인하기 →'}
       </Button>
     </form>
   )

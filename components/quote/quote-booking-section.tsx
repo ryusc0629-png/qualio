@@ -226,7 +226,16 @@ export function QuoteBookingSection({ quoteId, tiers, defaultName, defaultPhone 
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">연락처 (필수)</Label>
-                <Input placeholder="010-1234-5678" inputMode="tel" className="h-11 bg-white" {...register('customer_phone')} />
+                <Input
+                  placeholder="01012345678"
+                  inputMode="numeric"
+                  className="h-11 bg-white"
+                  {...register('customer_phone')}
+                  onChange={(e) => {
+                    const numOnly = e.target.value.replace(/\D/g, '')
+                    e.target.value = numOnly
+                  }}
+                />
                 {errors.customer_phone && (
                   <p className="text-xs text-destructive">{errors.customer_phone.message}</p>
                 )}
