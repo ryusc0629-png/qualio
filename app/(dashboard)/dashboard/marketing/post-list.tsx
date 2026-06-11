@@ -1,13 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
-import { generatePostAction, deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction } from '@/lib/actions/posts'
+import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction } from '@/lib/actions/posts'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, ImagePlus, X, Zap, CheckCircle2, Clock, CalendarDays } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -138,13 +136,8 @@ const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
 export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId }: PostListProps) {
   const [posts] = useState(initialPosts)
-  const [showGenerator, setShowGenerator] = useState(false)
   const [showEditor, setShowEditor] = useState(false)
-  const [topic, setTopic] = useState('')
-  const [uploadedUrls, setUploadedUrls] = useState<string[]>([])
-  const [uploadingCount, setUploadingCount] = useState(0)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const [suggestions, setSuggestions] = useState<TopicSuggestion[] | null>(null)
 
   const now = new Date()
@@ -178,58 +171,12 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const { execute: generatePost, isPending: isGenerating } = useAction(generatePostAction, {
-    onSuccess: ({ data }) => {
-      if (data?.postContent) {
-        toast.success('포스트가 생성됐습니다!')
-        setShowGenerator(false)
-        setTopic('')
-        setUploadedUrls([])
-        window.location.reload()
-      }
-    },
-    onError: ({ error }) => {
-      toast.error(error.serverError ?? '포스트 생성에 실패했어요. 다시 눌러주세요')
-    },
-  })
-
-  const { execute: deletePost, isPending: isDeleting } = useAction(deletePostAction, {
+const { execute: deletePost, isPending: isDeleting } = useAction(deletePostAction, {
     onSuccess: () => { toast.success('삭제됐습니다'); window.location.reload() },
     onError: ({ error }) => { toast.error(error.serverError ?? '삭제에 실패했습니다') },
   })
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? [])
-    if (files.length === 0) return
-    setUploadingCount(files.length)
-    const results = await Promise.allSettled(
-      files.map(async (file) => {
-        const formData = new FormData()
-        formData.append('file', file)
-        const res = await fetch('/api/upload-image', { method: 'POST', body: formData })
-        const json = await res.json() as { url?: string; error?: string }
-        if (!res.ok || !json.url) throw new Error(json.error ?? '업로드 실패')
-        return json.url
-      })
-    )
-    const succeeded: string[] = []
-    let failCount = 0
-    results.forEach((r) => {
-      if (r.status === 'fulfilled') succeeded.push(r.value)
-      else failCount++
-    })
-    setUploadedUrls((prev) => [...prev, ...succeeded])
-    setUploadingCount(0)
-    if (succeeded.length > 0) toast.success(`사진 ${succeeded.length}장이 올라갔어요!`)
-    if (failCount > 0) toast.error(`${failCount}장은 업로드에 실패했어요. 다시 시도해주세요`)
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
-
-  const removeImage = (url: string) => setUploadedUrls((prev) => prev.filter((u) => u !== url))
-  const handleGenerate = () => generatePost({ topic: topic.trim() || undefined, imageUrl: uploadedUrls[0] })
-  const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/posts/${slug}` : null
-  const isUploading = uploadingCount > 0
-
+const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/posts/${slug}` : null
   const publishedCount = schedule.filter((s) => s.status === 'published').length
   const upcomingCount = schedule.filter((s) => s.status === 'upcoming' || s.status === 'today').length
 
@@ -359,52 +306,10 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
 
       {/* 액션 버튼 */}
       <div className="flex gap-2 flex-wrap">
-        <Button onClick={() => { setShowGenerator(!showGenerator); setShowEditor(false) }} className="gap-2">
-          <Sparkles className="h-4 w-4" />AI로 포스트 생성
-        </Button>
-        <Button variant="outline" onClick={() => { setShowEditor(!showEditor); setEditingPost(null); setShowGenerator(false) }} className="gap-2">
+        <Button variant="outline" onClick={() => { setShowEditor(!showEditor); setEditingPost(null) }} className="gap-2">
           <Plus className="h-4 w-4" />직접 작성
         </Button>
       </div>
-
-      {/* AI 생성 패널 */}
-      {showGenerator && (
-        <div className="rounded-lg border bg-card p-5 space-y-4">
-          <h3 className="font-semibold text-sm">AI 포스트 자동 생성</h3>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">주제 (선택) — 비워두면 AI가 알아서 선택합니다</Label>
-              <Input placeholder="예: 에어컨 청소 주기, 입주청소 준비 방법, 곰팡이 제거 팁..." value={topic} onChange={(e) => setTopic(e.target.value)} disabled={isGenerating} />
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground mb-1 block">사진 (선택) — 여러 장 선택 가능, AI가 첫 번째 사진을 보고 내용 작성</Label>
-              {uploadedUrls.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {uploadedUrls.map((url) => (
-                    <div key={url} className="relative">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt="업로드된 사진" className="h-20 w-20 rounded-lg object-cover border" />
-                      <button type="button" onClick={() => removeImage(url)} className="absolute -top-1.5 -right-1.5 bg-destructive text-destructive-foreground rounded-full p-0.5" disabled={isGenerating}>
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <label className={`flex items-center gap-2 w-fit cursor-pointer rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground hover:bg-accent transition-colors ${isUploading || isGenerating ? 'opacity-50 pointer-events-none' : ''}`}>
-                {isUploading ? <><Loader2 className="h-4 w-4 animate-spin" />{uploadingCount}장 올리는 중...</> : <><ImagePlus className="h-4 w-4" />{uploadedUrls.length > 0 ? '사진 더 추가하기' : '사진 올리기'}</>}
-                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} disabled={isUploading || isGenerating} />
-              </label>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={handleGenerate} disabled={isGenerating || isUploading} className="gap-2">
-              {isGenerating ? <><Loader2 className="h-4 w-4 animate-spin" />AI가 작성 중이에요...</> : <><Sparkles className="h-4 w-4" />생성하기</>}
-            </Button>
-            <Button variant="ghost" onClick={() => setShowGenerator(false)} disabled={isGenerating}>취소</Button>
-          </div>
-        </div>
-      )}
 
       {/* 직접 작성 패널 */}
       {showEditor && !editingPost && (
