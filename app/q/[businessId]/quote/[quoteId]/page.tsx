@@ -23,7 +23,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
       .maybeSingle(),
     db
       .from('businesses')
-      .select('name, phone, description, slug')
+      .select('name, phone, description, slug, naver_place_url')
       .eq('id', businessId)
       .maybeSingle(),
   ])
@@ -126,7 +126,20 @@ export default async function QuoteLandingPage({ params }: PageProps) {
           </div>
         )}
 
-        {/* 통계 3개 */}
+        {/* A/S 보증 배너 */}
+        <div className="bg-white rounded-3xl p-5 shadow-sm flex items-start gap-4">
+          <div className="w-12 h-12 bg-[#FFF3E8] rounded-2xl flex items-center justify-center shrink-0">
+            <span className="text-2xl">🛡️</span>
+          </div>
+          <div>
+            <p className="font-extrabold text-[15px] text-[#1A1A1A]">작업 후 3일 이내 무상 재방문 보증</p>
+            <p className="text-xs text-[#8D8D8D] mt-1 leading-relaxed">
+              작업 완료 후 미흡한 부분이 있으면 3일 이내 추가 비용 없이 재방문해 드립니다. 만족하실 때까지 책임집니다.
+            </p>
+          </div>
+        </div>
+
+        {/* 작업 포인트 3가지 */}
         <div className="grid grid-cols-3 gap-3">
           {facts.map((fact, i) => (
             <div key={i} className="bg-white rounded-2xl p-4 text-center shadow-sm">
@@ -136,6 +149,27 @@ export default async function QuoteLandingPage({ params }: PageProps) {
             </div>
           ))}
         </div>
+
+        {/* 네이버 리뷰 링크 */}
+        {business.naver_place_url && (
+          <a
+            href={business.naver_place_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between bg-white rounded-2xl px-5 py-4 shadow-sm"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-[#03C75A] rounded-xl flex items-center justify-center shrink-0">
+                <span className="text-white text-xs font-black">N</span>
+              </div>
+              <div>
+                <p className="font-bold text-sm text-[#1A1A1A]">네이버 실제 고객 리뷰</p>
+                <p className="text-xs text-[#8D8D8D]">직접 확인해보세요</p>
+              </div>
+            </div>
+            <span className="text-[#8D8D8D] text-lg">›</span>
+          </a>
+        )}
 
         {/* 왜 필요한가 */}
         <div className="bg-white rounded-3xl p-5 shadow-sm space-y-1">
