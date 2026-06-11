@@ -2,7 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowLeft, Calendar, MapPin, Phone } from 'lucide-react'
+import { ArrowLeft, Calendar, Clock, MapPin, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface Props {
@@ -19,13 +19,111 @@ interface PostMeta {
   faqs?: FaqItem[]
 }
 
+interface TocItem {
+  id: string
+  text: string
+  level: 2 | 3
+}
+
+// 본문에서 ## / ### 헤더 추출 → 목차 생성
+function extractToc(content: string): TocItem[] {
+  const lines = content.split('\n')
+  const toc: TocItem[] = []
+  lines.forEach((line) => {
+    const h2 = line.match(/^## (.+)/)
+    const h3 = line.match(/^### (.+)/)
+    if (h2) {
+      const text = h2[1].trim()
+      toc.push({ id: toAnchorId(text), text, level: 2 })
+    } else if (h3) {
+      const text = h3[1].trim()
+      toc.push({ id: toAnchorId(text), text, level: 3 })
+    }
+  })
+  return toc
+}
+
+// 헤더 텍스트 → anchor id
+function toAnchorId(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w가-힣ㄱ-ㅎ-]/g, '')
+    .slice(0, 50)
+}
+
+// 읽기 시간 계산 (한국어 기준 분당 500자)
+function readingTime(content: string): number {
+  const chars = content.replace(/\s/g, '').length
+  return Math.max(1, Math.round(chars / 500))
+}
+
+// 마크다운 → React 요소 렌더링 (## 헤더 anchor 포함)
+function renderContent(content: string) {
+  const blocks = content.split(/\n\n+/)
+  return blocks.map((block, i) => {
+    const trimmed = block.trim()
+    if (!trimmed) return null
+
+    if (trimmed.startsWith('## ')) {
+      const text = trimmed.replace(/^## /, '')
+      return (
+        <h2 key={i} id={toAnchorId(text)} className="text-xl font-bold mt-10 mb-3 scroll-mt-20">
+          {text}
+        </h2>
+      )
+    }
+    if (trimmed.startsWith('### ')) {
+      const text = trimmed.replace(/^### /, '')
+      return (
+        <h3 key={i} id={toAnchorId(text)} className="text-base font-semibold mt-6 mb-2 scroll-mt-20">
+          {text}
+        </h3>
+      )
+    }
+
+    // 리스트 블록
+    const lines = trimmed.split('\n')
+    const listLines = lines.filter((l) => l.trim().startsWith('- '))
+    if (listLines.length > 0 && listLines.length === lines.filter(Boolean).length) {
+      return (
+        <ul key={i} className="space-y-2 my-4">
+          {listLines.map((line, j) => (
+            <li key={j} className="flex items-start gap-2.5 text-muted-foreground text-sm">
+              <span className="mt-2 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+              <span className="leading-relaxed">{line.replace(/^- /, '')}</span>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+
+    // 인용 블록 (> 로 시작)
+    if (trimmed.startsWith('> ')) {
+      return (
+        <blockquote key={i} className="border-l-4 border-primary/40 pl-4 py-1 my-4 bg-muted/40 rounded-r-lg">
+          <p className="text-sm text-muted-foreground italic leading-relaxed">
+            {trimmed.replace(/^> /, '')}
+          </p>
+        </blockquote>
+      )
+    }
+
+    return (
+      <p key={i} className="text-muted-foreground text-sm leading-7">
+        {trimmed}
+      </p>
+    )
+  })
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug, postSlug } = await params
   const db = createServiceClient()
 
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, seo_description')
+    .select('id, name, seo_description, address')
     .eq('slug', slug)
     .maybeSingle()
 
@@ -33,7 +131,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const { data: post } = await db
     .from('biz_posts')
-    .select('title, summary')
+    .select('title, summary, image_url, published_at')
     .eq('business_id', business.id)
     .eq('slug', postSlug)
     .eq('published', true)
@@ -43,6 +141,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
   const description = post.summary ?? business.seo_description ?? ''
+  const canonicalUrl = `${appUrl}/biz/${slug}/posts/${postSlug}`
 
   return {
     title: `${post.title} | ${business.name}`,
@@ -51,61 +150,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: post.title,
       description,
       type: 'article',
-      url: `${appUrl}/biz/${slug}/posts/${postSlug}`,
+      url: canonicalUrl,
       siteName: '퀄리오',
+      publishedTime: post.published_at,
+      ...(post.image_url ? { images: [{ url: post.image_url }] } : {}),
     },
-    twitter: { card: 'summary', title: post.title, description },
-    alternates: { canonical: `${appUrl}/biz/${slug}/posts/${postSlug}` },
+    twitter: { card: 'summary_large_image', title: post.title, description },
+    alternates: { canonical: canonicalUrl },
   }
-}
-
-// 마크다운 본문 → React 요소 렌더링
-// ## 헤더, 리스트(-), 일반 단락 지원
-function renderContent(content: string) {
-  const blocks = content.split(/\n\n+/)
-  return blocks.map((block, i) => {
-    const trimmed = block.trim()
-    if (!trimmed) return null
-
-    // ## 헤더
-    if (trimmed.startsWith('## ')) {
-      return (
-        <h2 key={i} className="text-lg font-bold mt-8 mb-3 text-foreground">
-          {trimmed.replace(/^## /, '')}
-        </h2>
-      )
-    }
-    // ### 헤더
-    if (trimmed.startsWith('### ')) {
-      return (
-        <h3 key={i} className="font-semibold mt-5 mb-2 text-foreground">
-          {trimmed.replace(/^### /, '')}
-        </h3>
-      )
-    }
-
-    // 리스트 블록 (줄마다 - 로 시작)
-    const listLines = trimmed.split('\n').filter((l) => l.trim().startsWith('- '))
-    if (listLines.length > 0 && listLines.length === trimmed.split('\n').filter(Boolean).length) {
-      return (
-        <ul key={i} className="space-y-1.5 my-3">
-          {listLines.map((line, j) => (
-            <li key={j} className="flex items-start gap-2 text-muted-foreground">
-              <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
-              <span>{line.replace(/^- /, '')}</span>
-            </li>
-          ))}
-        </ul>
-      )
-    }
-
-    // 일반 단락
-    return (
-      <p key={i} className="text-muted-foreground leading-relaxed">
-        {trimmed}
-      </p>
-    )
-  })
 }
 
 export default async function PostPage({ params }: Props) {
@@ -130,10 +182,9 @@ export default async function PostPage({ params }: Props) {
 
   if (!post) notFound()
 
-  // 최근 포스트 3개 (관련 포스트)
   const { data: relatedPosts } = await db
     .from('biz_posts')
-    .select('slug, title, published_at')
+    .select('slug, title, summary, published_at')
     .eq('business_id', business.id)
     .eq('published', true)
     .neq('slug', postSlug)
@@ -142,14 +193,12 @@ export default async function PostPage({ params }: Props) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
-  // content에서 keyPoints / faqs 파싱 시도 (AI가 JSON 메타를 앞에 붙인 경우 대비)
-  // 일반적으로 content는 순수 마크다운이지만, 추후 확장 가능
+  // JSON 메타 블록 파싱 (keyPoints, faqs)
   let keyPoints: string[] = []
   let inlineFaqs: FaqItem[] = []
-
-  // content 앞부분에 JSON 메타 블록이 있으면 추출
-  const metaMatch = post.content.match(/^```json\n([\s\S]+?)\n```\n/)
   let mainContent = post.content
+
+  const metaMatch = post.content.match(/^```json\n([\s\S]+?)\n```\n/)
   if (metaMatch) {
     try {
       const meta = JSON.parse(metaMatch[1]) as PostMeta
@@ -157,36 +206,25 @@ export default async function PostPage({ params }: Props) {
       inlineFaqs = meta.faqs ?? []
       mainContent = post.content.slice(metaMatch[0].length)
     } catch {
-      // 파싱 실패 시 그대로 사용
+      // 파싱 실패 시 원본 그대로
     }
   }
 
-  // content 내 ## FAQ 섹션 추출 (마크다운 형식)
-  const faqSectionMatch = mainContent.match(/## FAQ[\s\S]*$/)
-  if (faqSectionMatch && inlineFaqs.length === 0) {
-    const faqLines = faqSectionMatch[0].split('\n').filter(Boolean).slice(1)
-    const parsedFaqs: FaqItem[] = []
-    let currentQ = ''
-    faqLines.forEach((line) => {
-      if (line.startsWith('**Q')) {
-        currentQ = line.replace(/^\*\*Q\d+[.:]\s*/, '').replace(/\*\*$/, '')
-      } else if (line.startsWith('A:') || line.startsWith('**A:')) {
-        if (currentQ) {
-          parsedFaqs.push({ question: currentQ, answer: line.replace(/^\*\*?A:\s*/, '').replace(/\*\*$/, '') })
-          currentQ = ''
-        }
-      }
-    })
-    if (parsedFaqs.length > 0) {
-      inlineFaqs = parsedFaqs
-      mainContent = mainContent.slice(0, mainContent.indexOf(faqSectionMatch[0])).trim()
-    }
-  }
+  const toc = extractToc(mainContent)
+  const minutes = readingTime(mainContent)
 
-  // JSON-LD — Article + FAQPage
+  // JSON-LD — Article + FAQPage + BreadcrumbList
   const jsonLd = {
     '@context': 'https://schema.org',
     '@graph': [
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: '홈', item: appUrl },
+          { '@type': 'ListItem', position: 2, name: business.name, item: `${appUrl}/biz/${slug}` },
+          { '@type': 'ListItem', position: 3, name: post.title, item: `${appUrl}/biz/${slug}/posts/${postSlug}` },
+        ],
+      },
       {
         '@type': 'Article',
         headline: post.title,
@@ -220,7 +258,7 @@ export default async function PostPage({ params }: Props) {
       <div className="min-h-screen bg-background">
         {/* 헤더 */}
         <header className="border-b bg-white/80 backdrop-blur sticky top-0 z-10">
-          <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
             <Link
               href={`/biz/${slug}`}
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -234,126 +272,191 @@ export default async function PostPage({ params }: Props) {
           </div>
         </header>
 
-        <main className="max-w-2xl mx-auto px-4 py-10 space-y-8">
+        {/* 대표 이미지 — 풀 와이드 */}
+        {post.image_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={post.image_url}
+            alt={post.title}
+            className="w-full object-cover max-h-80"
+          />
+        )}
 
-          {/* 포스트 제목 + 메타 */}
-          <div className="space-y-3">
-            <h1 className="text-2xl font-bold leading-snug">{post.title}</h1>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-              <span className="flex items-center gap-1">
-                <Calendar className="h-3.5 w-3.5" />
-                {new Date(post.published_at).toLocaleDateString('ko-KR', {
-                  year: 'numeric', month: 'long', day: 'numeric',
-                })}
-              </span>
-              <span>{business.name}</span>
-            </div>
-          </div>
+        <div className="max-w-5xl mx-auto px-4 py-10">
+          <div className="lg:grid lg:grid-cols-[1fr_260px] lg:gap-12">
 
-          {/* 대표 이미지 */}
-          {post.image_url && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={post.image_url}
-              alt={post.title}
-              className="w-full rounded-xl object-cover max-h-72"
-            />
-          )}
+            {/* 메인 콘텐츠 */}
+            <main className="min-w-0 space-y-8">
 
-          {/* 핵심 요약 박스 — Inblog 스타일 */}
-          {(post.summary || keyPoints.length > 0) && (
-            <div className="rounded-xl border-l-4 border-primary bg-primary/5 p-5 space-y-2">
-              <p className="text-xs font-semibold text-primary uppercase tracking-wide">이 글의 핵심</p>
-              {post.summary && (
-                <p className="text-sm text-foreground leading-relaxed font-medium">{post.summary}</p>
-              )}
-              {keyPoints.length > 0 && (
-                <ul className="space-y-1 pt-1">
-                  {keyPoints.map((pt, i) => (
-                    <li key={i} className="text-sm text-muted-foreground">{pt}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
+              {/* 브레드크럼 */}
+              <nav className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                <Link href={`/biz/${slug}`} className="hover:text-foreground transition-colors">
+                  {business.name}
+                </Link>
+                <span>/</span>
+                <span className="text-foreground">{post.title}</span>
+              </nav>
 
-          {/* 본문 */}
-          <article className="space-y-4 text-sm leading-7">
-            {renderContent(mainContent)}
-          </article>
-
-          {/* FAQ 섹션 — AI 검색엔진 인용 핵심 */}
-          {inlineFaqs.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-lg font-bold">자주 묻는 질문</h2>
-              <div className="space-y-2">
-                {inlineFaqs.map((faq, i) => (
-                  <details key={i} className="group rounded-lg border bg-card">
-                    <summary className="flex items-center justify-between p-4 cursor-pointer list-none text-sm font-medium">
-                      <span className="pr-4">{faq.question}</span>
-                      <span className="text-muted-foreground shrink-0 group-open:rotate-180 transition-transform">▾</span>
-                    </summary>
-                    <div className="px-4 pb-4 text-sm text-muted-foreground leading-relaxed">
-                      {faq.answer}
-                    </div>
-                  </details>
-                ))}
+              {/* 제목 + 메타 */}
+              <div className="space-y-3">
+                <h1 className="text-2xl sm:text-3xl font-bold leading-snug">{post.title}</h1>
+                <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {new Date(post.published_at).toLocaleDateString('ko-KR', {
+                      year: 'numeric', month: 'long', day: 'numeric',
+                    })}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5" />
+                    약 {minutes}분 읽기
+                  </span>
+                  <span className="font-medium text-foreground">{business.name}</span>
+                </div>
               </div>
-            </section>
-          )}
 
-          {/* CTA 박스 */}
-          <section className="rounded-xl bg-primary/5 border border-primary/20 p-6 space-y-4">
-            <div className="space-y-1">
-              <p className="font-bold">{business.name}에 직접 문의하세요</p>
-              <p className="text-sm text-muted-foreground">무료로 견적을 받아보실 수 있습니다.</p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Link href={`/q/${business.id}`} className="flex-1">
-                <Button className="w-full">온라인 견적 받기 →</Button>
-              </Link>
-              {business.phone && (
-                <a href={`tel:${business.phone}`} className="flex-1">
-                  <Button variant="outline" className="w-full gap-2">
-                    <Phone className="h-4 w-4" />
-                    {business.phone}
-                  </Button>
-                </a>
+              {/* 핵심 요약 박스 */}
+              {(post.summary || keyPoints.length > 0) && (
+                <div className="rounded-xl border-l-4 border-primary bg-primary/5 p-5 space-y-2.5">
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wider">이 글의 핵심</p>
+                  {post.summary && (
+                    <p className="text-sm font-medium leading-relaxed">{post.summary}</p>
+                  )}
+                  {keyPoints.length > 0 && (
+                    <ul className="space-y-1.5 pt-1">
+                      {keyPoints.map((pt, i) => (
+                        <li key={i} className="text-sm text-muted-foreground">{pt}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
-            </div>
-            {business.address && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <MapPin className="h-3.5 w-3.5 shrink-0" />
-                {business.address}
-              </p>
-            )}
-          </section>
 
-          {/* 다른 포스트 */}
-          {relatedPosts && relatedPosts.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="font-bold">다른 청소 정보</h2>
-              <div className="space-y-2">
-                {relatedPosts.map((rp) => (
-                  <Link
-                    key={rp.slug}
-                    href={`/biz/${slug}/posts/${rp.slug}`}
-                    className="block rounded-lg border bg-card p-3 hover:bg-accent transition-colors group"
-                  >
-                    <p className="text-sm font-medium group-hover:text-primary transition-colors">{rp.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {new Date(rp.published_at).toLocaleDateString('ko-KR')}
-                    </p>
+              {/* 모바일 목차 */}
+              {toc.length >= 3 && (
+                <details className="lg:hidden rounded-lg border bg-card p-4">
+                  <summary className="text-sm font-semibold cursor-pointer list-none flex items-center justify-between">
+                    목차 <span className="text-muted-foreground text-xs">▾</span>
+                  </summary>
+                  <nav className="mt-3 space-y-1.5">
+                    {toc.map((item) => (
+                      <a
+                        key={item.id}
+                        href={`#${item.id}`}
+                        className={`block text-xs text-muted-foreground hover:text-primary transition-colors ${item.level === 3 ? 'pl-3' : ''}`}
+                      >
+                        {item.text}
+                      </a>
+                    ))}
+                  </nav>
+                </details>
+              )}
+
+              {/* 본문 */}
+              <article className="space-y-4">
+                {renderContent(mainContent)}
+              </article>
+
+              {/* FAQ */}
+              {inlineFaqs.length > 0 && (
+                <section className="space-y-3 pt-4">
+                  <h2 className="text-xl font-bold">자주 묻는 질문</h2>
+                  <div className="space-y-2">
+                    {inlineFaqs.map((faq, i) => (
+                      <details key={i} className="group rounded-lg border bg-card">
+                        <summary className="flex items-center justify-between p-4 cursor-pointer list-none text-sm font-medium">
+                          <span className="pr-4">{faq.question}</span>
+                          <span className="text-muted-foreground shrink-0 transition-transform group-open:rotate-180">▾</span>
+                        </summary>
+                        <div className="px-4 pb-4 text-sm text-muted-foreground leading-relaxed">
+                          {faq.answer}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* CTA */}
+              <section className="rounded-xl bg-primary/5 border border-primary/20 p-6 space-y-4">
+                <div>
+                  <p className="font-bold">{business.name}에 직접 문의하세요</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">무료 견적을 지금 바로 받아보세요.</p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Link href={`/q/${business.id}`} className="flex-1">
+                    <Button className="w-full">온라인 견적 받기 →</Button>
                   </Link>
-                ))}
-              </div>
-            </section>
-          )}
+                  {business.phone && (
+                    <a href={`tel:${business.phone}`} className="flex-1">
+                      <Button variant="outline" className="w-full gap-2">
+                        <Phone className="h-4 w-4" />
+                        {business.phone}
+                      </Button>
+                    </a>
+                  )}
+                </div>
+                {business.address && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5 shrink-0" />
+                    {business.address}
+                  </p>
+                )}
+              </section>
 
-        </main>
+              {/* 다른 포스트 */}
+              {relatedPosts && relatedPosts.length > 0 && (
+                <section className="space-y-3">
+                  <h2 className="font-bold text-lg">다른 청소 정보</h2>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {relatedPosts.map((rp) => (
+                      <Link
+                        key={rp.slug}
+                        href={`/biz/${slug}/posts/${rp.slug}`}
+                        className="block rounded-lg border bg-card p-4 hover:bg-accent transition-colors group"
+                      >
+                        <p className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2">
+                          {rp.title}
+                        </p>
+                        {rp.summary && (
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{rp.summary}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {new Date(rp.published_at).toLocaleDateString('ko-KR')}
+                        </p>
+                      </Link>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+            </main>
+
+            {/* 데스크톱 사이드바 목차 */}
+            {toc.length >= 3 && (
+              <aside className="hidden lg:block">
+                <div className="sticky top-20 rounded-xl border bg-card p-5 space-y-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">목차</p>
+                  <nav className="space-y-1.5">
+                    {toc.map((item) => (
+                      <a
+                        key={item.id}
+                        href={`#${item.id}`}
+                        className={`block text-xs text-muted-foreground hover:text-primary transition-colors leading-relaxed ${item.level === 3 ? 'pl-3 border-l border-border' : 'font-medium'}`}
+                      >
+                        {item.text}
+                      </a>
+                    ))}
+                  </nav>
+                </div>
+              </aside>
+            )}
+
+          </div>
+        </div>
 
         <footer className="border-t mt-16">
-          <div className="max-w-2xl mx-auto px-4 py-6 text-center text-xs text-muted-foreground">
+          <div className="max-w-5xl mx-auto px-4 py-6 text-center text-xs text-muted-foreground">
             <p>
               이 페이지는{' '}
               <a href={appUrl} className="underline hover:text-foreground">퀄리오</a>를 통해 운영됩니다.
