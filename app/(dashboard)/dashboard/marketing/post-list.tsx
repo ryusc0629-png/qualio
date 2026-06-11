@@ -89,11 +89,23 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
   const fileInputRef = useRef<HTMLInputElement>(null)
   // 이번 달 주제 추천
   const [suggestions, setSuggestions] = useState<TopicSuggestion[] | null>(null)
+  const suggestionsRef = useRef<TopicSuggestion[] | null>(null)  // reload 전 동기 읽기용
   // 개별 카드에서 업로드 중인 topic 추적 (ref: stale closure 방지)
   const [uploadingTopic, setUploadingTopic] = useState<string | null>(null)
   const uploadingTopicRef = useRef<string | null>(null)
   // 이미 업로드 완료된 topic 목록
   const [completedTopics, setCompletedTopics] = useState<string[]>([])
+  const completedTopicsRef = useRef<string[]>([])  // reload 전 동기 읽기용
+
+  // state + ref 동시 업데이트 헬퍼 (reload 전 동기 읽기 보장)
+  const updateSuggestions = (s: TopicSuggestion[] | null) => {
+    suggestionsRef.current = s
+    setSuggestions(s)
+  }
+  const updateCompletedTopics = (topics: string[]) => {
+    completedTopicsRef.current = topics
+    setCompletedTopics(topics)
+  }
 
   // 주제 추천 액션 — 마운트 시 자동 호출
   const { execute: fetchSuggestions, isPending: isLoadingSuggestions } = useAction(
@@ -101,7 +113,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
     {
       onSuccess: ({ data }) => {
         if (data?.suggestions) {
-          setSuggestions(data.suggestions)
+          updateSuggestions(data.suggestions)
           saveCache(businessId, data.suggestions, [])
         }
       },
@@ -115,8 +127,8 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
   useEffect(() => {
     const cached = loadCache(businessId)
     if (cached) {
-      setSuggestions(cached.suggestions)
-      setCompletedTopics(cached.completedTopics)
+      updateSuggestions(cached.suggestions)
+      updateCompletedTopics(cached.completedTopics)
     } else {
       fetchSuggestions({})
     }
@@ -126,8 +138,8 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
   // 새로 기획하기 — 캐시 무효화 후 재호출
   const handleRefreshSuggestions = () => {
     try { localStorage.removeItem('qualio_topic_cache') } catch { /* 무시 */ }
-    setSuggestions(null)
-    setCompletedTopics([])
+    updateSuggestions(null)
+    updateCompletedTopics([])
     fetchSuggestions({})
   }
 
@@ -135,17 +147,14 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
     onSuccess: ({ data }) => {
       if (data?.postContent) {
         toast.success('포스트가 생성됐습니다!')
-        // 추천 카드에서 올린 경우 → 완료 표시 + 캐시 업데이트
+        // 추천 카드에서 올린 경우 → reload 전에 캐시 동기 저장
         if (uploadingTopicRef.current) {
-          setCompletedTopics((prev) => {
-            const next = [...prev, uploadingTopicRef.current!]
-            // 완료 목록도 캐시에 반영 (페이지 리로드 후에도 유지)
-            setSuggestions((s) => {
-              if (s) saveCache(businessId, s, next)
-              return s
-            })
-            return next
-          })
+          const newCompleted = [...completedTopicsRef.current, uploadingTopicRef.current]
+          // ref 값으로 동기적으로 캐시 저장 (setState보다 먼저 실행됨)
+          if (suggestionsRef.current) {
+            saveCache(businessId, suggestionsRef.current, newCompleted)
+          }
+          completedTopicsRef.current = newCompleted
         }
         uploadingTopicRef.current = null
         setUploadingTopic(null)
