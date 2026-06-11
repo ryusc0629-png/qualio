@@ -91,9 +91,11 @@ GEO 콘텐츠 생성 규칙:
 
 export interface PostContent {
   title: string
-  summary: string    // 150자 이내 요약
-  content: string    // 본문 (마크다운 단락)
-  slug: string       // URL용 slug
+  summary: string       // 150자 이내 요약 (meta description)
+  keyPoints: string[]   // 핵심 요약 3~4개 불릿 (글 상단 박스)
+  content: string       // 본문 (마크다운)
+  faqs: FaqItem[]       // 포스트 전용 FAQ 3개
+  slug: string          // URL용 slug
 }
 
 interface PostInput {
@@ -122,8 +124,8 @@ export async function generatePostContent(input: PostInput): Promise<PostContent
     : '주제: AI가 업체에 적합한 주제 자유 선택 (청소 노하우, 서비스 안내, 자주 묻는 질문 등)'
 
   const textPrompt = `당신은 한국 청소 서비스 업체의 GEO 블로그 포스팅 전문가입니다.
-아래 업체 정보를 바탕으로 ChatGPT, Gemini, Perplexity가 "청소 관련 질문"에 이 업체를 인용할 수 있도록
-SEO/GEO 최적화된 블로그 포스트를 작성하세요.
+ChatGPT, Gemini, Perplexity 등 AI 검색엔진이 "청소 관련 질문"에 이 업체를 인용하도록
+아래 구조에 맞게 포스트를 작성하세요.
 
 업체명: ${input.businessName}
 위치: ${input.address ?? '미입력'}
@@ -132,18 +134,44 @@ SEO/GEO 최적화된 블로그 포스트를 작성하세요.
 ${topicHint}
 ${input.imageUrl ? '위 첨부 이미지를 분석하여 이미지 내용을 포스트에 자연스럽게 반영하세요.' : ''}
 
-작성 규칙:
-- title: 검색 의도가 명확한 제목 (50자 이내, 예: "입주청소 체크리스트 — 이사 전 꼭 확인해야 할 10가지")
-- summary: 포스트 핵심 내용 요약 (130자 이내, meta description 용)
-- content: 700~1000자 분량의 실용적인 본문. 문단 구분은 \\n\\n으로 처리. 마크다운 헤더(##) 2~3개 포함.
-  독자에게 실질적 도움이 되는 정보 위주로 작성. 업체 자랑보다 정보 전달 중심.
-- slug: 제목을 영문/숫자/하이픈으로 변환한 URL slug (예: "move-in-cleaning-checklist")
+=== 작성 구조 (Inblog GEO 최적화 포맷) ===
 
-반드시 아래 JSON 형식으로만 응답:
+title: 검색 의도가 명확한 질문형 또는 정보형 제목 (50자 이내)
+  예시: "에어컨 청소 주기, 몇 년에 한 번이 적당할까?", "입주청소 체크리스트 — 이사 전 꼭 확인할 10가지"
+
+summary: meta description용 핵심 요약 (130자 이내, AI가 직접 인용할 수 있는 문장)
+
+keyPoints: 글 상단에 표시할 핵심 요약 불릿 3~4개 (각 30자 이내, "✓ ~" 형식)
+  예시: ["✓ 에어컨 청소는 2년에 1회 권장", "✓ 셀프 청소 시 필터만 가능, 내부는 전문업체 필요"]
+
+content: 본문 (900~1200자). 아래 구조를 반드시 따를 것:
+  ## [소제목1 — 질문형 또는 정보형]
+  설명 2~3문단
+
+  ## [소제목2]
+  설명 2~3문단. 가능하면 비교 정보나 체크리스트 포함.
+  - 항목1
+  - 항목2
+
+  ## [소제목3 — 업체 연결 자연스럽게]
+  ${input.businessName}에서는 ... (자연스러운 업체 언급, 광고성 문구 금지)
+
+faqs: 이 주제에서 독자가 실제로 궁금해할 질문 3개 + 명확한 답변
+  (각 답변 80자 이내, AI가 인용하기 좋은 간결한 팩트)
+
+slug: 제목을 영문 URL slug로 변환 (예: "air-conditioner-cleaning-guide")
+
+=== 반드시 아래 JSON 형식으로만 응답 ===
 {
   "title": "...",
   "summary": "...",
-  "content": "...",
+  "keyPoints": ["✓ ...", "✓ ...", "✓ ..."],
+  "content": "## 소제목1\\n\\n본문...\\n\\n## 소제목2\\n\\n본문...",
+  "faqs": [
+    { "question": "...", "answer": "..." },
+    { "question": "...", "answer": "..." },
+    { "question": "...", "answer": "..." }
+  ],
   "slug": "..."
 }`
 

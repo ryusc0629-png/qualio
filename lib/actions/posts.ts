@@ -76,6 +76,12 @@ export const generatePostAction = action
       slug = `${baseSlug}-${Date.now().toString(36)}`
     }
 
+    // keyPoints/faqs를 content 앞에 JSON 메타 블록으로 저장
+    const metaBlock = (postContent.keyPoints?.length || postContent.faqs?.length)
+      ? `\`\`\`json\n${JSON.stringify({ keyPoints: postContent.keyPoints ?? [], faqs: postContent.faqs ?? [] })}\n\`\`\`\n`
+      : ''
+    const fullContent = metaBlock + postContent.content
+
     // DB 저장
     const { data: post, error } = await db
       .from('biz_posts')
@@ -83,7 +89,7 @@ export const generatePostAction = action
         business_id: businessId,
         slug,
         title: postContent.title,
-        content: postContent.content,
+        content: fullContent,
         summary: postContent.summary,
         ai_generated: true,
         published: true,
