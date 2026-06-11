@@ -51,7 +51,7 @@ export const createCustomerAction = action
 
     if (error) throw new Error('[APP] 고객 등록에 실패했습니다')
 
-    revalidatePath('/dashboard/customers')
+    revalidatePath('/dashboard/clients')
     return { success: true }
   })
 
@@ -86,7 +86,7 @@ export const updateCustomerAction = action
 
     if (error) throw new Error('[APP] 고객 정보 수정에 실패했습니다')
 
-    revalidatePath('/dashboard/customers')
+    revalidatePath('/dashboard/clients')
     return { success: true }
   })
 
@@ -153,8 +153,7 @@ export const createCustomerWithContractAction = action
       if (contractError) throw new Error('[APP] 계약 등록에 실패했습니다')
     }
 
-    revalidatePath('/dashboard/customers')
-    revalidatePath('/dashboard/crm')
+    revalidatePath('/dashboard/clients')
     revalidatePath('/dashboard')
     return { success: true }
   })
@@ -178,7 +177,7 @@ export const deleteCustomerAction = action
 
     if (error) throw new Error('[APP] 삭제에 실패했습니다')
 
-    revalidatePath('/dashboard/customers')
+    revalidatePath('/dashboard/clients')
     revalidatePath('/dashboard')
     return { success: true }
   })

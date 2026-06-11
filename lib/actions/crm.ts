@@ -76,7 +76,7 @@ export const createLeadAction = action
     })
 
     if (error) throw new Error('[APP] 잠재고객 추가에 실패했습니다')
-    revalidatePath('/dashboard/crm')
+    revalidatePath('/dashboard/clients')
     return { success: true }
   })
 
@@ -93,7 +93,7 @@ export const updateLeadStatusAction = action
       .eq('business_id', businessId)
 
     if (error) throw new Error('[APP] 상태 변경에 실패했습니다')
-    revalidatePath('/dashboard/crm')
+    revalidatePath('/dashboard/clients')
     return { success: true }
   })
 
@@ -118,7 +118,7 @@ export const updateLeadAction = action
       .eq('business_id', businessId)
 
     if (error) throw new Error('[APP] 수정에 실패했습니다')
-    revalidatePath('/dashboard/crm')
+    revalidatePath('/dashboard/clients')
     return { success: true }
   })
 
@@ -135,6 +135,6 @@ export const deleteLeadAction = action
       .eq('business_id', businessId)
 
     if (error) throw new Error('[APP] 삭제에 실패했습니다')
-    revalidatePath('/dashboard/crm')
+    revalidatePath('/dashboard/clients')
     return { success: true }
   })
