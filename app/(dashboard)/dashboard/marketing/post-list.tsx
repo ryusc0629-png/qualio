@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, ImagePlus, X, TrendingUp, ChevronRight } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, ImagePlus, X, TrendingUp, ChevronRight, CheckCircle2 } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -47,8 +47,11 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
   const fileInputRef = useRef<HTMLInputElement>(null)
   // 이번 달 주제 추천
   const [suggestions, setSuggestions] = useState<TopicSuggestion[] | null>(null)
-  // 개별 카드에서 업로드 중인 topic 추적
+  // 개별 카드에서 업로드 중인 topic 추적 (ref: stale closure 방지)
   const [uploadingTopic, setUploadingTopic] = useState<string | null>(null)
+  const uploadingTopicRef = useRef<string | null>(null)
+  // 이미 업로드 완료된 topic 목록
+  const [completedTopics, setCompletedTopics] = useState<string[]>([])
 
   // 주제 추천 액션 — 마운트 시 자동 호출
   const { execute: fetchSuggestions, isPending: isLoadingSuggestions } = useAction(
@@ -72,14 +75,20 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
     onSuccess: ({ data }) => {
       if (data?.postContent) {
         toast.success('포스트가 생성됐습니다!')
+        // 추천 카드에서 올린 경우 → 완료 표시
+        if (uploadingTopicRef.current) {
+          setCompletedTopics((prev) => [...prev, uploadingTopicRef.current!])
+        }
+        uploadingTopicRef.current = null
+        setUploadingTopic(null)
         setShowGenerator(false)
         setTopic('')
         setUploadedUrls([])
-        setUploadingTopic(null)
         window.location.reload()
       }
     },
     onError: ({ error }) => {
+      uploadingTopicRef.current = null
       setUploadingTopic(null)
       toast.error(error.serverError ?? '포스트 생성에 실패했습니다')
     },
@@ -143,6 +152,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
 
   // 추천 주제 카드에서 바로 업로드
   const handleSuggestionUpload = (suggestion: TopicSuggestion) => {
+    uploadingTopicRef.current = suggestion.topic
     setUploadingTopic(suggestion.topic)
     generatePost({ topic: suggestion.topic })
   }
@@ -180,24 +190,33 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {suggestions.slice(0, 5).map((s) => {
               const isThisUploading = isGenerating && uploadingTopic === s.topic
+              const isDone = completedTopics.includes(s.topic)
               return (
                 <div
                   key={s.topic}
-                  className="rounded-lg border bg-white p-3.5 flex flex-col gap-2 hover:border-primary/40 transition-colors"
+                  className={`rounded-lg border p-3.5 flex flex-col gap-2 transition-colors ${isDone ? 'bg-emerald-50 border-emerald-200' : 'bg-white hover:border-primary/40'}`}
                 >
                   <div className="flex-1">
+                    {isDone && (
+                      <div className="flex items-center gap-1 mb-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                        <span className="text-xs text-emerald-600 font-semibold">업로드 완료</span>
+                      </div>
+                    )}
                     <p className="font-semibold text-xs leading-snug line-clamp-2">{s.title}</p>
                     <p className="text-xs text-primary mt-1">{s.reason}</p>
                   </div>
                   <Button
                     size="sm"
-                    variant="outline"
-                    className="w-full gap-1.5 h-8 text-xs mt-1"
+                    variant={isDone ? 'ghost' : 'outline'}
+                    className={`w-full gap-1.5 h-8 text-xs mt-1 ${isDone ? 'text-muted-foreground hover:text-foreground' : ''}`}
                     onClick={() => handleSuggestionUpload(s)}
                     disabled={isGenerating}
                   >
                     {isThisUploading ? (
                       <><Loader2 className="h-3 w-3 animate-spin" />작성 중...</>
+                    ) : isDone ? (
+                      <><Sparkles className="h-3 w-3" />다시 올리기</>
                     ) : (
                       <><Sparkles className="h-3 w-3" />이 글 올리기 <ChevronRight className="h-3 w-3" /></>
                     )}
