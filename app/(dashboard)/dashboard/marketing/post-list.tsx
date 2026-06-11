@@ -232,7 +232,8 @@ export function PostList({ posts: initialPosts, businessSlug, businessId }: Post
     const safeTopic = suggestion.topic.slice(0, 300)
     uploadingTopicRef.current = safeTopic
     setUploadingTopic(safeTopic)
-    generatePost({ topic: safeTopic })
+    // suggestedTitle을 함께 전달 → 기획 제목과 실제 포스팅 제목 일치
+    generatePost({ topic: safeTopic, suggestedTitle: suggestion.title.slice(0, 200) })
   }
 
   const postUrl = (slug: string) =>

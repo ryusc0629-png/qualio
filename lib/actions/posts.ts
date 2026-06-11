@@ -28,6 +28,7 @@ export const generatePostAction = action
   .schema(z.object({
     topic: z.string().max(300).optional(),
     imageUrl: z.string().url().optional(),
+    suggestedTitle: z.string().max(200).optional(), // 추천 카드 제목 고정용
   }))
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getBusinessId()
@@ -61,6 +62,11 @@ export const generatePostAction = action
       topic: parsedInput.topic,
       imageUrl: parsedInput.imageUrl,
     })
+
+    // 추천 카드에서 발행한 경우 → 기획 단계 제목 그대로 사용
+    if (parsedInput.suggestedTitle) {
+      postContent.title = parsedInput.suggestedTitle
+    }
 
     // slug 중복 방지 — 같은 slug가 이미 있으면 숫자 붙이기
     const baseSlug = postContent.slug
