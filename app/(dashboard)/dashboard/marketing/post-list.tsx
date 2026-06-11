@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { generatePostAction, deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction } from '@/lib/actions/posts'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, ImagePlus, X, TrendingUp, ChevronRight, CheckCircle2, RefreshCw, Zap, Lock } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, ImagePlus, X, TrendingUp, RefreshCw, Zap, CalendarDays, CheckCircle2, Clock } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
+import { useRef } from 'react'
 
 interface TopicSuggestion {
   title: string
@@ -20,10 +21,8 @@ interface TopicSuggestion {
 interface SuggestionCache {
   weekKey: string
   suggestions: TopicSuggestion[]
-  completedTopics: string[]
 }
 
-// 이번 주 캐시 키 — 업체별, 주별 고유
 function getWeekKey(businessId: string): string {
   const now = new Date()
   const year = now.getFullYear()
@@ -39,24 +38,17 @@ function loadCache(businessId: string): SuggestionCache | null {
     const raw = localStorage.getItem('qualio_topic_cache')
     if (!raw) return null
     const cache = JSON.parse(raw) as SuggestionCache
-    if (cache.weekKey !== getWeekKey(businessId)) return null  // 주가 바뀌면 무효
+    if (cache.weekKey !== getWeekKey(businessId)) return null
     return cache
   } catch {
     return null
   }
 }
 
-function saveCache(businessId: string, suggestions: TopicSuggestion[], completedTopics: string[]) {
+function saveCache(businessId: string, suggestions: TopicSuggestion[]) {
   try {
-    const cache: SuggestionCache = {
-      weekKey: getWeekKey(businessId),
-      suggestions,
-      completedTopics,
-    }
-    localStorage.setItem('qualio_topic_cache', JSON.stringify(cache))
-  } catch {
-    // localStorage 저장 실패는 조용히 무시
-  }
+    localStorage.setItem('qualio_topic_cache', JSON.stringify({ weekKey: getWeekKey(businessId), suggestions }))
+  } catch { /* 무시 */ }
 }
 
 interface Post {
@@ -78,73 +70,135 @@ interface PostListProps {
   planId: string
 }
 
+// 이번 달 자동 발행 예정일 계산 (하루 2회 크론 기준)
+interface ScheduleSlot {
+  day: number
+  date: Date
+  post: Post | null       // 이미 발행된 포스트
+  topicLabel: string      // 예정 주제 (suggestions에서 순환)
+  status: 'published' | 'today' | 'upcoming' | 'past-empty'
+}
+
+function buildSchedule(
+  target: number,
+  posts: Post[],
+  suggestions: TopicSuggestion[] | null
+): ScheduleSlot[] {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  const today = now.getDate()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const RUNS_PER_DAY = 2  // 크론 하루 2회
+
+  // 이번 달 발행된 포스트 (날짜 → 포스트 배열)
+  const postsByDay = new Map<number, Post[]>()
+  posts.forEach((p) => {
+    const d = new Date(p.published_at)
+    if (p.published && d.getMonth() === month && d.getFullYear() === year) {
+      const day = d.getDate()
+      if (!postsByDay.has(day)) postsByDay.set(day, [])
+      postsByDay.get(day)!.push(p)
+    }
+  })
+
+  // 알고리즘으로 발행 예정 슬롯 계산
+  const slots: { day: number; runIndex: number }[] = []
+  let simCount = 0
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    for (let run = 0; run < RUNS_PER_DAY; run++) {
+      if (simCount >= target) break
+      const monthProgress = day / daysInMonth
+      const postProgress = simCount / target
+      if (monthProgress >= postProgress) {
+        slots.push({ day, runIndex: run })
+        simCount++
+      }
+    }
+    if (simCount >= target) break
+  }
+
+  // 각 슬롯에 발행된 포스트 또는 예정 주제 매핑
+  const suggestionTitles = suggestions?.map((s) => s.title) ?? []
+  let suggIndex = 0
+
+  return slots.map(({ day }) => {
+    const date = new Date(year, month, day)
+    const dayPosts = postsByDay.get(day) ?? []
+    const post = dayPosts.shift() ?? null  // 같은 날 여러 건이면 순서대로 소비
+
+    let status: ScheduleSlot['status']
+    if (post) status = 'published'
+    else if (day === today) status = 'today'
+    else if (day < today) status = 'past-empty'
+    else status = 'upcoming'
+
+    const topicLabel = post
+      ? post.title
+      : suggestionTitles[suggIndex++ % (suggestionTitles.length || 1)] ?? 'AI가 주제를 선택해요'
+
+    return { day, date, post, topicLabel, status }
+  })
+}
+
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+
+const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토']
 
 export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId }: PostListProps) {
   const [posts] = useState(initialPosts)
   const [showGenerator, setShowGenerator] = useState(false)
   const [showEditor, setShowEditor] = useState(false)
   const [topic, setTopic] = useState('')
-  // 여러 장 지원 — 첫 번째 사진을 AI 분석 + 대표 이미지로 사용
   const [uploadedUrls, setUploadedUrls] = useState<string[]>([])
   const [uploadingCount, setUploadingCount] = useState(0)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  // 이번 달 주제 추천
   const [suggestions, setSuggestions] = useState<TopicSuggestion[] | null>(null)
-  const suggestionsRef = useRef<TopicSuggestion[] | null>(null)  // reload 전 동기 읽기용
-  // 개별 카드에서 업로드 중인 topic 추적 (ref: stale closure 방지)
-  const [uploadingTopic, setUploadingTopic] = useState<string | null>(null)
-  const uploadingTopicRef = useRef<string | null>(null)
-  // 이미 업로드 완료된 topic 목록
-  const [completedTopics, setCompletedTopics] = useState<string[]>([])
-  const completedTopicsRef = useRef<string[]>([])  // reload 전 동기 읽기용
-  // 월간 자동 발행 목표
-  const [monthlyTarget, setMonthlyTarget] = useState(initialTarget)
 
-  // state + ref 동시 업데이트 헬퍼 (reload 전 동기 읽기 보장)
-  const updateSuggestions = (s: TopicSuggestion[] | null) => {
-    suggestionsRef.current = s
-    setSuggestions(s)
-  }
-  const updateCompletedTopics = (topics: string[]) => {
-    completedTopicsRef.current = topics
-    setCompletedTopics(topics)
-  }
+  // 이번 달 발행 건수
+  const now = new Date()
+  const postsThisMonth = posts.filter((p) => {
+    const d = new Date(p.published_at)
+    return p.published && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+  }).length
+  const progressPct = autoPostLimit > 0 ? Math.min((postsThisMonth / autoPostLimit) * 100, 100) : 0
+  const currentMonth = now.getMonth() + 1
 
-  // 주제 추천 액션 — 마운트 시 자동 호출
+  // 월간 일정표
+  const schedule = buildSchedule(autoPostLimit, posts, suggestions)
+
   const { execute: fetchSuggestions, isPending: isLoadingSuggestions } = useAction(
     getTopicSuggestionsAction,
     {
       onSuccess: ({ data }) => {
         if (data?.suggestions) {
-          updateSuggestions(data.suggestions)
-          saveCache(businessId, data.suggestions, [])
+          setSuggestions(data.suggestions)
+          saveCache(businessId, data.suggestions)
         }
-      },
-      onError: () => {
-        // 조용히 실패 — 추천이 없어도 사용에 지장 없음
       },
     }
   )
 
-  // 마운트 시: 캐시 우선 — 없을 때만 AI 호출
+  const { execute: saveTarget } = useAction(setMonthlyTargetAction)
+
   useEffect(() => {
     const cached = loadCache(businessId)
     if (cached) {
-      updateSuggestions(cached.suggestions)
-      updateCompletedTopics(cached.completedTopics)
+      setSuggestions(cached.suggestions)
     } else {
       fetchSuggestions({})
+    }
+    if (initialTarget !== autoPostLimit) {
+      saveTarget({ target: autoPostLimit })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 새로 기획하기 — 캐시 무효화 후 재호출
   const handleRefreshSuggestions = () => {
     try { localStorage.removeItem('qualio_topic_cache') } catch { /* 무시 */ }
-    updateSuggestions(null)
-    updateCompletedTopics([])
+    setSuggestions(null)
     fetchSuggestions({})
   }
 
@@ -152,17 +206,6 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
     onSuccess: ({ data }) => {
       if (data?.postContent) {
         toast.success('포스트가 생성됐습니다!')
-        // 추천 카드에서 올린 경우 → reload 전에 캐시 동기 저장
-        if (uploadingTopicRef.current) {
-          const newCompleted = [...completedTopicsRef.current, uploadingTopicRef.current]
-          // ref 값으로 동기적으로 캐시 저장 (setState보다 먼저 실행됨)
-          if (suggestionsRef.current) {
-            saveCache(businessId, suggestionsRef.current, newCompleted)
-          }
-          completedTopicsRef.current = newCompleted
-        }
-        uploadingTopicRef.current = null
-        setUploadingTopic(null)
         setShowGenerator(false)
         setTopic('')
         setUploadedUrls([])
@@ -170,18 +213,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
       }
     },
     onError: ({ error }) => {
-      uploadingTopicRef.current = null
-      setUploadingTopic(null)
       toast.error(error.serverError ?? '포스트 생성에 실패했어요. 다시 눌러주세요')
-    },
-  })
-
-  const { execute: saveTarget, isPending: isSavingTarget } = useAction(setMonthlyTargetAction, {
-    onSuccess: ({ data }) => {
-      if (data?.success) toast.success('자동 발행 설정이 저장됐어요!')
-    },
-    onError: ({ error }) => {
-      toast.error(error.serverError ?? '설정 저장에 실패했어요. 다시 눌러주세요')
     },
   })
 
@@ -198,10 +230,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
     if (files.length === 0) return
-
     setUploadingCount(files.length)
-
-    // 모든 파일 병렬 업로드
     const results = await Promise.allSettled(
       files.map(async (file) => {
         const formData = new FormData()
@@ -212,42 +241,23 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
         return json.url
       })
     )
-
     const succeeded: string[] = []
     let failCount = 0
     results.forEach((r) => {
       if (r.status === 'fulfilled') succeeded.push(r.value)
       else failCount++
     })
-
     setUploadedUrls((prev) => [...prev, ...succeeded])
     setUploadingCount(0)
-
     if (succeeded.length > 0) toast.success(`사진 ${succeeded.length}장이 올라갔어요!`)
     if (failCount > 0) toast.error(`${failCount}장은 업로드에 실패했어요. 다시 시도해주세요`)
-
-    // 같은 파일 재선택 가능하도록 초기화
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const removeImage = (url: string) => {
-    setUploadedUrls((prev) => prev.filter((u) => u !== url))
-  }
+  const removeImage = (url: string) => setUploadedUrls((prev) => prev.filter((u) => u !== url))
 
   const handleGenerate = () => {
-    generatePost({
-      topic: topic.trim() || undefined,
-      imageUrl: uploadedUrls[0], // 첫 번째 사진을 AI가 분석
-    })
-  }
-
-  // 추천 주제 카드에서 바로 업로드 (topic 300자 초과 방지)
-  const handleSuggestionUpload = (suggestion: TopicSuggestion) => {
-    const safeTopic = suggestion.topic.slice(0, 300)
-    uploadingTopicRef.current = safeTopic
-    setUploadingTopic(safeTopic)
-    // suggestedTitle을 함께 전달 → 기획 제목과 실제 포스팅 제목 일치
-    generatePost({ topic: safeTopic, suggestedTitle: suggestion.title.slice(0, 200) })
+    generatePost({ topic: topic.trim() || undefined, imageUrl: uploadedUrls[0] })
   }
 
   const postUrl = (slug: string) =>
@@ -255,61 +265,115 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
 
   const isUploading = uploadingCount > 0
 
-  const currentMonth = new Date().getMonth() + 1
-
   return (
     <div className="space-y-4">
 
-      {/* ── 자동 발행 설정 ── */}
+      {/* ── 자동 발행 현황 ── */}
       <div className="rounded-xl border bg-white p-5">
         <div className="flex items-center gap-2 mb-4">
           <Zap className="h-4 w-4 text-primary" />
-          <p className="font-semibold text-sm">자동 발행 설정</p>
-          <span className="text-xs text-muted-foreground ml-1">매일 오전 9시 자동으로 발행해요</span>
+          <p className="font-semibold text-sm">자동 발행 현황</p>
+          <span className="text-xs text-muted-foreground ml-1">하루 2회 (오전 9시·오후 9시) 자동 발행 중</span>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {[0, 5, 10, 20, 30].map((n) => {
-            const isLocked = n > autoPostLimit
-            const isSelected = monthlyTarget === n
-            return (
-              <button
-                key={n}
-                onClick={() => {
-                  if (isLocked) return
-                  setMonthlyTarget(n)
-                  saveTarget({ target: n })
-                }}
-                disabled={isSavingTarget || isLocked}
-                title={isLocked ? `${planId} 플랜 한도 초과 (최대 월 ${autoPostLimit}건)` : undefined}
-                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all flex items-center gap-1.5 ${
-                  isLocked
-                    ? 'bg-slate-50 text-muted-foreground border-border cursor-not-allowed opacity-50'
-                    : isSelected
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-white text-foreground border-border hover:border-primary/50'
-                }`}
-              >
-                {isLocked && <Lock className="h-3 w-3" />}
-                {n === 0 ? '꺼짐' : `월 ${n}건`}
-              </button>
-            )
-          })}
-          {isSavingTarget && <Loader2 className="h-4 w-4 animate-spin self-center text-muted-foreground" />}
-        </div>
-        {monthlyTarget > 0 && (
-          <p className="text-xs text-muted-foreground mt-3">
-            약 {Math.round(30 / monthlyTarget)}일마다 1건 — 매달 {monthlyTarget}건 자동 발행됩니다
+        <div className="space-y-2">
+          <div className="flex items-end justify-between">
+            <div>
+              <span className="text-2xl font-bold">{postsThisMonth}</span>
+              <span className="text-muted-foreground text-sm ml-1">/ {autoPostLimit}건</span>
+            </div>
+            <span className="text-xs text-muted-foreground">{currentMonth}월 자동 발행</span>
+          </div>
+          <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-500"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {autoPostLimit - postsThisMonth > 0
+              ? `이번 달 ${autoPostLimit - postsThisMonth}건 남았어요`
+              : '이번 달 목표를 모두 달성했어요!'}
           </p>
-        )}
-        <p className="text-xs text-muted-foreground mt-1">
-          현재 플랜: <span className="font-medium">{planId}</span> — 최대 월 {autoPostLimit}건
-          {autoPostLimit < 30 && (
-            <a href="/upgrade" className="ml-1.5 text-primary hover:underline">더 많이 발행하려면 업그레이드 →</a>
-          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-3">
+          현재 플랜: <span className="font-medium">{planId}</span> — 월 {autoPostLimit}건 자동 발행
         </p>
       </div>
 
-      {/* ── 이번 달 인기 주제 추천 ── */}
+      {/* ── 월간 발행 일정표 ── */}
+      <div className="rounded-xl border bg-white p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-4 w-4 text-primary" />
+          <p className="font-semibold text-sm">{currentMonth}월 자동 발행 일정</p>
+          <span className="text-xs text-muted-foreground ml-1">총 {autoPostLimit}건</span>
+        </div>
+
+        {schedule.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-2">자동 발행이 설정되면 일정이 여기에 표시돼요.</p>
+        ) : (
+          <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+            {schedule.map((slot, i) => {
+              const dayName = DAYS_KO[slot.date.getDay()]
+              const dateLabel = `${currentMonth}월 ${slot.day}일 (${dayName})`
+              return (
+                <div
+                  key={i}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm ${
+                    slot.status === 'published'
+                      ? 'bg-emerald-50'
+                      : slot.status === 'today'
+                        ? 'bg-blue-50 border border-blue-200'
+                        : slot.status === 'past-empty'
+                          ? 'bg-slate-50 opacity-50'
+                          : 'bg-white border border-dashed border-slate-200'
+                  }`}
+                >
+                  {/* 상태 아이콘 */}
+                  {slot.status === 'published' && <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />}
+                  {slot.status === 'today' && <Clock className="h-4 w-4 text-blue-500 shrink-0 animate-pulse" />}
+                  {slot.status === 'upcoming' && <Clock className="h-4 w-4 text-slate-300 shrink-0" />}
+                  {slot.status === 'past-empty' && <div className="h-4 w-4 rounded-full border-2 border-slate-200 shrink-0" />}
+
+                  {/* 날짜 */}
+                  <span className={`text-xs font-medium w-24 shrink-0 ${slot.status === 'today' ? 'text-blue-600' : 'text-muted-foreground'}`}>
+                    {dateLabel}
+                  </span>
+
+                  {/* 주제 */}
+                  <span className={`text-xs flex-1 truncate ${
+                    slot.status === 'published' ? 'font-medium text-foreground'
+                    : slot.status === 'today' ? 'text-blue-700'
+                    : slot.status === 'past-empty' ? 'text-muted-foreground line-through'
+                    : 'text-muted-foreground'
+                  }`}>
+                    {slot.status === 'past-empty' ? '발행 안 됨' : slot.topicLabel}
+                  </span>
+
+                  {/* 발행 링크 */}
+                  {slot.post && postUrl(slot.post.slug) && (
+                    <a
+                      href={postUrl(slot.post.slug)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                    </a>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        <div className="flex items-center gap-4 pt-1 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" />발행 완료</span>
+          <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-blue-400" />오늘 발행 예정</span>
+          <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-slate-300" />발행 예정</span>
+        </div>
+      </div>
+
+      {/* ── 이번 주 포스팅 기획 ── */}
       <div className="rounded-xl border bg-gradient-to-br from-primary/5 to-violet-500/5 p-5 space-y-3">
         <div className="flex items-center gap-2">
           <TrendingUp className="h-4 w-4 text-primary" />
@@ -320,14 +384,12 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
             onClick={handleRefreshSuggestions}
             disabled={isLoadingSuggestions}
             className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-            title="이번 주 주제 새로 기획하기"
           >
             <RefreshCw className={`h-3 w-3 ${isLoadingSuggestions ? 'animate-spin' : ''}`} />
             새로 기획하기
           </button>
         </div>
 
-        {/* 로딩 중 */}
         {isLoadingSuggestions && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground py-3">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -335,55 +397,26 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
           </div>
         )}
 
-        {/* 추천 카드 목록 */}
         {suggestions && suggestions.length > 0 && (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {suggestions.map((s) => {
-              const isThisUploading = isGenerating && uploadingTopic === s.topic
-              const isDone = completedTopics.includes(s.topic)
-              return (
-                <div
-                  key={s.topic}
-                  className={`rounded-lg border p-3.5 flex flex-col gap-2 transition-colors ${isDone ? 'bg-emerald-50 border-emerald-200' : 'bg-white hover:border-primary/40'}`}
-                >
-                  <div className="flex-1">
-                    {isDone && (
-                      <div className="flex items-center gap-1 mb-1.5">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                        <span className="text-xs text-emerald-600 font-semibold">업로드 완료</span>
-                      </div>
-                    )}
-                    <p className="font-semibold text-xs leading-snug line-clamp-2">{s.title}</p>
-                    <p className="text-xs text-primary mt-1">{s.reason}</p>
+            {suggestions.map((s, i) => (
+              <div key={s.topic} className="rounded-lg border bg-white p-3.5 space-y-1">
+                <div className="flex items-start gap-2">
+                  <span className="text-xs font-bold text-muted-foreground mt-0.5 shrink-0 w-4">{i + 1}</span>
+                  <div>
+                    <p className="font-semibold text-xs leading-snug">{s.title}</p>
+                    <p className="text-xs text-primary mt-0.5">{s.reason}</p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant={isDone ? 'ghost' : 'outline'}
-                    className={`w-full gap-1.5 h-8 text-xs mt-1 ${isDone ? 'text-muted-foreground hover:text-foreground' : ''}`}
-                    onClick={() => handleSuggestionUpload(s)}
-                    disabled={isGenerating}
-                  >
-                    {isThisUploading ? (
-                      <><Loader2 className="h-3 w-3 animate-spin" />작성 중...</>
-                    ) : isDone ? (
-                      <><Sparkles className="h-3 w-3" />다시 올리기</>
-                    ) : (
-                      <><Sparkles className="h-3 w-3" />이 글 올리기 <ChevronRight className="h-3 w-3" /></>
-                    )}
-                  </Button>
                 </div>
-              )
-            })}
+              </div>
+            ))}
           </div>
         )}
       </div>
 
       {/* 액션 버튼 */}
       <div className="flex gap-2 flex-wrap">
-        <Button
-          onClick={() => { setShowGenerator(!showGenerator); setShowEditor(false) }}
-          className="gap-2"
-        >
+        <Button onClick={() => { setShowGenerator(!showGenerator); setShowEditor(false) }} className="gap-2">
           <Sparkles className="h-4 w-4" />
           AI로 포스트 생성
         </Button>
@@ -413,23 +446,16 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
                 disabled={isGenerating}
               />
             </div>
-
             <div>
               <Label className="text-xs text-muted-foreground mb-1 block">
                 사진 (선택) — 여러 장 선택 가능, AI가 첫 번째 사진을 보고 내용 작성
               </Label>
-
-              {/* 업로드된 사진 썸네일 그리드 */}
               {uploadedUrls.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-2">
                   {uploadedUrls.map((url) => (
                     <div key={url} className="relative">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={url}
-                        alt="업로드된 사진"
-                        className="h-20 w-20 rounded-lg object-cover border"
-                      />
+                      <img src={url} alt="업로드된 사진" className="h-20 w-20 rounded-lg object-cover border" />
                       <button
                         type="button"
                         onClick={() => removeImage(url)}
@@ -442,59 +468,35 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
                   ))}
                 </div>
               )}
-
-              {/* 사진 올리기 버튼 */}
               <label className={`flex items-center gap-2 w-fit cursor-pointer rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground hover:bg-accent transition-colors ${isUploading || isGenerating ? 'opacity-50 pointer-events-none' : ''}`}>
-                {isUploading ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" />{uploadingCount}장 올리는 중...</>
-                ) : (
-                  <><ImagePlus className="h-4 w-4" />{uploadedUrls.length > 0 ? '사진 더 추가하기' : '사진 올리기'}</>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"           /* 아이폰 HEIC 포함 모든 이미지 허용 */
-                  multiple                   /* 여러 장 동시 선택 */
-                  className="hidden"
-                  onChange={handleImageUpload}
-                  disabled={isUploading || isGenerating}
-                />
+                {isUploading
+                  ? <><Loader2 className="h-4 w-4 animate-spin" />{uploadingCount}장 올리는 중...</>
+                  : <><ImagePlus className="h-4 w-4" />{uploadedUrls.length > 0 ? '사진 더 추가하기' : '사진 올리기'}</>
+                }
+                <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} disabled={isUploading || isGenerating} />
               </label>
             </div>
           </div>
-
           <div className="flex gap-2">
             <Button onClick={handleGenerate} disabled={isGenerating || isUploading} className="gap-2">
-              {isGenerating ? (
-                <><Loader2 className="h-4 w-4 animate-spin" />AI가 작성 중이에요...</>
-              ) : (
-                <><Sparkles className="h-4 w-4" />생성하기</>
-              )}
+              {isGenerating
+                ? <><Loader2 className="h-4 w-4 animate-spin" />AI가 작성 중이에요...</>
+                : <><Sparkles className="h-4 w-4" />생성하기</>
+              }
             </Button>
-            <Button variant="ghost" onClick={() => setShowGenerator(false)} disabled={isGenerating}>
-              취소
-            </Button>
+            <Button variant="ghost" onClick={() => setShowGenerator(false)} disabled={isGenerating}>취소</Button>
           </div>
         </div>
       )}
 
       {/* 직접 작성 패널 */}
       {showEditor && !editingPost && (
-        <PostEditor
-          businessId={businessId}
-          onClose={() => setShowEditor(false)}
-          onSaved={() => { setShowEditor(false); window.location.reload() }}
-        />
+        <PostEditor businessId={businessId} onClose={() => setShowEditor(false)} onSaved={() => { setShowEditor(false); window.location.reload() }} />
       )}
 
       {/* 수정 패널 */}
       {editingPost && (
-        <PostEditor
-          businessId={businessId}
-          post={editingPost}
-          onClose={() => setEditingPost(null)}
-          onSaved={() => { setEditingPost(null); window.location.reload() }}
-        />
+        <PostEditor businessId={businessId} post={editingPost} onClose={() => setEditingPost(null)} onSaved={() => { setEditingPost(null); window.location.reload() }} />
       )}
 
       {/* 포스트 목록 */}
@@ -507,10 +509,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
           {posts.map((post) => {
             const url = postUrl(post.slug)
             return (
-              <div
-                key={post.id}
-                className="rounded-lg border bg-card p-4 flex items-start justify-between gap-3"
-              >
+              <div key={post.id} className="rounded-lg border bg-card p-4 flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-medium text-sm truncate">{post.title}</p>
@@ -520,45 +519,25 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
                       </Badge>
                     )}
                     {!post.published && (
-                      <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">
-                        비공개
-                      </Badge>
+                      <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">비공개</Badge>
                     )}
                   </div>
-                  {post.summary && (
-                    <p className="text-xs text-muted-foreground line-clamp-1">{post.summary}</p>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(post.published_at).toLocaleDateString('ko-KR')}
-                  </p>
+                  {post.summary && <p className="text-xs text-muted-foreground line-clamp-1">{post.summary}</p>}
+                  <p className="text-xs text-muted-foreground">{new Date(post.published_at).toLocaleDateString('ko-KR')}</p>
                 </div>
-
                 <div className="flex items-center gap-1 shrink-0">
                   {url && (
                     <a href={url} target="_blank" rel="noopener noreferrer">
-                      <Button size="icon" variant="ghost" className="h-8 w-8">
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </Button>
+                      <Button size="icon" variant="ghost" className="h-8 w-8"><ExternalLink className="h-3.5 w-3.5" /></Button>
                     </a>
                   )}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8"
-                    onClick={() => setEditingPost(post)}
-                  >
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingPost(post)}>
                     {post.published ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
                   </Button>
                   <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive"
                     disabled={isDeleting}
-                    onClick={() => {
-                      if (confirm('포스트를 삭제할까요?')) {
-                        deletePost({ id: post.id })
-                      }
-                    }}
+                    onClick={() => { if (confirm('포스트를 삭제할까요?')) deletePost({ id: post.id }) }}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
@@ -569,16 +548,10 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
         </div>
       )}
 
-      {/* 랜딩 페이지 바로가기 */}
       {businessSlug && (
         <div className="text-xs text-muted-foreground text-center pt-2">
           랜딩 페이지:{' '}
-          <a
-            href={`${appUrl}/biz/${businessSlug}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-foreground"
-          >
+          <a href={`${appUrl}/biz/${businessSlug}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
             {appUrl}/biz/{businessSlug}
           </a>
         </div>

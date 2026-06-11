@@ -4,7 +4,8 @@ import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-cont
 import { getAutoPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
-// Vercel Cron: 매일 00:00 UTC (한국 오전 9시) 실행
+// Vercel Cron: 매일 00:00 UTC (한국 오전 9시) + 12:00 UTC (한국 오후 9시) 실행
+// → 하루 2회 실행으로 월 60건(스케일) 지원
 // vercel.json에 등록된 cron만 호출 가능 — CRON_SECRET으로 인증
 
 function getDaysInMonth(year: number, month: number): number {
