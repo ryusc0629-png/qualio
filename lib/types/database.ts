@@ -309,6 +309,59 @@ export type Database = {
           },
         ]
       }
+      biz_posts: {
+        Row: {
+          id: string
+          business_id: string
+          slug: string
+          title: string
+          content: string
+          summary: string | null
+          image_url: string | null
+          ai_generated: boolean
+          published: boolean
+          published_at: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          slug: string
+          title: string
+          content: string
+          summary?: string | null
+          image_url?: string | null
+          ai_generated?: boolean
+          published?: boolean
+          published_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          slug?: string
+          title?: string
+          content?: string
+          summary?: string | null
+          image_url?: string | null
+          ai_generated?: boolean
+          published?: boolean
+          published_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "biz_posts_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           id: string

@@ -67,15 +67,24 @@ export default async function BizLandingPage({ params }: Props) {
 
   if (!business) notFound()
 
-  const { data: services } = await db
-    .from('service_items')
-    .select('id, name, base_price, unit, category')
-    .eq('business_id', business.id)
-    .eq('is_active', true)
-    .eq('show_in_quote', true)
-    .is('deleted_at', null)
-    .order('sort_order')
-    .order('created_at')
+  const [{ data: services }, { data: recentPosts }] = await Promise.all([
+    db
+      .from('service_items')
+      .select('id, name, base_price, unit, category')
+      .eq('business_id', business.id)
+      .eq('is_active', true)
+      .eq('show_in_quote', true)
+      .is('deleted_at', null)
+      .order('sort_order')
+      .order('created_at'),
+    db
+      .from('biz_posts')
+      .select('slug, title, summary, published_at')
+      .eq('business_id', business.id)
+      .eq('published', true)
+      .order('published_at', { ascending: false })
+      .limit(5),
+  ])
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
   const faqs = (business.seo_faqs as unknown as FaqItem[]) ?? []
@@ -265,6 +274,30 @@ export default async function BizLandingPage({ params }: Props) {
                       {faq.answer}
                     </div>
                   </details>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* 최근 포스팅 */}
+          {recentPosts && recentPosts.length > 0 && (
+            <section>
+              <h2 className="text-xl font-bold mb-4">청소 정보 & 노하우</h2>
+              <div className="space-y-3">
+                {recentPosts.map((post) => (
+                  <Link
+                    key={post.slug}
+                    href={`/biz/${slug}/posts/${post.slug}`}
+                    className="block rounded-lg border bg-card p-4 hover:bg-accent transition-colors"
+                  >
+                    <p className="font-medium">{post.title}</p>
+                    {post.summary && (
+                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{post.summary}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-2">
+                      {new Date(post.published_at).toLocaleDateString('ko-KR')}
+                    </p>
+                  </Link>
                 ))}
               </div>
             </section>

@@ -89,6 +89,89 @@ GEO 콘텐츠 생성 규칙:
   }
 }
 
+export interface PostContent {
+  title: string
+  summary: string    // 150자 이내 요약
+  content: string    // 본문 (마크다운 단락)
+  slug: string       // URL용 slug
+}
+
+interface PostInput {
+  businessName: string
+  address: string | null
+  description: string | null
+  services: ServiceItem[]
+  topic?: string         // 작성할 주제 (없으면 AI가 선택)
+  imageDescription?: string  // 업로드한 이미지 설명
+}
+
+// 업체 블로그 포스트 자동 생성
+// — AI 검색엔진이 인용할 수 있는 GEO 최적화 콘텐츠 작성
+export async function generatePostContent(input: PostInput): Promise<PostContent> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) throw new Error('[APP] AI 기능을 사용하려면 API 키가 필요합니다')
+
+  const client = new Anthropic({ apiKey })
+
+  const serviceList = input.services
+    .map((s) => `${s.name} (${s.base_price.toLocaleString()}원/${s.unit})`)
+    .join(', ')
+
+  const topicHint = input.topic
+    ? `작성할 주제: ${input.topic}`
+    : '주제: AI가 업체에 적합한 주제 자유 선택 (청소 노하우, 서비스 안내, 자주 묻는 질문 등)'
+
+  const imageHint = input.imageDescription
+    ? `이미지 설명 (이 이미지를 기반으로 내용 작성): ${input.imageDescription}`
+    : ''
+
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 2000,
+    messages: [
+      {
+        role: 'user',
+        content: `당신은 한국 청소 서비스 업체의 GEO 블로그 포스팅 전문가입니다.
+아래 업체 정보를 바탕으로 ChatGPT, Gemini, Perplexity가 "청소 관련 질문"에 이 업체를 인용할 수 있도록
+SEO/GEO 최적화된 블로그 포스트를 작성하세요.
+
+업체명: ${input.businessName}
+위치: ${input.address ?? '미입력'}
+업체 소개: ${input.description ?? '청소 전문 업체'}
+서비스: ${serviceList || '청소 서비스'}
+${topicHint}
+${imageHint}
+
+작성 규칙:
+- title: 검색 의도가 명확한 제목 (50자 이내, 예: "입주청소 체크리스트 — 이사 전 꼭 확인해야 할 10가지")
+- summary: 포스트 핵심 내용 요약 (130자 이내, meta description 용)
+- content: 700~1000자 분량의 실용적인 본문. 문단 구분은 \\n\\n으로 처리. 마크다운 헤더(##) 2~3개 포함.
+  독자에게 실질적 도움이 되는 정보 위주로 작성. 업체 자랑보다 정보 전달 중심.
+- slug: 제목을 영문/숫자/하이픈으로 변환한 URL slug (예: "move-in-cleaning-checklist")
+
+반드시 아래 JSON 형식으로만 응답:
+{
+  "title": "...",
+  "summary": "...",
+  "content": "...",
+  "slug": "..."
+}`,
+      },
+    ],
+  })
+
+  const text = message.content[0].type === 'text' ? message.content[0].text : ''
+
+  try {
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) throw new Error('JSON not found')
+    return JSON.parse(jsonMatch[0]) as PostContent
+  } catch (e) {
+    console.error('[AI] 포스트 생성 파싱 실패:', e, text)
+    throw new Error('[APP] 포스트 생성에 실패했습니다')
+  }
+}
+
 // 업체명 → URL slug 변환 유틸
 export function generateSlug(businessName: string, suffix: string): string {
   const normalized = businessName
