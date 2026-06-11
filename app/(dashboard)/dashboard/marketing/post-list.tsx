@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, ImagePlus, X, TrendingUp, RefreshCw, Zap, CalendarDays, CheckCircle2, Clock } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, ImagePlus, X, TrendingUp, Zap, CalendarDays, CheckCircle2, Clock } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 import { useRef } from 'react'
@@ -196,13 +196,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleRefreshSuggestions = () => {
-    try { localStorage.removeItem('qualio_topic_cache') } catch { /* 무시 */ }
-    setSuggestions(null)
-    fetchSuggestions({})
-  }
-
-  const { execute: generatePost, isPending: isGenerating } = useAction(generatePostAction, {
+const { execute: generatePost, isPending: isGenerating } = useAction(generatePostAction, {
     onSuccess: ({ data }) => {
       if (data?.postContent) {
         toast.success('포스트가 생성됐습니다!')
@@ -380,14 +374,6 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
           <p className="font-semibold text-sm">
             이번 주 포스팅 기획 — {currentMonth}월 인기 주제 10개
           </p>
-          <button
-            onClick={handleRefreshSuggestions}
-            disabled={isLoadingSuggestions}
-            className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-          >
-            <RefreshCw className={`h-3 w-3 ${isLoadingSuggestions ? 'animate-spin' : ''}`} />
-            새로 기획하기
-          </button>
         </div>
 
         {isLoadingSuggestions && (
