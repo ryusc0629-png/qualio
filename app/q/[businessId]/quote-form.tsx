@@ -104,7 +104,7 @@ function InlineCalendar({ onSelect }: { onSelect: (label: string, value: string)
           type="button"
           onClick={prevMonth}
           disabled={!canGoPrev}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-[#6B6B6B] disabled:opacity-20 active:bg-[#F5F0EB]"
+          className="w-8 h-8 rounded-full flex items-center justify-center text-[#6B6B6B] disabled:opacity-20 active:bg-slate-50"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -113,7 +113,7 @@ function InlineCalendar({ onSelect }: { onSelect: (label: string, value: string)
           type="button"
           onClick={nextMonth}
           disabled={!canGoNext}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-[#6B6B6B] disabled:opacity-20 active:bg-[#F5F0EB]"
+          className="w-8 h-8 rounded-full flex items-center justify-center text-[#6B6B6B] disabled:opacity-20 active:bg-slate-50"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -151,11 +151,11 @@ function InlineCalendar({ onSelect }: { onSelect: (label: string, value: string)
               className={[
                 'mx-auto w-9 h-9 rounded-full text-sm flex items-center justify-center transition-colors font-medium',
                 isPast      ? 'text-[#D4D4D4] cursor-default' :
-                isSelected  ? 'bg-[#FF7D00] text-white font-bold' :
-                isToday     ? 'border-2 border-[#FF7D00] text-[#FF7D00] font-bold' :
+                isSelected  ? 'bg-primary text-white font-bold' :
+                isToday     ? 'border-2 border-primary text-primary font-bold' :
                 isSun       ? 'text-red-400 active:bg-[#FFF0F0]' :
                 isSat       ? 'text-blue-400 active:bg-[#F0F5FF]' :
-                              'text-[#1A1A1A] active:bg-[#F5F0EB]',
+                              'text-[#1A1A1A] active:bg-slate-50',
               ].join(' ')}
             >
               {day}
@@ -169,7 +169,7 @@ function InlineCalendar({ onSelect }: { onSelect: (label: string, value: string)
         type="button"
         onClick={handleConfirm}
         disabled={!selected}
-        className="w-full h-12 rounded-2xl bg-[#FF7D00] disabled:opacity-30 text-white font-bold text-sm transition-opacity mt-1"
+        className="w-full h-12 rounded-2xl bg-primary disabled:opacity-30 text-white font-bold text-sm transition-opacity mt-1"
       >
         {selected ? `${formatDateLabel(selected)} 선택하기` : '날짜를 선택해주세요'}
       </button>
@@ -189,7 +189,7 @@ function InlineCalendar({ onSelect }: { onSelect: (label: string, value: string)
 function BotBubble({ text, initial }: { text: string; initial: string }) {
   return (
     <div className="flex items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="w-8 h-8 rounded-full bg-[#FF7D00] flex items-center justify-center text-white text-xs font-bold shrink-0 mb-0.5">
+      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0 mb-0.5">
         {initial}
       </div>
       <div className="max-w-[78%] bg-white rounded-3xl rounded-bl-lg px-4 py-3 shadow-sm">
@@ -202,7 +202,7 @@ function BotBubble({ text, initial }: { text: string; initial: string }) {
 function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-200">
-      <div className="max-w-[70%] bg-[#FF7D00] rounded-3xl rounded-br-lg px-4 py-3 shadow-sm">
+      <div className="max-w-[70%] bg-primary rounded-3xl rounded-br-lg px-4 py-3 shadow-sm">
         <p className="text-sm text-white font-semibold break-keep">{text}</p>
       </div>
     </div>
@@ -212,7 +212,7 @@ function UserBubble({ text }: { text: string }) {
 function TypingBubble({ initial }: { initial: string }) {
   return (
     <div className="flex items-end gap-2 animate-in fade-in duration-200">
-      <div className="w-8 h-8 rounded-full bg-[#FF7D00] flex items-center justify-center text-white text-xs font-bold shrink-0 mb-0.5">
+      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0 mb-0.5">
         {initial}
       </div>
       <div className="bg-white rounded-3xl rounded-bl-lg px-4 py-3.5 shadow-sm">
@@ -359,13 +359,13 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F0EB] flex flex-col">
+    <div className="min-h-screen bg-slate-50 flex flex-col">
 
       {/* 상단 헤더 */}
-      <header className="bg-white border-b border-[#F0EBE3] sticky top-0 z-10">
+      <header className="bg-white border-b border-border sticky top-0 z-10">
         <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#FF7D00] flex items-center justify-center text-white text-xs font-bold shrink-0">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
               {initial}
             </div>
             <div>
@@ -376,7 +376,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
           {/* 진행 바 */}
           <div className="w-24 h-1.5 bg-[#F0EBE3] rounded-full overflow-hidden">
             <div
-              className="h-full bg-[#FF7D00] rounded-full transition-all duration-500"
+              className="h-full bg-primary rounded-full transition-all duration-500"
               style={{ width: `${progressPct}%` }}
             />
           </div>
@@ -415,7 +415,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
       </div>
 
       {/* 입력 영역 */}
-      <div className="bg-white border-t border-[#F0EBE3] px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      <div className="bg-white border-t border-border px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         <div className="max-w-md mx-auto space-y-3">
 
           {/* 타이핑/처리 중엔 입력 영역 숨김 */}
@@ -438,11 +438,11 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
                       key={s.id}
                       type="button"
                       onClick={() => handleServiceSelect(s)}
-                      className="text-left px-4 py-3.5 rounded-2xl border-2 border-[#F0EBE3] bg-[#FAFAFA] active:bg-[#FFF3E8] active:border-[#FF7D00] transition-colors"
+                      className="text-left px-4 py-3.5 rounded-2xl border-2 border-border bg-[#FAFAFA] active:bg-primary/10 active:border-primary transition-colors"
                     >
                       <p className="font-semibold text-sm text-[#1A1A1A]">{s.name}</p>
                       {hint && (
-                        <p className="text-[11px] text-[#FF7D00] font-medium mt-0.5">{hint}</p>
+                        <p className="text-[11px] text-primary font-medium mt-0.5">{hint}</p>
                       )}
                     </button>
                   )
@@ -462,7 +462,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
                     key={chip}
                     type="button"
                     onClick={() => handleSpaceChip(chip)}
-                    className="px-4 py-2.5 rounded-full border-2 border-[#F0EBE3] bg-[#FAFAFA] text-sm font-semibold text-[#1A1A1A] active:bg-[#FFF3E8] active:border-[#FF7D00] transition-colors"
+                    className="px-4 py-2.5 rounded-full border-2 border-border bg-[#FAFAFA] text-sm font-semibold text-[#1A1A1A] active:bg-primary/10 active:border-primary transition-colors"
                   >
                     {chip}
                   </button>
@@ -476,13 +476,13 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
                   value={customSpace}
                   onChange={(e) => setCustomSpace(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSpaceCustom()}
-                  className="h-12 rounded-2xl border-[#F0EBE3] text-sm"
+                  className="h-12 rounded-2xl border-border text-sm"
                 />
                 <button
                   type="button"
                   onClick={handleSpaceCustom}
                   disabled={!customSpace}
-                  className="shrink-0 w-12 h-12 rounded-2xl bg-[#FF7D00] disabled:opacity-40 flex items-center justify-center transition-opacity"
+                  className="shrink-0 w-12 h-12 rounded-2xl bg-primary disabled:opacity-40 flex items-center justify-center transition-opacity"
                 >
                   <ChevronRight className="h-5 w-5 text-white" />
                 </button>
@@ -498,7 +498,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
                   key={option}
                   type="button"
                   onClick={() => handleContextSelect(option)}
-                  className="text-left px-4 py-3.5 rounded-2xl border-2 border-[#F0EBE3] bg-[#FAFAFA] font-semibold text-sm text-[#1A1A1A] active:bg-[#FFF3E8] active:border-[#FF7D00] transition-colors"
+                  className="text-left px-4 py-3.5 rounded-2xl border-2 border-border bg-[#FAFAFA] font-semibold text-sm text-[#1A1A1A] active:bg-primary/10 active:border-primary transition-colors"
                 >
                   {option}
                 </button>
@@ -520,13 +520,13 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
                 placeholder="예) 에어컨 포함, 주방 기름때 심함, 반려동물 있음"
                 rows={3}
                 autoFocus
-                className="w-full rounded-2xl border border-[#F0EBE3] bg-[#FAFAFA] px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#FF7D00] focus:ring-opacity-30"
+                className="w-full rounded-2xl border border-border bg-[#FAFAFA] px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-30"
               />
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => handleNotes(true)}
-                  className="flex-1 h-12 rounded-2xl border-2 border-[#F0EBE3] text-sm font-semibold text-[#8D8D8D] active:bg-[#F5F0EB] transition-colors"
+                  className="flex-1 h-12 rounded-2xl border-2 border-border text-sm font-semibold text-[#8D8D8D] active:bg-slate-50 transition-colors"
                 >
                   없어요, 건너뛸게요
                 </button>
@@ -534,7 +534,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
                   type="button"
                   onClick={() => handleNotes(false)}
                   disabled={!notes.trim()}
-                  className="flex-1 h-12 rounded-2xl bg-[#FF7D00] disabled:opacity-40 text-white font-bold text-sm transition-opacity"
+                  className="flex-1 h-12 rounded-2xl bg-primary disabled:opacity-40 text-white font-bold text-sm transition-opacity"
                 >
                   다음으로 →
                 </button>
@@ -551,13 +551,13 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
                 onChange={(e) => setCustomerName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleName()}
                 autoFocus
-                className="h-12 rounded-2xl border-[#F0EBE3] text-sm"
+                className="h-12 rounded-2xl border-border text-sm"
               />
               <button
                 type="button"
                 onClick={handleName}
                 disabled={customerName.trim().length < 2}
-                className="shrink-0 w-12 h-12 rounded-2xl bg-[#FF7D00] disabled:opacity-40 flex items-center justify-center transition-opacity"
+                className="shrink-0 w-12 h-12 rounded-2xl bg-primary disabled:opacity-40 flex items-center justify-center transition-opacity"
               >
                 <ChevronRight className="h-5 w-5 text-white" />
               </button>
@@ -574,13 +574,13 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
                 onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                 autoFocus
-                className="h-12 rounded-2xl border-[#F0EBE3] text-sm"
+                className="h-12 rounded-2xl border-border text-sm"
               />
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={isPending || customerPhone.length < 10}
-                className="w-full h-14 rounded-2xl bg-[#FF7D00] text-white font-extrabold text-base disabled:opacity-50 active:scale-[0.98] transition-all"
+                className="w-full h-14 rounded-2xl bg-primary text-white font-extrabold text-base disabled:opacity-50 active:scale-[0.98] transition-all"
               >
                 무료 견적 받기 →
               </button>

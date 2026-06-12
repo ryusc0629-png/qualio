@@ -74,13 +74,13 @@ export default async function QuoteLandingPage({ params }: PageProps) {
   const isUrgent = !isBooked && hoursLeft > 0 && hoursLeft <= 12
 
   return (
-    <div className="min-h-screen bg-[#F5F0EB]">
+    <div className="min-h-screen bg-slate-50">
 
       {/* 헤더 */}
-      <header className="bg-white sticky top-0 z-10 border-b border-[#F0EBE3]">
+      <header className="bg-white sticky top-0 z-10 border-b border-border">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-[#FF7D00] flex items-center justify-center text-white text-xs font-bold shrink-0">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
               {business.name.slice(0, 1)}
             </div>
             <div>
@@ -91,7 +91,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
           {business.phone && (
             <a
               href={`tel:${business.phone}`}
-              className="flex items-center gap-1.5 text-[#FF7D00] text-sm font-semibold"
+              className="flex items-center gap-1.5 text-primary text-sm font-semibold"
             >
               <Phone className="h-3.5 w-3.5" />
               {business.phone}
@@ -129,7 +129,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
             {pitch.reasons.map((reason, i) => (
               <span
                 key={i}
-                className="shrink-0 flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 text-xs font-semibold text-[#4A4A4A] shadow-sm border border-[#F0EBE3]"
+                className="shrink-0 flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 text-xs font-semibold text-[#4A4A4A] shadow-sm border border-border"
               >
                 <span>{reason.emoji}</span>
                 {reason.title}
@@ -146,11 +146,11 @@ export default async function QuoteLandingPage({ params }: PageProps) {
               ? 'bg-red-50 border border-red-200'
               : isUrgent
                 ? 'bg-amber-50 border border-amber-200'
-                : 'bg-[#FFF3E8] border border-[#FFD4A8]',
+                : 'bg-primary/10 border border-primary/30',
           ].join(' ')}>
             <Clock className={[
               'h-4 w-4 shrink-0',
-              isExpired ? 'text-red-500' : 'text-[#FF7D00]',
+              isExpired ? 'text-red-500' : 'text-primary',
             ].join(' ')} />
             <p className={[
               'text-xs font-semibold break-keep',
@@ -171,7 +171,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               {quote.cleaning_type && (
-                <div className="inline-flex items-center gap-1.5 bg-[#FFF3E8] text-[#FF7D00] text-xs font-bold px-2.5 py-1 rounded-full mb-3">
+                <div className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-bold px-2.5 py-1 rounded-full mb-3">
                   {quote.cleaning_type}{quote.space_size ? ` · ${quote.space_size}평` : ''}
                 </div>
               )}
@@ -185,8 +185,8 @@ export default async function QuoteLandingPage({ params }: PageProps) {
           </div>
 
           {/* A/S 보증 인라인 */}
-          <div className="mt-4 flex items-center gap-2 bg-[#F5F0EB] rounded-xl px-3 py-2.5">
-            <ShieldCheck className="h-4 w-4 text-[#FF7D00] shrink-0" />
+          <div className="mt-4 flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2.5">
+            <ShieldCheck className="h-4 w-4 text-primary shrink-0" />
             <p className="text-xs font-semibold text-[#6B6B6B]">
               작업 후 <span className="text-[#1A1A1A]">3일 이내 무상 재방문</span> 보증
             </p>
@@ -238,9 +238,9 @@ export default async function QuoteLandingPage({ params }: PageProps) {
 
         {/* ⑤ 왜 이 업체인가 */}
         <div className="bg-white rounded-3xl p-5 shadow-sm space-y-2">
-          <p className="text-xs font-bold text-[#FF7D00] mb-1">이 업체를 선택하는 이유</p>
+          <p className="text-xs font-bold text-primary mb-1">이 업체를 선택하는 이유</p>
           {pitch.reasons.map((reason, i) => (
-            <div key={i} className="flex gap-3 items-start py-2 border-b border-[#F5F0EB] last:border-0">
+            <div key={i} className="flex gap-3 items-start py-2 border-b border-border last:border-0">
               <span className="text-lg shrink-0 mt-0.5">{reason.emoji}</span>
               <div>
                 <p className="font-bold text-sm text-[#1A1A1A]">{reason.title}</p>
@@ -255,7 +255,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
           <div className="grid grid-cols-3 gap-3">
             {pitch.cleaningFacts.map((fact, i) => (
               <div key={i} className="bg-white rounded-2xl p-4 text-center shadow-sm">
-                <p className="text-[22px] font-black text-[#FF7D00] tabular-nums leading-none">{fact.number}</p>
+                <p className="text-[22px] font-black text-primary tabular-nums leading-none">{fact.number}</p>
                 <p className="text-[11px] font-bold text-[#1A1A1A] mt-1.5">{fact.label}</p>
                 <p className="text-[10px] text-[#8D8D8D] mt-0.5 leading-tight">{fact.detail}</p>
               </div>
@@ -267,7 +267,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
         <div className="text-center text-xs text-[#B0B0B0] space-y-1 pb-4">
           <p>{business.name}이 직접 준비한 견적서입니다</p>
           {business.phone && (
-            <p>문의 <a href={`tel:${business.phone}`} className="text-[#FF7D00] underline">{business.phone}</a></p>
+            <p>문의 <a href={`tel:${business.phone}`} className="text-primary underline">{business.phone}</a></p>
           )}
           <p className="pt-1">Powered by 퀄리오</p>
         </div>

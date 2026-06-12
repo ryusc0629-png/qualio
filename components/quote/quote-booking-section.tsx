@@ -105,7 +105,7 @@ export function QuoteBookingSection({
   if (done) {
     return (
       <div className="text-center py-10 space-y-3">
-        <div className="w-16 h-16 bg-[#FFF3E8] rounded-full flex items-center justify-center mx-auto">
+        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
           <span className="text-3xl">🎉</span>
         </div>
         <p className="font-bold text-lg text-[#1A1A1A]">예약이 완료됐어요!</p>
@@ -143,15 +143,15 @@ export function QuoteBookingSection({
               className={[
                 'relative w-full rounded-2xl border-2 text-left transition-all p-4',
                 isSelected
-                  ? 'border-[#FF7D00] bg-[#FFF8F3]'
+                  ? 'border-primary bg-primary/5'
                   : tier.highlight
-                    ? 'border-[#FFD4A8] bg-white'
-                    : 'border-[#F0EBE3] bg-white',
+                    ? 'border-primary/30 bg-white'
+                    : 'border-border bg-white',
               ].join(' ')}
             >
               {/* 추천 뱃지 */}
               {tier.highlight && (
-                <div className="absolute -top-3 left-4 bg-[#FF7D00] text-white text-[11px] font-bold px-3 py-0.5 rounded-full">
+                <div className="absolute -top-3 left-4 bg-primary text-white text-[11px] font-bold px-3 py-0.5 rounded-full">
                   가장 많이 선택해요
                 </div>
               )}
@@ -161,7 +161,7 @@ export function QuoteBookingSection({
                 <div className="flex items-center gap-2">
                   <div className={[
                     'w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all',
-                    isSelected ? 'border-[#FF7D00] bg-[#FF7D00]' : 'border-[#D4C9BE]',
+                    isSelected ? 'border-primary bg-primary' : 'border-[#D4C9BE]',
                   ].join(' ')}>
                     {isSelected && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
                   </div>
@@ -182,11 +182,11 @@ export function QuoteBookingSection({
                     return (
                       <div key={i} className="flex items-center gap-1.5 text-xs">
                         {isAddon ? (
-                          <Plus className="h-3 w-3 text-[#FF7D00] shrink-0" />
+                          <Plus className="h-3 w-3 text-primary shrink-0" />
                         ) : (
                           <Check className="h-3 w-3 text-[#B0B0B0] shrink-0" />
                         )}
-                        <span className={isAddon ? 'font-bold text-[#FF7D00]' : 'text-[#6B6B6B]'}>
+                        <span className={isAddon ? 'font-bold text-primary' : 'text-[#6B6B6B]'}>
                           {isAddon ? item.slice(1).trim() : item}
                         </span>
                       </div>
@@ -203,8 +203,8 @@ export function QuoteBookingSection({
                   ))}
                   {fallback.addons.map((addon, i) => (
                     <div key={i} className="flex items-center gap-1.5">
-                      <Plus className="h-3 w-3 text-[#FF7D00] shrink-0" />
-                      <span className="text-xs font-bold text-[#FF7D00]">{addon.name}</span>
+                      <Plus className="h-3 w-3 text-primary shrink-0" />
+                      <span className="text-xs font-bold text-primary">{addon.name}</span>
                       <span className="text-xs text-[#8D8D8D]">({addon.detail})</span>
                     </div>
                   ))}
@@ -213,9 +213,9 @@ export function QuoteBookingSection({
 
               {/* 업셀 이유 callout */}
               {upsellReason && (
-                <div className="mt-3 ml-7 bg-[#FFF3E8] border border-[#FFD4A8] rounded-xl p-3 flex gap-2">
-                  <Lightbulb className="h-3.5 w-3.5 text-[#FF7D00] shrink-0 mt-0.5" />
-                  <p className="text-xs text-[#995200] leading-relaxed break-keep">
+                <div className="mt-3 ml-7 bg-primary/10 border border-primary/30 rounded-xl p-3 flex gap-2">
+                  <Lightbulb className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+                  <p className="text-xs text-primary/80 leading-relaxed break-keep">
                     {upsellReason}
                   </p>
                 </div>
@@ -227,10 +227,10 @@ export function QuoteBookingSection({
 
       {/* 예약 폼 */}
       {selectedTier && selectedTierData && (
-        <div ref={formRef} className="rounded-2xl bg-[#F5F0EB] p-4 space-y-4">
+        <div ref={formRef} className="rounded-2xl bg-slate-50 p-4 space-y-4">
           <p className="font-bold text-sm text-[#1A1A1A]">
             {selectedTierData.label} 플랜
-            <span className="ml-2 text-[#FF7D00] tabular-nums">
+            <span className="ml-2 text-primary tabular-nums">
               {selectedTierData.price.toLocaleString('ko-KR')}원
             </span>
           </p>
@@ -252,7 +252,7 @@ export function QuoteBookingSection({
                 <Label className="text-xs text-[#6B6B6B]">이름 (필수)</Label>
                 <Input
                   placeholder="홍길동"
-                  className="h-11 bg-white border-[#F0EBE3] rounded-xl text-sm"
+                  className="h-11 bg-white border-border rounded-xl text-sm"
                   {...register('customer_name')}
                 />
                 {errors.customer_name && (
@@ -264,7 +264,7 @@ export function QuoteBookingSection({
                 <Input
                   placeholder="01012345678"
                   inputMode="numeric"
-                  className="h-11 bg-white border-[#F0EBE3] rounded-xl text-sm"
+                  className="h-11 bg-white border-border rounded-xl text-sm"
                   {...register('customer_phone')}
                   onChange={(e) => {
                     const numOnly = e.target.value.replace(/\D/g, '')
@@ -281,7 +281,7 @@ export function QuoteBookingSection({
               <Label className="text-xs text-[#6B6B6B]">서비스 주소 (필수)</Label>
               <Input
                 placeholder="서울시 강남구 역삼동 123-45"
-                className="h-11 bg-white border-[#F0EBE3] rounded-xl text-sm"
+                className="h-11 bg-white border-border rounded-xl text-sm"
                 {...register('service_address')}
               />
               {errors.service_address && (
@@ -292,7 +292,7 @@ export function QuoteBookingSection({
             <button
               type="submit"
               disabled={isPending}
-              className="w-full h-14 rounded-2xl bg-[#FF7D00] text-white font-extrabold text-base disabled:opacity-60 active:scale-[0.98] transition-transform"
+              className="w-full h-14 rounded-2xl bg-primary text-white font-extrabold text-base disabled:opacity-60 active:scale-[0.98] transition-transform"
             >
               {isPending ? '예약 확정 중...' : '예약 확정하기'}
             </button>
@@ -303,13 +303,13 @@ export function QuoteBookingSection({
 
     {/* Sticky 하단 예약 바 — tier 선택 시 노출 */}
     {selectedTier && selectedTierData && !done && (
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#F0EBE3] shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-border shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
         <div className="max-w-lg mx-auto px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-3">
           <div className="flex-1 min-w-0">
             <p className="text-[11px] text-[#8D8D8D] font-medium">선택한 플랜</p>
             <p className="font-black text-[#1A1A1A] text-lg tabular-nums leading-tight">
               {selectedTierData.label}&nbsp;
-              <span className="text-[#FF7D00]">
+              <span className="text-primary">
                 {selectedTierData.price.toLocaleString('ko-KR')}원
               </span>
             </p>
@@ -317,7 +317,7 @@ export function QuoteBookingSection({
           <button
             type="button"
             onClick={() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-            className="shrink-0 bg-[#FF7D00] text-white font-extrabold px-6 h-12 rounded-2xl text-sm active:scale-[0.97] transition-transform"
+            className="shrink-0 bg-primary text-white font-extrabold px-6 h-12 rounded-2xl text-sm active:scale-[0.97] transition-transform"
           >
             예약하기 →
           </button>
