@@ -84,34 +84,6 @@ interface QuoteBookingSectionProps {
   }
 }
 
-const TIER_CONTENT: Record<string, {
-  base: string[]
-  addons: { name: string; detail: string }[]
-}> = {
-  good: {
-    base: [
-      '주방 전체 (싱크대·타일·레인지후드)',
-      '욕실 전체 (줄눈·변기·세면대)',
-      '전 실 바닥·창틀·문틀·벽면',
-      '베란다·다용도실',
-    ],
-    addons: [],
-  },
-  better: {
-    base: ['기본 청소 전 항목 완전 포함'],
-    addons: [
-      { name: '새집증후군 케어', detail: 'VOC·포름알데히드 전문 제거' },
-    ],
-  },
-  best: {
-    base: ['기본 청소 전 항목 완전 포함'],
-    addons: [
-      { name: '새집증후군 케어', detail: 'VOC·포름알데히드 전문 제거' },
-      { name: '상판 연마 처리', detail: '주방·욕실 상판 전용 연마' },
-      { name: '마루 코팅 처리', detail: '전 실 마루 보호 코팅' },
-    ],
-  },
-}
 
 export function QuoteBookingSection({
   quoteId,
@@ -175,9 +147,7 @@ export function QuoteBookingSection({
       <div className="space-y-3">
         {tiers.map((tier) => {
           const isSelected = selectedTier === tier.tier
-          // AI 생성 항목 우선, 없으면 정적 fallback
           const aiItems = tierIncludes?.[tier.tier as keyof typeof tierIncludes]
-          const fallback = TIER_CONTENT[tier.tier]
           const upsellReason =
             tier.tier === 'better' ? tierReasons?.better :
             tier.tier === 'best'   ? tierReasons?.best   : undefined
@@ -226,8 +196,8 @@ export function QuoteBookingSection({
                 </div>
               </div>
 
-              {/* 포함 항목 — AI 생성 우선, fallback은 정적 목록 */}
-              {aiItems ? (
+              {/* 포함 항목 — AI 생성 항목 */}
+              {aiItems && (
                 <div className="space-y-1.5 pl-7">
                   {aiItems.map((item, i) => {
                     const isAddon = item.startsWith('+')
@@ -245,23 +215,7 @@ export function QuoteBookingSection({
                     )
                   })}
                 </div>
-              ) : fallback ? (
-                <div className="space-y-1.5 pl-7">
-                  {fallback.base.map((item, i) => (
-                    <div key={i} className="flex items-center gap-1.5 text-xs text-[#6B6B6B]">
-                      <Check className="h-3 w-3 text-[#B0B0B0] shrink-0" />
-                      <span>{item}</span>
-                    </div>
-                  ))}
-                  {fallback.addons.map((addon, i) => (
-                    <div key={i} className="flex items-center gap-1.5">
-                      <Plus className="h-3 w-3 text-primary shrink-0" />
-                      <span className="text-xs font-bold text-primary">{addon.name}</span>
-                      <span className="text-xs text-[#8D8D8D]">({addon.detail})</span>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
+              )}
 
               {/* 업셀 이유 callout */}
               {upsellReason && (

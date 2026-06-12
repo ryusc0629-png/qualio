@@ -29,7 +29,7 @@ export interface QuotePitch {
   }
 }
 
-const FALLBACK_PITCH: QuotePitch = {
+export const FALLBACK_PITCH: QuotePitch = {
   headline: '고객님을 위한 맞춤 클리닝 제안',
   subheadline: '전문 팀이 직접 투입되어 숨은 오염까지 완벽하게 제거합니다',
   reasons: [

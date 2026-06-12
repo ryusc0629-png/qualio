@@ -4,6 +4,7 @@ import { generateQuotePitch } from '@/lib/ai/quote-pitch'
 import { QuoteBookingSection } from '@/components/quote/quote-booking-section'
 import { QuoteCountdown } from '@/components/quote/quote-countdown'
 import type { QuotePitch } from '@/lib/ai/quote-pitch'
+import { FALLBACK_PITCH } from '@/lib/ai/quote-pitch'
 import type { Json } from '@/lib/types/database'
 import { Phone, ShieldCheck, Star, ChevronRight } from 'lucide-react'
 
@@ -85,7 +86,10 @@ export default async function QuoteLandingPage({ params }: PageProps) {
       spaceSize:    quote.space_size ?? null,
       spaceUnit,
     })
-    db.from('quotes').update({ ai_pitch: pitch as unknown as Json }).eq('id', quoteId).then()
+    // fallback은 캐싱하지 않음 — 다음 방문 시 AI 재시도
+    if (pitch.headline !== FALLBACK_PITCH.headline) {
+      db.from('quotes').update({ ai_pitch: pitch as unknown as Json }).eq('id', quoteId).then()
+    }
   }
 
   const tiers = [
