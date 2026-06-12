@@ -374,7 +374,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
             </div>
           </div>
           {/* 진행 바 */}
-          <div className="w-24 h-1.5 bg-[#F0EBE3] rounded-full overflow-hidden">
+          <div className="w-24 h-1.5 bg-border rounded-full overflow-hidden">
             <div
               className="h-full bg-primary rounded-full transition-all duration-500"
               style={{ width: `${progressPct}%` }}
@@ -383,8 +383,8 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
         </div>
       </header>
 
-      {/* 채팅 스레드 */}
-      <div className="flex-1 overflow-y-auto px-4 pt-6 pb-4">
+      {/* 채팅 스레드 — 자연 높이로 표시, 페이지 전체 스크롤 */}
+      <div className="px-4 pt-5 pb-2">
         <div className="max-w-md mx-auto space-y-3">
 
           {completedSteps.map((step) => (
@@ -414,8 +414,8 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
         </div>
       </div>
 
-      {/* 입력 영역 */}
-      <div className="bg-white border-t border-border px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      {/* 입력 영역 — 항상 하단 고정 */}
+      <div className="sticky bottom-0 bg-white border-t border-border px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
         <div className="max-w-md mx-auto space-y-3">
 
           {/* 타이핑/처리 중엔 입력 영역 숨김 */}
