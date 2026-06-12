@@ -52,9 +52,27 @@ function UserBubble({ text }: { text: string }) {
   )
 }
 
+function TypingBubble({ initial }: { initial: string }) {
+  return (
+    <div className="flex items-end gap-2 animate-in fade-in duration-200">
+      <div className="w-8 h-8 rounded-full bg-[#FF7D00] flex items-center justify-center text-white text-xs font-bold shrink-0 mb-0.5">
+        {initial}
+      </div>
+      <div className="bg-white rounded-3xl rounded-bl-lg px-4 py-3.5 shadow-sm">
+        <div className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#C0B8B0] animate-bounce [animation-delay:0ms]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[#C0B8B0] animate-bounce [animation-delay:160ms]" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[#C0B8B0] animate-bounce [animation-delay:320ms]" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function QuoteForm({ businessId, businessName, services }: QuoteFormProps) {
   const [currentStep, setCurrentStep] = useState<Step>('service')
   const [completedSteps, setCompletedSteps] = useState<Step[]>([])
+  const [isTyping, setIsTyping] = useState(false)
 
   const [selectedServiceId, setSelectedServiceId] = useState('')
   const [selectedServiceName, setSelectedServiceName] = useState('')
@@ -70,7 +88,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
     setTimeout(() => {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }, 50)
-  }, [currentStep])
+  }, [currentStep, isTyping])
 
   const { execute, isPending } = useAction(calculateAndCreateQuoteAction, {
     onSuccess: ({ data }) => {
@@ -104,18 +122,22 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
 
   const advance = (from: Step, to: Step) => {
     setCompletedSteps(prev => [...prev, from])
-    setCurrentStep(to)
+    setIsTyping(true)
+    setTimeout(() => {
+      setIsTyping(false)
+      setCurrentStep(to)
+    }, 950)
   }
 
   const handleServiceSelect = (service: ServiceItem) => {
     setSelectedServiceId(service.id)
     setSelectedServiceName(service.name)
-    setTimeout(() => advance('service', 'space'), 120)
+    setTimeout(() => advance('service', 'space'), 50)
   }
 
   const handleSpaceChip = (chip: string) => {
     setSpaceSize(String(SPACE_CHIP_VALUES[chip]))
-    setTimeout(() => advance('space', 'notes'), 120)
+    setTimeout(() => advance('space', 'notes'), 50)
   }
 
   const handleSpaceCustom = () => {
@@ -198,19 +220,27 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
             </div>
           ))}
 
-          {/* 현재 질문 */}
-          <BotBubble text={getQuestion(currentStep)} initial={initial} />
+          {/* 타이핑 중이면 점 세 개, 아니면 현재 질문 */}
+          {isTyping
+            ? <TypingBubble initial={initial} />
+            : <BotBubble text={getQuestion(currentStep)} initial={initial} />
+          }
 
           <div ref={chatEndRef} className="h-1" />
         </div>
       </div>
 
-      {/* 입력 영역 (고정) */}
+      {/* 입력 영역 (타이핑 중엔 숨김) */}
       <div className="bg-white border-t border-[#F0EBE3] px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         <div className="max-w-md mx-auto space-y-3">
+          {isTyping && (
+            <div className="h-12 flex items-center justify-center">
+              <p className="text-xs text-[#B0B0B0]">답변을 입력하고 있어요...</p>
+            </div>
+          )}
 
           {/* 서비스 선택 */}
-          {currentStep === 'service' && (
+          {!isTyping && currentStep === 'service' && (
             services.length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
                 {services.map((s) => (
@@ -230,7 +260,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
           )}
 
           {/* 평수 선택 */}
-          {currentStep === 'space' && (
+          {!isTyping && currentStep === 'space' && (
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 {SPACE_CHIPS.map((chip) => (
@@ -267,7 +297,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
           )}
 
           {/* 요청사항 */}
-          {currentStep === 'notes' && (
+          {!isTyping && currentStep === 'notes' && (
             <div className="space-y-2">
               <textarea
                 value={notes}
@@ -298,7 +328,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
           )}
 
           {/* 이름 */}
-          {currentStep === 'name' && (
+          {!isTyping && currentStep === 'name' && (
             <div className="flex gap-2">
               <Input
                 placeholder="홍길동"
@@ -320,7 +350,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
           )}
 
           {/* 연락처 + 최종 제출 */}
-          {currentStep === 'phone' && (
+          {!isTyping && currentStep === 'phone' && (
             <div className="space-y-2">
               <Input
                 placeholder="01012345678"
