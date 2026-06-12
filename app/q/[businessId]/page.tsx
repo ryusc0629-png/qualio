@@ -33,24 +33,10 @@ export default async function PublicQuotePage({ params }: Props) {
     .order('created_at')
 
   return (
-    <div className="min-h-screen bg-background flex items-start justify-center pt-10 pb-16 px-4">
-      <div className="w-full max-w-md space-y-6">
-        {/* 업체 헤더 */}
-        <div className="text-center space-y-1">
-          <h1 className="text-2xl font-bold">{business.name}</h1>
-          {business.description && (
-            <p className="text-muted-foreground text-sm">{business.description}</p>
-          )}
-          <p className="text-muted-foreground text-sm">서비스 정보를 입력하시면 즉시 견적을 확인하실 수 있습니다</p>
-        </div>
-
-        {/* 견적 폼 */}
-        <div className="rounded-lg border bg-card p-6">
-          <QuoteForm businessId={business.id} services={services ?? []} />
-        </div>
-
-        <p className="text-center text-xs text-muted-foreground">Powered by 퀄리오</p>
-      </div>
-    </div>
+    <QuoteForm
+      businessId={business.id}
+      businessName={business.name}
+      services={services ?? []}
+    />
   )
 }
