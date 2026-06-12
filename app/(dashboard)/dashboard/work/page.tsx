@@ -3,8 +3,9 @@ import { redirect } from 'next/navigation'
 import { AddBookingForm } from '@/components/dashboard/add-booking-form'
 import { BookingStatusSelect } from '@/components/dashboard/booking-status-select'
 import { QuoteToLeadButton } from '@/components/dashboard/quote-to-lead-button'
+import { ArchiveQuoteButton } from '@/components/dashboard/archive-quote-button'
 import Link from 'next/link'
-import { Phone, Calendar, MapPin } from 'lucide-react'
+import { Phone, Calendar, Archive, MapPin } from 'lucide-react'
 
 // ── 상수 ────────────────────────────────────────────────
 
@@ -20,6 +21,7 @@ const QUOTE_STATUS: Record<string, { text: string; className: string }> = {
   pending:   { text: '답변 대기', className: 'bg-amber-100 text-amber-800' },
   booked:    { text: '예약됨',   className: 'bg-green-100 text-green-800' },
   expired:   { text: '만료',     className: 'bg-gray-100 text-gray-500' },
+  archived:  { text: '보관됨',   className: 'bg-slate-100 text-slate-500' },
   cancelled: { text: '취소',     className: 'bg-red-100 text-red-700' },
 }
 
@@ -35,7 +37,7 @@ export default async function WorkPage({
   searchParams: Promise<{ tab?: string }>
 }) {
   const { tab } = await searchParams
-  const activeTab = tab === 'bookings' ? 'bookings' : 'quotes'
+  const activeTab = tab === 'bookings' ? 'bookings' : tab === 'archived' ? 'archived' : 'quotes'
 
   const authClient = await createClient()
   const { data: { user } } = await authClient.auth.getUser()
@@ -52,12 +54,22 @@ export default async function WorkPage({
   const businessId = profile.business_id
 
   const [
-    { data: quotes },
+    { data: activeQuotes },
+    { data: archivedQuotes },
     { data: bookings },
   ] = await Promise.all([
+    // 활성 견적 — archived 제외
     db.from('quotes')
       .select('id, cleaning_type, space_size, preferred_date, good_price, better_price, best_price, status, customer_name, customer_phone, created_at')
       .eq('business_id', businessId)
+      .not('status', 'eq', 'archived')
+      .order('created_at', { ascending: false }),
+
+    // 보관함 — archived만
+    db.from('quotes')
+      .select('id, cleaning_type, space_size, preferred_date, good_price, better_price, best_price, status, customer_name, customer_phone, created_at')
+      .eq('business_id', businessId)
+      .eq('status', 'archived')
       .order('created_at', { ascending: false }),
 
     db.from('bookings')
@@ -67,12 +79,14 @@ export default async function WorkPage({
       .order('scheduled_at', { ascending: false }),
   ])
 
-  const pendingCount = quotes?.filter((q) => q.status === 'pending').length ?? 0
+  const pendingCount       = activeQuotes?.filter((q) => q.status === 'pending').length ?? 0
+  const archivedCount      = archivedQuotes?.length ?? 0
   const activeBookingCount = bookings?.filter((b) => b.status === 'confirmed' || b.status === 'in_progress').length ?? 0
 
   const tabs = [
-    { key: 'quotes',   label: '견적 요청', href: '/dashboard/work',              count: pendingCount },
-    { key: 'bookings', label: '예약',     href: '/dashboard/work?tab=bookings', count: activeBookingCount },
+    { key: 'quotes',   label: '견적 요청', href: '/dashboard/work',               count: pendingCount },
+    { key: 'bookings', label: '예약',      href: '/dashboard/work?tab=bookings',  count: activeBookingCount },
+    { key: 'archived', label: '보관함',    href: '/dashboard/work?tab=archived',  count: archivedCount },
   ]
 
   return (
@@ -118,21 +132,27 @@ export default async function WorkPage({
       {/* ── 견적 요청 탭 ── */}
       {activeTab === 'quotes' && (
         <>
-          {!quotes || quotes.length === 0 ? (
+          {!activeQuotes || activeQuotes.length === 0 ? (
             <div className="bg-white rounded-xl border border-dashed border-border p-12 text-center space-y-2">
               <p className="text-sm text-muted-foreground">아직 견적 요청이 없어요</p>
               <p className="text-xs text-muted-foreground">대시보드 홈에서 고객 링크를 공유해보세요</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {quotes.map((quote) => {
-                const status = QUOTE_STATUS[quote.status] ?? { text: quote.status, className: 'bg-gray-100 text-gray-600' }
+              {activeQuotes.map((quote) => {
+                const status     = QUOTE_STATUS[quote.status] ?? { text: quote.status, className: 'bg-gray-100 text-gray-600' }
                 const hasContact = Boolean(quote.customer_phone)
+                const canArchive = quote.status === 'pending' || quote.status === 'expired'
 
                 return (
                   <div
                     key={quote.id}
-                    className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition-colors"
+                    className={[
+                      'bg-white rounded-xl border p-4 transition-colors',
+                      quote.status === 'expired'
+                        ? 'border-border opacity-60'
+                        : 'border-border hover:border-primary/30',
+                    ].join(' ')}
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
@@ -177,13 +197,85 @@ export default async function WorkPage({
                           <p>추천 <span className="tabular-nums text-foreground font-semibold">{quote.better_price?.toLocaleString() ?? '—'}원</span></p>
                           <p>프리미엄 <span className="tabular-nums text-foreground font-semibold">{quote.best_price?.toLocaleString() ?? '—'}원</span></p>
                         </div>
-                        {hasContact && quote.status === 'pending' && (
-                          <QuoteToLeadButton
-                            customerName={quote.customer_name ?? ''}
-                            customerPhone={quote.customer_phone!}
-                            cleaningType={quote.cleaning_type}
-                          />
-                        )}
+                        <div className="flex items-center justify-end gap-1">
+                          {hasContact && quote.status === 'pending' && (
+                            <QuoteToLeadButton
+                              customerName={quote.customer_name ?? ''}
+                              customerPhone={quote.customer_phone!}
+                              cleaningType={quote.cleaning_type}
+                            />
+                          )}
+                          {canArchive && (
+                            <ArchiveQuoteButton quoteId={quote.id} />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── 보관함 탭 ── */}
+      {activeTab === 'archived' && (
+        <>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-xl px-4 py-3">
+            <Archive className="h-3.5 w-3.5 shrink-0" />
+            <p>보관된 견적은 여기서 확인할 수 있어요. 고객 정보는 영구 보존됩니다.</p>
+          </div>
+
+          {!archivedQuotes || archivedQuotes.length === 0 ? (
+            <div className="bg-white rounded-xl border border-dashed border-border p-12 text-center space-y-2">
+              <p className="text-sm text-muted-foreground">보관된 견적이 없어요</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {archivedQuotes.map((quote) => {
+                const hasContact = Boolean(quote.customer_phone)
+                return (
+                  <div
+                    key={quote.id}
+                    className="bg-white rounded-xl border border-border p-4 opacity-70"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-muted-foreground">
+                            {quote.cleaning_type ?? '서비스 미선택'}
+                            {quote.space_size && (
+                              <span className="ml-1 text-sm font-normal">
+                                {quote.space_size}평
+                              </span>
+                            )}
+                          </p>
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-500">
+                            보관됨
+                          </span>
+                        </div>
+                        <div className="mt-1.5 space-y-0.5">
+                          {hasContact ? (
+                            <p className="text-sm flex items-center gap-1 text-muted-foreground">
+                              <Phone className="h-3 w-3 shrink-0" />
+                              {quote.customer_name && <span className="font-medium mr-0.5">{quote.customer_name}</span>}
+                              {quote.customer_phone}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">연락처 미입력</p>
+                          )}
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Calendar className="h-3 w-3 shrink-0" />
+                            {new Date(quote.created_at).toLocaleDateString('ko-KR')} 요청
+                          </p>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right space-y-1">
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                          <p>기본 <span className="tabular-nums">{quote.good_price?.toLocaleString() ?? '—'}원</span></p>
+                          <p>추천 <span className="tabular-nums">{quote.better_price?.toLocaleString() ?? '—'}원</span></p>
+                        </div>
                       </div>
                     </div>
                   </div>

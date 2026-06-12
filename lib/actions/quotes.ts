@@ -2,7 +2,8 @@
 
 import { z } from 'zod'
 import { createSafeActionClient } from 'next-safe-action'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
 import { generateTierDescriptions } from '@/lib/ai/tier-descriptions'
 import { recommendBundles } from '@/lib/ai/bundle-recommendation'
 import { sendBookingConfirmAlimtalk, sendQuoteAlimtalk } from '@/lib/kakao/alimtalk'
@@ -417,5 +418,72 @@ export const createBookingAction = publicAction
       }
     }
 
+    return { success: true }
+  })
+
+// ── 견적 보관/복원 액션 (인증 필요) ────────────────────────
+
+import { action as authAction } from '@/lib/safe-action'
+
+const quoteIdSchema = z.object({ quote_id: z.string().uuid() })
+
+// 견적 보관 — pending/expired → archived (목록에서 숨김, DB는 유지)
+export const archiveQuoteAction = authAction
+  .schema(quoteIdSchema)
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+
+    // 본인 업체 견적인지 확인
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const { error } = await db
+      .from('quotes')
+      .update({ status: 'archived' })
+      .eq('id', parsedInput.quote_id)
+      .eq('business_id', profile.business_id)
+      .in('status', ['pending', 'expired'])  // booked 견적은 보관 불가
+
+    if (error) throw new Error('[APP] 보관 처리에 실패했습니다')
+
+    revalidatePath('/dashboard/work')
+    return { success: true }
+  })
+
+// 견적 복원 — archived → pending (보관함에서 다시 활성화)
+export const restoreQuoteAction = authAction
+  .schema(quoteIdSchema)
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const { error } = await db
+      .from('quotes')
+      .update({ status: 'pending' })
+      .eq('id', parsedInput.quote_id)
+      .eq('business_id', profile.business_id)
+      .eq('status', 'archived')
+
+    if (error) throw new Error('[APP] 복원에 실패했습니다')
+
+    revalidatePath('/dashboard/work')
     return { success: true }
   })
