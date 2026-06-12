@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { CheckCircle } from 'lucide-react'
 
 const TIER_OPTIONS = [
@@ -23,10 +24,10 @@ const TIER_OPTIONS = [
 ]
 
 interface ConfirmBookingButtonProps {
-  quoteId:      string
-  goodPrice:    number | null
-  betterPrice:  number | null
-  bestPrice:    number | null
+  quoteId:       string
+  goodPrice:     number | null
+  betterPrice:   number | null
+  bestPrice:     number | null
   preferredDate?: string | null
 }
 
@@ -37,13 +38,13 @@ export function ConfirmBookingButton({
   bestPrice,
   preferredDate,
 }: ConfirmBookingButtonProps) {
-  const [open, setOpen]               = useState(false)
-  const [tier, setTier]               = useState<'good' | 'better' | 'best'>('better')
-  const [scheduledAt, setScheduledAt] = useState(preferredDate ?? '')
-  const [finalPrice, setFinalPrice]   = useState<string>('')
-  const [address, setAddress]         = useState('')
+  const [open, setOpen]             = useState(false)
+  const [tier, setTier]             = useState<'good' | 'better' | 'best'>('better')
+  const [date, setDate]             = useState(preferredDate ?? '')
+  const [time, setTime]             = useState('10:00')
+  const [finalPrice, setFinalPrice] = useState<string>('')
+  const [address, setAddress]       = useState('')
 
-  // 플랜 선택 시 금액 자동 세팅
   const handleTierChange = (value: 'good' | 'better' | 'best') => {
     setTier(value)
     const price =
@@ -63,9 +64,10 @@ export function ConfirmBookingButton({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!date) { toast.error('날짜를 선택해주세요'); return }
     execute({
       quote_id:        quoteId,
-      scheduled_at:    scheduledAt,
+      scheduled_at:    `${date}T${time}:00+09:00`,
       selected_tier:   tier,
       final_price:     Number(finalPrice),
       service_address: address || undefined,
@@ -84,22 +86,28 @@ export function ConfirmBookingButton({
         </button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>예약 확정</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+        <form onSubmit={handleSubmit} className="space-y-5 mt-2">
 
-          {/* 날짜 */}
+          {/* 날짜·시간 피커 */}
           <div className="space-y-1.5">
-            <Label htmlFor="scheduledAt">청소 날짜 (필수)</Label>
-            <Input
-              id="scheduledAt"
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
-              required
+            <Label>
+              청소 날짜·시간
+              {date && (
+                <span className="ml-2 text-primary font-semibold">
+                  {date} {time}
+                </span>
+              )}
+            </Label>
+            <DateTimePicker
+              date={date}
+              time={time}
+              onDateChange={setDate}
+              onTimeChange={setTime}
             />
           </div>
 

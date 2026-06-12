@@ -12,22 +12,24 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { CalendarClock } from 'lucide-react'
 
-interface RescheduleBookingButtonProps {
-  bookingId:   string
-  scheduledAt: string  // 현재 일시 (ISO)
-  customerPhone: string | null
+// ISO → KST 날짜/시간 분리
+function parseKST(isoString: string): { date: string; time: string } {
+  const kst  = new Date(new Date(isoString).getTime() + 9 * 60 * 60 * 1000)
+  const date = kst.toISOString().slice(0, 10)
+  const hh   = String(kst.getUTCHours()).padStart(2, '0')
+  // 가장 가까운 정시로 스냅
+  const snapped = `${hh}:00`
+  return { date, time: snapped }
 }
 
-// ISO 문자열을 datetime-local input에 맞는 형식으로 변환
-function toDatetimeLocal(isoString: string): string {
-  const date = new Date(isoString)
-  // KST(+9) 기준으로 변환
-  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000)
-  return kst.toISOString().slice(0, 16)  // "YYYY-MM-DDTHH:mm"
+interface RescheduleBookingButtonProps {
+  bookingId:     string
+  scheduledAt:   string
+  customerPhone: string | null
 }
 
 export function RescheduleBookingButton({
@@ -35,8 +37,10 @@ export function RescheduleBookingButton({
   scheduledAt,
   customerPhone,
 }: RescheduleBookingButtonProps) {
-  const [open, setOpen]               = useState(false)
-  const [newDatetime, setNewDatetime] = useState(() => toDatetimeLocal(scheduledAt))
+  const initial     = parseKST(scheduledAt)
+  const [open, setOpen] = useState(false)
+  const [date, setDate] = useState(initial.date)
+  const [time, setTime] = useState(initial.time)
 
   const { execute, isPending } = useAction(rescheduleBookingAction, {
     onSuccess: () => {
@@ -52,8 +56,8 @@ export function RescheduleBookingButton({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newDatetime) return
-    execute({ booking_id: bookingId, new_scheduled_at: newDatetime })
+    if (!date) { toast.error('날짜를 선택해주세요'); return }
+    execute({ booking_id: bookingId, new_scheduled_at: `${date}T${time}:00+09:00` })
   }
 
   return (
@@ -62,14 +66,13 @@ export function RescheduleBookingButton({
         <button
           type="button"
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted"
-          title="일정 변경"
         >
           <CalendarClock className="h-3.5 w-3.5" />
           일정 변경
         </button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-sm">
+      <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>예약 일정 변경</DialogTitle>
         </DialogHeader>
@@ -88,22 +91,28 @@ export function RescheduleBookingButton({
             </p>
           </div>
 
-          {/* 새 일시 */}
+          {/* 날짜·시간 피커 */}
           <div className="space-y-1.5">
-            <Label htmlFor="newDatetime">변경할 날짜·시간 (필수)</Label>
-            <Input
-              id="newDatetime"
-              type="datetime-local"
-              value={newDatetime}
-              onChange={(e) => setNewDatetime(e.target.value)}
-              required
+            <Label>
+              변경할 날짜·시간
+              {date && (
+                <span className="ml-2 text-primary font-semibold">
+                  {date} {time}
+                </span>
+              )}
+            </Label>
+            <DateTimePicker
+              date={date}
+              time={time}
+              onDateChange={setDate}
+              onTimeChange={setTime}
             />
           </div>
 
           {/* 알림톡 안내 */}
           {customerPhone && (
             <p className="text-xs text-muted-foreground bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
-              저장하면 <span className="font-semibold text-primary">{customerPhone}</span>로
+              저장하면 <span className="font-semibold text-primary">{customerPhone}</span>으로
               일정 변경 알림톡이 자동 발송됩니다.
             </p>
           )}
