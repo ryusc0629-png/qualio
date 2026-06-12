@@ -34,6 +34,9 @@ const updateServiceItemSchema = z.object({
   ),
   photos: z.array(z.string()).optional(),
   ac_type_prices: acTypePricesSchema,
+  tier_good_items:   z.array(z.string()).optional(),
+  tier_better_items: z.array(z.string()).optional(),
+  tier_best_items:   z.array(z.string()).optional(),
 })
 
 // 서비스 항목 삭제 스키마
@@ -112,12 +115,15 @@ export const updateServiceItemAction = action
     const { error } = await db
       .from('service_items')
       .update({
-        name:           parsedInput.name,
-        category:       parsedInput.category ?? null,
-        base_price:     parsedInput.base_price,
-        unit:           parsedInput.unit,
-        photos:         parsedInput.photos ?? [],
-        ac_type_prices: parsedInput.ac_type_prices ?? null,
+        name:              parsedInput.name,
+        category:          parsedInput.category ?? null,
+        base_price:        parsedInput.base_price,
+        unit:              parsedInput.unit,
+        photos:            parsedInput.photos ?? [],
+        ac_type_prices:    parsedInput.ac_type_prices ?? null,
+        tier_good_items:   parsedInput.tier_good_items ?? [],
+        tier_better_items: parsedInput.tier_better_items ?? [],
+        tier_best_items:   parsedInput.tier_best_items ?? [],
       })
       .eq('id', parsedInput.id)
       .eq('business_id', profile.business_id)

@@ -22,7 +22,7 @@ export default async function ServicesPage() {
 
   const { data: services } = await db
     .from('service_items')
-    .select('id, name, category, base_price, unit, is_active, photos, ac_type_prices')
+    .select('id, name, category, base_price, unit, is_active, photos, ac_type_prices, tier_good_items, tier_better_items, tier_best_items')
     .eq('business_id', profile.business_id)
     .is('deleted_at', null)
     .order('sort_order')
@@ -114,6 +114,9 @@ export default async function ServicesPage() {
                       ac_type_prices: (service.ac_type_prices && typeof service.ac_type_prices === 'object' && !Array.isArray(service.ac_type_prices))
                         ? service.ac_type_prices as Record<string, number>
                         : null,
+                      tier_good_items:   service.tier_good_items   ?? [],
+                      tier_better_items: service.tier_better_items ?? [],
+                      tier_best_items:   service.tier_best_items   ?? [],
                     }} />
                     <DeleteServiceButton id={service.id} />
                   </div>

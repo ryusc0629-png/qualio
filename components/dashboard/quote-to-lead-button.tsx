@@ -25,7 +25,7 @@ export function QuoteToLeadButton({ customerName, customerPhone, cleaningType }:
       if (result?.serverError) {
         toast.error(result.serverError)
       } else {
-        toast.success('잠재고객으로 등록됐어요!')
+        toast.success('고객으로 저장됐어요!')
       }
     })
   }
@@ -39,7 +39,7 @@ export function QuoteToLeadButton({ customerName, customerPhone, cleaningType }:
       className="h-7 text-xs px-2 border-blue-300 text-blue-700 hover:bg-blue-50"
     >
       <UserPlus className="h-3 w-3 mr-1" />
-      {isPending ? '등록 중...' : '리드 등록'}
+      {isPending ? '저장 중...' : '고객 저장'}
     </Button>
   )
 }

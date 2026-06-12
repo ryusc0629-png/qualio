@@ -47,16 +47,25 @@ export default async function QuoteLandingPage({ params }: PageProps) {
 
   if (!quote || !business) notFound()
 
-  // 서비스 단위 조회 (에어컨=개, 청소=평당 등)
+  // 서비스 단위 및 플랜 구성 항목 조회
   const { data: serviceItem } = await db
     .from('service_items')
-    .select('unit')
+    .select('unit, tier_good_items, tier_better_items, tier_best_items')
     .eq('business_id', businessId)
     .eq('name', quote.cleaning_type ?? '')
     .is('deleted_at', null)
     .maybeSingle()
 
   const spaceUnit = serviceItem?.unit ?? '평당'
+
+  // 업체가 직접 입력한 플랜 항목이 있으면 AI에 전달 (없으면 AI가 추측)
+  const existingTierItems = (serviceItem?.tier_good_items?.length ?? 0) > 0
+    ? {
+        good:   serviceItem!.tier_good_items!,
+        better: serviceItem!.tier_better_items ?? [],
+        best:   serviceItem!.tier_best_items ?? [],
+      }
+    : undefined
 
   function formatSpaceTag(size: number | null, unit: string): string {
     if (!size) return ''
@@ -85,6 +94,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
       serviceName:  quote.cleaning_type ?? '청소 서비스',
       spaceSize:    quote.space_size ?? null,
       spaceUnit,
+      existingTierItems,
     })
     // fallback은 캐싱하지 않음 — 다음 방문 시 AI 재시도
     if (pitch.headline !== FALLBACK_PITCH.headline) {

@@ -710,6 +710,9 @@ export type Database = {
           photos: string[] | null
           show_in_quote: boolean
           sort_order: number
+          tier_best_items: string[] | null
+          tier_better_items: string[] | null
+          tier_good_items: string[] | null
           unit: string
           updated_at: string
         }
@@ -726,6 +729,9 @@ export type Database = {
           photos?: string[] | null
           show_in_quote?: boolean
           sort_order?: number
+          tier_best_items?: string[] | null
+          tier_better_items?: string[] | null
+          tier_good_items?: string[] | null
           unit?: string
           updated_at?: string
         }
@@ -742,6 +748,9 @@ export type Database = {
           photos?: string[] | null
           show_in_quote?: boolean
           sort_order?: number
+          tier_best_items?: string[] | null
+          tier_better_items?: string[] | null
+          tier_good_items?: string[] | null
           unit?: string
           updated_at?: string
         }

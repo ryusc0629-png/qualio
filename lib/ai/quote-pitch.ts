@@ -82,23 +82,33 @@ export async function generateQuotePitch({
   serviceName,
   spaceSize,
   spaceUnit = '평당',
+  existingTierItems,
 }: {
   businessName: string
   category: string | null
   serviceName: string
   spaceSize?: number | null
   spaceUnit?: string
+  existingTierItems?: { good: string[]; better: string[]; best: string[] }
 }): Promise<QuotePitch> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return FALLBACK_PITCH
 
   const client = new Anthropic({ apiKey })
 
+  const hasTierItems = existingTierItems && existingTierItems.good.length > 0
+
   const contextText = [
     `서비스: ${serviceName}`,
     formatSpaceContext(spaceSize, spaceUnit),
     category ? `업체 소개: ${category}` : '',
     `제공 업체: ${businessName}`,
+    hasTierItems ? [
+      `\n플랜 구성:`,
+      `기본 플랜: ${existingTierItems!.good.join(', ')}`,
+      existingTierItems!.better.length > 0 ? `추천 플랜 추가 항목: ${existingTierItems!.better.join(', ')}` : '',
+      existingTierItems!.best.length > 0   ? `프리미엄 플랜 추가 항목: ${existingTierItems!.best.join(', ')}`   : '',
+    ].filter(Boolean).join('\n') : '',
   ].filter(Boolean).join('\n')
 
   const prompt = `당신은 프리미엄 청소 서비스의 '맞춤 제안서' 작성 전문가입니다.
@@ -157,6 +167,15 @@ ${contextText}
 
     const parsed = JSON.parse(jsonMatch[0]) as QuotePitch
     if (!parsed.headline || !parsed.tierReasons || !parsed.tierIncludes) return FALLBACK_PITCH
+
+    // 업체가 직접 입력한 플랜 항목이 있으면 AI 추측 항목 대신 사용
+    if (hasTierItems) {
+      parsed.tierIncludes = {
+        good:   existingTierItems!.good,
+        better: ['기본 플랜 전 항목 포함', ...existingTierItems!.better.map((i) => `+ ${i}`)],
+        best:   ['추천 플랜 전 항목 포함', ...existingTierItems!.best.map((i) => `+ ${i}`)],
+      }
+    }
 
     return parsed
   } catch (e) {

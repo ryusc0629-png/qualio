@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -50,7 +50,62 @@ interface EditServiceButtonProps {
     unit: string
     photos: string[] | null
     ac_type_prices: Record<string, number> | null
+    tier_good_items: string[]
+    tier_better_items: string[]
+    tier_best_items: string[]
   }
+}
+
+// 플랜 항목 입력 컴포넌트
+function TierItemsEditor({
+  label,
+  placeholder,
+  items,
+  onChange,
+}: {
+  label: string
+  placeholder: string
+  items: string[]
+  onChange: (items: string[]) => void
+}) {
+  const [inputVal, setInputVal] = useState('')
+
+  const add = useCallback(() => {
+    const v = inputVal.trim()
+    if (!v) return
+    onChange([...items, v])
+    setInputVal('')
+  }, [inputVal, items, onChange])
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-semibold text-zinc-700">{label}</p>
+      {items.map((item, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <div className="flex-1 bg-zinc-50 border rounded-lg px-3 py-1.5 text-xs text-zinc-700">{item}</div>
+          <button
+            type="button"
+            onClick={() => onChange(items.filter((_, j) => j !== i))}
+            className="shrink-0 p-1 hover:text-destructive transition-colors"
+          >
+            <X className="h-3.5 w-3.5 text-zinc-400" />
+          </button>
+        </div>
+      ))}
+      <div className="flex gap-1.5">
+        <Input
+          placeholder={placeholder}
+          value={inputVal}
+          onChange={(e) => setInputVal(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+          className="h-8 text-xs"
+        />
+        <Button type="button" variant="outline" size="sm" onClick={add} className="h-8 shrink-0 text-xs px-3">
+          추가
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 export function EditServiceButton({ service }: EditServiceButtonProps) {
@@ -58,6 +113,9 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
   const [photos, setPhotos] = useState<string[]>(service.photos ?? [])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [tierGood,   setTierGood]   = useState<string[]>(service.tier_good_items)
+  const [tierBetter, setTierBetter] = useState<string[]>(service.tier_better_items)
+  const [tierBest,   setTierBest]   = useState<string[]>(service.tier_best_items)
   // 에어컨 유형별 단가 상태 (기존 값으로 초기화)
   const [acPrices, setAcPrices] = useState<Partial<Record<string, string>>>(() => {
     const init: Partial<Record<string, string>> = {}
@@ -157,13 +215,16 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
               }
 
               execute({
-                id:             service.id,
-                name:           data.name,
-                category:       data.category || undefined,
-                base_price:     basePrice,
-                unit:           data.unit,
+                id:                service.id,
+                name:              data.name,
+                category:          data.category || undefined,
+                base_price:        basePrice,
+                unit:              data.unit,
                 photos,
-                ac_type_prices: acTypePrices,
+                ac_type_prices:    acTypePrices,
+                tier_good_items:   tierGood.filter(Boolean),
+                tier_better_items: tierBetter.filter(Boolean),
+                tier_best_items:   tierBest.filter(Boolean),
               })
             })}
             className="space-y-4"
@@ -283,6 +344,34 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
                 multiple
                 className="hidden"
                 onChange={handlePhotoUpload}
+              />
+            </div>
+
+            {/* 플랜 구성 항목 */}
+            <div className="space-y-4 border-t pt-4">
+              <div>
+                <p className="text-sm font-semibold">플랜 구성 항목 설정</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  입력하시면 견적서에 정확한 포함 항목이 표시됩니다. 비워두면 AI가 자동으로 채웁니다.
+                </p>
+              </div>
+              <TierItemsEditor
+                label="기본 플랜 항목"
+                placeholder="예: 필터 세척"
+                items={tierGood}
+                onChange={setTierGood}
+              />
+              <TierItemsEditor
+                label="추천 플랜 추가 항목 (기본 포함 + 이것만 추가)"
+                placeholder="예: 열교환기 세척"
+                items={tierBetter}
+                onChange={setTierBetter}
+              />
+              <TierItemsEditor
+                label="프리미엄 플랜 추가 항목 (추천 포함 + 이것만 추가)"
+                placeholder="예: 항균 코팅"
+                items={tierBest}
+                onChange={setTierBest}
               />
             </div>
 
