@@ -133,7 +133,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, seo_description, address')
+    .select('id, name, seo_description, seo_keywords, address')
     .eq('slug', slug)
     .maybeSingle()
 
@@ -152,10 +152,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
   const description = post.summary ?? business.seo_description ?? ''
   const canonicalUrl = `${appUrl}/biz/${slug}/posts/${postSlug}`
+  // 포스트 제목에서 키워드 추출 + 업체 키워드 병합
+  const titleKeywords = post.title.replace(/[?!~·]/g, '').split(/[\s,]+/).filter(Boolean).slice(0, 5).join(', ')
+  const keywords = [titleKeywords, business.seo_keywords].filter(Boolean).join(', ')
 
   return {
     title: `${post.title} | ${business.name}`,
     description,
+    keywords,
     openGraph: {
       title: post.title,
       description,
@@ -240,6 +244,7 @@ export default async function PostPage({ params }: Props) {
         headline: post.title,
         description: post.summary ?? '',
         datePublished: post.published_at,
+        dateModified: post.published_at,  // 최신성 신호 — AI 검색엔진 우선순위에 영향
         author: { '@type': 'Organization', name: business.name, url: `${appUrl}/biz/${slug}` },
         publisher: { '@type': 'Organization', name: business.name, url: `${appUrl}/biz/${slug}` },
         mainEntityOfPage: { '@type': 'WebPage', '@id': `${appUrl}/biz/${slug}/posts/${postSlug}` },
@@ -342,13 +347,11 @@ export default async function PostPage({ params }: Props) {
                 </div>
               )}
 
-              {/* 모바일 목차 */}
+              {/* 모바일 목차 — 항상 표시 */}
               {toc.length >= 3 && (
-                <details className="lg:hidden rounded-lg border bg-card p-4">
-                  <summary className="text-sm font-semibold cursor-pointer list-none flex items-center justify-between">
-                    목차 <span className="text-muted-foreground text-xs">▾</span>
-                  </summary>
-                  <nav className="mt-3 space-y-1.5">
+                <div className="lg:hidden rounded-lg border bg-card p-4">
+                  <p className="text-sm font-semibold mb-3">목차</p>
+                  <nav className="space-y-1.5">
                     {toc.map((item) => (
                       <a
                         key={item.id}
@@ -359,7 +362,7 @@ export default async function PostPage({ params }: Props) {
                       </a>
                     ))}
                   </nav>
-                </details>
+                </div>
               )}
 
               {/* 본문 */}
@@ -371,17 +374,12 @@ export default async function PostPage({ params }: Props) {
               {inlineFaqs.length > 0 && (
                 <section className="space-y-3 pt-4">
                   <h2 className="text-xl font-bold">자주 묻는 질문</h2>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {inlineFaqs.map((faq, i) => (
-                      <details key={i} className="group rounded-lg border bg-card">
-                        <summary className="flex items-center justify-between p-4 cursor-pointer list-none text-sm font-medium">
-                          <span className="pr-4">{faq.question}</span>
-                          <span className="text-muted-foreground shrink-0 transition-transform group-open:rotate-180">▾</span>
-                        </summary>
-                        <div className="px-4 pb-4 text-sm text-muted-foreground leading-relaxed">
-                          {faq.answer}
-                        </div>
-                      </details>
+                      <div key={i} className="rounded-lg border bg-card p-4 space-y-1.5">
+                        <p className="text-sm font-semibold">{faq.question}</p>
+                        <p className="text-sm text-muted-foreground leading-relaxed">{faq.answer}</p>
+                      </div>
                     ))}
                   </div>
                 </section>

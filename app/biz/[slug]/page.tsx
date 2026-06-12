@@ -5,7 +5,6 @@ import Link from 'next/link'
 import {
   MapPin,
   Phone,
-  ChevronDown,
   CheckCircle2,
   Clock,
   Shield,
@@ -603,15 +602,10 @@ export default async function BizLandingPage({ params }: Props) {
               </div>
               <div className="max-w-2xl mx-auto space-y-3">
                 {faqs.map((faq, idx) => (
-                  <details key={idx} className="group rounded-2xl border-2 bg-white hover:border-primary/30 transition-colors">
-                    <summary className="flex items-center justify-between p-5 cursor-pointer list-none gap-4">
-                      <span className="font-semibold text-sm pr-4">{faq.question}</span>
-                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" />
-                    </summary>
-                    <div className="px-5 pb-5 text-sm text-muted-foreground leading-relaxed border-t pt-4">
-                      {faq.answer}
-                    </div>
-                  </details>
+                  <div key={idx} className="rounded-2xl border-2 bg-white p-5 space-y-2">
+                    <p className="font-semibold text-sm">{faq.question}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{faq.answer}</p>
+                  </div>
                 ))}
               </div>
             </div>
