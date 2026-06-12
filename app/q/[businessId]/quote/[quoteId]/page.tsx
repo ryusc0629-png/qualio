@@ -4,7 +4,8 @@ import { generateQuotePitch } from '@/lib/ai/quote-pitch'
 import { QuoteBookingSection } from '@/components/quote/quote-booking-section'
 import type { QuotePitch } from '@/lib/ai/quote-pitch'
 import type { Json } from '@/lib/types/database'
-import { Phone, ShieldCheck, Star, ChevronRight, Clock } from 'lucide-react'
+import { Phone, ShieldCheck, Star, ChevronRight } from 'lucide-react'
+import { QuoteCountdown } from '@/components/quote/quote-countdown'
 
 interface PageProps {
   params: Promise<{ businessId: string; quoteId: string }>
@@ -138,32 +139,13 @@ export default async function QuoteLandingPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* 견적 만료 배너 */}
+        {/* 견적 만료 배너 — 실시간 카운트다운 */}
         {!isBooked && (
-          <div className={[
-            'flex items-center gap-2.5 rounded-2xl px-4 py-3',
-            isExpired
-              ? 'bg-red-50 border border-red-200'
-              : isUrgent
-                ? 'bg-amber-50 border border-amber-200'
-                : 'bg-primary/10 border border-primary/30',
-          ].join(' ')}>
-            <Clock className={[
-              'h-4 w-4 shrink-0',
-              isExpired ? 'text-red-500' : 'text-primary',
-            ].join(' ')} />
-            <p className={[
-              'text-xs font-semibold break-keep',
-              isExpired ? 'text-red-700' : 'text-[#7A4200]',
-            ].join(' ')}>
-              {isExpired
-                ? '이 견적은 만료됐어요. 새 견적을 다시 요청해 주세요.'
-                : isUrgent
-                  ? `⚡ 이 견적은 ${hoursLeft}시간 후 만료됩니다. 지금 바로 예약하세요!`
-                  : `이 견적은 ${hoursLeft}시간 후 만료됩니다`
-              }
-            </p>
-          </div>
+          <QuoteCountdown
+            expiresAt={expiresAt.toISOString()}
+            isUrgent={isUrgent}
+            isExpired={isExpired}
+          />
         )}
 
         {/* ② 견적 확인 카드 */}
@@ -191,6 +173,11 @@ export default async function QuoteLandingPage({ params }: PageProps) {
               작업 후 <span className="text-[#1A1A1A]">3일 이내 무상 재방문</span> 보증
             </p>
           </div>
+
+          {/* 현장 변동 안내 */}
+          <p className="text-[11px] text-[#B0B0B0] mt-3 leading-relaxed break-keep">
+            ※ 현장 오염도·실측 면적에 따라 최종 금액이 달라질 수 있으며, 변동사항 생길 경우 현장 담당자가 안내드립니다.
+          </p>
         </div>
 
         {/* ③ 플랜 선택 */}
@@ -201,10 +188,24 @@ export default async function QuoteLandingPage({ params }: PageProps) {
           </div>
 
           {isBooked ? (
-            <div className="text-center py-8 space-y-3">
-              <div className="text-4xl">✅</div>
-              <p className="font-bold text-lg">예약이 완료된 견적입니다</p>
-              <p className="text-sm text-[#8D8D8D]">담당자가 곧 연락드릴 예정입니다.</p>
+            <div className="py-6 space-y-5">
+              <div className="text-center space-y-2">
+                <div className="text-4xl">✅</div>
+                <p className="font-bold text-lg text-[#1A1A1A]">예약이 완료된 견적입니다</p>
+                <p className="text-sm text-[#8D8D8D]">퀄리오가 알아서 챙겨드릴게요.</p>
+              </div>
+              <div className="space-y-2">
+                {[
+                  { emoji: '📋', text: '예약 확정 알림톡을 곧 보내드려요' },
+                  { emoji: '📞', text: '청소 전날 해피콜 알림톡을 드려요' },
+                  { emoji: '📸', text: '작업 완료 후 사진 보고서를 전달해드려요' },
+                ].map(({ emoji, text }) => (
+                  <div key={text} className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-3">
+                    <span className="text-lg shrink-0">{emoji}</span>
+                    <p className="text-sm text-[#4A4A4A] font-medium">{text}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <QuoteBookingSection

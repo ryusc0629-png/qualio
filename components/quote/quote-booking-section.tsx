@@ -140,12 +140,28 @@ export function QuoteBookingSection({
 
   if (done) {
     return (
-      <div className="text-center py-10 space-y-3">
-        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-          <span className="text-3xl">🎉</span>
+      <div className="py-8 space-y-5">
+        <div className="text-center space-y-2">
+          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+            <span className="text-3xl">✅</span>
+          </div>
+          <p className="font-bold text-lg text-[#1A1A1A]">예약이 완료됐어요!</p>
+          <p className="text-sm text-[#8D8D8D]">이제 퀄리오가 알아서 챙겨드릴게요.</p>
         </div>
-        <p className="font-bold text-lg text-[#1A1A1A]">예약이 완료됐어요!</p>
-        <p className="text-sm text-[#8D8D8D]">담당자가 예약일 전에 연락드리겠습니다.</p>
+
+        {/* 퀄리오 자동 처리 안내 */}
+        <div className="space-y-2">
+          {[
+            { emoji: '📋', text: '예약 확정 알림톡을 곧 보내드려요' },
+            { emoji: '📞', text: '청소 전날 해피콜 알림톡을 드려요' },
+            { emoji: '📸', text: '작업 완료 후 사진 보고서를 전달해드려요' },
+          ].map(({ emoji, text }) => (
+            <div key={text} className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-3">
+              <span className="text-lg shrink-0">{emoji}</span>
+              <p className="text-sm text-[#4A4A4A] font-medium">{text}</p>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }

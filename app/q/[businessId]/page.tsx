@@ -27,7 +27,6 @@ export default async function PublicQuotePage({ params }: Props) {
     .select('id, name, base_price, unit')
     .eq('business_id', businessId)
     .eq('is_active', true)
-    .eq('show_in_quote', true)
     .is('deleted_at', null)
     .order('sort_order')
     .order('created_at')
