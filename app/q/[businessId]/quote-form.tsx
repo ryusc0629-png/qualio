@@ -7,8 +7,10 @@ import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { calculateAndCreateQuoteAction } from '@/lib/actions/quotes'
 
-const STEPS = ['service', 'space', 'context', 'date', 'notes', 'name', 'phone'] as const
-type Step = typeof STEPS[number]
+// 에어컨 청소 여부에 따라 스텝 분기
+const STEP_SEQUENCE_DEFAULT = ['service', 'space', 'context', 'date', 'notes', 'name', 'phone'] as const
+const STEP_SEQUENCE_AC      = ['service', 'ac_detail', 'context', 'date', 'notes', 'name', 'phone'] as const
+type Step = 'service' | 'space' | 'ac_detail' | 'context' | 'date' | 'notes' | 'name' | 'phone'
 
 const SPACE_CHIPS = ['15평', '20평', '25평', '30평', '35평', '40평', '50평 이상']
 const SPACE_CHIP_VALUES: Record<string, number> = {
@@ -18,11 +20,26 @@ const SPACE_CHIP_VALUES: Record<string, number> = {
 
 const CONTEXT_OPTIONS = ['아파트', '빌라·다세대', '단독주택', '오피스텔', '상업시설·사무실']
 
+// 에어컨 유형 (한스클린 단가표 기준)
+const AC_TYPES = [
+  { id: 'wall_standard',  label: '벽걸이형',     sub: '일반' },
+  { id: 'wall_baramless', label: '벽걸이형',     sub: '무풍' },
+  { id: 'stand_standard', label: '스탠드형',     sub: '일반' },
+  { id: 'stand_smart',    label: '스탠드형',     sub: '스마트·무풍' },
+  { id: 'system_1way',    label: '시스템에어컨', sub: '1way·2way' },
+  { id: 'system_4way',    label: '시스템에어컨', sub: '4way' },
+  { id: 'commercial',     label: '업소형',       sub: '' },
+] as const
+
+type AcTypeId = typeof AC_TYPES[number]['id']
+type AcCounts = Partial<Record<AcTypeId, number>>
+
 interface ServiceItem {
   id: string
   name: string
   base_price: number
   unit: string
+  ac_type_prices: Record<string, number> | null
 }
 
 interface QuoteFormProps {
@@ -36,6 +53,101 @@ const DOW = ['일', '월', '화', '수', '목', '금', '토']
 
 function formatDateLabel(date: Date) {
   return `${date.getMonth() + 1}월 ${date.getDate()}일(${DOW[date.getDay()]})`
+}
+
+// 에어컨 유형별 수량 선택 컴포넌트
+function AcDetailSelector({
+  acTypePrices,
+  onConfirm,
+}: {
+  acTypePrices: Record<string, number> | null
+  onConfirm: (summary: string, totalCount: number, selections: Record<string, number>) => void
+}) {
+  const [counts, setCounts] = useState<AcCounts>({})
+
+  const change = (id: AcTypeId, delta: number) => {
+    setCounts((prev) => {
+      const next = Math.max(0, (prev[id] ?? 0) + delta)
+      if (next === 0) {
+        const { [id]: _, ...rest } = prev
+        return rest
+      }
+      return { ...prev, [id]: next }
+    })
+  }
+
+  const totalCount = Object.values(counts).reduce((a, b) => a + (b ?? 0), 0)
+
+  const handleConfirm = () => {
+    if (totalCount === 0) return
+    const selected = AC_TYPES.filter((t) => (counts[t.id] ?? 0) > 0)
+    const summary = selected
+      .map((t) => `${t.label}${t.sub ? ` ${t.sub}` : ''} ${counts[t.id]}대`)
+      .join(', ')
+    const selections: Record<string, number> = {}
+    for (const t of selected) selections[t.id] = counts[t.id] ?? 0
+    onConfirm(summary, totalCount, selections)
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        {AC_TYPES.map((t) => {
+          const count = counts[t.id] ?? 0
+          return (
+            <div
+              key={t.id}
+              className={[
+                'flex items-center justify-between rounded-2xl border-2 px-4 py-3 transition-colors',
+                count > 0 ? 'border-primary bg-primary/5' : 'border-border bg-[#FAFAFA]',
+              ].join(' ')}
+            >
+              <div>
+                <p className="font-semibold text-sm text-[#1A1A1A]">{t.label}</p>
+                {t.sub && <p className="text-xs text-[#8D8D8D]">{t.sub}</p>}
+                {acTypePrices?.[t.id] ? (
+                  <p className="text-xs font-bold text-primary tabular-nums mt-0.5">
+                    {acTypePrices[t.id].toLocaleString('ko-KR')}원 / 대
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-[#C0C0C0] mt-0.5">단가 미설정</p>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => change(t.id, -1)}
+                  disabled={count === 0}
+                  className="w-8 h-8 rounded-full border-2 border-border bg-white flex items-center justify-center text-[#6B6B6B] disabled:opacity-30 active:bg-slate-50 font-bold text-lg leading-none"
+                >
+                  −
+                </button>
+                <span className={['w-5 text-center font-black text-base tabular-nums', count > 0 ? 'text-primary' : 'text-[#B0B0B0]'].join(' ')}>
+                  {count}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => change(t.id, 1)}
+                  className="w-8 h-8 rounded-full border-2 border-primary bg-primary flex items-center justify-center text-white font-bold text-lg leading-none active:opacity-80"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <button
+        type="button"
+        onClick={handleConfirm}
+        disabled={totalCount === 0}
+        className="w-full h-13 rounded-2xl bg-primary disabled:opacity-30 text-white font-bold text-sm transition-opacity py-3.5"
+      >
+        {totalCount > 0 ? `총 ${totalCount}대 선택 완료 →` : '에어컨을 1대 이상 선택해주세요'}
+      </button>
+    </div>
+  )
 }
 
 function InlineCalendar({ onSelect }: { onSelect: (label: string, value: string) => void }) {
@@ -221,6 +333,11 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
 
   const [selectedServiceId, setSelectedServiceId] = useState('')
   const [selectedServiceName, setSelectedServiceName] = useState('')
+  const [isAcService, setIsAcService] = useState(false)
+  const [acSummary, setAcSummary] = useState('')                      // "벽걸이형 일반 2대, 스탠드형 1대"
+  const [acTotalCount, setAcTotalCount] = useState(0)
+  const [acSelections, setAcSelections] = useState<Record<string, number>>({})  // 서버로 전달할 유형별 수량
+  const [acTypePrices, setAcTypePrices] = useState<Record<string, number> | null>(null)
   const [spaceSize, setSpaceSize] = useState('')
   const [customSpace, setCustomSpace] = useState('')
   const [contextAnswer, setContextAnswer] = useState('')
@@ -229,6 +346,9 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   const [notes, setNotes] = useState('')
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
+
+  // 현재 서비스에 맞는 스텝 순서
+  const stepSequence = isAcService ? STEP_SEQUENCE_AC : STEP_SEQUENCE_DEFAULT
 
   const chatEndRef = useRef<HTMLDivElement>(null)
 
@@ -247,29 +367,31 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   })
 
   const initial = businessName.slice(0, 1)
-  const progressPct = (completedSteps.length / STEPS.length) * 100
+  const progressPct = (completedSteps.length / stepSequence.length) * 100
 
   const getQuestion = (step: Step): string => {
     switch (step) {
-      case 'service': return '안녕하세요! 어떤 청소 서비스가 필요하신가요?'
-      case 'space':   return '공간이 몇 평인가요?'
-      case 'context': return '주거 형태가 어떻게 되세요?'
-      case 'date':    return '언제 방문해 드릴까요?'
-      case 'notes':   return '특별히 신경 써드릴 부분이 있나요?'
-      case 'name':    return '성함이 어떻게 되세요?'
-      case 'phone':   return '카카오톡으로 견적서를 보내드릴게요 📱\n연락처를 알려주세요'
+      case 'service':   return '안녕하세요! 어떤 청소 서비스가 필요하신가요?'
+      case 'space':     return '공간이 몇 평인가요?'
+      case 'ac_detail': return '에어컨 유형과 대수를 알려주세요'
+      case 'context':   return '주거 형태가 어떻게 되세요?'
+      case 'date':      return '언제 방문해 드릴까요?'
+      case 'notes':     return '특별히 신경 써드릴 부분이 있나요?'
+      case 'name':      return '성함이 어떻게 되세요?'
+      case 'phone':     return '카카오톡으로 견적서를 보내드릴게요 📱\n연락처를 알려주세요'
     }
   }
 
   const getAnswerDisplay = (step: Step): string => {
     switch (step) {
-      case 'service': return selectedServiceName
-      case 'space':   return `${spaceSize}평`
-      case 'context': return contextAnswer
-      case 'date':    return preferredDateLabel
-      case 'notes':   return notes.trim() || '특별 요청 없음'
-      case 'name':    return customerName
-      case 'phone':   return customerPhone
+      case 'service':   return selectedServiceName
+      case 'space':     return `${spaceSize}평`
+      case 'ac_detail': return acSummary
+      case 'context':   return contextAnswer
+      case 'date':      return preferredDateLabel
+      case 'notes':     return notes.trim() || '특별 요청 없음'
+      case 'name':      return customerName
+      case 'phone':     return customerPhone
     }
   }
 
@@ -283,9 +405,19 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   }
 
   const handleServiceSelect = (service: ServiceItem) => {
+    const isAc = service.name.includes('에어컨')
     setSelectedServiceId(service.id)
     setSelectedServiceName(service.name)
-    setTimeout(() => advance('service', 'space'), 50)
+    setIsAcService(isAc)
+    setAcTypePrices(service.ac_type_prices)
+    setTimeout(() => advance('service', isAc ? 'ac_detail' : 'space'), 50)
+  }
+
+  const handleAcDetail = (summary: string, totalCount: number, selections: Record<string, number>) => {
+    setAcSummary(summary)
+    setAcTotalCount(totalCount)
+    setAcSelections(selections)
+    setTimeout(() => advance('ac_detail', 'context'), 50)
   }
 
   const handleSpaceChip = (chip: string) => {
@@ -329,20 +461,22 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
       return
     }
 
-    // 컨텍스트 + 요청사항 합산
+    // 컨텍스트 + 에어컨 상세 + 요청사항 합산
     const combinedNotes = [
       contextAnswer ? `주거형태: ${contextAnswer}` : '',
+      isAcService && acSummary ? `에어컨: ${acSummary}` : '',
       notes.trim(),
     ].filter(Boolean).join(' | ')
 
     execute({
       business_id:    businessId,
       service_id:     selectedServiceId,
-      space_size:     Number(spaceSize),
+      space_size:     isAcService ? acTotalCount : Number(spaceSize),
       preferred_date: preferredDate || undefined,
       extra_notes:    combinedNotes || undefined,
       customer_name:  customerName.trim(),
       customer_phone: clean,
+      ac_selections:  isAcService && Object.keys(acSelections).length > 0 ? acSelections : undefined,
     })
   }
 
@@ -435,6 +569,11 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
             ) : (
               <p className="text-sm text-[#8D8D8D] text-center py-4">등록된 서비스가 없습니다</p>
             )
+          )}
+
+          {/* 에어컨 유형·대수 선택 */}
+          {!isTyping && !isPending && currentStep === 'ac_detail' && (
+            <AcDetailSelector acTypePrices={acTypePrices} onConfirm={handleAcDetail} />
           )}
 
           {/* 평수 선택 */}

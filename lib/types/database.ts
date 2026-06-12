@@ -695,6 +695,7 @@ export type Database = {
       }
       service_items: {
         Row: {
+          ac_type_prices: Json | null
           base_price: number
           business_id: string
           category: string | null
@@ -710,6 +711,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          ac_type_prices?: Json | null
           base_price?: number
           business_id: string
           category?: string | null
@@ -725,6 +727,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          ac_type_prices?: Json | null
           base_price?: number
           business_id?: string
           category?: string | null

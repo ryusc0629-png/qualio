@@ -7,6 +7,9 @@ import { revalidatePath } from 'next/cache'
 
 const VALID_UNITS = ['정액', '평당', '시간', '개'] as const
 
+// AC 유형별 단가 스키마
+const acTypePricesSchema = z.record(z.string(), z.number().min(0)).optional()
+
 // 서비스 항목 생성 스키마 — z.enum() 대신 z.string().refine() 사용 (Zod v4 호환)
 const createServiceItemSchema = z.object({
   name: z.string().min(1, '서비스명을 입력해주세요'),
@@ -16,6 +19,7 @@ const createServiceItemSchema = z.object({
     (val): val is typeof VALID_UNITS[number] => (VALID_UNITS as readonly string[]).includes(val),
     '올바른 단위를 선택해주세요'
   ),
+  ac_type_prices: acTypePricesSchema,
 })
 
 // 서비스 항목 수정 스키마
@@ -29,6 +33,7 @@ const updateServiceItemSchema = z.object({
     '올바른 단위를 선택해주세요'
   ),
   photos: z.array(z.string()).optional(),
+  ac_type_prices: acTypePricesSchema,
 })
 
 // 서비스 항목 삭제 스키마
@@ -70,11 +75,12 @@ export const createServiceItemAction = action
 
     // 서비스 항목 생성
     const { error } = await db.from('service_items').insert({
-      business_id: profile.business_id,
-      name: parsedInput.name,
-      category: parsedInput.category ?? null,
-      base_price: parsedInput.base_price,
-      unit: parsedInput.unit,
+      business_id:    profile.business_id,
+      name:           parsedInput.name,
+      category:       parsedInput.category ?? null,
+      base_price:     parsedInput.base_price,
+      unit:           parsedInput.unit,
+      ac_type_prices: parsedInput.ac_type_prices ?? null,
     })
 
     if (error) throw new Error('[APP] 서비스 추가에 실패했습니다')
@@ -106,11 +112,12 @@ export const updateServiceItemAction = action
     const { error } = await db
       .from('service_items')
       .update({
-        name:       parsedInput.name,
-        category:   parsedInput.category ?? null,
-        base_price: parsedInput.base_price,
-        unit:       parsedInput.unit,
-        photos:     parsedInput.photos ?? [],
+        name:           parsedInput.name,
+        category:       parsedInput.category ?? null,
+        base_price:     parsedInput.base_price,
+        unit:           parsedInput.unit,
+        photos:         parsedInput.photos ?? [],
+        ac_type_prices: parsedInput.ac_type_prices ?? null,
       })
       .eq('id', parsedInput.id)
       .eq('business_id', profile.business_id)

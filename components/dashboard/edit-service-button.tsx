@@ -12,14 +12,24 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { updateServiceItemAction } from '@/lib/actions/services'
 import { createClient } from '@/lib/supabase/client'
-import { Pencil, X, ImagePlus, Loader2 } from 'lucide-react'
+import { Pencil, X, ImagePlus, Loader2, Zap } from 'lucide-react'
 
 const CATEGORIES = ['주거 공간', '가전 케어', '특수/시공', '상업 공간', '사무실', '기타'] as const
 const UNITS = [
   { value: '정액', label: '정액 (1회 고정가)' },
   { value: '평당', label: '평당 가격' },
-  { value: '개', label: '개당 가격' },
+  { value: '개',   label: '대·개당 가격' },
   { value: '시간', label: '시간당 가격' },
+] as const
+
+const AC_TYPE_LIST = [
+  { id: 'wall_standard',  label: '벽걸이형',     sub: '일반',       placeholder: '75000' },
+  { id: 'wall_baramless', label: '벽걸이형',     sub: '무풍',       placeholder: '95000' },
+  { id: 'stand_standard', label: '스탠드형',     sub: '일반',       placeholder: '100000' },
+  { id: 'stand_smart',    label: '스탠드형',     sub: '스마트·무풍', placeholder: '125000' },
+  { id: 'system_1way',    label: '시스템에어컨', sub: '1way·2way',  placeholder: '110000' },
+  { id: 'system_4way',    label: '시스템에어컨', sub: '4way',       placeholder: '130000' },
+  { id: 'commercial',     label: '업소형',       sub: '',           placeholder: '150000' },
 ] as const
 
 const schema = z.object({
@@ -39,6 +49,7 @@ interface EditServiceButtonProps {
     base_price: number
     unit: string
     photos: string[] | null
+    ac_type_prices: Record<string, number> | null
   }
 }
 
@@ -47,8 +58,20 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
   const [photos, setPhotos] = useState<string[]>(service.photos ?? [])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // 에어컨 유형별 단가 상태 (기존 값으로 초기화)
+  const [acPrices, setAcPrices] = useState<Partial<Record<string, string>>>(() => {
+    const init: Partial<Record<string, string>> = {}
+    if (service.ac_type_prices) {
+      for (const [k, v] of Object.entries(service.ac_type_prices)) {
+        init[k] = String(v)
+      }
+    }
+    return init
+  })
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormInput>({
+  const isAcService = service.name.includes('에어컨')
+
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormInput>({
     resolver: zodResolver(schema),
     defaultValues: {
       name:       service.name,
@@ -57,6 +80,9 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
       unit:       service.unit,
     },
   })
+
+  const currentName = watch('name') ?? ''
+  const isAcByName  = currentName.includes('에어컨')
 
   const { execute, isPending } = useAction(updateServiceItemAction, {
     onSuccess: () => {
@@ -110,16 +136,36 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
           </DialogHeader>
 
           <form
-            onSubmit={handleSubmit((data) =>
+            onSubmit={handleSubmit((data) => {
+              let acTypePrices: Record<string, number> | undefined
+              let basePrice = Number(data.base_price)
+
+              if (isAcByName) {
+                const parsed: Record<string, number> = {}
+                let minPrice = Infinity
+                for (const [id, val] of Object.entries(acPrices)) {
+                  const n = Number(val)
+                  if (n > 0) {
+                    parsed[id] = n
+                    if (n < minPrice) minPrice = n
+                  }
+                }
+                if (Object.keys(parsed).length > 0) {
+                  acTypePrices = parsed
+                  basePrice = minPrice === Infinity ? basePrice : minPrice
+                }
+              }
+
               execute({
-                id:         service.id,
-                name:       data.name,
-                category:   data.category || undefined,
-                base_price: Number(data.base_price),
-                unit:       data.unit,
+                id:             service.id,
+                name:           data.name,
+                category:       data.category || undefined,
+                base_price:     basePrice,
+                unit:           data.unit,
                 photos,
+                ac_type_prices: acTypePrices,
               })
-            )}
+            })}
             className="space-y-4"
           >
             {/* 서비스명 */}
@@ -148,12 +194,44 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
               </div>
             </div>
 
-            {/* 기본가 */}
-            <div className="space-y-1">
-              <Label>기본 가격 (원) *</Label>
-              <Input type="number" {...register('base_price')} />
-              {errors.base_price && <p className="text-xs text-destructive">{errors.base_price.message}</p>}
-            </div>
+            {/* 기본가 — 에어컨은 유형별 단가에서 자동 계산 */}
+            {!isAcByName && (
+              <div className="space-y-1">
+                <Label>기본 가격 (원) *</Label>
+                <Input type="number" {...register('base_price')} />
+                {errors.base_price && <p className="text-xs text-destructive">{errors.base_price.message}</p>}
+              </div>
+            )}
+
+            {/* 에어컨 유형별 단가 */}
+            {isAcByName && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Zap className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <Label className="text-primary">유형별 단가 설정</Label>
+                </div>
+                {AC_TYPE_LIST.map((t) => (
+                  <div key={t.id} className="flex items-center gap-2">
+                    <div className="w-32 shrink-0">
+                      <p className="text-xs font-semibold">{t.label}</p>
+                      {t.sub && <p className="text-[11px] text-muted-foreground">{t.sub}</p>}
+                    </div>
+                    <div className="flex-1 relative">
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        placeholder={t.placeholder}
+                        value={acPrices[t.id] ?? ''}
+                        onChange={(e) => setAcPrices((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                        className="h-9 text-sm pr-8"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-[11px] text-muted-foreground">단가를 비워두면 미제공 유형으로 처리돼요</p>
+              </div>
+            )}
 
             {/* 사진 업로드 */}
             <div className="space-y-2">

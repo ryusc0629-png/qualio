@@ -10,7 +10,18 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createServiceItemAction } from '@/lib/actions/services'
-import { Plus, X } from 'lucide-react'
+import { Plus, X, Zap } from 'lucide-react'
+
+// 에어컨 유형 목록 (견적 폼과 동일한 ID 사용)
+const AC_TYPE_LIST = [
+  { id: 'wall_standard',  label: '벽걸이형', sub: '일반',       placeholder: '75,000' },
+  { id: 'wall_baramless', label: '벽걸이형', sub: '무풍',       placeholder: '95,000' },
+  { id: 'stand_standard', label: '스탠드형', sub: '일반',       placeholder: '100,000' },
+  { id: 'stand_smart',    label: '스탠드형', sub: '스마트·무풍', placeholder: '125,000' },
+  { id: 'system_1way',    label: '시스템에어컨', sub: '1way·2way', placeholder: '110,000' },
+  { id: 'system_4way',    label: '시스템에어컨', sub: '4way',    placeholder: '130,000' },
+  { id: 'commercial',     label: '업소형',   sub: '',           placeholder: '150,000' },
+] as const
 
 // 표준 카테고리 목록 (데이터 일관성을 위해 고정값 사용)
 const CATEGORIES = [
@@ -26,20 +37,20 @@ const CATEGORIES = [
 const UNITS = [
   { value: '정액', label: '정액 (1회 고정가)' },
   { value: '평당', label: '평당 가격' },
-  { value: '개', label: '개당 가격' },
+  { value: '개',   label: '대·개당 가격' },
   { value: '시간', label: '시간당 가격' },
 ] as const
 
 type UnitValue = typeof UNITS[number]['value']
 
 // 업계 표준 프리셋 서비스 목록
+// 에어컨은 유형별 분리 없이 하나로 통합 — 고객이 견적 폼에서 유형+대수 직접 선택
 const PRESETS = [
-  { name: '이사 청소',           category: '주거 공간', unit: '평당',  base_price: 15000 },
-  { name: '입주 청소',           category: '주거 공간', unit: '평당',  base_price: 18000 },
-  { name: '거주 청소',           category: '주거 공간', unit: '정액',  base_price: 80000 },
-  { name: '에어컨 청소 (벽걸이)', category: '가전 케어', unit: '개',    base_price: 80000 },
-  { name: '에어컨 청소 (스탠드)', category: '가전 케어', unit: '개',    base_price: 120000 },
-  { name: '줄눈 시공',           category: '특수/시공', unit: '평당',  base_price: 30000 },
+  { name: '이사 청소',   category: '주거 공간', unit: '평당', base_price: 15000 },
+  { name: '입주 청소',   category: '주거 공간', unit: '평당', base_price: 18000 },
+  { name: '거주 청소',   category: '주거 공간', unit: '정액', base_price: 80000 },
+  { name: '에어컨 청소', category: '가전 케어', unit: '개',   base_price: 80000 },
+  { name: '줄눈 시공',   category: '특수/시공', unit: '평당', base_price: 30000 },
 ] as const
 
 const schema = z.object({
@@ -53,6 +64,8 @@ type FormInput = z.infer<typeof schema>
 
 export function AddServiceForm() {
   const [open, setOpen] = useState(false)
+  // 에어컨 유형별 단가 상태 (ID → 원 단위 문자열)
+  const [acPrices, setAcPrices] = useState<Partial<Record<string, string>>>({})
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormInput>({
     resolver: zodResolver(schema),
@@ -61,8 +74,9 @@ export function AddServiceForm() {
 
   const { execute, isPending } = useAction(createServiceItemAction, {
     onSuccess: () => {
-      toast.success('서비스가 추가되었습니다')
+      toast.success('서비스가 추가됐어요!')
       reset({ unit: '정액', base_price: '0' })
+      setAcPrices({})
       setOpen(false)
     },
     onError: ({ error }) => {
@@ -76,9 +90,21 @@ export function AddServiceForm() {
     setValue('category', preset.category)
     setValue('unit', preset.unit as UnitValue)
     setValue('base_price', String(preset.base_price))
+    // 에어컨 프리셋이면 유형별 기본 단가 자동 세팅
+    if (preset.name.includes('에어컨')) {
+      const defaults: Partial<Record<string, string>> = {}
+      AC_TYPE_LIST.forEach((t) => {
+        defaults[t.id] = t.placeholder.replace(',', '')
+      })
+      setAcPrices(defaults)
+    } else {
+      setAcPrices({})
+    }
   }
 
-  const currentUnit = watch('unit')
+  const currentUnit  = watch('unit')
+  const currentName  = watch('name') ?? ''
+  const isAcService  = currentName.includes('에어컨')
 
   if (!open) {
     return (
@@ -91,7 +117,29 @@ export function AddServiceForm() {
 
   return (
     <form
-      onSubmit={handleSubmit((data) => execute({ ...data, base_price: Number(data.base_price) }))}
+      onSubmit={handleSubmit((data) => {
+        // 에어컨 서비스면 유형별 단가 포함, base_price는 최저 단가로 자동 설정
+        let acTypePrices: Record<string, number> | undefined
+        let basePrice = Number(data.base_price)
+
+        if (isAcService) {
+          const parsed: Record<string, number> = {}
+          let minPrice = Infinity
+          for (const [id, val] of Object.entries(acPrices)) {
+            const n = Number(val)
+            if (n > 0) {
+              parsed[id] = n
+              if (n < minPrice) minPrice = n
+            }
+          }
+          if (Object.keys(parsed).length > 0) {
+            acTypePrices = parsed
+            basePrice = minPrice === Infinity ? basePrice : minPrice
+          }
+        }
+
+        execute({ ...data, base_price: basePrice, ac_type_prices: acTypePrices })
+      })}
       className="rounded-lg border bg-card p-4 space-y-4"
     >
       <div className="flex items-center justify-between">
@@ -126,6 +174,45 @@ export function AddServiceForm() {
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
 
+        {/* 에어컨 서비스 안내 + 유형별 단가 입력 */}
+        {isAcService && (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-1">
+              <div className="flex items-center gap-1.5">
+                <Zap className="h-3.5 w-3.5 text-primary shrink-0" />
+                <p className="text-xs font-bold text-primary">유형별 단가를 설정하면 자동으로 계산됩니다</p>
+              </div>
+              <p className="text-xs text-primary/80 leading-relaxed">
+                고객이 견적 폼에서 유형·대수를 선택하면, 아래 단가를 기준으로 자동 합산됩니다.
+              </p>
+            </div>
+
+            {/* 유형별 단가 입력 그리드 */}
+            <div className="space-y-2">
+              {AC_TYPE_LIST.map((t) => (
+                <div key={t.id} className="flex items-center gap-2">
+                  <div className="w-36 shrink-0">
+                    <p className="text-xs font-semibold text-foreground">{t.label}</p>
+                    {t.sub && <p className="text-[11px] text-muted-foreground">{t.sub}</p>}
+                  </div>
+                  <div className="flex-1 relative">
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      placeholder={t.placeholder}
+                      value={acPrices[t.id] ?? ''}
+                      onChange={(e) => setAcPrices((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                      className="h-9 text-sm pr-8"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground">단가를 비워두면 미제공 유형으로 처리돼요</p>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           {/* 카테고리 */}
           <div className="space-y-1">
@@ -157,32 +244,34 @@ export function AddServiceForm() {
           </div>
         </div>
 
-        {/* 기본가 */}
-        <div className="space-y-1">
-          <Label htmlFor="base_price">
-            기본 가격 (원) *
-            <span className="ml-1 text-xs text-muted-foreground font-normal">
-              {currentUnit === '평당' && '— 평당 금액'}
-              {currentUnit === '개' && '— 개당 금액'}
-              {currentUnit === '시간' && '— 시간당 금액'}
-              {currentUnit === '정액' && '— 1회 고정 금액'}
-            </span>
-          </Label>
-          <Input
-            id="base_price"
-            type="number"
-            placeholder={
-              currentUnit === '평당' ? '예) 15000' :
-              currentUnit === '개' ? '예) 80000' :
-              currentUnit === '시간' ? '예) 30000' :
-              '예) 80000'
-            }
-            {...register('base_price')}
-          />
-          {errors.base_price && (
-            <p className="text-xs text-destructive">{errors.base_price.message}</p>
-          )}
-        </div>
+        {/* 기본가 — 에어컨은 유형별 단가에서 자동 계산되므로 숨김 */}
+        {!isAcService && (
+          <div className="space-y-1">
+            <Label htmlFor="base_price">
+              기본 가격 (원) *
+              <span className="ml-1 text-xs text-muted-foreground font-normal">
+                {currentUnit === '평당' && '— 평당 금액'}
+                {currentUnit === '개' && '— 개당 금액'}
+                {currentUnit === '시간' && '— 시간당 금액'}
+                {currentUnit === '정액' && '— 1회 고정 금액'}
+              </span>
+            </Label>
+            <Input
+              id="base_price"
+              type="number"
+              placeholder={
+                currentUnit === '평당' ? '예) 15000' :
+                currentUnit === '개' ? '예) 80000' :
+                currentUnit === '시간' ? '예) 30000' :
+                '예) 80000'
+              }
+              {...register('base_price')}
+            />
+            {errors.base_price && (
+              <p className="text-xs text-destructive">{errors.base_price.message}</p>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex justify-end gap-2">

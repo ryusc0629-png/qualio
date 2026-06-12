@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { AddServiceForm } from '@/components/dashboard/add-service-form'
 import { DeleteServiceButton } from '@/components/dashboard/delete-service-button'
 import { EditServiceButton } from '@/components/dashboard/edit-service-button'
-import { Image } from 'lucide-react'
+import { Image, Zap } from 'lucide-react'
 
 export default async function ServicesPage() {
   const authClient = await createClient()
@@ -22,7 +22,7 @@ export default async function ServicesPage() {
 
   const { data: services } = await db
     .from('service_items')
-    .select('id, name, category, base_price, unit, is_active, photos')
+    .select('id, name, category, base_price, unit, is_active, photos, ac_type_prices')
     .eq('business_id', profile.business_id)
     .is('deleted_at', null)
     .order('sort_order')
@@ -65,16 +65,41 @@ export default async function ServicesPage() {
                           {service.category}
                         </span>
                       )}
+                      {service.name.includes('에어컨') && (
+                        <span className="inline-flex items-center gap-1 text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
+                          <Zap className="h-2.5 w-2.5" />
+                          유형·대수 자동 선택
+                        </span>
+                      )}
                       {!service.is_active && (
                         <span className="text-xs bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">
                           비활성
                         </span>
                       )}
                     </div>
-                    <p className="text-sm mt-1.5">
-                      <span className="font-bold tabular-nums">{service.base_price.toLocaleString('ko-KR')}원</span>
-                      <span className="text-xs text-muted-foreground ml-1">/ {service.unit}</span>
-                    </p>
+                    {/* 에어컨 유형별 단가 표시 */}
+                    {service.name.includes('에어컨') && service.ac_type_prices && typeof service.ac_type_prices === 'object' && !Array.isArray(service.ac_type_prices) ? (
+                      <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                        {(Object.entries(service.ac_type_prices as Record<string, number>)).map(([id, price]) => {
+                          const labelMap: Record<string, string> = {
+                            wall_standard: '벽걸이 일반', wall_baramless: '벽걸이 무풍',
+                            stand_standard: '스탠드 일반', stand_smart: '스탠드 스마트',
+                            system_1way: '시스템 1way', system_4way: '시스템 4way',
+                            commercial: '업소형',
+                          }
+                          return (
+                            <span key={id} className="text-xs text-muted-foreground tabular-nums">
+                              {labelMap[id] ?? id}: <span className="font-semibold text-foreground">{price.toLocaleString('ko-KR')}원</span>
+                            </span>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-sm mt-1.5">
+                        <span className="font-bold tabular-nums">{service.base_price.toLocaleString('ko-KR')}원</span>
+                        <span className="text-xs text-muted-foreground ml-1">/ {service.unit}</span>
+                      </p>
+                    )}
                     {photoCount > 0 && (
                       <p className="text-xs text-primary mt-1 flex items-center gap-1">
                         <Image className="h-3 w-3" />
@@ -84,7 +109,12 @@ export default async function ServicesPage() {
                   </div>
 
                   <div className="shrink-0 flex items-center gap-1">
-                    <EditServiceButton service={service} />
+                    <EditServiceButton service={{
+                      ...service,
+                      ac_type_prices: (service.ac_type_prices && typeof service.ac_type_prices === 'object' && !Array.isArray(service.ac_type_prices))
+                        ? service.ac_type_prices as Record<string, number>
+                        : null,
+                    }} />
                     <DeleteServiceButton id={service.id} />
                   </div>
                 </div>

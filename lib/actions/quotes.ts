@@ -35,6 +35,8 @@ const calculateAndCreateQuoteSchema = z.object({
   extra_notes: z.string().max(500).optional(),
   customer_name: z.string().optional(),
   customer_phone: z.string().optional(),
+  // 에어컨 유형별 선택 수량 { wall_standard: 2, stand_standard: 1 }
+  ac_selections: z.record(z.string(), z.number().min(0)).optional(),
 })
 
 export const calculateAndCreateQuoteAction = publicAction
@@ -51,10 +53,10 @@ export const calculateAndCreateQuoteAction = publicAction
 
     if (!business) throw new Error('[APP] 존재하지 않는 업체입니다')
 
-    // 선택한 서비스 조회
+    // 선택한 서비스 조회 (에어컨 유형별 단가 포함)
     const { data: service } = await db
       .from('service_items')
-      .select('id, name, base_price, unit')
+      .select('id, name, base_price, unit, ac_type_prices')
       .eq('id', parsedInput.service_id)
       .eq('business_id', parsedInput.business_id)
       .eq('is_active', true)
@@ -63,11 +65,28 @@ export const calculateAndCreateQuoteAction = publicAction
 
     if (!service) throw new Error('[APP] 선택한 서비스를 찾을 수 없습니다')
 
-    // 기본 금액 계산 (평당 단위면 평수 곱하기)
-    const baseCalc =
-      service.unit === '평당'
-        ? service.base_price * (parsedInput.space_size || 1)
-        : service.base_price
+    // 기본 금액 계산
+    let baseCalc: number
+    if (
+      parsedInput.ac_selections &&
+      service.ac_type_prices &&
+      typeof service.ac_type_prices === 'object' &&
+      !Array.isArray(service.ac_type_prices)
+    ) {
+      // 에어컨 유형별 단가 × 대수 합산
+      const prices = service.ac_type_prices as Record<string, number>
+      baseCalc = Object.entries(parsedInput.ac_selections).reduce((sum, [typeId, count]) => {
+        const unitPrice = prices[typeId] ?? service.base_price
+        return sum + unitPrice * count
+      }, 0)
+    } else if (service.unit === '평당') {
+      baseCalc = service.base_price * (parsedInput.space_size || 1)
+    } else if (service.unit === '개') {
+      // 개당 × 수량 (에어컨 기본 단가 방식 fallback)
+      baseCalc = service.base_price * (parsedInput.space_size || 1)
+    } else {
+      baseCalc = service.base_price
+    }
 
     // 업체의 quote_tiers 조회
     const { data: dbTiers } = await db
