@@ -7,7 +7,7 @@ import { ChevronRight } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { calculateAndCreateQuoteAction } from '@/lib/actions/quotes'
 
-const STEPS = ['service', 'space', 'notes', 'name', 'phone'] as const
+const STEPS = ['service', 'space', 'context', 'date', 'notes', 'name', 'phone'] as const
 type Step = typeof STEPS[number]
 
 const SPACE_CHIPS = ['15평', '20평', '25평', '30평', '35평', '40평', '50평 이상']
@@ -15,6 +15,8 @@ const SPACE_CHIP_VALUES: Record<string, number> = {
   '15평': 15, '20평': 20, '25평': 25, '30평': 30,
   '35평': 35, '40평': 40, '50평 이상': 50,
 }
+
+const CONTEXT_OPTIONS = ['아파트', '빌라·다세대', '단독주택', '오피스텔', '상업시설·사무실']
 
 interface ServiceItem {
   id: string
@@ -29,6 +31,31 @@ interface QuoteFormProps {
   services: ServiceItem[]
 }
 
+// 단위별 가격 힌트 포맷 (base_price=0이면 빈 문자열)
+function formatPriceHint(price: number, unit: string): string {
+  if (!price) return ''
+  const formatted = price.toLocaleString('ko-KR')
+  switch (unit) {
+    case '평당':  return `평당 ${formatted}원~`
+    case '시간':  return `${formatted}원/시간`
+    case '개':    return `${formatted}원/개`
+    case '정액':
+    default:      return `${formatted}원~`
+  }
+}
+
+// 날짜 칩 생성 (오늘 제외 내일부터 7일)
+function getUpcomingDates() {
+  const DAYS = ['일', '월', '화', '수', '목', '금', '토']
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() + i + 1)
+    const label = `${d.getMonth() + 1}월 ${d.getDate()}일(${DAYS[d.getDay()]})`
+    const value = d.toISOString().split('T')[0]
+    return { label, value }
+  })
+}
+
 function BotBubble({ text, initial }: { text: string; initial: string }) {
   return (
     <div className="flex items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -36,7 +63,7 @@ function BotBubble({ text, initial }: { text: string; initial: string }) {
         {initial}
       </div>
       <div className="max-w-[78%] bg-white rounded-3xl rounded-bl-lg px-4 py-3 shadow-sm">
-        <p className="text-sm text-[#1A1A1A] font-medium leading-relaxed break-keep">{text}</p>
+        <p className="text-sm text-[#1A1A1A] font-medium leading-relaxed break-keep whitespace-pre-line">{text}</p>
       </div>
     </div>
   )
@@ -78,6 +105,9 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   const [selectedServiceName, setSelectedServiceName] = useState('')
   const [spaceSize, setSpaceSize] = useState('')
   const [customSpace, setCustomSpace] = useState('')
+  const [contextAnswer, setContextAnswer] = useState('')
+  const [preferredDate, setPreferredDate] = useState('')
+  const [preferredDateLabel, setPreferredDateLabel] = useState('')
   const [notes, setNotes] = useState('')
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
@@ -99,11 +129,15 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   })
 
   const initial = businessName.slice(0, 1)
+  const upcomingDates = getUpcomingDates()
+  const progressPct = (completedSteps.length / STEPS.length) * 100
 
   const getQuestion = (step: Step): string => {
     switch (step) {
       case 'service': return '안녕하세요! 어떤 청소 서비스가 필요하신가요?'
       case 'space':   return '공간이 몇 평인가요?'
+      case 'context': return '주거 형태가 어떻게 되세요?'
+      case 'date':    return '언제 방문해 드릴까요?'
       case 'notes':   return '특별히 신경 써드릴 부분이 있나요?'
       case 'name':    return '성함이 어떻게 되세요?'
       case 'phone':   return '카카오톡으로 견적서를 보내드릴게요 📱\n연락처를 알려주세요'
@@ -114,6 +148,8 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
     switch (step) {
       case 'service': return selectedServiceName
       case 'space':   return `${spaceSize}평`
+      case 'context': return contextAnswer
+      case 'date':    return preferredDateLabel
       case 'notes':   return notes.trim() || '특별 요청 없음'
       case 'name':    return customerName
       case 'phone':   return customerPhone
@@ -137,14 +173,31 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
 
   const handleSpaceChip = (chip: string) => {
     setSpaceSize(String(SPACE_CHIP_VALUES[chip]))
-    setTimeout(() => advance('space', 'notes'), 50)
+    setTimeout(() => advance('space', 'context'), 50)
   }
 
   const handleSpaceCustom = () => {
     const val = Number(customSpace)
     if (!val || val < 1) return
     setSpaceSize(customSpace)
-    advance('space', 'notes')
+    advance('space', 'context')
+  }
+
+  const handleContextSelect = (option: string) => {
+    setContextAnswer(option)
+    setTimeout(() => advance('context', 'date'), 50)
+  }
+
+  const handleDateSelect = (label: string, value: string) => {
+    setPreferredDateLabel(label)
+    setPreferredDate(value)
+    setTimeout(() => advance('date', 'notes'), 50)
+  }
+
+  const handleDateSkip = () => {
+    setPreferredDateLabel('날짜 미정')
+    setPreferredDate('')
+    advance('date', 'notes')
   }
 
   const handleNotes = (skip?: boolean) => {
@@ -164,11 +217,19 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
       toast.error('올바른 전화번호를 입력해주세요 (예: 01012345678)')
       return
     }
+
+    // 컨텍스트 + 요청사항 합산
+    const combinedNotes = [
+      contextAnswer ? `주거형태: ${contextAnswer}` : '',
+      notes.trim(),
+    ].filter(Boolean).join(' | ')
+
     execute({
       business_id:    businessId,
       service_id:     selectedServiceId,
       space_size:     Number(spaceSize),
-      extra_notes:    notes.trim() || undefined,
+      preferred_date: preferredDate || undefined,
+      extra_notes:    combinedNotes || undefined,
       customer_name:  customerName.trim(),
       customer_phone: clean,
     })
@@ -189,21 +250,12 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
               <p className="text-[11px] text-[#8D8D8D]">견적 문의</p>
             </div>
           </div>
-          {/* 진행 단계 점 */}
-          <div className="flex items-center gap-1.5">
-            {STEPS.map((s) => (
-              <div
-                key={s}
-                className={[
-                  'rounded-full transition-all duration-300',
-                  completedSteps.includes(s)
-                    ? 'w-2 h-2 bg-[#FF7D00]'
-                    : s === currentStep
-                      ? 'w-2.5 h-2.5 bg-[#FF7D00] opacity-70'
-                      : 'w-2 h-2 bg-[#E0D9D0]',
-                ].join(' ')}
-              />
-            ))}
+          {/* 진행 바 */}
+          <div className="w-24 h-1.5 bg-[#F0EBE3] rounded-full overflow-hidden">
+            <div
+              className="h-full bg-[#FF7D00] rounded-full transition-all duration-500"
+              style={{ width: `${progressPct}%` }}
+            />
           </div>
         </div>
       </header>
@@ -212,7 +264,6 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
       <div className="flex-1 overflow-y-auto px-4 pt-6 pb-4">
         <div className="max-w-md mx-auto space-y-3">
 
-          {/* 완료된 단계 대화 기록 */}
           {completedSteps.map((step) => (
             <div key={step} className="space-y-2">
               <BotBubble text={getQuestion(step)} initial={initial} />
@@ -220,39 +271,59 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
             </div>
           ))}
 
-          {/* 타이핑 중이면 점 세 개, 아니면 현재 질문 */}
-          {isTyping
-            ? <TypingBubble initial={initial} />
-            : <BotBubble text={getQuestion(currentStep)} initial={initial} />
-          }
+          {/* 제출 중 — 연락처 답변 + 계산 중 메시지 */}
+          {isPending && (
+            <div className="space-y-2">
+              <BotBubble text={getQuestion('phone')} initial={initial} />
+              <UserBubble text={customerPhone} />
+              <BotBubble text={'맞춤 견적을 계산하고 있어요 ✨\n잠깐만 기다려 주세요'} initial={initial} />
+            </div>
+          )}
+
+          {/* 타이핑 중 또는 현재 질문 */}
+          {!isPending && (
+            isTyping
+              ? <TypingBubble initial={initial} />
+              : <BotBubble text={getQuestion(currentStep)} initial={initial} />
+          )}
 
           <div ref={chatEndRef} className="h-1" />
         </div>
       </div>
 
-      {/* 입력 영역 (타이핑 중엔 숨김) */}
+      {/* 입력 영역 */}
       <div className="bg-white border-t border-[#F0EBE3] px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         <div className="max-w-md mx-auto space-y-3">
-          {isTyping && (
+
+          {/* 타이핑/처리 중엔 입력 영역 숨김 */}
+          {(isTyping || isPending) && (
             <div className="h-12 flex items-center justify-center">
-              <p className="text-xs text-[#B0B0B0]">답변을 입력하고 있어요...</p>
+              <p className="text-xs text-[#B0B0B0]">
+                {isPending ? '견적을 계산하고 있어요...' : '답변을 입력하고 있어요...'}
+              </p>
             </div>
           )}
 
           {/* 서비스 선택 */}
-          {!isTyping && currentStep === 'service' && (
+          {!isTyping && !isPending && currentStep === 'service' && (
             services.length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
-                {services.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => handleServiceSelect(s)}
-                    className="text-left px-4 py-3.5 rounded-2xl border-2 border-[#F0EBE3] bg-[#FAFAFA] font-semibold text-sm text-[#1A1A1A] active:bg-[#FFF3E8] active:border-[#FF7D00] transition-colors"
-                  >
-                    {s.name}
-                  </button>
-                ))}
+                {services.map((s) => {
+                  const hint = formatPriceHint(s.base_price, s.unit)
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => handleServiceSelect(s)}
+                      className="text-left px-4 py-3.5 rounded-2xl border-2 border-[#F0EBE3] bg-[#FAFAFA] active:bg-[#FFF3E8] active:border-[#FF7D00] transition-colors"
+                    >
+                      <p className="font-semibold text-sm text-[#1A1A1A]">{s.name}</p>
+                      {hint && (
+                        <p className="text-[11px] text-[#FF7D00] font-medium mt-0.5">{hint}</p>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
             ) : (
               <p className="text-sm text-[#8D8D8D] text-center py-4">등록된 서비스가 없습니다</p>
@@ -260,7 +331,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
           )}
 
           {/* 평수 선택 */}
-          {!isTyping && currentStep === 'space' && (
+          {!isTyping && !isPending && currentStep === 'space' && (
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 {SPACE_CHIPS.map((chip) => (
@@ -296,8 +367,49 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
             </div>
           )}
 
+          {/* 주거 형태 선택 */}
+          {!isTyping && !isPending && currentStep === 'context' && (
+            <div className="grid grid-cols-2 gap-2">
+              {CONTEXT_OPTIONS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => handleContextSelect(option)}
+                  className="text-left px-4 py-3.5 rounded-2xl border-2 border-[#F0EBE3] bg-[#FAFAFA] font-semibold text-sm text-[#1A1A1A] active:bg-[#FFF3E8] active:border-[#FF7D00] transition-colors"
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* 희망 날짜 선택 */}
+          {!isTyping && !isPending && currentStep === 'date' && (
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
+                {upcomingDates.map(({ label, value }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => handleDateSelect(label, value)}
+                    className="px-4 py-2.5 rounded-full border-2 border-[#F0EBE3] bg-[#FAFAFA] text-sm font-semibold text-[#1A1A1A] active:bg-[#FFF3E8] active:border-[#FF7D00] transition-colors"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={handleDateSkip}
+                className="w-full h-11 rounded-2xl border-2 border-[#F0EBE3] text-sm font-semibold text-[#8D8D8D] active:bg-[#F5F0EB] transition-colors"
+              >
+                아직 미정이에요
+              </button>
+            </div>
+          )}
+
           {/* 요청사항 */}
-          {!isTyping && currentStep === 'notes' && (
+          {!isTyping && !isPending && currentStep === 'notes' && (
             <div className="space-y-2">
               <textarea
                 value={notes}
@@ -328,7 +440,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
           )}
 
           {/* 이름 */}
-          {!isTyping && currentStep === 'name' && (
+          {!isTyping && !isPending && currentStep === 'name' && (
             <div className="flex gap-2">
               <Input
                 placeholder="홍길동"
@@ -350,7 +462,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
           )}
 
           {/* 연락처 + 최종 제출 */}
-          {!isTyping && currentStep === 'phone' && (
+          {!isTyping && !isPending && currentStep === 'phone' && (
             <div className="space-y-2">
               <Input
                 placeholder="01012345678"
@@ -367,7 +479,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
                 disabled={isPending || customerPhone.length < 10}
                 className="w-full h-14 rounded-2xl bg-[#FF7D00] text-white font-extrabold text-base disabled:opacity-50 active:scale-[0.98] transition-all"
               >
-                {isPending ? '맞춤 견적을 계산하고 있어요...' : '무료 견적 받기 →'}
+                무료 견적 받기 →
               </button>
             </div>
           )}
