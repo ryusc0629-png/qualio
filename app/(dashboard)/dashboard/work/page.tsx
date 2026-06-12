@@ -1,0 +1,275 @@
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { AddBookingForm } from '@/components/dashboard/add-booking-form'
+import { BookingStatusSelect } from '@/components/dashboard/booking-status-select'
+import { QuoteToLeadButton } from '@/components/dashboard/quote-to-lead-button'
+import Link from 'next/link'
+import { Phone, Calendar, MapPin } from 'lucide-react'
+
+// ── 상수 ────────────────────────────────────────────────
+
+const BOOKING_STATUS: Record<string, { text: string; className: string }> = {
+  confirmed:   { text: '확정',   className: 'bg-primary/10 text-primary' },
+  in_progress: { text: '진행중', className: 'bg-amber-100 text-amber-800' },
+  completed:   { text: '완료',   className: 'bg-green-100 text-green-800' },
+  cancelled:   { text: '취소',   className: 'bg-gray-100 text-gray-500' },
+  no_show:     { text: '노쇼',   className: 'bg-red-100 text-red-700' },
+}
+
+const QUOTE_STATUS: Record<string, { text: string; className: string }> = {
+  pending:   { text: '답변 대기', className: 'bg-amber-100 text-amber-800' },
+  booked:    { text: '예약됨',   className: 'bg-green-100 text-green-800' },
+  expired:   { text: '만료',     className: 'bg-gray-100 text-gray-500' },
+  cancelled: { text: '취소',     className: 'bg-red-100 text-red-700' },
+}
+
+const TIER_LABEL: Record<string, string> = {
+  good: '기본', better: '추천', best: '프리미엄',
+}
+
+// ── 페이지 ────────────────────────────────────────────────
+
+export default async function WorkPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
+  const { tab } = await searchParams
+  const activeTab = tab === 'bookings' ? 'bookings' : 'quotes'
+
+  const authClient = await createClient()
+  const { data: { user } } = await authClient.auth.getUser()
+  if (!user) redirect('/login')
+
+  const db = createServiceClient()
+  const { data: profile } = await db
+    .from('profiles')
+    .select('business_id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (!profile?.business_id) redirect('/onboarding')
+  const businessId = profile.business_id
+
+  const [
+    { data: quotes },
+    { data: bookings },
+  ] = await Promise.all([
+    db.from('quotes')
+      .select('id, cleaning_type, space_size, preferred_date, good_price, better_price, best_price, status, customer_name, customer_phone, created_at')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false }),
+
+    db.from('bookings')
+      .select('id, customer_name, customer_phone, service_address, scheduled_at, selected_tier, final_price, status, created_at')
+      .eq('business_id', businessId)
+      .is('deleted_at', null)
+      .order('scheduled_at', { ascending: false }),
+  ])
+
+  const pendingCount = quotes?.filter((q) => q.status === 'pending').length ?? 0
+  const activeBookingCount = bookings?.filter((b) => b.status === 'confirmed' || b.status === 'in_progress').length ?? 0
+
+  const tabs = [
+    { key: 'quotes',   label: '견적 요청', href: '/dashboard/work',              count: pendingCount },
+    { key: 'bookings', label: '예약',     href: '/dashboard/work?tab=bookings', count: activeBookingCount },
+  ]
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+
+      {/* 헤더 */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">업무</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            견적 요청 확인 → 예약 확정 순서로 처리해요
+          </p>
+        </div>
+        {activeTab === 'bookings' && <AddBookingForm />}
+      </div>
+
+      {/* 탭 */}
+      <div className="flex gap-1 border-b border-border">
+        {tabs.map((t) => (
+          <Link
+            key={t.key}
+            href={t.href}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              activeTab === t.key
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {t.label}
+            {t.count > 0 && (
+              <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
+                activeTab === t.key
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground'
+              }`}>
+                {t.count}
+              </span>
+            )}
+          </Link>
+        ))}
+      </div>
+
+      {/* ── 견적 요청 탭 ── */}
+      {activeTab === 'quotes' && (
+        <>
+          {!quotes || quotes.length === 0 ? (
+            <div className="bg-white rounded-xl border border-dashed border-border p-12 text-center space-y-2">
+              <p className="text-sm text-muted-foreground">아직 견적 요청이 없어요</p>
+              <p className="text-xs text-muted-foreground">대시보드 홈에서 고객 링크를 공유해보세요</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {quotes.map((quote) => {
+                const status = QUOTE_STATUS[quote.status] ?? { text: quote.status, className: 'bg-gray-100 text-gray-600' }
+                const hasContact = Boolean(quote.customer_phone)
+
+                return (
+                  <div
+                    key={quote.id}
+                    className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold">
+                            {quote.cleaning_type ?? '서비스 미선택'}
+                            {quote.space_size && (
+                              <span className="ml-1 text-sm font-normal text-muted-foreground">
+                                {quote.space_size}평
+                              </span>
+                            )}
+                          </p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.className}`}>
+                            {status.text}
+                          </span>
+                        </div>
+
+                        <div className="mt-1.5 space-y-0.5">
+                          {hasContact ? (
+                            <p className="text-sm flex items-center gap-1">
+                              <Phone className="h-3 w-3 text-muted-foreground shrink-0" />
+                              {quote.customer_name && (
+                                <span className="font-medium mr-0.5">{quote.customer_name}</span>
+                              )}
+                              <span className="text-muted-foreground">{quote.customer_phone}</span>
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">연락처 미입력</p>
+                          )}
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Calendar className="h-3 w-3 shrink-0" />
+                            {quote.preferred_date ? `희망일 ${quote.preferred_date}` : '희망일 미정'}
+                            {' · '}
+                            {new Date(quote.created_at).toLocaleDateString('ko-KR')} 요청
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 text-right space-y-2">
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                          <p>기본 <span className="tabular-nums text-foreground font-semibold">{quote.good_price?.toLocaleString() ?? '—'}원</span></p>
+                          <p>추천 <span className="tabular-nums text-foreground font-semibold">{quote.better_price?.toLocaleString() ?? '—'}원</span></p>
+                          <p>프리미엄 <span className="tabular-nums text-foreground font-semibold">{quote.best_price?.toLocaleString() ?? '—'}원</span></p>
+                        </div>
+                        {hasContact && quote.status === 'pending' && (
+                          <QuoteToLeadButton
+                            customerName={quote.customer_name ?? ''}
+                            customerPhone={quote.customer_phone!}
+                            cleaningType={quote.cleaning_type}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── 예약 탭 ── */}
+      {activeTab === 'bookings' && (
+        <>
+          {!bookings || bookings.length === 0 ? (
+            <div className="bg-white rounded-xl border border-dashed border-border p-12 text-center space-y-2">
+              <p className="text-sm text-muted-foreground">아직 예약이 없어요</p>
+              <p className="text-xs text-muted-foreground">전화로 받은 예약은 오른쪽 위 버튼으로 직접 추가해보세요</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {bookings.map((booking) => {
+                const status = BOOKING_STATUS[booking.status] ?? { text: booking.status, className: 'bg-gray-100 text-gray-600' }
+                const scheduledDate = new Date(booking.scheduled_at).toLocaleDateString('ko-KR', {
+                  month: 'short', day: 'numeric', weekday: 'short',
+                })
+                const scheduledTime = new Date(booking.scheduled_at).toLocaleTimeString('ko-KR', {
+                  hour: '2-digit', minute: '2-digit',
+                })
+
+                return (
+                  <div
+                    key={booking.id}
+                    className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold">{booking.customer_name}</p>
+                          {booking.selected_tier && (
+                            <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                              {TIER_LABEL[booking.selected_tier] ?? booking.selected_tier}
+                            </span>
+                          )}
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.className}`}>
+                            {status.text}
+                          </span>
+                        </div>
+
+                        <div className="mt-1.5 space-y-0.5">
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Calendar className="h-3 w-3 shrink-0" />
+                            {scheduledDate} {scheduledTime}
+                          </p>
+                          {booking.customer_phone && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Phone className="h-3 w-3 shrink-0" />
+                              {booking.customer_phone}
+                            </p>
+                          )}
+                          {booking.service_address && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                              <MapPin className="h-3 w-3 shrink-0" />
+                              {booking.service_address}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 flex flex-col items-end gap-2">
+                        <p className="text-base font-bold tabular-nums">
+                          {booking.final_price.toLocaleString('ko-KR')}원
+                        </p>
+                        <BookingStatusSelect
+                          bookingId={booking.id}
+                          currentStatus={booking.status}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+    </div>
+  )
+}

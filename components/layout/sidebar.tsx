@@ -7,8 +7,7 @@ import {
   LayoutDashboard,
   LogOut,
   Wrench,
-  FileText,
-  Calendar,
+  ClipboardList,
   Settings,
   Users,
   Megaphone,
@@ -25,13 +24,12 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { href: '/dashboard', label: '대시보드', icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/clients', label: '고객', icon: Users },
-  { href: '/dashboard/bookings', label: '예약', icon: Calendar },
-  { href: '/dashboard/quotes', label: '견적', icon: FileText },
-  { href: '/dashboard/services', label: '서비스 설정', icon: Wrench },
-  { href: '/dashboard/marketing', label: '마케팅', icon: Megaphone },
-  { href: '/dashboard/settings', label: '설정', icon: Settings },
+  { href: '/dashboard',         label: '대시보드',   icon: LayoutDashboard, exact: true },
+  { href: '/dashboard/work',    label: '업무',       icon: ClipboardList },
+  { href: '/dashboard/clients', label: '고객',       icon: Users },
+  { href: '/dashboard/services',label: '서비스 설정', icon: Wrench },
+  { href: '/dashboard/marketing',label: '마케팅',    icon: Megaphone },
+  { href: '/dashboard/settings',label: '설정',       icon: Settings },
 ]
 
 export function Sidebar({ businessName, isOpen = false, onClose }: SidebarProps) {
