@@ -2,7 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { CopyLinkButton } from '@/components/dashboard/copy-link-button'
 import Link from 'next/link'
-import { CalendarCheck, TrendingUp, FileText, CheckCircle2, ChevronRight } from 'lucide-react'
+import { CheckCircle2, ChevronRight, Sparkles, TrendingUp, Wallet } from 'lucide-react'
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
   confirmed:   { text: '확정',    className: 'bg-primary/10 text-primary' },
@@ -41,84 +41,95 @@ export default async function DashboardPage() {
   const greeting = hour < 12 ? '좋은 아침이에요' : hour < 18 ? '안녕하세요' : '수고하셨어요'
 
   const [
-    { data: monthBookings },
-    { count: pendingQuoteCount },
-    { count: totalCompletedCount },
+    { data: completedThisMonth },
+    { data: qualioInquiries },
+    { data: qualioBookings },
     { data: recentBookings },
-    { data: activeContracts },
   ] = await Promise.all([
+    // 이번 달 완료 예약 (매출 계산용)
     db.from('bookings')
-      .select('final_price, status')
-      .eq('business_id', businessId)
-      .is('deleted_at', null)
-      .not('status', 'in', '("cancelled","no_show")')
-      .gte('created_at', thisMonthStart),
-
-    db.from('quotes')
-      .select('id', { count: 'exact', head: true })
-      .eq('business_id', businessId)
-      .eq('status', 'pending'),
-
-    db.from('bookings')
-      .select('id', { count: 'exact', head: true })
+      .select('final_price')
       .eq('business_id', businessId)
       .eq('status', 'completed')
-      .is('deleted_at', null),
+      .is('deleted_at', null)
+      .gte('updated_at', thisMonthStart),
 
+    // 퀄리오 유입 문의 — 이번 달 생성된 견적 수
+    db.from('quotes')
+      .select('id')
+      .eq('business_id', businessId)
+      .gte('created_at', thisMonthStart),
+
+    // 퀄리오 유입 매출 — quote_id 있는 완료 예약의 금액 합산
+    db.from('bookings')
+      .select('final_price')
+      .eq('business_id', businessId)
+      .eq('status', 'completed')
+      .not('quote_id', 'is', null)
+      .is('deleted_at', null)
+      .gte('updated_at', thisMonthStart),
+
+    // 최근 예약 5건
     db.from('bookings')
       .select('id, customer_name, scheduled_at, selected_tier, final_price, status')
       .eq('business_id', businessId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(5),
-
-    db.from('contracts')
-      .select('contract_price')
-      .eq('business_id', businessId)
-      .eq('status', 'active'),
   ])
 
-  const monthBookingCount = monthBookings?.length ?? 0
-  const recurringRevenue = (activeContracts ?? [])
-    .reduce((sum, c) => sum + (c.contract_price ?? 0), 0)
+  // 통계 계산
+  const monthRevenue = (completedThisMonth ?? [])
+    .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
+
+  const monthCompletedCount = completedThisMonth?.length ?? 0
+
+  const qualioInquiryCount = qualioInquiries?.length ?? 0
+
+  const qualioRevenue = (qualioBookings ?? [])
+    .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   const quoteUrl = `${baseUrl}/q/${businessId}`
 
   const stats = [
     {
-      label: `${monthLabel} 예약`,
-      value: `${monthBookingCount}건`,
-      icon: CalendarCheck,
+      label: `${monthLabel} 매출`,
+      value: monthRevenue > 0 ? `${monthRevenue.toLocaleString('ko-KR')}원` : '—',
+      sub: '완료된 예약 기준',
+      icon: Wallet,
       color: 'text-primary',
       bg: 'bg-primary/10',
       href: '/dashboard/bookings',
     },
     {
-      label: '정기 매출',
-      value: recurringRevenue > 0 ? `${recurringRevenue.toLocaleString('ko-KR')}원` : '—',
-      sub: '활성 계약 월 합계',
-      icon: TrendingUp,
+      label: `${monthLabel} 완료`,
+      value: `${monthCompletedCount}건`,
+      sub: '청소 완료한 건수',
+      icon: CheckCircle2,
       color: 'text-emerald-600',
       bg: 'bg-emerald-50',
-      href: '/dashboard/contracts',
+      href: '/dashboard/bookings',
     },
     {
-      label: '미처리 견적',
-      value: `${pendingQuoteCount ?? 0}건`,
-      sub: '답변 대기 중',
-      icon: FileText,
-      color: 'text-amber-600',
-      bg: 'bg-amber-50',
-      href: '/dashboard/quotes',
-    },
-    {
-      label: '누적 완료',
-      value: `${totalCompletedCount ?? 0}건`,
-      icon: CheckCircle2,
+      label: '퀄리오 유입 문의',
+      value: `${qualioInquiryCount}건`,
+      sub: '이번 달 링크로 들어온 고객',
+      icon: Sparkles,
       color: 'text-violet-600',
       bg: 'bg-violet-50',
+      href: '/dashboard/quotes',
+      badge: true,
+    },
+    {
+      label: '퀄리오 유입 매출',
+      value: qualioRevenue > 0 ? `${qualioRevenue.toLocaleString('ko-KR')}원` : '—',
+      sub: '퀄리오가 만들어준 매출',
+      icon: TrendingUp,
+      color: 'text-amber-600',
+      bg: 'bg-amber-50',
       href: '/dashboard/bookings',
+      badge: true,
     },
   ]
 
@@ -146,19 +157,24 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {stats.map((stat) => {
             const card = (
-              <div className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 hover:shadow-sm transition-all group">
-                <div className={`w-9 h-9 ${stat.bg} rounded-xl flex items-center justify-center mb-3`}>
-                  <stat.icon className={`h-4.5 w-4.5 ${stat.color}`} />
+              <div className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 hover:shadow-sm transition-all">
+                <div className="flex items-start justify-between mb-3">
+                  <div className={`w-9 h-9 ${stat.bg} rounded-xl flex items-center justify-center`}>
+                    <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                  </div>
+                  {stat.badge && (
+                    <span className="text-[10px] font-semibold bg-violet-50 text-violet-600 px-1.5 py-0.5 rounded-full">
+                      퀄리오
+                    </span>
+                  )}
                 </div>
                 <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
-                {stat.sub && <p className="text-xs text-muted-foreground/70">{stat.sub}</p>}
+                <p className="text-xs font-medium text-muted-foreground mt-1">{stat.label}</p>
+                {stat.sub && <p className="text-xs text-muted-foreground/60 mt-0.5">{stat.sub}</p>}
               </div>
             )
-            return stat.href ? (
+            return (
               <Link key={stat.label} href={stat.href}>{card}</Link>
-            ) : (
-              <div key={stat.label}>{card}</div>
             )
           })}
         </div>
