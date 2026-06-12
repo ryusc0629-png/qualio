@@ -9,7 +9,43 @@ import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createBookingAction } from '@/lib/actions/quotes'
-import { Check, Plus, Lightbulb } from 'lucide-react'
+import { Check, Plus, Lightbulb, Search } from 'lucide-react'
+
+// 카카오(다음) 우편번호 API 타입 선언
+declare global {
+  interface Window {
+    daum?: {
+      Postcode: new (options: {
+        oncomplete: (data: { address: string; buildingName: string; addressType: string; bname: string }) => void
+        onclose?: () => void
+      }) => { open: () => void }
+    }
+  }
+}
+
+// 카카오 주소 검색 팝업 실행
+function openAddressSearch(onSelect: (address: string) => void) {
+  const run = () => {
+    new window.daum!.Postcode({
+      oncomplete: (data) => {
+        // 도로명 주소 + 건물명(있으면) 조합
+        const extra = data.buildingName ? ` (${data.buildingName})` : ''
+        onSelect(data.address + extra)
+      },
+    }).open()
+  }
+
+  if (window.daum?.Postcode) {
+    run()
+    return
+  }
+
+  // 스크립트 최초 로드 후 실행
+  const script = document.createElement('script')
+  script.src = '//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js'
+  script.onload = run
+  document.head.appendChild(script)
+}
 
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
 
@@ -89,7 +125,7 @@ export function QuoteBookingSection({
   const [done, setDone] = useState(false)
   const formRef = useRef<HTMLDivElement>(null)
 
-  const { register, handleSubmit, formState: { errors } } = useForm<BookingInput>({
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<BookingInput>({
     resolver: zodResolver(bookingSchema),
     defaultValues: {
       customer_name:  defaultName  ?? '',
@@ -279,11 +315,28 @@ export function QuoteBookingSection({
 
             <div className="space-y-1">
               <Label className="text-xs text-[#6B6B6B]">서비스 주소 (필수)</Label>
-              <Input
-                placeholder="서울시 강남구 역삼동 123-45"
-                className="h-11 bg-white border-border rounded-xl text-sm"
-                {...register('service_address')}
-              />
+              {/* 기본 주소 — 검색 버튼으로 실제 주소만 입력 가능 */}
+              <button
+                type="button"
+                onClick={() => openAddressSearch((addr) => setValue('service_address', addr, { shouldValidate: true }))}
+                className="w-full h-11 rounded-xl border border-border bg-white px-3 flex items-center justify-between text-sm text-left hover:bg-slate-50 transition-colors"
+              >
+                <span className={watch('service_address') ? 'text-foreground' : 'text-muted-foreground'}>
+                  {watch('service_address') || '주소 검색하기'}
+                </span>
+                <Search className="h-4 w-4 text-primary shrink-0" />
+              </button>
+              {/* 상세 주소 — 동/호수 직접 입력 */}
+              {watch('service_address') && (
+                <Input
+                  placeholder="상세 주소 입력 (예: 101동 1234호)"
+                  className="h-11 bg-white border-border rounded-xl text-sm"
+                  onChange={(e) => {
+                    const base = watch('service_address').split(' — ')[0]
+                    setValue('service_address', e.target.value ? `${base} — ${e.target.value}` : base, { shouldValidate: true })
+                  }}
+                />
+              )}
               {errors.service_address && (
                 <p className="text-xs text-red-500">{errors.service_address.message}</p>
               )}
