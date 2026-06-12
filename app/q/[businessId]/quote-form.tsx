@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { calculateAndCreateQuoteAction } from '@/lib/actions/quotes'
 
@@ -44,16 +44,146 @@ function formatPriceHint(price: number, unit: string): string {
   }
 }
 
-// 날짜 칩 생성 (오늘 제외 내일부터 7일)
-function getUpcomingDates() {
-  const DAYS = ['일', '월', '화', '수', '목', '금', '토']
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() + i + 1)
-    const label = `${d.getMonth() + 1}월 ${d.getDate()}일(${DAYS[d.getDay()]})`
-    const value = d.toISOString().split('T')[0]
-    return { label, value }
-  })
+const DOW = ['일', '월', '화', '수', '목', '금', '토']
+
+function formatDateLabel(date: Date) {
+  return `${date.getMonth() + 1}월 ${date.getDate()}일(${DOW[date.getDay()]})`
+}
+
+function InlineCalendar({ onSelect }: { onSelect: (label: string, value: string) => void }) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const [viewYear, setViewYear]   = useState(today.getFullYear())
+  const [viewMonth, setViewMonth] = useState(today.getMonth())
+  const [selected, setSelected]   = useState<Date | null>(null)
+
+  // 최대 6개월 뒤까지 (입주청소 3달 전 예약 커버)
+  const maxDate = new Date(today)
+  maxDate.setMonth(maxDate.getMonth() + 6)
+
+  const canGoPrev = !(viewYear === today.getFullYear() && viewMonth === today.getMonth())
+  const canGoNext = !(viewYear === maxDate.getFullYear() && viewMonth === maxDate.getMonth())
+
+  const prevMonth = useCallback(() => {
+    if (!canGoPrev) return
+    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11) }
+    else setViewMonth(m => m - 1)
+  }, [canGoPrev, viewMonth])
+
+  const nextMonth = useCallback(() => {
+    if (!canGoNext) return
+    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0) }
+    else setViewMonth(m => m + 1)
+  }, [canGoNext, viewMonth])
+
+  const firstDow    = new Date(viewYear, viewMonth, 1).getDay()
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const cells = [
+    ...Array<null>(firstDow).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ]
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const handleDay = (day: number) => {
+    const d = new Date(viewYear, viewMonth, day)
+    if (d < today) return
+    setSelected(d)
+  }
+
+  const handleConfirm = () => {
+    if (!selected) return
+    onSelect(formatDateLabel(selected), selected.toISOString().split('T')[0])
+  }
+
+  return (
+    <div className="space-y-2">
+      {/* 월 네비게이션 */}
+      <div className="flex items-center justify-between px-1">
+        <button
+          type="button"
+          onClick={prevMonth}
+          disabled={!canGoPrev}
+          className="w-8 h-8 rounded-full flex items-center justify-center text-[#6B6B6B] disabled:opacity-20 active:bg-[#F5F0EB]"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <p className="font-bold text-sm text-[#1A1A1A]">{viewYear}년 {viewMonth + 1}월</p>
+        <button
+          type="button"
+          onClick={nextMonth}
+          disabled={!canGoNext}
+          className="w-8 h-8 rounded-full flex items-center justify-center text-[#6B6B6B] disabled:opacity-20 active:bg-[#F5F0EB]"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* 요일 헤더 */}
+      <div className="grid grid-cols-7 text-center">
+        {DOW.map((d, i) => (
+          <p key={d} className={[
+            'text-[11px] font-semibold py-1',
+            i === 0 ? 'text-red-400' : i === 6 ? 'text-blue-400' : 'text-[#B0B0B0]',
+          ].join(' ')}>
+            {d}
+          </p>
+        ))}
+      </div>
+
+      {/* 날짜 그리드 */}
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {cells.map((day, i) => {
+          if (!day) return <div key={i} />
+          const date   = new Date(viewYear, viewMonth, day)
+          const isPast = date < today
+          const isToday    = date.getTime() === today.getTime()
+          const isSelected = selected?.getTime() === date.getTime()
+          const isSun = date.getDay() === 0
+          const isSat = date.getDay() === 6
+
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => handleDay(day)}
+              disabled={isPast}
+              className={[
+                'mx-auto w-9 h-9 rounded-full text-sm flex items-center justify-center transition-colors font-medium',
+                isPast      ? 'text-[#D4D4D4] cursor-default' :
+                isSelected  ? 'bg-[#FF7D00] text-white font-bold' :
+                isToday     ? 'border-2 border-[#FF7D00] text-[#FF7D00] font-bold' :
+                isSun       ? 'text-red-400 active:bg-[#FFF0F0]' :
+                isSat       ? 'text-blue-400 active:bg-[#F0F5FF]' :
+                              'text-[#1A1A1A] active:bg-[#F5F0EB]',
+              ].join(' ')}
+            >
+              {day}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* 확인 버튼 */}
+      <button
+        type="button"
+        onClick={handleConfirm}
+        disabled={!selected}
+        className="w-full h-12 rounded-2xl bg-[#FF7D00] disabled:opacity-30 text-white font-bold text-sm transition-opacity mt-1"
+      >
+        {selected ? `${formatDateLabel(selected)} 선택하기` : '날짜를 선택해주세요'}
+      </button>
+
+      {/* 미정 */}
+      <button
+        type="button"
+        onClick={() => onSelect('날짜 미정', '')}
+        className="w-full h-9 text-xs font-semibold text-[#B0B0B0]"
+      >
+        아직 미정이에요
+      </button>
+    </div>
+  )
 }
 
 function BotBubble({ text, initial }: { text: string; initial: string }) {
@@ -129,7 +259,6 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   })
 
   const initial = businessName.slice(0, 1)
-  const upcomingDates = getUpcomingDates()
   const progressPct = (completedSteps.length / STEPS.length) * 100
 
   const getQuestion = (step: Step): string => {
@@ -192,12 +321,6 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
     setPreferredDateLabel(label)
     setPreferredDate(value)
     setTimeout(() => advance('date', 'notes'), 50)
-  }
-
-  const handleDateSkip = () => {
-    setPreferredDateLabel('날짜 미정')
-    setPreferredDate('')
-    advance('date', 'notes')
   }
 
   const handleNotes = (skip?: boolean) => {
@@ -383,29 +506,9 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
             </div>
           )}
 
-          {/* 희망 날짜 선택 */}
+          {/* 희망 날짜 선택 — 인라인 달력 */}
           {!isTyping && !isPending && currentStep === 'date' && (
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-2">
-                {upcomingDates.map(({ label, value }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => handleDateSelect(label, value)}
-                    className="px-4 py-2.5 rounded-full border-2 border-[#F0EBE3] bg-[#FAFAFA] text-sm font-semibold text-[#1A1A1A] active:bg-[#FFF3E8] active:border-[#FF7D00] transition-colors"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={handleDateSkip}
-                className="w-full h-11 rounded-2xl border-2 border-[#F0EBE3] text-sm font-semibold text-[#8D8D8D] active:bg-[#F5F0EB] transition-colors"
-              >
-                아직 미정이에요
-              </button>
-            </div>
+            <InlineCalendar onSelect={handleDateSelect} />
           )}
 
           {/* 요청사항 */}

@@ -32,16 +32,21 @@ export function DashboardShell({ businessName, children }: DashboardShellProps) 
 
       {/* 메인 콘텐츠 */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* 모바일 상단 헤더 — 햄버거 버튼 */}
-        <header className="md:hidden flex items-center gap-3 px-4 py-3 border-b bg-card sticky top-0 z-30">
+        {/* 모바일 상단 헤더 */}
+        <header className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-white sticky top-0 z-30">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-md hover:bg-accent"
+            className="p-2 rounded-lg hover:bg-muted"
             aria-label="메뉴 열기"
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="h-5 w-5 text-muted-foreground" />
           </button>
-          <p className="font-semibold text-sm truncate">{businessName}</p>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-primary rounded-md flex items-center justify-center">
+              <span className="text-primary-foreground text-xs font-bold">Q</span>
+            </div>
+            <p className="font-semibold text-sm truncate">{businessName}</p>
+          </div>
         </header>
 
         <main className="flex-1 p-4 md:p-6 overflow-auto">
