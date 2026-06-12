@@ -102,7 +102,7 @@ export default async function ClientsPage({
                   (!tab && totalCount === 0)
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold">클라이언트</h1>
@@ -152,13 +152,13 @@ export default async function ClientsPage({
 
       {/* 빈 상태 */}
       {isEmpty && (
-        <div className="rounded-lg border border-dashed p-12 text-center space-y-3">
-          <p className="text-muted-foreground">
+        <div className="bg-white rounded-xl border border-dashed border-border p-12 text-center space-y-2">
+          <p className="text-sm text-muted-foreground">
             {tab === 'lead' ? '아직 등록된 잠재고객이 없어요' :
              tab === 'active' ? '아직 등록된 활성 고객이 없어요' :
              '아직 등록된 고객이 없어요'}
           </p>
-          <p className="text-xs text-muted-foreground">오른쪽 위 "추가하기" 버튼을 눌러 첫 번째 고객을 추가해보세요</p>
+          <p className="text-xs text-muted-foreground">오른쪽 위 버튼을 눌러 첫 번째 고객을 추가해보세요</p>
         </div>
       )}
 

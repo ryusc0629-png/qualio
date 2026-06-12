@@ -2,10 +2,9 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AddServiceForm } from '@/components/dashboard/add-service-form'
 import { DeleteServiceButton } from '@/components/dashboard/delete-service-button'
-import { ShowInQuoteToggle } from '@/components/dashboard/show-in-quote-toggle'
 import { EditServiceButton } from '@/components/dashboard/edit-service-button'
+import { Image } from 'lucide-react'
 
-// 서비스 항목 관리 페이지
 export default async function ServicesPage() {
   const authClient = await createClient()
   const { data: { user } } = await authClient.auth.getUser()
@@ -13,7 +12,6 @@ export default async function ServicesPage() {
 
   const db = createServiceClient()
 
-  // 업체 ID 조회
   const { data: profile } = await db
     .from('profiles')
     .select('business_id')
@@ -22,75 +20,77 @@ export default async function ServicesPage() {
 
   if (!profile?.business_id) redirect('/onboarding')
 
-  // 서비스 목록 조회 (삭제되지 않은 항목만)
   const { data: services } = await db
     .from('service_items')
-    .select('id, name, category, base_price, unit, is_active, show_in_quote, photos')
+    .select('id, name, category, base_price, unit, is_active, photos')
     .eq('business_id', profile.business_id)
     .is('deleted_at', null)
     .order('sort_order')
     .order('created_at')
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="max-w-3xl mx-auto space-y-6">
+
+      <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold">서비스 항목</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            고객 견적 폼에 표시될 서비스를 등록하세요
+            등록된 서비스는 고객 견적 폼에 자동으로 노출돼요
           </p>
         </div>
         <AddServiceForm />
       </div>
 
-      {/* 서비스 목록 */}
       {!services || services.length === 0 ? (
-        <div className="rounded-lg border border-dashed p-12 text-center">
-          <p className="text-muted-foreground text-sm">등록된 서비스가 없습니다</p>
-          <p className="text-muted-foreground text-xs mt-1">위의 "서비스 추가" 버튼을 눌러 추가하세요</p>
+        <div className="bg-white rounded-xl border border-dashed border-border p-12 text-center space-y-2">
+          <p className="text-sm text-muted-foreground">아직 등록된 서비스가 없어요</p>
+          <p className="text-xs text-muted-foreground">오른쪽 위 버튼을 눌러 첫 번째 서비스를 추가해보세요</p>
         </div>
       ) : (
-        <div className="rounded-lg border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="text-left px-4 py-3 font-medium">서비스명</th>
-                <th className="text-left px-4 py-3 font-medium">카테고리</th>
-                <th className="text-right px-4 py-3 font-medium">기본가</th>
-                <th className="text-center px-4 py-3 font-medium">단위</th>
-                <th className="text-center px-4 py-3 font-medium">견적폼</th>
-                <th className="text-center px-4 py-3 font-medium">사진</th>
-                <th className="w-20 px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {services.map((service) => (
-                <tr key={service.id} className="border-b last:border-0 hover:bg-muted/30">
-                  <td className="px-4 py-3 font-medium">{service.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{service.category ?? '—'}</td>
-                  <td className="px-4 py-3 text-right">
-                    {service.base_price.toLocaleString()}원
-                  </td>
-                  <td className="px-4 py-3 text-center text-muted-foreground">{service.unit}</td>
-                  <td className="px-4 py-3 text-center">
-                    <ShowInQuoteToggle id={service.id} showInQuote={service.show_in_quote} />
-                  </td>
-                  <td className="px-4 py-3 text-center text-muted-foreground text-xs">
-                    {(service.photos?.length ?? 0) > 0
-                      ? <span className="text-primary font-medium">{service.photos!.length}장</span>
-                      : <span className="text-zinc-400">없음</span>
-                    }
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <EditServiceButton service={service} />
-                      <DeleteServiceButton id={service.id} />
+        <div className="space-y-2">
+          {services.map((service) => {
+            const photoCount = service.photos?.length ?? 0
+
+            return (
+              <div
+                key={service.id}
+                className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition-colors"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold">{service.name}</p>
+                      {service.category && (
+                        <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                          {service.category}
+                        </span>
+                      )}
+                      {!service.is_active && (
+                        <span className="text-xs bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded">
+                          비활성
+                        </span>
+                      )}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <p className="text-sm mt-1.5">
+                      <span className="font-bold tabular-nums">{service.base_price.toLocaleString('ko-KR')}원</span>
+                      <span className="text-xs text-muted-foreground ml-1">/ {service.unit}</span>
+                    </p>
+                    {photoCount > 0 && (
+                      <p className="text-xs text-primary mt-1 flex items-center gap-1">
+                        <Image className="h-3 w-3" />
+                        사진 {photoCount}장
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="shrink-0 flex items-center gap-1">
+                    <EditServiceButton service={service} />
+                    <DeleteServiceButton id={service.id} />
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
