@@ -2,7 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AddBookingForm } from '@/components/dashboard/add-booking-form'
 import { BookingStatusSelect } from '@/components/dashboard/booking-status-select'
-import { QuoteToLeadButton } from '@/components/dashboard/quote-to-lead-button'
+import { ConfirmBookingButton } from '@/components/dashboard/confirm-booking-button'
 import { ArchiveQuoteButton } from '@/components/dashboard/archive-quote-button'
 import Link from 'next/link'
 import { Phone, Calendar, Archive, MapPin } from 'lucide-react'
@@ -198,11 +198,13 @@ export default async function WorkPage({
                           <p>프리미엄 <span className="tabular-nums text-foreground font-semibold">{quote.best_price?.toLocaleString() ?? '—'}원</span></p>
                         </div>
                         <div className="flex items-center justify-end gap-1">
-                          {hasContact && quote.status === 'pending' && (
-                            <QuoteToLeadButton
-                              customerName={quote.customer_name ?? ''}
-                              customerPhone={quote.customer_phone!}
-                              cleaningType={quote.cleaning_type}
+                          {quote.status === 'pending' && (
+                            <ConfirmBookingButton
+                              quoteId={quote.id}
+                              goodPrice={quote.good_price}
+                              betterPrice={quote.better_price}
+                              bestPrice={quote.best_price}
+                              preferredDate={quote.preferred_date}
                             />
                           )}
                           {canArchive && (

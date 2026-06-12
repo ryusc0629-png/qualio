@@ -2,7 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { CopyLinkButton } from '@/components/dashboard/copy-link-button'
 import Link from 'next/link'
-import { AlertCircle, Calendar, CheckCircle2, ChevronRight, Clock, Sparkles, TrendingUp, Wallet } from 'lucide-react'
+import { AlertCircle, Calendar, CheckCircle2, ChevronRight, Clock, RefreshCw, Sparkles, Wallet } from 'lucide-react'
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
   confirmed:   { text: '확정',    className: 'bg-primary/10 text-primary' },
@@ -44,6 +44,8 @@ export default async function DashboardPage() {
   const weekEndUTC    = new Date(todayStartUTC.getTime() + 7 * 24 * 60 * 60 * 1000)
 
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString()
+  const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
   const monthLabel = `${now.getMonth() + 1}월`
 
   const hour = now.getHours()
@@ -51,8 +53,9 @@ export default async function DashboardPage() {
 
   const [
     { data: completedThisMonth },
-    { data: qualioInquiries },
-    { data: qualioBookings },
+    { data: completedLastMonth },
+    { data: activeContracts },
+    { data: qualioAutoBookings },
     { data: todayBookings },
     { data: upcomingBookings },
     { count: pendingQuoteCount },
@@ -65,20 +68,28 @@ export default async function DashboardPage() {
       .is('deleted_at', null)
       .gte('updated_at', thisMonthStart),
 
-    // 퀄리오 유입 문의 — 이번 달 생성된 견적 수
-    db.from('quotes')
-      .select('id')
-      .eq('business_id', businessId)
-      .gte('created_at', thisMonthStart),
-
-    // 퀄리오 유입 매출 — quote_id 있는 완료 예약의 금액 합산
+    // 지난달 완료 예약 (전월 대비 비교용)
     db.from('bookings')
       .select('final_price')
       .eq('business_id', businessId)
       .eq('status', 'completed')
+      .is('deleted_at', null)
+      .gte('updated_at', lastMonthStart)
+      .lt('updated_at', lastMonthEnd),
+
+    // 활성 정기 계약 (월 안정 매출)
+    db.from('contracts')
+      .select('contract_price')
+      .eq('business_id', businessId)
+      .eq('status', 'active'),
+
+    // 퀄리오 자동 처리 예약 (이번 달, quote_id 있는 예약 = 링크로 자동 유입)
+    db.from('bookings')
+      .select('id')
+      .eq('business_id', businessId)
       .not('quote_id', 'is', null)
       .is('deleted_at', null)
-      .gte('updated_at', thisMonthStart),
+      .gte('created_at', thisMonthStart),
 
     // 오늘 예약 (KST 기준 당일, 취소·완료 제외)
     db.from('bookings')
@@ -108,13 +119,27 @@ export default async function DashboardPage() {
       .eq('status', 'pending'),
   ])
 
-  // 통계 계산
+  // 이달 매출
   const monthRevenue = (completedThisMonth ?? [])
     .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
   const monthCompletedCount = completedThisMonth?.length ?? 0
-  const qualioInquiryCount  = qualioInquiries?.length ?? 0
-  const qualioRevenue = (qualioBookings ?? [])
+
+  // 전월 대비 텍스트
+  const lastMonthRevenue = (completedLastMonth ?? [])
     .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
+  const revenueDiff = monthRevenue - lastMonthRevenue
+  const revenueSubText = lastMonthRevenue > 0
+    ? revenueDiff >= 0
+      ? `↑ 지난달보다 +${Math.round(revenueDiff / 10000)}만원`
+      : `↓ 지난달보다 -${Math.round(Math.abs(revenueDiff) / 10000)}만원`
+    : '완료된 예약 기준'
+
+  // 정기 계약 월 매출
+  const monthlyContractRevenue = (activeContracts ?? [])
+    .reduce((sum, c) => sum + (c.contract_price ?? 0), 0)
+
+  // 퀄리오 자동 처리 예약 건수
+  const qualioAutoCount = qualioAutoBookings?.length ?? 0
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   const quoteUrl = `${baseUrl}/q/${businessId}`
@@ -123,25 +148,28 @@ export default async function DashboardPage() {
     {
       label: `${monthLabel} 매출`,
       value: monthRevenue > 0 ? `${monthRevenue.toLocaleString('ko-KR')}원` : '—',
-      sub: '완료된 예약 기준',
+      sub: revenueSubText,
+      subColor: lastMonthRevenue > 0 && revenueDiff >= 0 ? 'text-emerald-600' : lastMonthRevenue > 0 ? 'text-red-500' : '',
       icon: Wallet,
       color: 'text-primary',
       bg: 'bg-primary/10',
-      href: '/dashboard/bookings',
+      href: '/dashboard/work?tab=bookings',
     },
     {
       label: `${monthLabel} 완료`,
       value: `${monthCompletedCount}건`,
       sub: '청소 완료한 건수',
+      subColor: '',
       icon: CheckCircle2,
       color: 'text-emerald-600',
       bg: 'bg-emerald-50',
-      href: '/dashboard/bookings',
+      href: '/dashboard/work?tab=bookings',
     },
     {
-      label: '퀄리오 유입 문의',
-      value: `${qualioInquiryCount}건`,
-      sub: '이번 달 링크로 들어온 고객',
+      label: '자동 예약 처리',
+      value: `${qualioAutoCount}건`,
+      sub: '전화 없이 자동으로 들어왔어요',
+      subColor: '',
       icon: Sparkles,
       color: 'text-violet-600',
       bg: 'bg-violet-50',
@@ -149,13 +177,14 @@ export default async function DashboardPage() {
       badge: true,
     },
     {
-      label: '퀄리오 유입 매출',
-      value: qualioRevenue > 0 ? `${qualioRevenue.toLocaleString('ko-KR')}원` : '—',
-      sub: '퀄리오가 만들어준 매출',
-      icon: TrendingUp,
-      color: 'text-amber-600',
-      bg: 'bg-amber-50',
-      href: '/dashboard/bookings',
+      label: '정기 계약 매출',
+      value: monthlyContractRevenue > 0 ? `${monthlyContractRevenue.toLocaleString('ko-KR')}원/월` : '—',
+      sub: monthlyContractRevenue > 0 ? `${activeContracts?.length ?? 0}건 계약 진행 중` : '아직 정기 계약이 없어요',
+      subColor: '',
+      icon: RefreshCw,
+      color: 'text-teal-600',
+      bg: 'bg-teal-50',
+      href: '/dashboard/clients',
       badge: true,
     },
   ]
@@ -194,36 +223,7 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      {/* 이달 현황 */}
-      <div>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{monthLabel} 현황</p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {stats.map((stat) => {
-            const card = (
-              <div className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 hover:shadow-sm transition-all">
-                <div className="flex items-start justify-between mb-3">
-                  <div className={`w-9 h-9 ${stat.bg} rounded-xl flex items-center justify-center`}>
-                    <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                  </div>
-                  {stat.badge && (
-                    <span className="text-[10px] font-semibold bg-violet-50 text-violet-600 px-1.5 py-0.5 rounded-full">
-                      퀄리오
-                    </span>
-                  )}
-                </div>
-                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                <p className="text-xs font-medium text-muted-foreground mt-1">{stat.label}</p>
-                {stat.sub && <p className="text-xs text-muted-foreground/60 mt-0.5">{stat.sub}</p>}
-              </div>
-            )
-            return (
-              <Link key={stat.label} href={stat.href}>{card}</Link>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* 오늘 예약 */}
+      {/* 오늘 예약 (최우선) */}
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
@@ -236,7 +236,7 @@ export default async function DashboardPage() {
             )}
           </div>
           <Link
-            href="/dashboard/bookings"
+            href="/dashboard/work?tab=bookings"
             className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-0.5"
           >
             전체 보기 <ChevronRight className="h-3 w-3" />
@@ -274,9 +274,42 @@ export default async function DashboardPage() {
         ) : (
           <div className="px-5 py-10 text-center space-y-1">
             <p className="text-sm font-medium text-muted-foreground">오늘은 예약이 없어요</p>
-            <p className="text-xs text-muted-foreground/70">푹 쉬거나, 새 고객을 모아보세요 😊</p>
+            <p className="text-xs text-muted-foreground/70">여유로운 하루예요 — 새 고객을 모아보세요</p>
           </div>
         )}
+      </div>
+
+      {/* 이달 현황 KPI */}
+      <div>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{monthLabel} 현황</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {stats.map((stat) => {
+            const card = (
+              <div className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 hover:shadow-sm transition-all">
+                <div className="flex items-start justify-between mb-3">
+                  <div className={`w-9 h-9 ${stat.bg} rounded-xl flex items-center justify-center`}>
+                    <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                  </div>
+                  {stat.badge && (
+                    <span className="text-[10px] font-semibold bg-violet-50 text-violet-600 px-1.5 py-0.5 rounded-full">
+                      퀄리오
+                    </span>
+                  )}
+                </div>
+                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                <p className="text-xs font-medium text-muted-foreground mt-1">{stat.label}</p>
+                {stat.sub && (
+                  <p className={`text-xs mt-0.5 ${stat.subColor || 'text-muted-foreground/60'}`}>
+                    {stat.sub}
+                  </p>
+                )}
+              </div>
+            )
+            return (
+              <Link key={stat.label} href={stat.href}>{card}</Link>
+            )
+          })}
+        </div>
       </div>
 
       {/* 이번 주 예정 예약 */}
@@ -288,7 +321,7 @@ export default async function DashboardPage() {
               <h2 className="font-semibold text-sm">이번 주 예정</h2>
             </div>
             <Link
-              href="/dashboard/bookings"
+              href="/dashboard/work?tab=bookings"
               className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-0.5"
             >
               전체 보기 <ChevronRight className="h-3 w-3" />

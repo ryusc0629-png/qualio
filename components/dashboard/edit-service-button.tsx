@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { updateServiceItemAction } from '@/lib/actions/services'
 import { createClient } from '@/lib/supabase/client'
 import { Pencil, X, ImagePlus, Loader2, Zap } from 'lucide-react'
+import { isAcService } from '@/lib/utils'
 
 const CATEGORIES = ['주거 공간', '가전 케어', '특수/시공', '상업 공간', '사무실', '기타'] as const
 const UNITS = [
@@ -127,8 +128,6 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
     return init
   })
 
-  const isAcService = service.name.includes('에어컨')
-
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormInput>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -140,7 +139,7 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
   })
 
   const currentName = watch('name') ?? ''
-  const isAcByName  = currentName.includes('에어컨')
+  const isAcByName  = isAcService(currentName)
 
   const { execute, isPending } = useAction(updateServiceItemAction, {
     onSuccess: () => {
@@ -353,6 +352,9 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
                 <p className="text-sm font-semibold">플랜 구성 항목 설정</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   입력하시면 견적서에 정확한 포함 항목이 표시됩니다. 비워두면 AI가 자동으로 채웁니다.
+                </p>
+                <p className="text-xs text-amber-600 mt-1">
+                  ✏️ 짧은 명사형으로 입력해주세요 — &ldquo;필터 세척&rdquo; O, &ldquo;필터를 세척해드립니다&rdquo; X
                 </p>
               </div>
               <TierItemsEditor

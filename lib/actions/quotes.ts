@@ -487,3 +487,67 @@ export const restoreQuoteAction = authAction
     revalidatePath('/dashboard/work')
     return { success: true }
   })
+
+// 견적 → 예약 확정 (업체가 직접 예약 생성) ─────────────────────────
+const confirmBookingSchema = z.object({
+  quote_id:        z.string().uuid(),
+  scheduled_at:    z.string().min(1, '날짜를 선택해주세요'),
+  selected_tier:   z.string().refine(
+    (v) => ['good', 'better', 'best'].includes(v),
+    '플랜을 선택해주세요'
+  ),
+  final_price:     z.coerce.number().min(0, '금액을 입력해주세요'),
+  service_address: z.string().optional(),
+})
+
+export const confirmBookingFromQuoteAction = authAction
+  .schema(confirmBookingSchema)
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    // 견적 조회 — 본인 업체, pending 상태만 허용
+    const { data: quote } = await db
+      .from('quotes')
+      .select('id, business_id, cleaning_type, customer_name, customer_phone, good_price, better_price, best_price')
+      .eq('id', parsedInput.quote_id)
+      .eq('business_id', profile.business_id)
+      .eq('status', 'pending')
+      .maybeSingle()
+
+    if (!quote) throw new Error('[APP] 견적 정보를 찾을 수 없거나 이미 처리된 견적입니다')
+
+    // 예약 생성
+    const { error: bookingError } = await db.from('bookings').insert({
+      business_id:     quote.business_id,
+      quote_id:        quote.id,
+      customer_name:   quote.customer_name ?? '고객',
+      customer_phone:  quote.customer_phone ?? '',
+      service_address: parsedInput.service_address ?? '',
+      scheduled_at:    new Date(parsedInput.scheduled_at).toISOString(),
+      selected_tier:   parsedInput.selected_tier,
+      final_price:     parsedInput.final_price,
+      status:          'confirmed',
+    })
+
+    if (bookingError) throw new Error('[APP] 예약 생성에 실패했습니다')
+
+    // 견적 상태 → booked
+    await db
+      .from('quotes')
+      .update({ status: 'booked' })
+      .eq('id', quote.id)
+
+    revalidatePath('/dashboard/work')
+    return { success: true }
+  })

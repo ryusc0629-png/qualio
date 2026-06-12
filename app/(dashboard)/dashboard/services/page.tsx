@@ -4,6 +4,7 @@ import { AddServiceForm } from '@/components/dashboard/add-service-form'
 import { DeleteServiceButton } from '@/components/dashboard/delete-service-button'
 import { EditServiceButton } from '@/components/dashboard/edit-service-button'
 import { Image, Zap } from 'lucide-react'
+import { isAcService } from '@/lib/utils'
 
 export default async function ServicesPage() {
   const authClient = await createClient()
@@ -65,7 +66,7 @@ export default async function ServicesPage() {
                           {service.category}
                         </span>
                       )}
-                      {service.name.includes('에어컨') && (
+                      {isAcService(service.name) && (
                         <span className="inline-flex items-center gap-1 text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
                           <Zap className="h-2.5 w-2.5" />
                           유형·대수 자동 선택
@@ -78,7 +79,7 @@ export default async function ServicesPage() {
                       )}
                     </div>
                     {/* 에어컨 유형별 단가 표시 */}
-                    {service.name.includes('에어컨') && service.ac_type_prices && typeof service.ac_type_prices === 'object' && !Array.isArray(service.ac_type_prices) ? (
+                    {isAcService(service.name) && service.ac_type_prices && typeof service.ac_type_prices === 'object' && !Array.isArray(service.ac_type_prices) ? (
                       <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
                         {(Object.entries(service.ac_type_prices as Record<string, number>)).map(([id, price]) => {
                           const labelMap: Record<string, string> = {

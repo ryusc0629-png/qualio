@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { calculateAndCreateQuoteAction } from '@/lib/actions/quotes'
+import { isAcService } from '@/lib/utils'
 
 // 에어컨 청소 여부에 따라 스텝 분기
 const STEP_SEQUENCE_DEFAULT = ['service', 'space', 'context', 'date', 'notes', 'name', 'phone'] as const
@@ -333,7 +334,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
 
   const [selectedServiceId, setSelectedServiceId] = useState('')
   const [selectedServiceName, setSelectedServiceName] = useState('')
-  const [isAcService, setIsAcService] = useState(false)
+  const [isAcMode, setIsAcMode] = useState(false)
   const [acSummary, setAcSummary] = useState('')                      // "벽걸이형 일반 2대, 스탠드형 1대"
   const [acTotalCount, setAcTotalCount] = useState(0)
   const [acSelections, setAcSelections] = useState<Record<string, number>>({})  // 서버로 전달할 유형별 수량
@@ -348,7 +349,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   const [customerPhone, setCustomerPhone] = useState('')
 
   // 현재 서비스에 맞는 스텝 순서
-  const stepSequence = isAcService ? STEP_SEQUENCE_AC : STEP_SEQUENCE_DEFAULT
+  const stepSequence = isAcMode ? STEP_SEQUENCE_AC : STEP_SEQUENCE_DEFAULT
 
   const chatEndRef = useRef<HTMLDivElement>(null)
 
@@ -405,10 +406,10 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   }
 
   const handleServiceSelect = (service: ServiceItem) => {
-    const isAc = service.name.includes('에어컨')
+    const isAc = isAcService(service.name)
     setSelectedServiceId(service.id)
     setSelectedServiceName(service.name)
-    setIsAcService(isAc)
+    setIsAcMode(isAc)
     setAcTypePrices(service.ac_type_prices)
     setTimeout(() => advance('service', isAc ? 'ac_detail' : 'space'), 50)
   }
@@ -464,19 +465,19 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
     // 컨텍스트 + 에어컨 상세 + 요청사항 합산
     const combinedNotes = [
       contextAnswer ? `주거형태: ${contextAnswer}` : '',
-      isAcService && acSummary ? `에어컨: ${acSummary}` : '',
+      isAcMode && acSummary ? `에어컨: ${acSummary}` : '',
       notes.trim(),
     ].filter(Boolean).join(' | ')
 
     execute({
       business_id:    businessId,
       service_id:     selectedServiceId,
-      space_size:     isAcService ? acTotalCount : Number(spaceSize),
+      space_size:     isAcMode ? acTotalCount : Number(spaceSize),
       preferred_date: preferredDate || undefined,
       extra_notes:    combinedNotes || undefined,
       customer_name:  customerName.trim(),
       customer_phone: clean,
-      ac_selections:  isAcService && Object.keys(acSelections).length > 0 ? acSelections : undefined,
+      ac_selections:  isAcMode && Object.keys(acSelections).length > 0 ? acSelections : undefined,
     })
   }
 

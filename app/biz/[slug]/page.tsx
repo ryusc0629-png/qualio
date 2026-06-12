@@ -20,6 +20,7 @@ import {
   ThumbsUp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { isAcService } from '@/lib/utils'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -66,7 +67,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 // 서비스 카테고리별 이모지
 function serviceEmoji(category: string | null, name: string): string {
   const text = (category ?? name).toLowerCase()
-  if (text.includes('에어컨')) return '❄️'
+  if (isAcService(text)) return '❄️'
   if (text.includes('입주') || text.includes('이사')) return '🏠'
   if (text.includes('정기')) return '🔄'
   if (text.includes('사무') || text.includes('오피스')) return '🏢'

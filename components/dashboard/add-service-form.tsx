@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createServiceItemAction } from '@/lib/actions/services'
 import { Plus, X, Zap } from 'lucide-react'
+import { isAcService } from '@/lib/utils'
 
 // 에어컨 유형 목록 (견적 폼과 동일한 ID 사용)
 const AC_TYPE_LIST = [
@@ -91,7 +92,7 @@ export function AddServiceForm() {
     setValue('unit', preset.unit as UnitValue)
     setValue('base_price', String(preset.base_price))
     // 에어컨 프리셋이면 유형별 기본 단가 자동 세팅
-    if (preset.name.includes('에어컨')) {
+    if (isAcService(preset.name)) {
       const defaults: Partial<Record<string, string>> = {}
       AC_TYPE_LIST.forEach((t) => {
         defaults[t.id] = t.placeholder.replace(',', '')
@@ -104,7 +105,7 @@ export function AddServiceForm() {
 
   const currentUnit  = watch('unit')
   const currentName  = watch('name') ?? ''
-  const isAcService  = currentName.includes('에어컨')
+  const isAc  = isAcService(currentName)
 
   if (!open) {
     return (
@@ -122,7 +123,7 @@ export function AddServiceForm() {
         let acTypePrices: Record<string, number> | undefined
         let basePrice = Number(data.base_price)
 
-        if (isAcService) {
+        if (isAc) {
           const parsed: Record<string, number> = {}
           let minPrice = Infinity
           for (const [id, val] of Object.entries(acPrices)) {
@@ -175,7 +176,7 @@ export function AddServiceForm() {
         </div>
 
         {/* 에어컨 서비스 안내 + 유형별 단가 입력 */}
-        {isAcService && (
+        {isAc && (
           <div className="space-y-3">
             <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-1">
               <div className="flex items-center gap-1.5">
@@ -245,7 +246,7 @@ export function AddServiceForm() {
         </div>
 
         {/* 기본가 — 에어컨은 유형별 단가에서 자동 계산되므로 숨김 */}
-        {!isAcService && (
+        {!isAc && (
           <div className="space-y-1">
             <Label htmlFor="base_price">
               기본 가격 (원) *
