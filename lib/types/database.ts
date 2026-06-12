@@ -251,6 +251,7 @@ export type Database = {
           logo_url: string | null
           name: string
           naver_place_url: string | null
+          youtube_url: string | null
           owner_id: string
           phone: string | null
           updated_at: string
@@ -271,6 +272,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           naver_place_url?: string | null
+          youtube_url?: string | null
           owner_id: string
           phone?: string | null
           updated_at?: string
@@ -291,6 +293,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           naver_place_url?: string | null
+          youtube_url?: string | null
           owner_id?: string
           phone?: string | null
           updated_at?: string

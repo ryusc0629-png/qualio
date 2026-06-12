@@ -197,14 +197,14 @@ export function QuoteBookingSection({
                 isSelected
                   ? 'border-primary bg-primary/5'
                   : tier.highlight
-                    ? 'border-primary/30 bg-white'
+                    ? 'border-orange-500 bg-orange-50/40 shadow-[0_4px_20px_rgba(234,88,12,0.12)]'
                     : 'border-border bg-white',
               ].join(' ')}
             >
               {/* 추천 뱃지 */}
               {tier.highlight && (
-                <div className="absolute -top-3 left-4 bg-primary text-white text-[11px] font-bold px-3 py-0.5 rounded-full">
-                  가장 많이 선택해요
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-orange-500 text-white text-[11px] font-bold px-4 py-1 rounded-full whitespace-nowrap shadow-sm">
+                  ✨ 가장 많이 선택해요
                 </div>
               )}
 

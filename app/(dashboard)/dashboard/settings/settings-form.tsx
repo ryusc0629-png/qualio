@@ -13,6 +13,7 @@ interface Business {
   address: string | null
   description: string | null
   naver_place_url: string | null
+  youtube_url: string | null
 }
 
 interface Props {
@@ -36,6 +37,7 @@ export function SettingsForm({ business }: Props) {
       address:         data.get('address') as string,
       description:     data.get('description') as string,
       naver_place_url: data.get('naver_place_url') as string,
+      youtube_url:     data.get('youtube_url') as string,
     })
   }
 
@@ -100,6 +102,17 @@ export function SettingsForm({ business }: Props) {
             defaultValue={business.naver_place_url ?? ''}
             placeholder="https://naver.me/..."
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="youtube_url">유튜브 시공 영상 URL</Label>
+          <Input
+            id="youtube_url"
+            name="youtube_url"
+            defaultValue={business.youtube_url ?? ''}
+            placeholder="https://www.youtube.com/watch?v=..."
+          />
+          <p className="text-xs text-muted-foreground">등록 시 고객 견적서에 시공 영상이 자동 표시됩니다</p>
         </div>
       </div>
 

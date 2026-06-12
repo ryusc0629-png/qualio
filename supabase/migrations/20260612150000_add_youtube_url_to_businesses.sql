@@ -1,0 +1,1 @@
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS youtube_url TEXT;
