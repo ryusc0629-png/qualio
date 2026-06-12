@@ -4,6 +4,7 @@ import { AddBookingForm } from '@/components/dashboard/add-booking-form'
 import { BookingStatusSelect } from '@/components/dashboard/booking-status-select'
 import { ConfirmBookingButton } from '@/components/dashboard/confirm-booking-button'
 import { ArchiveQuoteButton } from '@/components/dashboard/archive-quote-button'
+import { RescheduleBookingButton } from '@/components/dashboard/reschedule-booking-button'
 import Link from 'next/link'
 import { Phone, Calendar, Archive, MapPin } from 'lucide-react'
 
@@ -354,6 +355,13 @@ export default async function WorkPage({
                           bookingId={booking.id}
                           currentStatus={booking.status}
                         />
+                        {(booking.status === 'confirmed' || booking.status === 'in_progress') && (
+                          <RescheduleBookingButton
+                            bookingId={booking.id}
+                            scheduledAt={booking.scheduled_at}
+                            customerPhone={booking.customer_phone}
+                          />
+                        )}
                       </div>
                     </div>
                   </div>

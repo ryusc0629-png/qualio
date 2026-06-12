@@ -92,6 +92,49 @@ export async function sendQuoteAlimtalk(params: QuoteSentParams): Promise<void> 
   })
 }
 
+// 일정 변경 알림톡 파라미터
+export interface RescheduleParams {
+  customerPhone: string
+  businessName:  string
+  businessPhone: string | null
+  cleaningType:  string
+  oldScheduledAt: string  // ISO 문자열
+  newScheduledAt: string  // ISO 문자열
+}
+
+// 일정 변경 알림톡 발송
+export async function sendRescheduleAlimtalk(params: RescheduleParams): Promise<void> {
+  const apiKey     = process.env.SOLAPI_API_KEY
+  const apiSecret  = process.env.SOLAPI_API_SECRET
+  const sender     = process.env.SOLAPI_SENDER_PHONE
+  const templateId = process.env.SOLAPI_TEMPLATE_ID_RESCHEDULE
+  const pfId       = process.env.SOLAPI_KAKAO_PF_ID
+
+  if (!apiKey || !apiSecret || !sender || !templateId || !pfId) {
+    console.warn('[Alimtalk] RESCHEDULE 템플릿 미설정 — 발송 생략')
+    return
+  }
+
+  const service = new SolapiMessageService(apiKey, apiSecret)
+
+  await service.sendOne({
+    to:   params.customerPhone,
+    from: sender,
+    type: 'ATA',
+    kakaoOptions: {
+      pfId,
+      templateId,
+      variables: {
+        '#{업체명}':     params.businessName,
+        '#{서비스명}':   params.cleaningType,
+        '#{변경전일시}': formatKoreanDate(params.oldScheduledAt),
+        '#{변경후일시}': formatKoreanDate(params.newScheduledAt),
+        '#{업체연락처}': params.businessPhone ?? '업체에 문의해 주세요',
+      },
+    },
+  })
+}
+
 // 예약 확정 알림톡 발송 (퀄리오 채널로 고객사 대신 발송)
 export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): Promise<void> {
   const apiKey     = process.env.SOLAPI_API_KEY

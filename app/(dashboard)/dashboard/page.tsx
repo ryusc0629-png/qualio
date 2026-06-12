@@ -223,7 +223,40 @@ export default async function DashboardPage() {
         </Link>
       )}
 
-      {/* 오늘 예약 (최우선) */}
+      {/* 이달 현황 KPI */}
+      <div>
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{monthLabel} 현황</p>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {stats.map((stat) => {
+            const card = (
+              <div className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 hover:shadow-sm transition-all">
+                <div className="flex items-start justify-between mb-3">
+                  <div className={`w-9 h-9 ${stat.bg} rounded-xl flex items-center justify-center`}>
+                    <stat.icon className={`h-4 w-4 ${stat.color}`} />
+                  </div>
+                  {stat.badge && (
+                    <span className="text-[10px] font-semibold bg-violet-50 text-violet-600 px-1.5 py-0.5 rounded-full">
+                      퀄리오
+                    </span>
+                  )}
+                </div>
+                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
+                <p className="text-xs font-medium text-muted-foreground mt-1">{stat.label}</p>
+                {stat.sub && (
+                  <p className={`text-xs mt-0.5 ${stat.subColor || 'text-muted-foreground/60'}`}>
+                    {stat.sub}
+                  </p>
+                )}
+              </div>
+            )
+            return (
+              <Link key={stat.label} href={stat.href}>{card}</Link>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 오늘 예약 */}
       <div className="bg-white rounded-xl border border-border overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
@@ -277,39 +310,6 @@ export default async function DashboardPage() {
             <p className="text-xs text-muted-foreground/70">여유로운 하루예요 — 새 고객을 모아보세요</p>
           </div>
         )}
-      </div>
-
-      {/* 이달 현황 KPI */}
-      <div>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{monthLabel} 현황</p>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {stats.map((stat) => {
-            const card = (
-              <div className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 hover:shadow-sm transition-all">
-                <div className="flex items-start justify-between mb-3">
-                  <div className={`w-9 h-9 ${stat.bg} rounded-xl flex items-center justify-center`}>
-                    <stat.icon className={`h-4 w-4 ${stat.color}`} />
-                  </div>
-                  {stat.badge && (
-                    <span className="text-[10px] font-semibold bg-violet-50 text-violet-600 px-1.5 py-0.5 rounded-full">
-                      퀄리오
-                    </span>
-                  )}
-                </div>
-                <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                <p className="text-xs font-medium text-muted-foreground mt-1">{stat.label}</p>
-                {stat.sub && (
-                  <p className={`text-xs mt-0.5 ${stat.subColor || 'text-muted-foreground/60'}`}>
-                    {stat.sub}
-                  </p>
-                )}
-              </div>
-            )
-            return (
-              <Link key={stat.label} href={stat.href}>{card}</Link>
-            )
-          })}
-        </div>
       </div>
 
       {/* 이번 주 예정 예약 */}

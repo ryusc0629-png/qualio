@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { sendRescheduleAlimtalk } from '@/lib/kakao/alimtalk'
 
 // 한국 전화번호 검증
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
@@ -100,5 +101,91 @@ export const updateBookingStatusAction = action
     if (error) throw new Error('[APP] 상태 변경에 실패했습니다')
 
     revalidatePath('/dashboard/bookings')
+    return { success: true }
+  })
+
+// 예약 일정 변경 액션 — DB 업데이트 + 고객 알림톡 자동 발송
+const rescheduleBookingSchema = z.object({
+  booking_id:       z.string().uuid(),
+  new_scheduled_at: z.string().min(1, '새 날짜를 선택해주세요'),
+})
+
+export const rescheduleBookingAction = action
+  .schema(rescheduleBookingSchema)
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    // 현재 예약 조회 (변경 전 일시 + 고객 연락처 확보)
+    const { data: booking } = await db
+      .from('bookings')
+      .select('id, customer_phone, scheduled_at, quote_id, status')
+      .eq('id', parsedInput.booking_id)
+      .eq('business_id', profile.business_id)
+      .maybeSingle()
+
+    if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
+    if (['completed', 'cancelled', 'no_show'].includes(booking.status)) {
+      throw new Error('[APP] 완료·취소된 예약은 일정을 변경할 수 없습니다')
+    }
+
+    const oldScheduledAt = booking.scheduled_at
+    const newScheduledAt = new Date(parsedInput.new_scheduled_at).toISOString()
+
+    // 일정 업데이트
+    const { error } = await db
+      .from('bookings')
+      .update({ scheduled_at: newScheduledAt })
+      .eq('id', parsedInput.booking_id)
+      .eq('business_id', profile.business_id)
+
+    if (error) throw new Error('[APP] 일정 변경에 실패했습니다')
+
+    // 고객 알림톡 발송 (연락처 있는 경우만, 실패해도 변경은 유지)
+    if (booking.customer_phone) {
+      try {
+        const { data: business } = await db
+          .from('businesses')
+          .select('name, phone')
+          .eq('id', profile.business_id)
+          .maybeSingle()
+
+        // 서비스명 조회 (quote가 있으면 cleaning_type, 없으면 기본값)
+        let cleaningType = '청소 서비스'
+        if (booking.quote_id) {
+          const { data: quote } = await db
+            .from('quotes')
+            .select('cleaning_type')
+            .eq('id', booking.quote_id)
+            .maybeSingle()
+          if (quote?.cleaning_type) cleaningType = quote.cleaning_type
+        }
+
+        if (business) {
+          await sendRescheduleAlimtalk({
+            customerPhone:  booking.customer_phone,
+            businessName:   business.name,
+            businessPhone:  business.phone ?? null,
+            cleaningType,
+            oldScheduledAt,
+            newScheduledAt,
+          })
+        }
+      } catch (e) {
+        console.error('[Alimtalk] 일정 변경 알림톡 발송 실패 — 일정 변경은 정상 완료됨', e)
+      }
+    }
+
+    revalidatePath('/dashboard/work')
     return { success: true }
   })
