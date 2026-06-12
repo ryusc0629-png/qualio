@@ -31,18 +31,6 @@ interface QuoteFormProps {
   services: ServiceItem[]
 }
 
-// 단위별 가격 힌트 포맷 (base_price=0이면 빈 문자열)
-function formatPriceHint(price: number, unit: string): string {
-  if (!price) return ''
-  const formatted = price.toLocaleString('ko-KR')
-  switch (unit) {
-    case '평당':  return `평당 ${formatted}원~`
-    case '시간':  return `${formatted}원/시간`
-    case '개':    return `${formatted}원/개`
-    case '정액':
-    default:      return `${formatted}원~`
-  }
-}
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토']
 
@@ -383,9 +371,9 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
         </div>
       </header>
 
-      {/* 채팅 스레드 — 자연 높이로 표시, 페이지 전체 스크롤 */}
-      <div className="px-4 pt-5 pb-2">
-        <div className="max-w-md mx-auto space-y-3">
+      {/* 채팅 스레드 — 카카오톡처럼 메시지가 하단부터 쌓임 */}
+      <div className="flex-1 overflow-y-auto px-4 pb-4 flex flex-col justify-end">
+        <div className="max-w-md mx-auto w-full space-y-3 pt-4">
 
           {completedSteps.map((step) => (
             <div key={step} className="space-y-2">
@@ -432,7 +420,6 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
             services.length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
                 {services.map((s) => {
-                  const hint = formatPriceHint(s.base_price, s.unit)
                   return (
                     <button
                       key={s.id}
@@ -441,9 +428,6 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
                       className="text-left px-4 py-3.5 rounded-2xl border-2 border-border bg-[#FAFAFA] active:bg-primary/10 active:border-primary transition-colors"
                     >
                       <p className="font-semibold text-sm text-[#1A1A1A]">{s.name}</p>
-                      {hint && (
-                        <p className="text-[11px] text-primary font-medium mt-0.5">{hint}</p>
-                      )}
                     </button>
                   )
                 })}
