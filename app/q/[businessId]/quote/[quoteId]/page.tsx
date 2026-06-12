@@ -46,6 +46,28 @@ export default async function QuoteLandingPage({ params }: PageProps) {
 
   if (!quote || !business) notFound()
 
+  // 서비스 단위 조회 (에어컨=개, 청소=평당 등)
+  const { data: serviceItem } = await db
+    .from('service_items')
+    .select('unit')
+    .eq('business_id', businessId)
+    .eq('name', quote.cleaning_type ?? '')
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  const spaceUnit = serviceItem?.unit ?? '평당'
+
+  function formatSpaceTag(size: number | null, unit: string): string {
+    if (!size) return ''
+    switch (unit) {
+      case '평당': return `${size}평`
+      case '개':   return `${size}대`
+      case '시간': return `${size}시간`
+      case '정액': return ''
+      default:     return `${size}평`
+    }
+  }
+
   let pitch: QuotePitch
   const cached = quote.ai_pitch
   if (
@@ -61,6 +83,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
       category:     business.description ?? null,
       serviceName:  quote.cleaning_type ?? '청소 서비스',
       spaceSize:    quote.space_size ?? null,
+      spaceUnit,
     })
     db.from('quotes').update({ ai_pitch: pitch as unknown as Json }).eq('id', quoteId).then()
   }
@@ -128,7 +151,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
         <div className="bg-white rounded-3xl px-5 py-5 shadow-sm">
           {quote.cleaning_type && (
             <div className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-xs font-bold px-2.5 py-1 rounded-full mb-3">
-              {quote.cleaning_type}{quote.space_size ? ` · ${quote.space_size}평` : ''}
+              {quote.cleaning_type}{formatSpaceTag(quote.space_size, spaceUnit) ? ` · ${formatSpaceTag(quote.space_size, spaceUnit)}` : ''}
             </div>
           )}
           <h1 className="text-[20px] font-extrabold leading-snug text-zinc-900 break-keep">

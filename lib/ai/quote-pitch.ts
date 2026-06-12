@@ -66,16 +66,28 @@ const FALLBACK_PITCH: QuotePitch = {
   },
 }
 
+function formatSpaceContext(size: number | null | undefined, unit: string): string {
+  if (!size) return ''
+  switch (unit) {
+    case '평당': return `공간 크기: ${size}평`
+    case '개':   return `수량: ${size}대`
+    case '시간': return `작업 시간: ${size}시간`
+    default:     return ''
+  }
+}
+
 export async function generateQuotePitch({
   businessName,
   category,
   serviceName,
   spaceSize,
+  spaceUnit = '평당',
 }: {
   businessName: string
   category: string | null
   serviceName: string
   spaceSize?: number | null
+  spaceUnit?: string
 }): Promise<QuotePitch> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return FALLBACK_PITCH
@@ -84,7 +96,7 @@ export async function generateQuotePitch({
 
   const contextText = [
     `서비스: ${serviceName}`,
-    spaceSize ? `공간 크기: ${spaceSize}평` : '',
+    formatSpaceContext(spaceSize, spaceUnit),
     category ? `업체 소개: ${category}` : '',
     `제공 업체: ${businessName}`,
   ].filter(Boolean).join('\n')
