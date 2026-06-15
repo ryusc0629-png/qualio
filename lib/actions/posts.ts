@@ -236,6 +236,18 @@ export const setMonthlyTargetAction = action
     return { success: true, limit }
   })
 
+// 구독 시작일 기준 현재 청구 주기 시작일 계산 (30일 롤링)
+function getBillingPeriodStart(subscriptionCreatedAt: string | null, now: Date): Date {
+  if (!subscriptionCreatedAt) {
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  }
+  const subStart = new Date(subscriptionCreatedAt)
+  const elapsedMs = now.getTime() - subStart.getTime()
+  const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24))
+  const periodIndex = Math.floor(elapsedDays / 30)
+  return new Date(subStart.getTime() + periodIndex * 30 * 24 * 60 * 60 * 1000)
+}
+
 // 오늘 자동 발행 수동 트리거 — "지금 발행" 버튼용
 // Cron과 동일한 로직, 세션 인증으로 현재 업체만 실행
 export const publishTodayAction = action
@@ -244,15 +256,12 @@ export const publishTodayAction = action
     const { db, businessId } = await getBusinessId()
 
     const now = new Date()
-    const year = now.getUTCFullYear()
     const month = now.getUTCMonth() + 1
-    const dayOfMonth = now.getUTCDate()
-    const daysInMonth = new Date(year, month, 0).getDate()
 
-    // 플랜 한도 조회
+    // 플랜 한도 + 구독 시작일 조회
     const { data: sub } = await db
       .from('subscriptions')
-      .select('plan')
+      .select('plan, created_at')
       .eq('business_id', businessId)
       .eq('status', 'active')
       .maybeSingle()
@@ -260,21 +269,23 @@ export const publishTodayAction = action
     const planId = ((sub?.plan as PlanId) ?? 'beta')
     const planLimit = getAutoPostLimit(planId)
 
-    const monthStart = new Date(year, month - 1, 1).toISOString()
+    // 구독 시작일 기준 현재 청구 주기 시작일 (30일 롤링)
+    const periodStart = getBillingPeriodStart(sub?.created_at ?? null, now)
+    const daysElapsed = Math.floor((now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
 
-    // 이번 달 발행 건수
+    // 이번 주기 발행 건수
     const { count } = await db
       .from('biz_posts')
       .select('id', { count: 'exact', head: true })
       .eq('business_id', businessId)
       .eq('published', true)
-      .gte('published_at', monthStart)
+      .gte('published_at', periodStart.toISOString())
 
-    const postsThisMonth = count ?? 0
+    const postsThisPeriod = count ?? 0
 
-    // 오늘까지 발행됐어야 할 누적 건수
-    const expectedSoFar = Math.floor(planLimit * dayOfMonth / daysInMonth)
-    const needed = Math.max(0, expectedSoFar - postsThisMonth)
+    // 오늘까지 발행됐어야 할 누적 건수 (30일 기준)
+    const expectedSoFar = Math.floor(planLimit * Math.min(daysElapsed, 30) / 30)
+    const needed = Math.max(0, expectedSoFar - postsThisPeriod)
 
     if (needed === 0) {
       return { success: true, published: 0, message: '오늘 발행할 포스트가 없어요 (이미 목표 달성)' }
@@ -292,12 +303,12 @@ export const publishTodayAction = action
     const business = businessResult.data
     const services = servicesResult.data ?? []
 
-    // 이번 달 발행 제목 목록 (중복 방지)
+    // 이번 주기 발행 제목 목록 (중복 방지)
     const { data: publishedThisMonth } = await db
       .from('biz_posts')
       .select('title')
       .eq('business_id', businessId)
-      .gte('published_at', monthStart)
+      .gte('published_at', periodStart.toISOString())
     const publishedTitles = (publishedThisMonth ?? []).map((p) => p.title)
 
     const titles: string[] = []

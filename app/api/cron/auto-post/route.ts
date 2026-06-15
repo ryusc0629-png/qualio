@@ -9,21 +9,29 @@ import type { PlanId } from '@/lib/config/plans'
 // 1회 실행 시 오늘 발행해야 할 건수만큼 반복 발행 (스케일 플랜 하루 2건 지원)
 // vercel.json에 등록된 cron만 호출 가능 — CRON_SECRET으로 인증
 
-function getDaysInMonth(year: number, month: number): number {
-  return new Date(year, month, 0).getDate()
+// 오늘 발행해야 할 건수 계산 — 구독 시작일 기준 30일 롤링 균등 분포
+function postsToPublishToday(
+  postsThisPeriod: number,
+  target: number,
+  daysElapsed: number,
+): number {
+  if (postsThisPeriod >= target) return 0
+  // 오늘까지 발행됐어야 할 누적 건수 (30일 기준)
+  const expectedSoFar = Math.floor(target * Math.min(daysElapsed, 30) / 30)
+  return Math.max(0, expectedSoFar - postsThisPeriod)
 }
 
-// 오늘 발행해야 할 건수 계산 — 목표를 월 전체에 균등 분포
-function postsToPublishToday(
-  postsThisMonth: number,
-  target: number,
-  dayOfMonth: number,
-  daysInMonth: number,
-): number {
-  if (postsThisMonth >= target) return 0
-  // 오늘까지 발행됐어야 할 누적 건수
-  const expectedSoFar = Math.floor(target * dayOfMonth / daysInMonth)
-  return Math.max(0, expectedSoFar - postsThisMonth)
+// 구독 시작일 기준 현재 청구 주기 시작일 계산 (30일 롤링)
+function getBillingPeriodStart(subscriptionCreatedAt: string | null, now: Date): Date {
+  if (!subscriptionCreatedAt) {
+    // 구독일 없으면 이번 달 1일로 폴백
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  }
+  const subStart = new Date(subscriptionCreatedAt)
+  const elapsedMs = now.getTime() - subStart.getTime()
+  const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24))
+  const periodIndex = Math.floor(elapsedDays / 30)
+  return new Date(subStart.getTime() + periodIndex * 30 * 24 * 60 * 60 * 1000)
 }
 
 // 포스트 1건 생성 및 저장
@@ -105,10 +113,7 @@ export async function GET(request: NextRequest) {
 
   const db = createServiceClient()
   const now = new Date()
-  const year = now.getUTCFullYear()
   const month = now.getUTCMonth() + 1
-  const dayOfMonth = now.getUTCDate()
-  const daysInMonth = getDaysInMonth(year, month)
 
   const { data: businesses, error: bizError } = await db
     .from('businesses')
@@ -130,7 +135,7 @@ export async function GET(request: NextRequest) {
     try {
       const { data: sub } = await db
         .from('subscriptions')
-        .select('plan')
+        .select('plan, created_at')
         .eq('business_id', business.id)
         .eq('status', 'active')
         .maybeSingle()
@@ -139,28 +144,31 @@ export async function GET(request: NextRequest) {
       const planLimit = getAutoPostLimit(planId)
       const effectiveTarget = Math.min(business.monthly_post_target, planLimit)
 
-      const monthStart = new Date(year, month - 1, 1).toISOString()
+      // 구독 시작일 기준 현재 청구 주기 시작일 (30일 롤링)
+      const periodStart = getBillingPeriodStart(sub?.created_at ?? null, now)
+      const daysElapsed = Math.floor((now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
+
       const { count } = await db
         .from('biz_posts')
         .select('id', { count: 'exact', head: true })
         .eq('business_id', business.id)
         .eq('published', true)
-        .gte('published_at', monthStart)
+        .gte('published_at', periodStart.toISOString())
 
-      const postsThisMonth = count ?? 0
-      const needed = postsToPublishToday(postsThisMonth, effectiveTarget, dayOfMonth, daysInMonth)
+      const postsThisPeriod = count ?? 0
+      const needed = postsToPublishToday(postsThisPeriod, effectiveTarget, daysElapsed)
 
       if (needed === 0) {
         results.push({ businessId: business.id, action: 'skipped' })
         continue
       }
 
-      // 이번 달 발행 제목 목록 (중복 방지용)
+      // 이번 주기 발행 제목 목록 (중복 방지용)
       const { data: publishedThisMonth } = await db
         .from('biz_posts')
         .select('title')
         .eq('business_id', business.id)
-        .gte('published_at', monthStart)
+        .gte('published_at', periodStart.toISOString())
       const publishedTitles = (publishedThisMonth ?? []).map((p) => p.title)
 
       const { data: services } = await db
