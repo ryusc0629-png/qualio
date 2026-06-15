@@ -40,6 +40,8 @@ const calculateAndCreateQuoteSchema = z.object({
   ac_selections: z.record(z.string(), z.number().min(0)).optional(),
   // 항목별 선택 수량 { "화장실": 2, "주방": 1 }
   unit_selections: z.record(z.string(), z.number().min(0)).optional(),
+  // 구분 선택 (신축/구축 등) — unit_variants가 있는 서비스에만 전달
+  unit_variant: z.string().optional(),
 })
 
 export const calculateAndCreateQuoteAction = publicAction
@@ -59,7 +61,7 @@ export const calculateAndCreateQuoteAction = publicAction
     // 선택한 서비스 조회 (에어컨·항목별 단가 포함)
     const { data: service } = await db
       .from('service_items')
-      .select('id, name, base_price, unit, ac_type_prices, unit_prices')
+      .select('id, name, base_price, unit, ac_type_prices, unit_prices, unit_variants')
       .eq('id', parsedInput.service_id)
       .eq('business_id', parsedInput.business_id)
       .eq('is_active', true)
@@ -88,7 +90,13 @@ export const calculateAndCreateQuoteAction = publicAction
       Array.isArray(service.unit_prices)
     ) {
       // 항목별 단가 × 수량 합산 (줄눌·화장실청소 등)
-      const items = service.unit_prices as Array<{ name: string; price: number }>
+      // unit_variant가 지정된 경우 해당 구분의 단가만 사용
+      type UnitPriceItem = { name: string; price: number; variant?: string }
+      const allItems = service.unit_prices as UnitPriceItem[]
+      const variant = parsedInput.unit_variant
+      const items = variant
+        ? allItems.filter((item) => item.variant === variant)
+        : allItems.filter((item) => !item.variant)
       baseCalc = items.reduce((sum, item) => {
         const count = parsedInput.unit_selections![item.name] ?? 0
         return sum + item.price * count

@@ -67,11 +67,14 @@ export function AddServiceForm() {
   const [open, setOpen] = useState(false)
   // 에어컨 유형별 단가 상태 (ID → 원 단위 문자열)
   const [acPrices, setAcPrices] = useState<Partial<Record<string, string>>>({})
-  // 항목별 단가 상태 [{name, price}]
+  // 항목별 단가 상태
   const [showUnitPrices, setShowUnitPrices] = useState(false)
-  const [unitItems, setUnitItems] = useState<Array<{ name: string; price: string }>>([
-    { name: '', price: '' },
-  ])
+  const [unitVariants, setUnitVariants] = useState<string[]>([])
+  const [newVariantInput, setNewVariantInput] = useState('')
+  // variants가 있으면: { variantName: [{name, price}] }, 없으면: [{name, price}] 형태를 variants 키 '' 로 통일
+  const [unitItemsByVariant, setUnitItemsByVariant] = useState<Record<string, Array<{ name: string; price: string }>>>({
+    '': [{ name: '', price: '' }],
+  })
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormInput>({
     resolver: zodResolver(schema),
@@ -84,7 +87,9 @@ export function AddServiceForm() {
       reset({ unit: '정액', base_price: '0' })
       setAcPrices({})
       setShowUnitPrices(false)
-      setUnitItems([{ name: '', price: '' }])
+      setUnitVariants([])
+      setNewVariantInput('')
+      setUnitItemsByVariant({ '': [{ name: '', price: '' }] })
       setOpen(false)
     },
     onError: ({ error }) => {
@@ -109,15 +114,43 @@ export function AddServiceForm() {
       setAcPrices({})
     }
     setShowUnitPrices(false)
-    setUnitItems([{ name: '', price: '' }])
+    setUnitVariants([])
+    setNewVariantInput('')
+    setUnitItemsByVariant({ '': [{ name: '', price: '' }] })
   }
 
-  // 항목별 단가 항목 추가/수정/삭제 헬퍼
-  const updateUnitItem = (idx: number, field: 'name' | 'price', value: string) => {
-    setUnitItems((prev) => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item))
+  // 구분(variant) 추가/삭제
+  const addVariant = () => {
+    const v = newVariantInput.trim()
+    if (!v || unitVariants.includes(v)) return
+    setUnitVariants((prev) => [...prev, v])
+    setUnitItemsByVariant((prev) => ({ ...prev, [v]: [{ name: '', price: '' }] }))
+    setNewVariantInput('')
   }
-  const addUnitItem = () => setUnitItems((prev) => [...prev, { name: '', price: '' }])
-  const removeUnitItem = (idx: number) => setUnitItems((prev) => prev.filter((_, i) => i !== idx))
+  const removeVariant = (v: string) => {
+    setUnitVariants((prev) => prev.filter((x) => x !== v))
+    setUnitItemsByVariant((prev) => { const next = { ...prev }; delete next[v]; return next })
+  }
+
+  // 항목 추가/수정/삭제 헬퍼 (variant 키 기반)
+  const updateUnitItem = (variantKey: string, idx: number, field: 'name' | 'price', value: string) => {
+    setUnitItemsByVariant((prev) => ({
+      ...prev,
+      [variantKey]: (prev[variantKey] ?? []).map((item, i) => i === idx ? { ...item, [field]: value } : item),
+    }))
+  }
+  const addUnitItem = (variantKey: string) => {
+    setUnitItemsByVariant((prev) => ({
+      ...prev,
+      [variantKey]: [...(prev[variantKey] ?? []), { name: '', price: '' }],
+    }))
+  }
+  const removeUnitItem = (variantKey: string, idx: number) => {
+    setUnitItemsByVariant((prev) => ({
+      ...prev,
+      [variantKey]: (prev[variantKey] ?? []).filter((_, i) => i !== idx),
+    }))
+  }
 
   const currentUnit = watch('unit')
   const currentName = watch('name') ?? ''
@@ -156,17 +189,32 @@ export function AddServiceForm() {
             basePrice = minPrice === Infinity ? basePrice : minPrice
           }
         } else if (isUnit) {
-          // 항목별 단가: 이름·금액이 모두 입력된 항목만 포함
-          const items = unitItems
-            .filter((item) => item.name.trim() && Number(item.price) > 0)
-            .map((item) => ({ name: item.name.trim(), price: Number(item.price) }))
-          if (items.length > 0) {
-            unitPrices = items
-            basePrice = Math.min(...items.map((i) => i.price))
+          // 항목별 단가: variant 구분 포함하여 변환
+          const hasVariants = unitVariants.length > 0
+          const allItems: Array<{ name: string; price: number; variant?: string }> = []
+          const keys = hasVariants ? unitVariants : ['']
+          for (const key of keys) {
+            const rows = (unitItemsByVariant[key] ?? []).filter((r) => r.name.trim() && Number(r.price) > 0)
+            for (const r of rows) {
+              allItems.push(hasVariants
+                ? { name: r.name.trim(), price: Number(r.price), variant: key }
+                : { name: r.name.trim(), price: Number(r.price) }
+              )
+            }
+          }
+          if (allItems.length > 0) {
+            unitPrices = allItems
+            basePrice = Math.min(...allItems.map((i) => i.price))
           }
         }
 
-        execute({ ...data, base_price: basePrice, ac_type_prices: acTypePrices, unit_prices: unitPrices })
+        execute({
+          ...data,
+          base_price:    basePrice,
+          ac_type_prices: acTypePrices,
+          unit_prices:    unitPrices,
+          unit_variants:  unitVariants.length > 0 ? unitVariants : undefined,
+        })
       })}
       className="rounded-lg border bg-card p-4 space-y-4"
     >
@@ -231,41 +279,75 @@ export function AddServiceForm() {
               </p>
             </div>
 
-            <div className="space-y-2">
-              {unitItems.map((item, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <Input
-                    placeholder="항목명 (예: 화장실)"
-                    value={item.name}
-                    onChange={(e) => updateUnitItem(idx, 'name', e.target.value)}
-                    className="h-9 text-sm flex-1"
-                  />
-                  <div className="relative w-32 shrink-0">
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      placeholder="50000"
-                      value={item.price}
-                      onChange={(e) => updateUnitItem(idx, 'price', e.target.value)}
-                      className="h-9 text-sm pr-6"
-                    />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
-                  </div>
-                  {unitItems.length > 1 && (
-                    <button type="button" onClick={() => removeUnitItem(idx)} className="text-muted-foreground hover:text-destructive transition-colors">
-                      <Trash2 className="h-4 w-4" />
+            {/* 구분(신축/구축 등) 설정 */}
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">구분 설정 (선택) — 예: 신축, 구축</p>
+              <div className="flex flex-wrap gap-1.5 items-center">
+                {unitVariants.map((v) => (
+                  <span key={v} className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2.5 py-1 font-medium">
+                    {v}
+                    <button type="button" onClick={() => removeVariant(v)} className="hover:text-destructive transition-colors">
+                      <X className="h-3 w-3" />
                     </button>
-                  )}
+                  </span>
+                ))}
+                <div className="flex items-center gap-1">
+                  <Input
+                    placeholder="구분 추가 (예: 신축)"
+                    value={newVariantInput}
+                    onChange={(e) => setNewVariantInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addVariant() } }}
+                    className="h-8 text-xs w-36"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={addVariant} className="h-8 text-xs px-2">추가</Button>
                 </div>
-              ))}
-              <button
-                type="button"
-                onClick={addUnitItem}
-                className="flex items-center gap-1.5 text-xs text-primary hover:underline"
-              >
-                <Plus className="h-3.5 w-3.5" /> 항목 추가
-              </button>
+              </div>
             </div>
+
+            {/* 구분이 없으면 단일 항목 목록, 있으면 구분별 항목 목록 */}
+            {(unitVariants.length > 0 ? unitVariants : ['']).map((variantKey) => {
+              const items = unitItemsByVariant[variantKey] ?? []
+              return (
+                <div key={variantKey} className="space-y-2">
+                  {variantKey && (
+                    <p className="text-xs font-semibold text-foreground border-b pb-1">{variantKey}</p>
+                  )}
+                  {items.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Input
+                        placeholder="항목명 (예: 화장실)"
+                        value={item.name}
+                        onChange={(e) => updateUnitItem(variantKey, idx, 'name', e.target.value)}
+                        className="h-9 text-sm flex-1"
+                      />
+                      <div className="relative w-32 shrink-0">
+                        <Input
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="50000"
+                          value={item.price}
+                          onChange={(e) => updateUnitItem(variantKey, idx, 'price', e.target.value)}
+                          className="h-9 text-sm pr-6"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
+                      </div>
+                      {items.length > 1 && (
+                        <button type="button" onClick={() => removeUnitItem(variantKey, idx)} className="text-muted-foreground hover:text-destructive transition-colors">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => addUnitItem(variantKey)}
+                    className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> 항목 추가
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
 

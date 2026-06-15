@@ -24,7 +24,7 @@ export default async function PublicQuotePage({ params }: Props) {
   // 견적폼 노출 서비스 목록 조회 (show_in_quote=true인 것만)
   const { data: services } = await db
     .from('service_items')
-    .select('id, name, base_price, unit, ac_type_prices, unit_prices')
+    .select('id, name, base_price, unit, ac_type_prices, unit_prices, unit_variants')
     .eq('business_id', businessId)
     .eq('is_active', true)
     .is('deleted_at', null)
@@ -38,7 +38,10 @@ export default async function PublicQuotePage({ params }: Props) {
       ? s.ac_type_prices as Record<string, number>
       : null,
     unit_prices: Array.isArray(s.unit_prices)
-      ? s.unit_prices as Array<{ name: string; price: number }>
+      ? s.unit_prices as Array<{ name: string; price: number; variant?: string }>
+      : null,
+    unit_variants: Array.isArray(s.unit_variants)
+      ? s.unit_variants as string[]
       : null,
   }))
 

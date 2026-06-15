@@ -23,7 +23,7 @@ export default async function ServicesPage() {
 
   const { data: services } = await db
     .from('service_items')
-    .select('id, name, category, base_price, unit, is_active, photos, ac_type_prices, unit_prices, tier_good_items, tier_better_items, tier_best_items')
+    .select('id, name, category, base_price, unit, is_active, photos, ac_type_prices, unit_prices, unit_variants, tier_good_items, tier_better_items, tier_best_items')
     .eq('business_id', profile.business_id)
     .is('deleted_at', null)
     .order('sort_order')
@@ -116,7 +116,10 @@ export default async function ServicesPage() {
                         ? service.ac_type_prices as Record<string, number>
                         : null,
                       unit_prices: Array.isArray(service.unit_prices)
-                        ? service.unit_prices as Array<{ name: string; price: number }>
+                        ? service.unit_prices as Array<{ name: string; price: number; variant?: string }>
+                        : null,
+                      unit_variants: Array.isArray(service.unit_variants)
+                        ? service.unit_variants as string[]
                         : null,
                       tier_good_items:   service.tier_good_items   ?? [],
                       tier_better_items: service.tier_better_items ?? [],

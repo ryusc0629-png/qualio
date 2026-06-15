@@ -10,11 +10,16 @@ const VALID_UNITS = ['정액', '평당', '시간', '개'] as const
 // AC 유형별 단가 스키마
 const acTypePricesSchema = z.record(z.string(), z.number().min(0)).optional()
 
-// 항목별 단가 스키마 (줄눌·화장실청소 등) — [{name: "화장실", price: 50000}]
+// 항목별 단가 스키마 — [{name, price, variant?}]
+// variant가 있으면 신축/구축처럼 구분별 단가, 없으면 단일 단가
 const unitPricesSchema = z.array(z.object({
-  name:  z.string().min(1),
-  price: z.number().min(0),
+  name:    z.string().min(1),
+  price:   z.number().min(0),
+  variant: z.string().optional(),
 })).optional()
+
+// 항목별 구분 목록 스키마 — ["신축", "구축"]
+const unitVariantsSchema = z.array(z.string().min(1)).optional()
 
 // 서비스 항목 생성 스키마 — z.enum() 대신 z.string().refine() 사용 (Zod v4 호환)
 const createServiceItemSchema = z.object({
@@ -25,8 +30,9 @@ const createServiceItemSchema = z.object({
     (val): val is typeof VALID_UNITS[number] => (VALID_UNITS as readonly string[]).includes(val),
     '올바른 단위를 선택해주세요'
   ),
-  ac_type_prices: acTypePricesSchema,
-  unit_prices:    unitPricesSchema,
+  ac_type_prices:  acTypePricesSchema,
+  unit_prices:     unitPricesSchema,
+  unit_variants:   unitVariantsSchema,
 })
 
 // 서비스 항목 수정 스키마
@@ -40,8 +46,9 @@ const updateServiceItemSchema = z.object({
     '올바른 단위를 선택해주세요'
   ),
   photos: z.array(z.string()).optional(),
-  ac_type_prices: acTypePricesSchema,
-  unit_prices:    unitPricesSchema,
+  ac_type_prices:  acTypePricesSchema,
+  unit_prices:     unitPricesSchema,
+  unit_variants:   unitVariantsSchema,
   tier_good_items:   z.array(z.string()).optional(),
   tier_better_items: z.array(z.string()).optional(),
   tier_best_items:   z.array(z.string()).optional(),
@@ -93,6 +100,7 @@ export const createServiceItemAction = action
       unit:           parsedInput.unit,
       ac_type_prices: parsedInput.ac_type_prices ?? null,
       unit_prices:    parsedInput.unit_prices    ?? null,
+      unit_variants:  parsedInput.unit_variants  ?? null,
     })
 
     if (error) throw new Error('[APP] 서비스 추가에 실패했습니다')
@@ -131,6 +139,7 @@ export const updateServiceItemAction = action
         photos:            parsedInput.photos ?? [],
         ac_type_prices:    parsedInput.ac_type_prices ?? null,
         unit_prices:       parsedInput.unit_prices    ?? null,
+        unit_variants:     parsedInput.unit_variants  ?? null,
         tier_good_items:   parsedInput.tier_good_items ?? [],
         tier_better_items: parsedInput.tier_better_items ?? [],
         tier_best_items:   parsedInput.tier_best_items ?? [],

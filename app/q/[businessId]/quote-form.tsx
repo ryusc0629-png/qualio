@@ -9,10 +9,11 @@ import { calculateAndCreateQuoteAction } from '@/lib/actions/quotes'
 import { isAcService } from '@/lib/utils'
 
 // 서비스 유형에 따라 스텝 분기
-const STEP_SEQUENCE_DEFAULT = ['service', 'space', 'context', 'date', 'notes', 'name', 'phone'] as const
-const STEP_SEQUENCE_AC      = ['service', 'ac_detail', 'context', 'date', 'notes', 'name', 'phone'] as const
-const STEP_SEQUENCE_UNIT    = ['service', 'unit_detail', 'context', 'date', 'notes', 'name', 'phone'] as const
-type Step = 'service' | 'space' | 'ac_detail' | 'unit_detail' | 'context' | 'date' | 'notes' | 'name' | 'phone'
+const STEP_SEQUENCE_DEFAULT      = ['service', 'space', 'context', 'date', 'notes', 'name', 'phone'] as const
+const STEP_SEQUENCE_AC           = ['service', 'ac_detail', 'context', 'date', 'notes', 'name', 'phone'] as const
+const STEP_SEQUENCE_UNIT         = ['service', 'unit_detail', 'context', 'date', 'notes', 'name', 'phone'] as const
+const STEP_SEQUENCE_UNIT_VARIANT = ['service', 'unit_variant', 'unit_detail', 'context', 'date', 'notes', 'name', 'phone'] as const
+type Step = 'service' | 'space' | 'ac_detail' | 'unit_variant' | 'unit_detail' | 'context' | 'date' | 'notes' | 'name' | 'phone'
 
 const SPACE_CHIPS = ['15평', '20평', '25평', '30평', '35평', '40평', '50평 이상']
 const SPACE_CHIP_VALUES: Record<string, number> = {
@@ -42,7 +43,8 @@ interface ServiceItem {
   base_price: number
   unit: string
   ac_type_prices: Record<string, number> | null
-  unit_prices: Array<{ name: string; price: number }> | null
+  unit_prices: Array<{ name: string; price: number; variant?: string }> | null
+  unit_variants: string[] | null
 }
 
 interface QuoteFormProps {
@@ -437,7 +439,9 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   const [acTotalCount, setAcTotalCount] = useState(0)
   const [acSelections, setAcSelections] = useState<Record<string, number>>({})
   const [acTypePrices, setAcTypePrices] = useState<Record<string, number> | null>(null)
-  const [unitPrices, setUnitPrices] = useState<Array<{ name: string; price: number }> | null>(null)
+  const [unitPrices, setUnitPrices] = useState<Array<{ name: string; price: number; variant?: string }> | null>(null)
+  const [unitVariants, setUnitVariants] = useState<string[] | null>(null)
+  const [selectedUnitVariant, setSelectedUnitVariant] = useState<string | null>(null)
   const [unitSummary, setUnitSummary] = useState('')
   const [unitSelections, setUnitSelections] = useState<Record<string, number>>({})
   const [spaceSize, setSpaceSize] = useState('')
@@ -450,7 +454,11 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   const [customerPhone, setCustomerPhone] = useState('')
 
   // 현재 서비스에 맞는 스텝 순서
-  const stepSequence = isAcMode ? STEP_SEQUENCE_AC : isUnitMode ? STEP_SEQUENCE_UNIT : STEP_SEQUENCE_DEFAULT
+  const stepSequence = isAcMode
+    ? STEP_SEQUENCE_AC
+    : isUnitMode
+      ? (unitVariants && unitVariants.length > 0 ? STEP_SEQUENCE_UNIT_VARIANT : STEP_SEQUENCE_UNIT)
+      : STEP_SEQUENCE_DEFAULT
 
   const chatEndRef = useRef<HTMLDivElement>(null)
 
@@ -475,8 +483,9 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
     switch (step) {
       case 'service':   return '안녕하세요! 어떤 청소 서비스가 필요하신가요?'
       case 'space':     return '공간이 몇 평인가요?'
-      case 'ac_detail':   return '에어컨 유형과 대수를 알려주세요'
-      case 'unit_detail': return '항목별 수량을 선택해주세요'
+      case 'ac_detail':     return '에어컨 유형과 대수를 알려주세요'
+      case 'unit_variant':  return '해당되는 구분을 선택해주세요'
+      case 'unit_detail':   return '항목별 수량을 선택해주세요'
       case 'context':   return '주거 형태가 어떻게 되세요?'
       case 'date':      return '언제 방문해 드릴까요?'
       case 'notes':     return '특별히 신경 써드릴 부분이 있나요?'
@@ -489,8 +498,9 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
     switch (step) {
       case 'service':   return selectedServiceName
       case 'space':     return `${spaceSize}평`
-      case 'ac_detail':   return acSummary
-      case 'unit_detail': return unitSummary
+      case 'ac_detail':     return acSummary
+      case 'unit_variant':  return selectedUnitVariant ?? ''
+      case 'unit_detail':   return unitSummary
       case 'context':   return contextAnswer
       case 'date':      return preferredDateLabel
       case 'notes':     return notes.trim() || '특별 요청 없음'
@@ -511,14 +521,22 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   const handleServiceSelect = (service: ServiceItem) => {
     const isAc   = isAcService(service.name)
     const isUnit = !isAc && Array.isArray(service.unit_prices) && service.unit_prices.length > 0
+    const hasVariants = isUnit && Array.isArray(service.unit_variants) && service.unit_variants.length > 0
     setSelectedServiceId(service.id)
     setSelectedServiceName(service.name)
     setIsAcMode(isAc)
     setIsUnitMode(isUnit)
     setAcTypePrices(service.ac_type_prices)
     setUnitPrices(isUnit ? service.unit_prices : null)
-    const nextStep = isAc ? 'ac_detail' : isUnit ? 'unit_detail' : 'space'
+    setUnitVariants(hasVariants ? (service.unit_variants as string[]) : null)
+    setSelectedUnitVariant(null)
+    const nextStep = isAc ? 'ac_detail' : isUnit ? (hasVariants ? 'unit_variant' : 'unit_detail') : 'space'
     setTimeout(() => advance('service', nextStep), 50)
+  }
+
+  const handleUnitVariantSelect = (variant: string) => {
+    setSelectedUnitVariant(variant)
+    setTimeout(() => advance('unit_variant', 'unit_detail'), 50)
   }
 
   const handleAcDetail = (summary: string, totalCount: number, selections: Record<string, number>) => {
@@ -592,6 +610,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
       customer_phone: clean,
       ac_selections:   isAcMode   && Object.keys(acSelections).length   > 0 ? acSelections   : undefined,
       unit_selections: isUnitMode && Object.keys(unitSelections).length > 0 ? unitSelections : undefined,
+      unit_variant:    selectedUnitVariant ?? undefined,
     })
   }
 
@@ -696,10 +715,30 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
             <AcDetailSelector acTypePrices={acTypePrices} onConfirm={handleAcDetail} />
           )}
 
-          {/* 항목별 수량 선택 (줄눌 시공 등) */}
-          {!isTyping && !isPending && currentStep === 'unit_detail' && unitPrices && (
-            <UnitDetailSelector unitPrices={unitPrices} onConfirm={handleUnitDetail} />
+          {/* 구분 선택 (신축/구축 등) */}
+          {!isTyping && !isPending && currentStep === 'unit_variant' && unitVariants && (
+            <div className="flex flex-wrap gap-2">
+              {unitVariants.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => handleUnitVariantSelect(v)}
+                  className="px-5 py-3 rounded-2xl border-2 border-border bg-[#FAFAFA] text-sm font-semibold text-[#1A1A1A] active:bg-primary/10 active:border-primary transition-colors"
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
           )}
+
+          {/* 항목별 수량 선택 (줄눌 시공 등) */}
+          {!isTyping && !isPending && currentStep === 'unit_detail' && unitPrices && (() => {
+            // variant가 선택된 경우 해당 항목만 필터링
+            const filteredPrices = selectedUnitVariant
+              ? unitPrices.filter((item) => item.variant === selectedUnitVariant)
+              : unitPrices.filter((item) => !item.variant)
+            return <UnitDetailSelector unitPrices={filteredPrices} onConfirm={handleUnitDetail} />
+          })()}
 
           {/* 평수 선택 */}
           {!isTyping && !isPending && currentStep === 'space' && (

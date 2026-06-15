@@ -51,7 +51,8 @@ interface EditServiceButtonProps {
     unit: string
     photos: string[] | null
     ac_type_prices: Record<string, number> | null
-    unit_prices: Array<{ name: string; price: number }> | null
+    unit_prices: Array<{ name: string; price: number; variant?: string }> | null
+    unit_variants: string[] | null
     tier_good_items: string[]
     tier_better_items: string[]
     tier_best_items: string[]
@@ -132,11 +133,26 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
   const [showUnitPrices, setShowUnitPrices] = useState(() =>
     Array.isArray(service.unit_prices) && service.unit_prices.length > 0
   )
-  const [unitItems, setUnitItems] = useState<Array<{ name: string; price: string }>>(() => {
-    if (Array.isArray(service.unit_prices) && service.unit_prices.length > 0) {
-      return service.unit_prices.map((item) => ({ name: item.name, price: String(item.price) }))
+  const [unitVariants, setUnitVariants] = useState<string[]>(() =>
+    Array.isArray(service.unit_variants) ? service.unit_variants : []
+  )
+  const [newVariantInput, setNewVariantInput] = useState('')
+  const [unitItemsByVariant, setUnitItemsByVariant] = useState<Record<string, Array<{ name: string; price: string }>>>(() => {
+    if (!Array.isArray(service.unit_prices) || service.unit_prices.length === 0) {
+      return { '': [{ name: '', price: '' }] }
     }
-    return [{ name: '', price: '' }]
+    const hasVariants = Array.isArray(service.unit_variants) && service.unit_variants.length > 0
+    if (!hasVariants) {
+      return { '': service.unit_prices.map((i) => ({ name: i.name, price: String(i.price) })) }
+    }
+    const map: Record<string, Array<{ name: string; price: string }>> = {}
+    for (const v of service.unit_variants ?? []) map[v] = []
+    for (const item of service.unit_prices) {
+      const key = item.variant ?? ''
+      if (!map[key]) map[key] = []
+      map[key].push({ name: item.name, price: String(item.price) })
+    }
+    return map
   })
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormInput>({
@@ -153,11 +169,35 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
   const isAcByName   = isAcService(currentName)
   const isUnitByName = !isAcByName && showUnitPrices
 
-  const updateUnitItem = (idx: number, field: 'name' | 'price', value: string) => {
-    setUnitItems((prev) => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item))
+  const addVariant = () => {
+    const v = newVariantInput.trim()
+    if (!v || unitVariants.includes(v)) return
+    setUnitVariants((prev) => [...prev, v])
+    setUnitItemsByVariant((prev) => ({ ...prev, [v]: [{ name: '', price: '' }] }))
+    setNewVariantInput('')
   }
-  const addUnitItem    = () => setUnitItems((prev) => [...prev, { name: '', price: '' }])
-  const removeUnitItem = (idx: number) => setUnitItems((prev) => prev.filter((_, i) => i !== idx))
+  const removeVariant = (v: string) => {
+    setUnitVariants((prev) => prev.filter((x) => x !== v))
+    setUnitItemsByVariant((prev) => { const next = { ...prev }; delete next[v]; return next })
+  }
+  const updateUnitItem = (variantKey: string, idx: number, field: 'name' | 'price', value: string) => {
+    setUnitItemsByVariant((prev) => ({
+      ...prev,
+      [variantKey]: (prev[variantKey] ?? []).map((item, i) => i === idx ? { ...item, [field]: value } : item),
+    }))
+  }
+  const addUnitItem = (variantKey: string) => {
+    setUnitItemsByVariant((prev) => ({
+      ...prev,
+      [variantKey]: [...(prev[variantKey] ?? []), { name: '', price: '' }],
+    }))
+  }
+  const removeUnitItem = (variantKey: string, idx: number) => {
+    setUnitItemsByVariant((prev) => ({
+      ...prev,
+      [variantKey]: (prev[variantKey] ?? []).filter((_, i) => i !== idx),
+    }))
+  }
 
   const { execute, isPending } = useAction(updateServiceItemAction, {
     onSuccess: () => {
@@ -231,12 +271,21 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
                   basePrice = minPrice === Infinity ? basePrice : minPrice
                 }
               } else if (isUnitByName) {
-                const items = unitItems
-                  .filter((item) => item.name.trim() && Number(item.price) > 0)
-                  .map((item) => ({ name: item.name.trim(), price: Number(item.price) }))
-                if (items.length > 0) {
-                  unitPrices = items
-                  basePrice = Math.min(...items.map((i) => i.price))
+                const hasVariants = unitVariants.length > 0
+                const allItems: Array<{ name: string; price: number; variant?: string }> = []
+                const keys = hasVariants ? unitVariants : ['']
+                for (const key of keys) {
+                  const rows = (unitItemsByVariant[key] ?? []).filter((r) => r.name.trim() && Number(r.price) > 0)
+                  for (const r of rows) {
+                    allItems.push(hasVariants
+                      ? { name: r.name.trim(), price: Number(r.price), variant: key }
+                      : { name: r.name.trim(), price: Number(r.price) }
+                    )
+                  }
+                }
+                if (allItems.length > 0) {
+                  unitPrices = allItems
+                  basePrice = Math.min(...allItems.map((i) => i.price))
                 }
               }
 
@@ -249,6 +298,7 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
                 photos,
                 ac_type_prices:    acTypePrices,
                 unit_prices:       unitPrices,
+                unit_variants:     unitVariants.length > 0 ? unitVariants : undefined,
                 tier_good_items:   tierGood.filter(Boolean),
                 tier_better_items: tierBetter.filter(Boolean),
                 tier_best_items:   tierBest.filter(Boolean),
@@ -310,41 +360,75 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
                     고객이 견적 폼에서 항목·수량을 선택하면, 아래 단가를 기준으로 자동 합산됩니다.
                   </p>
                 </div>
-                <div className="space-y-2">
-                  {unitItems.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <Input
-                        placeholder="항목명 (예: 화장실)"
-                        value={item.name}
-                        onChange={(e) => updateUnitItem(idx, 'name', e.target.value)}
-                        className="h-9 text-sm flex-1"
-                      />
-                      <div className="relative w-32 shrink-0">
-                        <Input
-                          type="number"
-                          inputMode="numeric"
-                          placeholder="50000"
-                          value={item.price}
-                          onChange={(e) => updateUnitItem(idx, 'price', e.target.value)}
-                          className="h-9 text-sm pr-6"
-                        />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
-                      </div>
-                      {unitItems.length > 1 && (
-                        <button type="button" onClick={() => removeUnitItem(idx)} className="text-muted-foreground hover:text-destructive transition-colors">
-                          <Trash2 className="h-4 w-4" />
+
+                {/* 구분(신축/구축 등) 설정 */}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-medium text-muted-foreground">구분 설정 (선택) — 예: 신축, 구축</p>
+                  <div className="flex flex-wrap gap-1.5 items-center">
+                    {unitVariants.map((v) => (
+                      <span key={v} className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2.5 py-1 font-medium">
+                        {v}
+                        <button type="button" onClick={() => removeVariant(v)} className="hover:text-destructive transition-colors">
+                          <X className="h-3 w-3" />
                         </button>
-                      )}
+                      </span>
+                    ))}
+                    <div className="flex items-center gap-1">
+                      <Input
+                        placeholder="구분 추가 (예: 신축)"
+                        value={newVariantInput}
+                        onChange={(e) => setNewVariantInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addVariant() } }}
+                        className="h-8 text-xs w-32"
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={addVariant} className="h-8 text-xs px-2">추가</Button>
                     </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={addUnitItem}
-                    className="flex items-center gap-1.5 text-xs text-primary hover:underline"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> 항목 추가
-                  </button>
+                  </div>
                 </div>
+
+                {(unitVariants.length > 0 ? unitVariants : ['']).map((variantKey) => {
+                  const items = unitItemsByVariant[variantKey] ?? []
+                  return (
+                    <div key={variantKey} className="space-y-2">
+                      {variantKey && (
+                        <p className="text-xs font-semibold text-foreground border-b pb-1">{variantKey}</p>
+                      )}
+                      {items.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <Input
+                            placeholder="항목명 (예: 화장실)"
+                            value={item.name}
+                            onChange={(e) => updateUnitItem(variantKey, idx, 'name', e.target.value)}
+                            className="h-9 text-sm flex-1"
+                          />
+                          <div className="relative w-32 shrink-0">
+                            <Input
+                              type="number"
+                              inputMode="numeric"
+                              placeholder="50000"
+                              value={item.price}
+                              onChange={(e) => updateUnitItem(variantKey, idx, 'price', e.target.value)}
+                              className="h-9 text-sm pr-6"
+                            />
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
+                          </div>
+                          {items.length > 1 && (
+                            <button type="button" onClick={() => removeUnitItem(variantKey, idx)} className="text-muted-foreground hover:text-destructive transition-colors">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => addUnitItem(variantKey)}
+                        className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> 항목 추가
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
             )}
 
