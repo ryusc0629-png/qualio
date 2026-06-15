@@ -139,6 +139,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   const [showEditor, setShowEditor] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
   const [suggestions, setSuggestions] = useState<TopicSuggestion[] | null>(null)
+  const [publishResult, setPublishResult] = useState<{ published: number; message?: string } | null>(null)
 
   const now = new Date()
   const postsThisMonth = posts.filter((p) => {
@@ -178,11 +179,14 @@ const { execute: deletePost, isPending: isDeleting } = useAction(deletePostActio
 
   const { execute: publishToday, isPending: isPublishing } = useAction(publishTodayAction, {
     onSuccess: ({ data }) => {
-      if (data?.published === 0) {
-        toast.success(data.message ?? '오늘 목표를 이미 달성했어요!')
+      if (!data) return
+      setPublishResult({ published: data.published, message: data.message })
+      if (data.published > 0) {
+        toast.success(`포스트 ${data.published}건 발행됐어요!`)
+        // 목록 갱신을 위해 1.5초 후 페이지 새로고침
+        setTimeout(() => window.location.replace(window.location.pathname), 1500)
       } else {
-        toast.success(`포스트 ${data?.published}건 발행 완료!`)
-        window.location.reload()
+        toast.success(data.message ?? '오늘 목표를 이미 달성했어요!')
       }
     },
     onError: ({ error }) => { toast.error(error.serverError ?? '발행에 실패했습니다') },
@@ -319,13 +323,16 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
       {/* 액션 버튼 */}
       <div className="flex gap-2 flex-wrap">
         <Button
-          onClick={() => publishToday({})}
-          disabled={isPublishing}
+          onClick={() => { setPublishResult(null); publishToday({}) }}
+          disabled={isPublishing || publishResult?.published === 0}
           className="gap-2"
+          variant={publishResult !== null && !isPublishing ? 'outline' : 'default'}
         >
           {isPublishing
             ? <><Loader2 className="h-4 w-4 animate-spin" />AI가 작성 중이에요...</>
-            : <><Play className="h-4 w-4" />지금 발행</>
+            : publishResult !== null
+              ? <><CheckCircle2 className="h-4 w-4 text-emerald-500" />{publishResult.published > 0 ? `${publishResult.published}건 발행됐어요!` : '오늘 발행 완료!'}</>
+              : <><Play className="h-4 w-4" />지금 발행</>
           }
         </Button>
         <Button variant="outline" onClick={() => { setShowEditor(!showEditor); setEditingPost(null) }} className="gap-2">
