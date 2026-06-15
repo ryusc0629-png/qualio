@@ -10,7 +10,36 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { addBookingAction } from '@/lib/actions/bookings'
-import { Plus, X } from 'lucide-react'
+import { Plus, X, Search } from 'lucide-react'
+
+declare global {
+  interface Window {
+    daum?: {
+      Postcode: new (options: {
+        oncomplete: (data: { address: string; buildingName: string; addressType: string; bname: string }) => void
+        onclose?: () => void
+      }) => { open: () => void }
+    }
+  }
+}
+
+function openAddressSearch(onSelect: (address: string) => void) {
+  const run = () => {
+    new window.daum!.Postcode({
+      oncomplete: (data) => {
+        const extra = data.buildingName ? ` (${data.buildingName})` : ''
+        onSelect(data.address + extra)
+      },
+    }).open()
+  }
+
+  if (window.daum?.Postcode) { run(); return }
+
+  const script = document.createElement('script')
+  script.src = '//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js'
+  script.onload = run
+  document.head.appendChild(script)
+}
 
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
 
@@ -33,7 +62,9 @@ type FormInput = z.infer<typeof schema>
 export function AddBookingForm() {
   const [open, setOpen] = useState(false)
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormInput>({
+  const [addressDetail, setAddressDetail] = useState('')
+
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormInput>({
     resolver: zodResolver(schema),
   })
 
@@ -49,8 +80,10 @@ export function AddBookingForm() {
   })
 
   const onSubmit = (data: FormInput) => {
+    const base = data.service_address.split(' — ')[0]
     execute({
       ...data,
+      service_address: addressDetail ? `${base} — ${addressDetail}` : base,
       final_price: Number(data.final_price),
     })
   }
@@ -90,8 +123,24 @@ export function AddBookingForm() {
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="service_address">주소 *</Label>
-        <Input id="service_address" placeholder="서울시 강남구 테헤란로 123" {...register('service_address')} />
+        <Label>주소 *</Label>
+        <button
+          type="button"
+          onClick={() => openAddressSearch((addr) => { setValue('service_address', addr, { shouldValidate: true }); setAddressDetail('') })}
+          className="w-full h-10 rounded-md border border-input bg-background px-3 flex items-center justify-between text-sm text-left hover:bg-muted transition-colors"
+        >
+          <span className={watch('service_address') ? 'text-foreground' : 'text-muted-foreground'}>
+            {watch('service_address') || '주소 검색하기'}
+          </span>
+          <Search className="h-4 w-4 text-primary shrink-0" />
+        </button>
+        {watch('service_address') && (
+          <Input
+            placeholder="상세 주소 입력 (예: 101동 1234호)"
+            value={addressDetail}
+            onChange={(e) => setAddressDetail(e.target.value)}
+          />
+        )}
         {errors.service_address && <p className="text-xs text-destructive">{errors.service_address.message}</p>}
       </div>
 

@@ -402,7 +402,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
     setTimeout(() => {
       setIsTyping(false)
       setCurrentStep(to)
-    }, 950)
+    }, 400)
   }
 
   const handleServiceSelect = (service: ServiceItem) => {
@@ -496,12 +496,17 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
               <p className="text-[11px] text-[#8D8D8D]">견적 문의</p>
             </div>
           </div>
-          {/* 진행 바 */}
-          <div className="w-24 h-1.5 bg-border rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all duration-500"
-              style={{ width: `${progressPct}%` }}
-            />
+          {/* 진행 바 + 단계 수치 */}
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] text-zinc-400 tabular-nums shrink-0">
+              {completedSteps.length}/{stepSequence.length}
+            </p>
+            <div className="w-20 h-1.5 bg-border rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-500"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
           </div>
         </div>
       </header>
@@ -706,8 +711,11 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
                 disabled={isPending || customerPhone.length < 10}
                 className="w-full h-14 rounded-2xl bg-primary text-white font-extrabold text-base disabled:opacity-50 active:scale-[0.98] transition-all"
               >
-                무료 견적 받기 →
+                내 견적서 바로 받기 →
               </button>
+              <p className="text-[11px] text-zinc-400 text-center leading-relaxed">
+                🔒 전화번호는 예약 확인에만 사용돼요. 광고 문자는 보내지 않습니다.
+              </p>
             </div>
           )}
 

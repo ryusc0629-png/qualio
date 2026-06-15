@@ -135,6 +135,51 @@ export async function sendRescheduleAlimtalk(params: RescheduleParams): Promise<
   })
 }
 
+// 예약 리마인더 알림톡 파라미터 (방문 전날 저녁 발송)
+export interface ReminderParams {
+  customerPhone: string
+  customerName:  string
+  businessName:  string
+  businessPhone: string | null
+  cleaningType:  string
+  scheduledAt:   string  // ISO 문자열
+  serviceAddress: string
+}
+
+// 예약 리마인더 알림톡 발송 (방문 전날 18시 KST 자동 발송)
+export async function sendReminderAlimtalk(params: ReminderParams): Promise<void> {
+  const apiKey     = process.env.SOLAPI_API_KEY
+  const apiSecret  = process.env.SOLAPI_API_SECRET
+  const sender     = process.env.SOLAPI_SENDER_PHONE
+  const templateId = process.env.SOLAPI_TEMPLATE_ID_REMINDER
+  const pfId       = process.env.SOLAPI_KAKAO_PF_ID
+
+  if (!apiKey || !apiSecret || !sender || !templateId || !pfId) {
+    console.warn('[Alimtalk] REMINDER 템플릿 미설정 — 발송 생략')
+    return
+  }
+
+  const service = new SolapiMessageService(apiKey, apiSecret)
+
+  await service.sendOne({
+    to:   params.customerPhone,
+    from: sender,
+    type: 'ATA',
+    kakaoOptions: {
+      pfId,
+      templateId,
+      variables: {
+        '#{고객명}':     params.customerName,
+        '#{업체명}':     params.businessName,
+        '#{서비스명}':   params.cleaningType,
+        '#{예약일시}':   formatKoreanDate(params.scheduledAt),
+        '#{서비스주소}': params.serviceAddress,
+        '#{업체연락처}': params.businessPhone ?? '업체에 문의해 주세요',
+      },
+    },
+  })
+}
+
 // 예약 확정 알림톡 발송 (퀄리오 채널로 고객사 대신 발송)
 export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): Promise<void> {
   const apiKey     = process.env.SOLAPI_API_KEY
