@@ -201,6 +201,7 @@ export type Database = {
           type: string
           lead_id: string | null
           notes: string | null
+          reengagement_sent_at: string | null
           created_at: string
           updated_at: string
         }
@@ -214,6 +215,7 @@ export type Database = {
           type?: string
           lead_id?: string | null
           notes?: string | null
+          reengagement_sent_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -227,6 +229,7 @@ export type Database = {
           type?: string
           lead_id?: string | null
           notes?: string | null
+          reengagement_sent_at?: string | null
           created_at?: string
           updated_at?: string
         }

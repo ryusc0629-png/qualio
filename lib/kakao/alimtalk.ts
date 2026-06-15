@@ -417,6 +417,50 @@ export interface ReviewClaimedParams {
 }
 
 // 고객이 후기 인증 시 사장님에게 알림톡 발송
+interface ReengagementParams {
+  customerPhone: string
+  customerName:  string
+  businessName:  string
+  quoteUrl:      string   // 견적 신청 페이지 URL
+}
+
+export async function sendReengagementAlimtalk(params: ReengagementParams): Promise<void> {
+  const apiKey     = process.env.SOLAPI_API_KEY
+  const apiSecret  = process.env.SOLAPI_API_SECRET
+  const sender     = process.env.SOLAPI_SENDER_PHONE
+  const templateId = process.env.SOLAPI_TEMPLATE_ID_REENGAGEMENT
+  const pfId       = process.env.SOLAPI_KAKAO_PF_ID
+
+  if (!apiKey || !apiSecret || !sender || !templateId || !pfId) {
+    console.warn('[Alimtalk] REENGAGEMENT 템플릿 미설정 — 발송 생략')
+    return
+  }
+
+  const service = new SolapiMessageService(apiKey, apiSecret)
+
+  await service.sendOne({
+    to:   params.customerPhone,
+    from: sender,
+    type: 'ATA',
+    kakaoOptions: {
+      pfId,
+      templateId,
+      variables: {
+        '#{업체명}': params.businessName,
+        '#{고객명}': params.customerName,
+      },
+      buttons: [
+        {
+          buttonType: 'WL' as const,
+          buttonName: '견적 신청하기',
+          linkMo: params.quoteUrl,
+          linkPc: params.quoteUrl,
+        },
+      ],
+    },
+  })
+}
+
 interface QuoteFollowupParams {
   customerPhone: string
   customerName:  string
