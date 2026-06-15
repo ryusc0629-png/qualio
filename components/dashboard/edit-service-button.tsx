@@ -15,6 +15,78 @@ import { createClient } from '@/lib/supabase/client'
 import { Pencil, X, ImagePlus, Loader2, Zap, ListPlus, Trash2, Plus } from 'lucide-react'
 import { isAcService } from '@/lib/utils'
 
+const VARIANT_PRESETS = ['신축', '구축', '아파트', '빌라', '오피스텔', '상가']
+
+function VariantSelector({
+  variants, onChange, onAdd, newInput, onNewInputChange, onRemove,
+}: {
+  variants: string[]
+  onChange: (v: string[]) => void
+  onAdd: () => void
+  newInput: string
+  onNewInputChange: (v: string) => void
+  onRemove: (v: string) => void
+}) {
+  const toggle = (preset: string) => {
+    if (variants.includes(preset)) {
+      onChange(variants.filter((v) => v !== preset))
+    } else {
+      onChange([...variants, preset])
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-muted-foreground">구분 설정 (선택) — 신축/구축처럼 단가가 다를 때 사용</p>
+      <div className="flex flex-wrap gap-1.5">
+        {VARIANT_PRESETS.map((preset) => {
+          const selected = variants.includes(preset)
+          return (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => toggle(preset)}
+              className={[
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                selected
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground',
+              ].join(' ')}
+            >
+              {selected && <span className="mr-1">✓</span>}{preset}
+            </button>
+          )
+        })}
+      </div>
+      <div className="flex flex-wrap gap-1.5 items-center">
+        {variants.filter((v) => !VARIANT_PRESETS.includes(v)).map((v) => (
+          <span key={v} className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2.5 py-1 font-medium">
+            {v}
+            <button type="button" onClick={() => onRemove(v)} className="hover:text-destructive transition-colors">
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        <div className="flex items-center gap-1">
+          <Input
+            placeholder="직접 입력"
+            value={newInput}
+            onChange={(e) => onNewInputChange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onAdd() } }}
+            className="h-7 text-xs w-28"
+          />
+          {newInput.trim() && (
+            <Button type="button" variant="outline" size="sm" onClick={onAdd} className="h-7 text-xs px-2">추가</Button>
+          )}
+        </div>
+      </div>
+      {variants.length > 0 && (
+        <p className="text-[11px] text-muted-foreground">선택된 구분: {variants.join(', ')}</p>
+      )}
+    </div>
+  )
+}
+
 const CATEGORIES = ['주거 공간', '가전 케어', '특수/시공', '상업 공간', '사무실', '기타'] as const
 const UNITS = [
   { value: '정액', label: '정액 (1회 고정가)' },
@@ -169,15 +241,22 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
   const isAcByName   = isAcService(currentName)
   const isUnitByName = !isAcByName && showUnitPrices
 
+  const handleVariantsChange = (next: string[]) => {
+    setUnitVariants(next)
+    setUnitItemsByVariant((prev) => {
+      const updated = { ...prev }
+      next.forEach((v) => { if (!updated[v]) updated[v] = [{ name: '', price: '' }] })
+      return updated
+    })
+  }
   const addVariant = () => {
     const v = newVariantInput.trim()
     if (!v || unitVariants.includes(v)) return
-    setUnitVariants((prev) => [...prev, v])
-    setUnitItemsByVariant((prev) => ({ ...prev, [v]: [{ name: '', price: '' }] }))
+    handleVariantsChange([...unitVariants, v])
     setNewVariantInput('')
   }
   const removeVariant = (v: string) => {
-    setUnitVariants((prev) => prev.filter((x) => x !== v))
+    handleVariantsChange(unitVariants.filter((x) => x !== v))
     setUnitItemsByVariant((prev) => { const next = { ...prev }; delete next[v]; return next })
   }
   const updateUnitItem = (variantKey: string, idx: number, field: 'name' | 'price', value: string) => {
@@ -361,30 +440,7 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
                   </p>
                 </div>
 
-                {/* 구분(신축/구축 등) 설정 */}
-                <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">구분 설정 (선택) — 예: 신축, 구축</p>
-                  <div className="flex flex-wrap gap-1.5 items-center">
-                    {unitVariants.map((v) => (
-                      <span key={v} className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2.5 py-1 font-medium">
-                        {v}
-                        <button type="button" onClick={() => removeVariant(v)} className="hover:text-destructive transition-colors">
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                    <div className="flex items-center gap-1">
-                      <Input
-                        placeholder="구분 추가 (예: 신축)"
-                        value={newVariantInput}
-                        onChange={(e) => setNewVariantInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addVariant() } }}
-                        className="h-8 text-xs w-32"
-                      />
-                      <Button type="button" variant="outline" size="sm" onClick={addVariant} className="h-8 text-xs px-2">추가</Button>
-                    </div>
-                  </div>
-                </div>
+                <VariantSelector variants={unitVariants} onChange={handleVariantsChange} onAdd={addVariant} newInput={newVariantInput} onNewInputChange={setNewVariantInput} onRemove={removeVariant} />
 
                 {(unitVariants.length > 0 ? unitVariants : ['']).map((variantKey) => {
                   const items = unitItemsByVariant[variantKey] ?? []

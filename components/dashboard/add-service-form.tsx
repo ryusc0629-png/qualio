@@ -13,6 +13,81 @@ import { createServiceItemAction } from '@/lib/actions/services'
 import { Plus, X, Zap, ListPlus, Trash2 } from 'lucide-react'
 import { isAcService } from '@/lib/utils'
 
+// 구분 설정에서 빠른 선택 가능한 자주 쓰는 구분 프리셋
+const VARIANT_PRESETS = ['신축', '구축', '아파트', '빌라', '오피스텔', '상가']
+
+function VariantSelector({
+  variants, onChange, onAdd, newInput, onNewInputChange, onRemove,
+}: {
+  variants: string[]
+  onChange: (v: string[]) => void
+  onAdd: () => void
+  newInput: string
+  onNewInputChange: (v: string) => void
+  onRemove: (v: string) => void
+}) {
+  const toggle = (preset: string) => {
+    if (variants.includes(preset)) {
+      onChange(variants.filter((v) => v !== preset))
+    } else {
+      onChange([...variants, preset])
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-muted-foreground">구분 설정 (선택) — 신축/구축처럼 단가가 다를 때 사용</p>
+      {/* 프리셋 칩 */}
+      <div className="flex flex-wrap gap-1.5">
+        {VARIANT_PRESETS.map((preset) => {
+          const selected = variants.includes(preset)
+          return (
+            <button
+              key={preset}
+              type="button"
+              onClick={() => toggle(preset)}
+              className={[
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                selected
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground',
+              ].join(' ')}
+            >
+              {selected && <span className="mr-1">✓</span>}{preset}
+            </button>
+          )
+        })}
+      </div>
+      {/* 선택된 구분 + 직접 입력 */}
+      <div className="flex flex-wrap gap-1.5 items-center">
+        {variants.filter((v) => !VARIANT_PRESETS.includes(v)).map((v) => (
+          <span key={v} className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2.5 py-1 font-medium">
+            {v}
+            <button type="button" onClick={() => onRemove(v)} className="hover:text-destructive transition-colors">
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        <div className="flex items-center gap-1">
+          <Input
+            placeholder="직접 입력"
+            value={newInput}
+            onChange={(e) => onNewInputChange(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onAdd() } }}
+            className="h-7 text-xs w-28"
+          />
+          {newInput.trim() && (
+            <Button type="button" variant="outline" size="sm" onClick={onAdd} className="h-7 text-xs px-2">추가</Button>
+          )}
+        </div>
+      </div>
+      {variants.length > 0 && (
+        <p className="text-[11px] text-muted-foreground">선택된 구분: {variants.join(', ')}</p>
+      )}
+    </div>
+  )
+}
+
 // 에어컨 유형 목록 (견적 폼과 동일한 ID 사용)
 const AC_TYPE_LIST = [
   { id: 'wall_standard',  label: '벽걸이형', sub: '일반',       placeholder: '75,000' },
@@ -119,16 +194,24 @@ export function AddServiceForm() {
     setUnitItemsByVariant({ '': [{ name: '', price: '' }] })
   }
 
-  // 구분(variant) 추가/삭제
+  // 구분(variant) 추가/삭제/토글
+  const handleVariantsChange = (next: string[]) => {
+    // 새로 추가된 variant에 빈 항목 행 초기화
+    setUnitVariants(next)
+    setUnitItemsByVariant((prev) => {
+      const updated = { ...prev }
+      next.forEach((v) => { if (!updated[v]) updated[v] = [{ name: '', price: '' }] })
+      return updated
+    })
+  }
   const addVariant = () => {
     const v = newVariantInput.trim()
     if (!v || unitVariants.includes(v)) return
-    setUnitVariants((prev) => [...prev, v])
-    setUnitItemsByVariant((prev) => ({ ...prev, [v]: [{ name: '', price: '' }] }))
+    handleVariantsChange([...unitVariants, v])
     setNewVariantInput('')
   }
   const removeVariant = (v: string) => {
-    setUnitVariants((prev) => prev.filter((x) => x !== v))
+    handleVariantsChange(unitVariants.filter((x) => x !== v))
     setUnitItemsByVariant((prev) => { const next = { ...prev }; delete next[v]; return next })
   }
 
@@ -280,29 +363,7 @@ export function AddServiceForm() {
             </div>
 
             {/* 구분(신축/구축 등) 설정 */}
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground">구분 설정 (선택) — 예: 신축, 구축</p>
-              <div className="flex flex-wrap gap-1.5 items-center">
-                {unitVariants.map((v) => (
-                  <span key={v} className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2.5 py-1 font-medium">
-                    {v}
-                    <button type="button" onClick={() => removeVariant(v)} className="hover:text-destructive transition-colors">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-                <div className="flex items-center gap-1">
-                  <Input
-                    placeholder="구분 추가 (예: 신축)"
-                    value={newVariantInput}
-                    onChange={(e) => setNewVariantInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addVariant() } }}
-                    className="h-8 text-xs w-36"
-                  />
-                  <Button type="button" variant="outline" size="sm" onClick={addVariant} className="h-8 text-xs px-2">추가</Button>
-                </div>
-              </div>
-            </div>
+            <VariantSelector variants={unitVariants} onChange={setUnitVariants} onAdd={addVariant} newInput={newVariantInput} onNewInputChange={setNewVariantInput} onRemove={removeVariant} />
 
             {/* 구분이 없으면 단일 항목 목록, 있으면 구분별 항목 목록 */}
             {(unitVariants.length > 0 ? unitVariants : ['']).map((variantKey) => {
