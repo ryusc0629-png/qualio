@@ -106,19 +106,11 @@ export function NaverBlogPanel({ naverBlogId: initialBlogId }: NaverBlogPanelPro
           <div className="rounded-lg bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-800 space-y-1.5">
             <p className="font-medium">API 키 발급 방법</p>
             <ol className="space-y-1 list-decimal list-inside text-blue-700">
-              <li>네이버 블로그 접속 → 내 블로그</li>
-              <li>관리 → 기본 설정 → 블로그 API</li>
-              <li>"API 키 발급받기" 클릭 후 복사</li>
+              <li>네이버 블로그 접속 → 상단 <strong>관리</strong> 클릭</li>
+              <li>왼쪽 메뉴 → <strong>플러그인/연동 관리</strong></li>
+              <li><strong>글쓰기 API 설정</strong> → API 사용 신청</li>
+              <li><strong>API 연결 암호</strong> 복사</li>
             </ol>
-            <a
-              href="https://blog.naver.com/setup/BlogApiSetting.naver"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-blue-600 hover:underline mt-1"
-            >
-              <ExternalLink className="h-3 w-3" />
-              API 키 발급 페이지 바로가기
-            </a>
           </div>
 
           <div className="space-y-3">
