@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
 import { generatePostImage } from '@/lib/ai/image-gen'
-import { generateNaverContent } from '@/lib/ai/naver-content'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
@@ -28,27 +27,6 @@ function postsToPublishToday(
 
 function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate()
-}
-
-// GEO 포스트 → 네이버 SEO 버전 생성 후 저장 (실패해도 무시)
-async function tryGenerateNaverContent(
-  db: ReturnType<typeof createServiceClient>,
-  postId: string,
-  businessName: string,
-  address: string | null,
-  title: string,
-  content: string,
-) {
-  try {
-    const naver = await generateNaverContent({ businessName, address, geoTitle: title, geoContent: content })
-    await db.from('biz_posts').update({
-      naver_title:   naver.title,
-      naver_content: naver.content,
-      naver_tags:    naver.tags,
-    }).eq('id', postId)
-  } catch {
-    // 실패 무시
-  }
 }
 
 // 포스트 1건 생성 및 저장
@@ -116,11 +94,6 @@ async function publishOnePost(
   }).select('id').single()
 
   if (error) throw new Error(error.message)
-
-  // 네이버 SEO 버전 자동 생성 (실패해도 무시)
-  if (saved?.id) {
-    await tryGenerateNaverContent(db, saved.id, business.name, business.address, postContent.title, fullContent)
-  }
 
   // 다음 반복에서 중복 방지
   publishedTitles.push(postContent.title)

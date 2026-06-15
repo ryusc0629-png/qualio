@@ -4,7 +4,6 @@ import { SettingsForm } from './settings-form'
 import { CurrentPlanCard } from '@/components/dashboard/current-plan-card'
 import { CancelSubscriptionButton } from '@/components/dashboard/cancel-subscription-button'
 import { GeoPanel } from '@/components/dashboard/geo-panel'
-import { NaverBlogPanel } from '@/components/dashboard/naver-blog-panel'
 import { CopyLinkButton } from '@/components/dashboard/copy-link-button'
 import type { PlanId } from '@/lib/config/plans'
 
@@ -30,7 +29,7 @@ export default async function SettingsPage() {
   const [businessResult, subscriptionResult] = await Promise.all([
     db
       .from('businesses')
-      .select('id, name, phone, address, description, naver_place_url, google_place_url, youtube_url, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, naver_blog_id')
+      .select('id, name, phone, address, description, naver_place_url, google_place_url, youtube_url, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at')
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
@@ -84,9 +83,6 @@ export default async function SettingsPage() {
           <CancelSubscriptionButton />
         </div>
       )}
-
-      {/* 네이버 블로그 연동 */}
-      <NaverBlogPanel naverBlogId={business.naver_blog_id ?? null} />
 
       {/* GEO 자동화 패널 */}
       <GeoPanel

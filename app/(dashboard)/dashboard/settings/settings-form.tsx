@@ -1,11 +1,21 @@
 'use client'
 
+import { useState } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { updateBusinessAction } from '@/lib/actions/settings'
+
+type RewardType = 'none' | 'discount_amount' | 'discount_rate' | 'gifticon'
+
+// DB에 저장된 타입 → UI 상위 타입으로 변환
+function toRewardCategory(type: string): 'none' | 'discount' | 'gifticon' {
+  if (type === 'discount_amount' || type === 'discount_rate') return 'discount'
+  if (type === 'gifticon') return 'gifticon'
+  return 'none'
+}
 
 interface Business {
   name: string
@@ -24,15 +34,30 @@ interface Props {
 }
 
 export function SettingsForm({ business }: Props) {
+  // 할인 세부 타입 (discount_amount | discount_rate) 초기값
+  const initialType = business.review_reward_type as RewardType
+  const [rewardCategory, setRewardCategory] = useState<'none' | 'discount' | 'gifticon'>(
+    toRewardCategory(initialType)
+  )
+  const [discountType, setDiscountType] = useState<'discount_amount' | 'discount_rate'>(
+    initialType === 'discount_rate' ? 'discount_rate' : 'discount_amount'
+  )
+  const [rewardValue, setRewardValue] = useState(business.review_reward_description ?? '')
+
   const { execute, isPending } = useAction(updateBusinessAction, {
-    onSuccess: () => toast.success('설정이 저장되었습니다'),
-    onError: ({ error }) => toast.error(error.serverError ?? '저장에 실패했습니다'),
+    onSuccess: () => toast.success('설정이 저장됐어요!'),
+    onError: ({ error }) => toast.error(error.serverError ?? '저장 못 했어요. 다시 눌러주세요'),
   })
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const form = e.currentTarget
     const data = new FormData(form)
+
+    // 보상 타입 결정
+    let rewardType: string = 'none'
+    if (rewardCategory === 'discount') rewardType = discountType
+    else if (rewardCategory === 'gifticon') rewardType = 'gifticon'
 
     execute({
       name:                      data.get('name') as string,
@@ -42,8 +67,8 @@ export function SettingsForm({ business }: Props) {
       naver_place_url:           data.get('naver_place_url') as string,
       google_place_url:          data.get('google_place_url') as string,
       youtube_url:               data.get('youtube_url') as string,
-      review_reward_type:        data.get('review_reward_type') as string,
-      review_reward_description: data.get('review_reward_description') as string,
+      review_reward_type:        rewardType,
+      review_reward_description: rewardCategory === 'none' ? '' : rewardValue,
     })
   }
 
@@ -138,43 +163,125 @@ export function SettingsForm({ business }: Props) {
       <div className="rounded-lg border bg-card p-5 space-y-4">
         <div>
           <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">후기 보상</h2>
-          <p className="text-xs text-muted-foreground mt-1">후기 작성 고객에게 자동 안내할 혜택을 설정하세요</p>
+          <p className="text-xs text-muted-foreground mt-1">후기를 남긴 고객에게 드릴 혜택을 설정하세요</p>
         </div>
 
+        {/* 보상 유형 선택 */}
         <div className="space-y-2">
           <Label>보상 유형</Label>
           <div className="grid grid-cols-3 gap-2">
             {[
-              { value: 'none',     label: '없음' },
-              { value: 'discount', label: '할인 쿠폰' },
-              { value: 'other',    label: '기타 혜택' },
+              { value: 'none' as const,     label: '없음' },
+              { value: 'discount' as const, label: '할인' },
+              { value: 'gifticon' as const, label: '기프티콘' },
             ].map((opt) => (
-              <label key={opt.value} className="relative">
-                <input
-                  type="radio"
-                  name="review_reward_type"
-                  value={opt.value}
-                  defaultChecked={business.review_reward_type === opt.value}
-                  className="peer sr-only"
-                />
-                <div className="h-10 flex items-center justify-center rounded-lg border text-sm cursor-pointer peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:text-primary peer-checked:font-medium hover:bg-muted transition-colors">
-                  {opt.label}
-                </div>
-              </label>
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  setRewardCategory(opt.value)
+                  setRewardValue('')
+                }}
+                className={`h-10 flex items-center justify-center rounded-lg border text-sm transition-colors ${
+                  rewardCategory === opt.value
+                    ? 'border-primary bg-primary/5 text-primary font-medium'
+                    : 'hover:bg-muted'
+                }`}
+              >
+                {opt.label}
+              </button>
             ))}
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="review_reward_description">보상 내용</Label>
-          <Input
-            id="review_reward_description"
-            name="review_reward_description"
-            defaultValue={business.review_reward_description ?? ''}
-            placeholder="예: 다음 방문 10% 할인 쿠폰을 드립니다"
-          />
-          <p className="text-xs text-muted-foreground">고객 인증 페이지와 사장님 알림에 표시됩니다</p>
-        </div>
+        {/* 할인 세부 설정 */}
+        {rewardCategory === 'discount' && (
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>할인 방식</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: 'discount_amount' as const, label: '금액 할인', placeholder: '예: 5000', suffix: '원' },
+                  { value: 'discount_rate' as const,   label: '할인율',   placeholder: '예: 10',   suffix: '%' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      setDiscountType(opt.value)
+                      setRewardValue('')
+                    }}
+                    className={`h-10 flex items-center justify-center rounded-lg border text-sm transition-colors ${
+                      discountType === opt.value
+                        ? 'border-primary bg-primary/5 text-primary font-medium'
+                        : 'hover:bg-muted'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 금액/율 입력 */}
+            {discountType === 'discount_amount' ? (
+              <div className="space-y-1.5">
+                <Label htmlFor="reward_value">다음 방문 시 할인 금액</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="reward_value"
+                    inputMode="numeric"
+                    placeholder="5000"
+                    value={rewardValue}
+                    onChange={(e) => setRewardValue(e.target.value.replace(/[^0-9]/g, ''))}
+                    className="text-right"
+                  />
+                  <span className="text-sm text-muted-foreground shrink-0">원</span>
+                </div>
+                {rewardValue && (
+                  <p className="text-xs text-primary">→ 고객에게 표시: 재방문 시 {Number(rewardValue).toLocaleString()}원 할인해 드려요</p>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="reward_value">다음 방문 시 할인율</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="reward_value"
+                    inputMode="numeric"
+                    placeholder="10"
+                    value={rewardValue}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/[^0-9]/g, '')
+                      if (Number(v) <= 100) setRewardValue(v)
+                    }}
+                    className="text-right"
+                  />
+                  <span className="text-sm text-muted-foreground shrink-0">%</span>
+                </div>
+                {rewardValue && (
+                  <p className="text-xs text-primary">→ 고객에게 표시: 재방문 시 {rewardValue}% 할인해 드려요</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 기프티콘 세부 설정 */}
+        {rewardCategory === 'gifticon' && (
+          <div className="space-y-1.5">
+            <Label htmlFor="reward_value">기프티콘 종류</Label>
+            <Input
+              id="reward_value"
+              placeholder="예: 스타벅스 아메리카노, 편의점 5천원권"
+              value={rewardValue}
+              onChange={(e) => setRewardValue(e.target.value)}
+            />
+            {rewardValue && (
+              <p className="text-xs text-primary">→ 고객에게 표시: 후기 작성 시 {rewardValue} 기프티콘을 드려요</p>
+            )}
+          </div>
+        )}
       </div>
 
       <Button type="submit" disabled={isPending} className="w-full">

@@ -8,8 +8,6 @@ import { generatePostImage } from '@/lib/ai/image-gen'
 import { revalidatePath } from 'next/cache'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
-import { createNaverBlogDraft, markdownToNaverHtml } from '@/lib/naver/blog'
-import { generateNaverContent } from '@/lib/ai/naver-content'
 import { generateSocialContent } from '@/lib/ai/social-content'
 
 // 공통: 현재 유저의 business_id 조회
@@ -27,35 +25,6 @@ async function getBusinessId() {
 
   if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
   return { db, businessId: profile.business_id }
-}
-
-// GEO 포스트 → 네이버 SEO 버전 생성 후 DB 저장 (실패해도 무시)
-async function tryGenerateAndSaveNaverContent(
-  db: ReturnType<typeof createServiceClient>,
-  postId: string,
-  businessName: string,
-  address: string | null,
-  title: string,
-  content: string,
-) {
-  try {
-    const naver = await generateNaverContent({
-      businessName,
-      address,
-      geoTitle: title,
-      geoContent: content,
-    })
-    await db
-      .from('biz_posts')
-      .update({
-        naver_title:   naver.title,
-        naver_content: naver.content,
-        naver_tags:    naver.tags,
-      })
-      .eq('id', postId)
-  } catch {
-    // 네이버 변환 실패는 무시 — GEO 포스팅은 정상 발행됨
-  }
 }
 
 // 당근마켓·인스타그램 버전 자동 생성 후 DB 저장 (실패해도 무시)
@@ -79,31 +48,6 @@ async function tryGenerateAndSaveSocialContent(
       .eq('id', postId)
   } catch {
     // 소셜 변환 실패는 무시 — GEO 포스팅은 정상 발행됨
-  }
-}
-
-// 네이버 블로그 초안 생성 (실패해도 포스팅은 계속 진행)
-async function tryCreateNaverDraft(
-  db: ReturnType<typeof createServiceClient>,
-  businessId: string,
-  title: string,
-  content: string,
-) {
-  try {
-    const { data: biz } = await db
-      .from('businesses')
-      .select('naver_blog_id, naver_blog_api_key')
-      .eq('id', businessId)
-      .maybeSingle()
-
-    if (!biz?.naver_blog_id || !biz?.naver_blog_api_key) return
-
-    await createNaverBlogDraft(
-      { blogId: biz.naver_blog_id, apiKey: biz.naver_blog_api_key },
-      { title, content: markdownToNaverHtml(content) },
-    )
-  } catch {
-    // 네이버 초안 실패는 무시 — 퀄리오 포스팅은 정상 발행
   }
 }
 
@@ -195,14 +139,8 @@ export const generatePostAction = action
 
     if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
 
-    // 네이버 SEO 버전 + 소셜 버전 자동 생성 (실패해도 무시)
-    await Promise.all([
-      tryGenerateAndSaveNaverContent(db, post.id, business.name, business.address, postContent.title, fullContent),
-      tryGenerateAndSaveSocialContent(db, post.id, business.name, business.address, postContent.title, fullContent),
-    ])
-
-    // 네이버 블로그 연동 시 초안 자동 생성 (실패해도 무시)
-    await tryCreateNaverDraft(db, businessId, postContent.title, fullContent)
+    // 소셜 버전 자동 생성 (실패해도 무시)
+    await tryGenerateAndSaveSocialContent(db, post.id, business.name, business.address, postContent.title, fullContent)
 
     revalidatePath('/dashboard/marketing')
     return { success: true, postId: post.id, slug: post.slug, postContent }
@@ -455,16 +393,10 @@ export const publishTodayAction = action
 
       if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
 
-      // 네이버 SEO 버전 + 소셜 버전 자동 생성 (실패해도 무시)
+      // 소셜 버전 자동 생성 (실패해도 무시)
       if (savedPost?.id) {
-        await Promise.all([
-          tryGenerateAndSaveNaverContent(db, savedPost.id, business.name, business.address, postContent.title, fullContent),
-          tryGenerateAndSaveSocialContent(db, savedPost.id, business.name, business.address, postContent.title, fullContent),
-        ])
+        await tryGenerateAndSaveSocialContent(db, savedPost.id, business.name, business.address, postContent.title, fullContent)
       }
-
-      // 네이버 블로그 연동 시 초안 자동 생성 (실패해도 무시)
-      await tryCreateNaverDraft(db, businessId, postContent.title, fullContent)
 
       publishedTitles.push(postContent.title)
       titles.push(postContent.title)

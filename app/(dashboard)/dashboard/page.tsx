@@ -2,6 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { QuoteLinkShare } from '@/components/dashboard/quote-link-share'
+import { WeeklyChart } from '@/components/dashboard/weekly-chart'
 import {
   AlertCircle, Calendar, ChevronRight, RefreshCw,
   Wallet, ClipboardList, Star, Phone,
@@ -348,49 +349,7 @@ export default async function DashboardPage() {
 
         {/* 주간 매출 추이 */}
         <div className="bg-white rounded-xl border border-border p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-sm font-semibold">최근 7일 매출</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                합계 {weeklyTotal > 0 ? `${weeklyTotal.toLocaleString('ko-KR')}원` : '—'}
-              </p>
-            </div>
-          </div>
-
-          {/* 바 차트 */}
-          <div className="flex items-end gap-1.5 h-20 mb-2">
-            {weeklyData.map((day) => {
-              const barH = day.revenue > 0
-                ? Math.max(Math.round((day.revenue / maxWeeklyRevenue) * 72), 4)
-                : 2
-              return (
-                <div key={day.date} className="flex-1 flex flex-col items-center gap-0">
-                  <div
-                    className={`w-full rounded-t transition-all ${
-                      day.isToday
-                        ? 'bg-primary'
-                        : day.revenue > 0
-                          ? 'bg-primary/40'
-                          : 'bg-border'
-                    }`}
-                    style={{ height: `${barH}px` }}
-                  />
-                </div>
-              )
-            })}
-          </div>
-          <div className="flex gap-1.5">
-            {weeklyData.map((day) => (
-              <div key={day.date} className="flex-1 text-center">
-                <span className={`text-[10px] ${day.isToday ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
-                  {day.dayLabel}
-                </span>
-              </div>
-            ))}
-          </div>
-          {weeklyTotal === 0 && (
-            <p className="text-xs text-muted-foreground/60 text-center mt-2">이번 주 완료된 예약이 없어요</p>
-          )}
+          <WeeklyChart data={weeklyData} maxRevenue={maxWeeklyRevenue} total={weeklyTotal} />
         </div>
 
         {/* 예약 파이프라인 + 고객 현황 */}
