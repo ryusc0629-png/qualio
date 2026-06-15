@@ -324,7 +324,7 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>서비스 수정</DialogTitle>
           </DialogHeader>
