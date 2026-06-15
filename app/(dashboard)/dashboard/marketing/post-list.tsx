@@ -65,6 +65,7 @@ interface PostListProps {
   monthlyTarget: number
   autoPostLimit: number
   planId: string
+  isTodayComplete: boolean
 }
 
 interface ScheduleSlot {
@@ -134,12 +135,15 @@ function buildSchedule(target: number, posts: Post[], suggestions: TopicSuggesti
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
-export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId }: PostListProps) {
+export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete }: PostListProps) {
   const [posts] = useState(initialPosts)
   const [showEditor, setShowEditor] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
   const [suggestions, setSuggestions] = useState<TopicSuggestion[] | null>(null)
-  const [publishResult, setPublishResult] = useState<{ published: number; message?: string } | null>(null)
+  // 오늘 이미 발행 완료된 경우 버튼 초기 상태를 완료로 설정
+  const [publishResult, setPublishResult] = useState<{ published: number; message?: string } | null>(
+    isTodayComplete ? { published: 0, message: '오늘 발행 완료!' } : null
+  )
 
   const now = new Date()
   const postsThisMonth = posts.filter((p) => {

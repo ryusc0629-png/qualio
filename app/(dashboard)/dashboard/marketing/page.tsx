@@ -1,7 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { PostList } from './post-list'
-import { getAutoPostLimit } from '@/lib/config/plans'
+import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
 export default async function MarketingPage() {
@@ -42,6 +42,17 @@ export default async function MarketingPage() {
   const posts = postsResult.data ?? []
   const planId = ((subResult.data?.plan as PlanId) ?? 'beta')
   const autoPostLimit = getAutoPostLimit(planId)
+  const autoDailyPostLimit = getAutoDailyPostLimit(planId)
+
+  // 오늘 KST 기준 발행 건수 → 일 한도 초과 여부 확인
+  const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  const todayKSTStr = nowKST.toISOString().slice(0, 10)
+  const todayPostCount = posts.filter((p) => {
+    if (!p.published) return false
+    const pKST = new Date(new Date(p.published_at).getTime() + 9 * 60 * 60 * 1000)
+    return pKST.toISOString().slice(0, 10) === todayKSTStr
+  }).length
+  const isTodayComplete = todayPostCount >= autoDailyPostLimit
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -59,6 +70,7 @@ export default async function MarketingPage() {
         monthlyTarget={business?.monthly_post_target ?? 0}
         autoPostLimit={autoPostLimit}
         planId={planId}
+        isTodayComplete={isTodayComplete}
       />
     </div>
   )
