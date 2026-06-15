@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
+import { generatePostImage } from '@/lib/ai/image-gen'
 import { revalidatePath } from 'next/cache'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
@@ -146,6 +147,11 @@ export const generatePostAction = action
       : ''
     const fullContent = metaBlock + postContent.content
 
+    // 이미지 자동 생성 (실패해도 포스팅 진행)
+    const imageUrl = postContent.imagePrompt
+      ? await generatePostImage(postContent.imagePrompt)
+      : null
+
     // DB 저장
     const { data: post, error } = await db
       .from('biz_posts')
@@ -155,6 +161,7 @@ export const generatePostAction = action
         title: postContent.title,
         content: fullContent,
         summary: postContent.summary,
+        image_url: imageUrl,
         ai_generated: true,
         published: true,
       })
@@ -401,12 +408,19 @@ export const publishTodayAction = action
         : ''
 
       const fullContent = metaBlock + postContent.content
+
+      // 이미지 자동 생성 (실패해도 포스팅 진행)
+      const imageUrl = postContent.imagePrompt
+        ? await generatePostImage(postContent.imagePrompt)
+        : null
+
       const { data: savedPost, error } = await db.from('biz_posts').insert({
         business_id: businessId,
         slug,
         title: postContent.title,
         content: fullContent,
         summary: postContent.summary,
+        image_url: imageUrl,
         ai_generated: true,
         published: true,
       }).select('id').single()

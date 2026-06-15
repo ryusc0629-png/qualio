@@ -1,6 +1,8 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { Suspense } from 'react'
 import { PostList } from './post-list'
+import { MarketingStats } from './marketing-stats'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
@@ -72,6 +74,16 @@ export default async function MarketingPage() {
         planId={planId}
         isTodayComplete={isTodayComplete}
       />
+
+      <div className="border-t pt-6">
+        <Suspense fallback={
+          <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
+            성과 데이터를 불러오는 중...
+          </div>
+        }>
+          <MarketingStats businessId={profile.business_id} />
+        </Suspense>
+      </div>
     </div>
   )
 }

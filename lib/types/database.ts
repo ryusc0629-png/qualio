@@ -383,6 +383,45 @@ export type Database = {
           },
         ]
       }
+      post_views: {
+        Row: {
+          id: string
+          post_id: string
+          business_id: string
+          source: string
+          viewed_at: string
+        }
+        Insert: {
+          id?: string
+          post_id: string
+          business_id: string
+          source?: string
+          viewed_at?: string
+        }
+        Update: {
+          id?: string
+          post_id?: string
+          business_id?: string
+          source?: string
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_views_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "biz_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_views_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           id: string

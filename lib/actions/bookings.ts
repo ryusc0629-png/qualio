@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { sendRescheduleAlimtalk } from '@/lib/kakao/alimtalk'
+import { sendRescheduleAlimtalk, sendReceiptAlimtalk } from '@/lib/kakao/alimtalk'
 
 // 한국 전화번호 검증
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
@@ -52,20 +52,49 @@ export const addBookingAction = action
 
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
-    const { error } = await db.from('bookings').insert({
+    const scheduledAt = new Date(parsedInput.scheduled_at).toISOString()
+
+    const { error, data: newBooking } = await db.from('bookings').insert({
       business_id: profile.business_id,
       quote_id: null,
       customer_name: parsedInput.customer_name,
       customer_phone: parsedInput.customer_phone,
       service_address: parsedInput.service_address,
-      scheduled_at: new Date(parsedInput.scheduled_at).toISOString(),
+      scheduled_at: scheduledAt,
       selected_tier: 'good',
       final_price: parsedInput.final_price,
       memo: parsedInput.memo ?? null,
       status: 'confirmed',
-    })
+    }).select('id').single()
 
     if (error) throw new Error('[APP] 예약 추가에 실패했습니다')
+
+    // 영수증 알림톡 발송 (템플릿 미설정 시 자동 스킵)
+    if (newBooking) {
+      try {
+        const { data: business } = await db
+          .from('businesses')
+          .select('name, phone')
+          .eq('id', profile.business_id)
+          .maybeSingle()
+
+        if (business) {
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+          await sendReceiptAlimtalk({
+            customerPhone: parsedInput.customer_phone,
+            customerName:  parsedInput.customer_name,
+            businessName:  business.name,
+            businessPhone: business.phone ?? null,
+            cleaningType:  parsedInput.cleaning_type,
+            scheduledAt,
+            finalPrice:    parsedInput.final_price,
+            receiptUrl:    `${appUrl}/q/${profile.business_id}/receipt/${newBooking.id}`,
+          })
+        }
+      } catch (e) {
+        console.error('[Alimtalk] 영수증 알림톡 발송 실패 — 예약은 정상 완료됨', e)
+      }
+    }
 
     revalidatePath('/dashboard/bookings')
     return { success: true }

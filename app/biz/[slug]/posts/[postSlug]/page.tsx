@@ -1,9 +1,11 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft, Calendar, Clock, MapPin, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { detectViewSource } from '@/lib/utils/detect-view-source'
 
 interface Props {
   params: Promise<{ slug: string; postSlug: string }>
@@ -195,6 +197,13 @@ export default async function PostPage({ params }: Props) {
     .maybeSingle()
 
   if (!post) notFound()
+
+  // 조회 기록 — fire-and-forget (렌더링 지연 없음)
+  const headersList = await headers()
+  const referer = headersList.get('referer') ?? ''
+  const userAgent = headersList.get('user-agent') ?? ''
+  const viewSource = detectViewSource(referer, userAgent)
+  void db.from('post_views').insert({ post_id: post.id, business_id: business.id, source: viewSource })
 
   const { data: relatedPosts } = await db
     .from('biz_posts')

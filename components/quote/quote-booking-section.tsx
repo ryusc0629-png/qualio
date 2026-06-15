@@ -95,6 +95,7 @@ export function QuoteBookingSection({
 }: QuoteBookingSectionProps) {
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
   const formRef = useRef<HTMLDivElement>(null)
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<BookingInput>({
@@ -106,7 +107,10 @@ export function QuoteBookingSection({
   })
 
   const { execute, isPending } = useAction(createBookingAction, {
-    onSuccess: () => setDone(true),
+    onSuccess: ({ data }) => {
+      setDone(true)
+      if (data?.receiptUrl) setReceiptUrl(data.receiptUrl)
+    },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
@@ -120,6 +124,16 @@ export function QuoteBookingSection({
           <p className="font-bold text-lg text-[#1A1A1A]">예약이 완료됐어요!</p>
           <p className="text-sm text-[#8D8D8D]">이제 퀄리오가 알아서 챙겨드릴게요.</p>
         </div>
+
+        {/* 영수증 확인 버튼 */}
+        {receiptUrl && (
+          <a
+            href={receiptUrl}
+            className="flex items-center justify-center gap-2 w-full h-12 rounded-2xl bg-primary text-white font-bold text-sm"
+          >
+            예약 영수증 확인하기
+          </a>
+        )}
 
         {/* 퀄리오 자동 처리 안내 */}
         <div className="space-y-2">

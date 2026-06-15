@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { AddClientForm } from '@/components/dashboard/add-client-form'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { DeleteCustomerButton } from '@/components/dashboard/delete-customer-button'
@@ -8,7 +9,7 @@ import { LeadStatusSelect } from '@/components/dashboard/lead-status-select'
 import { RegisterFromLeadButton } from '@/components/dashboard/register-from-lead-button'
 import { ContractStatusSelect } from '@/components/dashboard/contract-status-select'
 import { formatFrequency } from '@/lib/utils/frequency'
-import { Phone, MapPin, Calendar, TrendingUp } from 'lucide-react'
+import { Phone, MapPin, Calendar, TrendingUp, ChevronRight } from 'lucide-react'
 
 // ── 타입 ────────────────────────────────────────────────
 
@@ -298,7 +299,12 @@ export default async function ClientsPage() {
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold">{customer.name}</p>
+                        <Link
+                          href={`/dashboard/clients/${customer.id}`}
+                          className="font-semibold hover:text-primary hover:underline transition-colors"
+                        >
+                          {customer.name}
+                        </Link>
                         {customer.category && (
                           <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
                             {customer.category}
@@ -364,6 +370,13 @@ export default async function ClientsPage() {
 
                       {/* 액션 */}
                       <div className="flex items-center gap-1">
+                        <Link
+                          href={`/dashboard/clients/${customer.id}`}
+                          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border hover:border-primary/30"
+                        >
+                          이력
+                          <ChevronRight className="h-3 w-3" />
+                        </Link>
                         {customer.phone && (
                           <EditCustomerButton customer={{ ...customer, phone: customer.phone }} />
                         )}
