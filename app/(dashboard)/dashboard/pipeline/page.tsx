@@ -22,7 +22,7 @@ export default async function PipelinePage({
 
   if (!profile?.business_id) redirect('/onboarding')
 
-  const { data: leads } = await db
+  const { data: leads, error: leadsError } = await db
     .rpc('get_leads_for_pipeline', { p_business_id: profile.business_id })
 
   return (
@@ -33,6 +33,17 @@ export default async function PipelinePage({
           상담 중인 거래처와 일반 고객을 단계별로 관리해요
         </p>
       </div>
+
+      {leadsError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 break-all">
+          DB오류: {leadsError.message}
+        </div>
+      )}
+      {!leadsError && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
+          조회됨: {leads?.length ?? 0}건 | bizId: {profile.business_id.slice(0, 8)}...
+        </div>
+      )}
 
       <PipelineList
         leads={leads ?? []}
