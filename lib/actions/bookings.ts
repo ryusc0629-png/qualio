@@ -88,6 +88,18 @@ export const updateBookingStatusAction = action
 
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
+    // 완료 처리 시 고객 정보 미리 조회 (upsert용)
+    let bookingForCustomer: { customer_name: string; customer_phone: string | null; service_address: string | null } | null = null
+    if (parsedInput.status === 'completed') {
+      const { data } = await db
+        .from('bookings')
+        .select('customer_name, customer_phone, service_address')
+        .eq('id', parsedInput.id)
+        .eq('business_id', profile.business_id)
+        .maybeSingle()
+      bookingForCustomer = data
+    }
+
     // 본인 업체 예약인지 확인 후 상태 업데이트
     const { error } = await db
       .from('bookings')
@@ -100,7 +112,28 @@ export const updateBookingStatusAction = action
 
     if (error) throw new Error('[APP] 상태 변경에 실패했습니다')
 
-    revalidatePath('/dashboard/bookings')
+    // 청소 완료 → 고객 DB 자동 upsert (전화번호 기준, 이미 있으면 스킵)
+    if (parsedInput.status === 'completed' && bookingForCustomer?.customer_phone) {
+      const { data: existing } = await db
+        .from('customers')
+        .select('id')
+        .eq('business_id', profile.business_id)
+        .eq('phone', bookingForCustomer.customer_phone)
+        .maybeSingle()
+
+      if (!existing) {
+        await db.from('customers').insert({
+          business_id: profile.business_id,
+          name: bookingForCustomer.customer_name,
+          phone: bookingForCustomer.customer_phone,
+          address: bookingForCustomer.service_address ?? null,
+          type: 'individual',
+        })
+      }
+    }
+
+    revalidatePath('/dashboard/work')
+    revalidatePath('/dashboard/clients')
     return { success: true }
   })
 
