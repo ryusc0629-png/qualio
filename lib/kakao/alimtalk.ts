@@ -387,7 +387,7 @@ export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): 
         '#{업체연락처}': contactInfo,
       },
       // V2 버튼: 전화 연결 + 일정 변경 요청
-      ...(useV2 && params.businessPhone && rescheduleUrl ? {
+      ...(useV2 && params.businessPhone && rescheduleUrl !== undefined ? {
         buttons: [
           {
             buttonType: 'WL' as const,
@@ -403,6 +403,54 @@ export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): 
           },
         ],
       } : {}),
+    },
+  })
+}
+
+// 후기 인증 알림 파라미터 (사장님에게 발송)
+export interface ReviewClaimedParams {
+  ownerPhone:          string  // 사장님 전화번호
+  customerName:        string
+  businessName:        string
+  rewardDescription:   string | null
+  dashboardUrl:        string
+}
+
+// 고객이 후기 인증 시 사장님에게 알림톡 발송
+export async function sendReviewClaimedAlimtalk(params: ReviewClaimedParams): Promise<void> {
+  const apiKey     = process.env.SOLAPI_API_KEY
+  const apiSecret  = process.env.SOLAPI_API_SECRET
+  const sender     = process.env.SOLAPI_SENDER_PHONE
+  const templateId = process.env.SOLAPI_TEMPLATE_ID_REVIEW_CLAIMED
+  const pfId       = process.env.SOLAPI_KAKAO_PF_ID
+
+  if (!apiKey || !apiSecret || !sender || !templateId || !pfId) {
+    console.warn('[Alimtalk] REVIEW_CLAIMED 템플릿 미설정 — 발송 생략')
+    return
+  }
+
+  const service = new SolapiMessageService(apiKey, apiSecret)
+
+  await service.sendOne({
+    to:   params.ownerPhone,
+    from: sender,
+    type: 'ATA',
+    kakaoOptions: {
+      pfId,
+      templateId,
+      variables: {
+        '#{업체명}':   params.businessName,
+        '#{고객명}':   params.customerName,
+        '#{보상내용}': params.rewardDescription ?? '없음',
+      },
+      buttons: [
+        {
+          buttonType: 'WL' as const,
+          buttonName: '대시보드 확인',
+          linkMo: params.dashboardUrl,
+          linkPc: params.dashboardUrl,
+        },
+      ],
     },
   })
 }

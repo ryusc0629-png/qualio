@@ -11,6 +11,7 @@ import {
   Settings,
   Users,
   Megaphone,
+  CalendarDays,
   X,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -25,8 +26,9 @@ interface SidebarProps {
 
 const navItems = [
   { href: '/dashboard',         label: '대시보드',   icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/work',    label: '업무',       icon: ClipboardList },
-  { href: '/dashboard/clients', label: '고객',       icon: Users },
+  { href: '/dashboard/work',     label: '업무',   icon: ClipboardList },
+  { href: '/dashboard/schedule', label: '일정',   icon: CalendarDays },
+  { href: '/dashboard/clients',  label: '고객',   icon: Users },
   { href: '/dashboard/services',label: '서비스 설정', icon: Wrench },
   { href: '/dashboard/marketing',label: '마케팅',    icon: Megaphone },
   { href: '/dashboard/settings',label: '설정',       icon: Settings },

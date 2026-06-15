@@ -271,6 +271,8 @@ export type Database = {
           seo_faqs: Json
           seo_generated_at: string | null
           monthly_post_target: number
+          review_reward_type: string
+          review_reward_description: string | null
         }
         Insert: {
           address?: string | null
@@ -295,6 +297,8 @@ export type Database = {
           seo_faqs?: Json
           seo_generated_at?: string | null
           monthly_post_target?: number
+          review_reward_type?: string
+          review_reward_description?: string | null
         }
         Update: {
           address?: string | null
@@ -319,6 +323,8 @@ export type Database = {
           seo_faqs?: Json
           seo_generated_at?: string | null
           monthly_post_target?: number
+          review_reward_type?: string
+          review_reward_description?: string | null
         }
         Relationships: [
           {
@@ -394,6 +400,60 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "biz_posts_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      review_claims: {
+        Row: {
+          id: string
+          booking_id: string
+          business_id: string
+          customer_phone: string
+          token: string
+          is_followup: boolean
+          sent_at: string
+          clicked_at: string | null
+          claimed_at: string | null
+          reward_sent_at: string | null
+        }
+        Insert: {
+          id?: string
+          booking_id: string
+          business_id: string
+          customer_phone: string
+          token: string
+          is_followup?: boolean
+          sent_at?: string
+          clicked_at?: string | null
+          claimed_at?: string | null
+          reward_sent_at?: string | null
+        }
+        Update: {
+          id?: string
+          booking_id?: string
+          business_id?: string
+          customer_phone?: string
+          token?: string
+          is_followup?: boolean
+          sent_at?: string
+          clicked_at?: string | null
+          claimed_at?: string | null
+          reward_sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_claims_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_claims_business_id_fkey"
             columns: ["business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
