@@ -5,11 +5,8 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 
-const TIME_OPTIONS = [
-  '08:00', '09:00', '10:00', '11:00',
-  '12:00', '13:00', '14:00', '15:00',
-  '16:00', '17:00', '18:00',
-]
+const HOUR_OPTIONS = Array.from({ length: 17 }, (_, i) => i + 6) // 6 ~ 22
+const MINUTE_OPTIONS = ['00', '30']
 
 interface DateTimePickerProps {
   date: string   // "YYYY-MM-DD"
@@ -162,26 +159,73 @@ export function DateTimePicker({ date, time, onDateChange, onTimeChange }: DateT
         </div>
       </div>
 
-      {/* 시간 선택 버튼 */}
-      <div>
-        <p className="text-xs font-medium text-muted-foreground mb-2">시간 선택</p>
-        <div className="grid grid-cols-4 gap-1.5">
-          {TIME_OPTIONS.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => onTimeChange(t)}
-              className={[
-                'rounded-lg border py-2 text-xs font-medium transition-colors',
-                time === t
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border hover:border-primary/40 hover:bg-muted',
-              ].join(' ')}
-            >
-              {t}
-            </button>
-          ))}
+      {/* 시간 선택 */}
+      <div className="space-y-3">
+        <p className="text-xs font-medium text-muted-foreground">시간 선택</p>
+
+        {/* 시 선택 */}
+        <div>
+          <p className="text-xs text-muted-foreground/70 mb-1.5">시</p>
+          <div className="flex flex-wrap gap-1.5">
+            {HOUR_OPTIONS.map((h) => {
+              const hStr = String(h).padStart(2, '0')
+              const selectedHour = time ? time.split(':')[0] : ''
+              return (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => {
+                    const min = time ? time.split(':')[1] : '00'
+                    onTimeChange(`${hStr}:${min}`)
+                  }}
+                  className={[
+                    'rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors',
+                    selectedHour === hStr
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:border-primary/40 hover:bg-muted',
+                  ].join(' ')}
+                >
+                  {h}시
+                </button>
+              )
+            })}
+          </div>
         </div>
+
+        {/* 분 선택 */}
+        <div>
+          <p className="text-xs text-muted-foreground/70 mb-1.5">분</p>
+          <div className="flex gap-2">
+            {MINUTE_OPTIONS.map((m) => {
+              const selectedMin = time ? time.split(':')[1] : ''
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    const hour = time ? time.split(':')[0] : '09'
+                    onTimeChange(`${hour}:${m}`)
+                  }}
+                  className={[
+                    'rounded-lg border px-5 py-2 text-xs font-medium transition-colors',
+                    selectedMin === m
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:border-primary/40 hover:bg-muted',
+                  ].join(' ')}
+                >
+                  {m}분
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* 선택된 시간 표시 */}
+        {time && (
+          <p className="text-xs text-muted-foreground">
+            선택된 시간: <span className="font-semibold text-primary">{time}</span>
+          </p>
+        )}
       </div>
     </div>
   )

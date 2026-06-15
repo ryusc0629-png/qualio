@@ -15,7 +15,25 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DateTimePicker } from '@/components/ui/date-time-picker'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle, Search } from 'lucide-react'
+
+function openAddressSearch(onSelect: (address: string) => void) {
+  const run = () => {
+    new window.daum!.Postcode({
+      oncomplete: (data) => {
+        const extra = data.buildingName ? ` (${data.buildingName})` : ''
+        onSelect(data.address + extra)
+      },
+    }).open()
+  }
+
+  if (window.daum?.Postcode) { run(); return }
+
+  const script = document.createElement('script')
+  script.src = '//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js'
+  script.onload = run
+  document.head.appendChild(script)
+}
 
 const TIER_OPTIONS = [
   { value: 'good',   label: '기본' },
@@ -44,6 +62,7 @@ export function ConfirmBookingButton({
   const [time, setTime]             = useState('10:00')
   const [finalPrice, setFinalPrice] = useState<string>('')
   const [address, setAddress]       = useState('')
+  const [addressDetail, setAddressDetail] = useState('')
 
   const handleTierChange = (value: 'good' | 'better' | 'best') => {
     setTier(value)
@@ -65,12 +84,13 @@ export function ConfirmBookingButton({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!date) { toast.error('날짜를 선택해주세요'); return }
+    const fullAddress = addressDetail ? `${address} — ${addressDetail}` : address
     execute({
       quote_id:        quoteId,
       scheduled_at:    `${date}T${time}:00+09:00`,
       selected_tier:   tier,
       final_price:     Number(finalPrice),
-      service_address: address || undefined,
+      service_address: fullAddress || undefined,
     })
   }
 
@@ -162,13 +182,24 @@ export function ConfirmBookingButton({
 
           {/* 주소 */}
           <div className="space-y-1.5">
-            <Label htmlFor="address">청소 주소</Label>
-            <Input
-              id="address"
-              placeholder="예: 서울시 강남구 역삼동 123-45"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-            />
+            <Label>청소 주소</Label>
+            <button
+              type="button"
+              onClick={() => openAddressSearch((addr) => { setAddress(addr); setAddressDetail('') })}
+              className="w-full h-10 rounded-md border border-input bg-background px-3 flex items-center justify-between text-sm text-left hover:bg-muted transition-colors"
+            >
+              <span className={address ? 'text-foreground' : 'text-muted-foreground'}>
+                {address || '주소 검색하기'}
+              </span>
+              <Search className="h-4 w-4 text-primary shrink-0" />
+            </button>
+            {address && (
+              <Input
+                placeholder="상세 주소 입력 (예: 101동 1234호)"
+                value={addressDetail}
+                onChange={(e) => setAddressDetail(e.target.value)}
+              />
+            )}
           </div>
 
           <Button type="submit" className="w-full h-12" disabled={isPending}>
