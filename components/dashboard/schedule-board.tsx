@@ -21,6 +21,7 @@ import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2 } from 'luci
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
 import { assignBookingAction, addWorkerAction, deleteWorkerAction } from '@/lib/actions/workers'
+import { BookingDetailSheet } from '@/components/dashboard/booking-detail-sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -132,7 +133,15 @@ function BookingCard({
 
 // ── 드래그 가능한 카드 래퍼 ──────────────────────────────
 
-function DraggableBookingCard({ booking, color }: { booking: Booking; color: string }) {
+function DraggableBookingCard({
+  booking,
+  color,
+  onClick,
+}: {
+  booking: Booking
+  color: string
+  onClick: () => void
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: booking.id,
     data: { booking },
@@ -143,6 +152,7 @@ function DraggableBookingCard({ booking, color }: { booking: Booking; color: str
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform) }}
       className="cursor-grab active:cursor-grabbing touch-none"
+      onClick={onClick}
       {...listeners}
       {...attributes}
     >
@@ -295,6 +305,9 @@ export function ScheduleBoard({
   const [bookings, setBookings] = useState(initialBookings)
   const [activeBooking, setActiveBooking] = useState<Booking | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null)
+
+  const selectedBooking = bookings.find((b) => b.id === selectedBookingId) ?? null
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -335,6 +348,24 @@ export function ScheduleBoard({
     if (!workerId) return '#94a3b8'
     return workers.find((w) => w.id === workerId)?.color ?? '#94a3b8'
   }, [workers])
+
+  // Sheet 콜백 — 낙관적 업데이트
+  const handleSheetWorkerChange = (bookingId: string, newWorkerId: string | null) => {
+    setBookings((prev) =>
+      prev.map((b) => b.id === bookingId ? { ...b, worker_id: newWorkerId } : b)
+    )
+  }
+
+  const handleSheetTimeChange = (bookingId: string, newScheduledAt: string) => {
+    setBookings((prev) =>
+      prev.map((b) => b.id === bookingId ? { ...b, scheduled_at: newScheduledAt } : b)
+    )
+  }
+
+  const handleSheetCancel = (bookingId: string) => {
+    setBookings((prev) => prev.filter((b) => b.id !== bookingId))
+    setSelectedBookingId(null)
+  }
 
   const handleDragStart = (event: DragStartEvent) => {
     const booking = bookings.find((b) => b.id === event.active.id)
@@ -419,12 +450,11 @@ export function ScheduleBoard({
         onDragEnd={handleDragEnd}
       >
         <div className="overflow-x-auto -mx-4 px-4 pb-2">
-          <div style={{ minWidth: `${Math.max(700, rows.length * 100 + 120)}px` }}>
+          <div style={{ minWidth: '1050px' }}>
 
             {/* 헤더 행: 요일 */}
             <div
-              className="grid mb-1"
-              style={{ gridTemplateColumns: `140px repeat(7, 1fr)` }}
+              style={{ display: 'grid', gridTemplateColumns: '140px repeat(7, 130px)', marginBottom: '4px' }}
             >
               <div />
               {days.map((day) => (
@@ -445,8 +475,7 @@ export function ScheduleBoard({
               {rows.map((row) => (
                 <div
                   key={String(row.id)}
-                  className="grid items-start"
-                  style={{ gridTemplateColumns: `140px repeat(7, 1fr)` }}
+                  style={{ display: 'grid', gridTemplateColumns: '140px repeat(7, 130px)', alignItems: 'start' }}
                 >
                   {/* 작업자 레이블 */}
                   <div className="flex items-center gap-2 px-2 py-2 min-h-[72px]">
@@ -488,6 +517,7 @@ export function ScheduleBoard({
                             key={b.id}
                             booking={b}
                             color={getWorkerColor(b.worker_id)}
+                            onClick={() => setSelectedBookingId(b.id)}
                           />
                         ))}
                       </DroppableCell>
@@ -520,6 +550,16 @@ export function ScheduleBoard({
           <p className="text-xs mt-1">예약 탭에서 예약을 추가하면 여기 표시돼요</p>
         </div>
       )}
+
+      {/* 예약 상세 Sheet */}
+      <BookingDetailSheet
+        booking={selectedBooking}
+        workers={workers}
+        onClose={() => setSelectedBookingId(null)}
+        onWorkerChange={handleSheetWorkerChange}
+        onTimeChange={handleSheetTimeChange}
+        onCancel={handleSheetCancel}
+      />
     </div>
   )
 }

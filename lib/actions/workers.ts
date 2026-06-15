@@ -69,6 +69,75 @@ export const deleteWorkerAction = action
     return { success: true }
   })
 
+// 예약 시간 변경 (날짜 유지, 시간만 교체)
+export const updateBookingTimeAction = action
+  .schema(z.object({
+    bookingId: z.string().uuid(),
+    newTime:   z.string().regex(/^\d{2}:\d{2}$/, '시간 형식이 올바르지 않습니다'),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { data: booking } = await db
+      .from('bookings')
+      .select('scheduled_at, status')
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+      .maybeSingle()
+
+    if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
+    if (['completed', 'cancelled', 'no_show'].includes(booking.status as string)) {
+      throw new Error('[APP] 완료·취소된 예약은 변경할 수 없습니다')
+    }
+
+    const current = new Date(booking.scheduled_at as string)
+    const [hours, minutes] = parsedInput.newTime.split(':').map(Number)
+    const newScheduledAt = new Date(Date.UTC(
+      current.getUTCFullYear(), current.getUTCMonth(), current.getUTCDate(),
+      hours!, minutes!,
+    )).toISOString()
+
+    const { error } = await db
+      .from('bookings')
+      .update({ scheduled_at: newScheduledAt })
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+
+    if (error) throw new Error('[APP] 시간 변경에 실패했습니다')
+    revalidatePath('/dashboard/schedule')
+    return { success: true, newScheduledAt }
+  })
+
+// 일정 보드에서 예약 취소
+export const cancelBookingFromScheduleAction = action
+  .schema(z.object({ bookingId: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { data: booking } = await db
+      .from('bookings')
+      .select('status')
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+      .maybeSingle()
+
+    if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
+    if (['completed', 'cancelled', 'no_show'].includes(booking.status as string)) {
+      throw new Error('[APP] 이미 완료·취소된 예약입니다')
+    }
+
+    const { error } = await db
+      .from('bookings')
+      .update({ status: 'cancelled', cancelled_at: new Date().toISOString() } as never)
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+
+    if (error) throw new Error('[APP] 예약 취소에 실패했습니다')
+    revalidatePath('/dashboard/schedule')
+    revalidatePath('/dashboard/work')
+    return { success: true }
+  })
+
 // 예약 드래그앤드롭 — 날짜 + 작업자 동시 변경
 export const assignBookingAction = action
   .schema(z.object({
