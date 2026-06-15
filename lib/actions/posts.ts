@@ -7,6 +7,7 @@ import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-cont
 import { revalidatePath } from 'next/cache'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
+import { createNaverBlogDraft, markdownToNaverHtml } from '@/lib/naver/blog'
 
 // 공통: 현재 유저의 business_id 조회
 async function getBusinessId() {
@@ -23,6 +24,31 @@ async function getBusinessId() {
 
   if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
   return { db, businessId: profile.business_id }
+}
+
+// 네이버 블로그 초안 생성 (실패해도 포스팅은 계속 진행)
+async function tryCreateNaverDraft(
+  db: ReturnType<typeof createServiceClient>,
+  businessId: string,
+  title: string,
+  content: string,
+) {
+  try {
+    const { data: biz } = await db
+      .from('businesses')
+      .select('naver_blog_id, naver_blog_api_key')
+      .eq('id', businessId)
+      .maybeSingle()
+
+    if (!biz?.naver_blog_id || !biz?.naver_blog_api_key) return
+
+    await createNaverBlogDraft(
+      { blogId: biz.naver_blog_id, apiKey: biz.naver_blog_api_key },
+      { title, content: markdownToNaverHtml(content) },
+    )
+  } catch {
+    // 네이버 초안 실패는 무시 — 퀄리오 포스팅은 정상 발행
+  }
 }
 
 // AI 포스트 자동 생성 액션
@@ -106,6 +132,9 @@ export const generatePostAction = action
       .single()
 
     if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
+
+    // 네이버 블로그 연동 시 초안 자동 생성 (실패해도 무시)
+    await tryCreateNaverDraft(db, businessId, postContent.title, fullContent)
 
     revalidatePath('/dashboard/marketing')
     return { success: true, postId: post.id, slug: post.slug, postContent }
@@ -349,6 +378,10 @@ export const publishTodayAction = action
       })
 
       if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
+
+      // 네이버 블로그 연동 시 초안 자동 생성 (실패해도 무시)
+      const fullContent = metaBlock + postContent.content
+      await tryCreateNaverDraft(db, businessId, postContent.title, fullContent)
 
       publishedTitles.push(postContent.title)
       titles.push(postContent.title)

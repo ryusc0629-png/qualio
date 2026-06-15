@@ -250,6 +250,8 @@ export type Database = {
           kakao_channel_id: string | null
           logo_url: string | null
           name: string
+          naver_blog_id: string | null
+          naver_blog_api_key: string | null
           naver_place_url: string | null
           youtube_url: string | null
           owner_id: string
@@ -271,6 +273,8 @@ export type Database = {
           kakao_channel_id?: string | null
           logo_url?: string | null
           name: string
+          naver_blog_id?: string | null
+          naver_blog_api_key?: string | null
           naver_place_url?: string | null
           youtube_url?: string | null
           owner_id: string
@@ -292,6 +296,8 @@ export type Database = {
           kakao_channel_id?: string | null
           logo_url?: string | null
           name?: string
+          naver_blog_id?: string | null
+          naver_blog_api_key?: string | null
           naver_place_url?: string | null
           youtube_url?: string | null
           owner_id?: string
