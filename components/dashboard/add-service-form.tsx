@@ -381,13 +381,13 @@ export function AddServiceForm() {
                         onChange={(e) => updateUnitItem(variantKey, idx, 'name', e.target.value)}
                         className="h-9 text-sm flex-1"
                       />
-                      <div className="relative w-32 shrink-0">
+                      <div className="relative w-36 shrink-0">
                         <Input
-                          type="number"
+                          type="text"
                           inputMode="numeric"
-                          placeholder="50000"
-                          value={item.price}
-                          onChange={(e) => updateUnitItem(variantKey, idx, 'price', e.target.value)}
+                          placeholder="50,000"
+                          value={item.price ? Number(item.price).toLocaleString('ko-KR') : ''}
+                          onChange={(e) => updateUnitItem(variantKey, idx, 'price', e.target.value.replace(/[^0-9]/g, ''))}
                           className="h-9 text-sm pr-6"
                         />
                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
@@ -435,11 +435,11 @@ export function AddServiceForm() {
                   </div>
                   <div className="flex-1 relative">
                     <Input
-                      type="number"
+                      type="text"
                       inputMode="numeric"
                       placeholder={t.placeholder}
-                      value={acPrices[t.id] ?? ''}
-                      onChange={(e) => setAcPrices((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                      value={acPrices[t.id] ? Number(acPrices[t.id]).toLocaleString('ko-KR') : ''}
+                      onChange={(e) => setAcPrices((prev) => ({ ...prev, [t.id]: e.target.value.replace(/[^0-9]/g, '') }))}
                       className="h-9 text-sm pr-8"
                     />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
