@@ -7,6 +7,7 @@ import {
   AlertCircle, Calendar, ChevronRight, RefreshCw,
   Wallet, ClipboardList, Star, Phone,
   Users, UserPlus, AlertTriangle, TrendingUp, CheckCircle2,
+  Handshake, PhoneCall,
 } from 'lucide-react'
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
@@ -68,6 +69,8 @@ export default async function DashboardPage() {
     { count: newCustomersThisMonth },
     { data: pipelineBookings },
     { count: unassignedCount },
+    { data: allLeads },
+    { data: todayFollowUps },
   ] = await Promise.all([
     // 이번 달 완료 예약
     db.from('bookings').select('final_price')
@@ -144,6 +147,18 @@ export default async function DashboardPage() {
       .eq('status' as never, 'confirmed')
       .is('worker_id' as never, null)
       .is('deleted_at' as never, null),
+
+    // 거래처 파이프라인 전체
+    db.from('leads')
+      .select('id, status, monthly_budget')
+      .eq('business_id', businessId),
+
+    // 오늘 연락 예정 거래처
+    db.from('leads')
+      .select('id, company_name, phone, contact_name, status')
+      .eq('business_id', businessId)
+      .eq('next_follow_up_date', todayKSTStr)
+      .not('status', 'in', '("contracted","rejected")'),
   ])
 
   // ── 계산 ──────────────────────────────────────────────
@@ -163,6 +178,12 @@ export default async function DashboardPage() {
 
   const confirmedCount  = (pipelineBookings ?? []).filter((b) => b.status === 'confirmed').length
   const inProgressCount = (pipelineBookings ?? []).filter((b) => b.status === 'in_progress').length
+
+  // B2B 거래처 지표
+  const activeLeads       = (allLeads ?? []).filter((l) => l.status !== 'contracted' && l.status !== 'rejected')
+  const contractedLeads   = (allLeads ?? []).filter((l) => l.status === 'contracted')
+  const pipelineMonthlyRevenue = contractedLeads.reduce((s, l) => s + (l.monthly_budget ?? 0), 0)
+  const todayFollowUpCount = (todayFollowUps ?? []).length
 
   // 주간 매출 차트 데이터 (최근 7일, KST 기준)
   const weeklyData = Array.from({ length: 7 }, (_, i) => {
@@ -192,7 +213,7 @@ export default async function DashboardPage() {
 
   // 알림 배너 여부
   const hasAlerts = (pendingQuoteCount ?? 0) > 0 || unreportedCount > 0 ||
-    (unreviewedCount ?? 0) > 0 || (unassignedCount ?? 0) > 0
+    (unreviewedCount ?? 0) > 0 || (unassignedCount ?? 0) > 0 || todayFollowUpCount > 0
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
@@ -209,6 +230,18 @@ export default async function DashboardPage() {
       {/* 액션 알림 */}
       {hasAlerts && (
         <div className="space-y-2">
+          {todayFollowUpCount > 0 && (
+            <Link href="/dashboard/pipeline">
+              <div className="flex items-center gap-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 hover:bg-violet-100 transition-colors">
+                <PhoneCall className="h-4 w-4 text-violet-600 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-violet-800">오늘 연락해야 할 거래처가 {todayFollowUpCount}곳 있어요</p>
+                  <p className="text-xs text-violet-600 mt-0.5">거래처 관리에서 확인하세요</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-violet-400 shrink-0" />
+              </div>
+            </Link>
+          )}
           {(unassignedCount ?? 0) > 0 && (
             <Link href="/dashboard/schedule">
               <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 hover:bg-red-100 transition-colors">
@@ -396,9 +429,52 @@ export default async function DashboardPage() {
 
           <div className="border-t border-border" />
 
-          {/* 고객 현황 */}
+          {/* B2B 거래처 현황 */}
           <div>
-            <p className="text-sm font-semibold mb-3">고객 현황</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold">거래처 현황</p>
+              <Link href="/dashboard/pipeline" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-0.5">
+                관리 <ChevronRight className="h-3 w-3" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <Link href="/dashboard/pipeline?status=active">
+                <div className="rounded-lg bg-violet-50 p-3 hover:bg-violet-100 transition-colors">
+                  <div className="flex items-center gap-1 mb-1">
+                    <Handshake className="h-3 w-3 text-violet-500" />
+                    <span className="text-[10px] text-violet-600">상담 중</span>
+                  </div>
+                  <p className="text-lg font-bold text-violet-700 tabular-nums">{activeLeads.length}곳</p>
+                </div>
+              </Link>
+              <Link href="/dashboard/pipeline?status=contracted">
+                <div className="rounded-lg bg-green-50 p-3 hover:bg-green-100 transition-colors">
+                  <div className="flex items-center gap-1 mb-1">
+                    <CheckCircle2 className="h-3 w-3 text-green-500" />
+                    <span className="text-[10px] text-green-600">계약</span>
+                  </div>
+                  <p className="text-lg font-bold text-green-700 tabular-nums">{contractedLeads.length}곳</p>
+                </div>
+              </Link>
+              <div className="rounded-lg bg-teal-50 p-3">
+                <div className="flex items-center gap-1 mb-1">
+                  <RefreshCw className="h-3 w-3 text-teal-500" />
+                  <span className="text-[10px] text-teal-600">월 예상</span>
+                </div>
+                <p className="text-sm font-bold text-teal-700 tabular-nums leading-tight">
+                  {pipelineMonthlyRevenue > 0
+                    ? `${Math.round(pipelineMonthlyRevenue / 10000)}만`
+                    : '—'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-border" />
+
+          {/* 개인 고객 현황 */}
+          <div>
+            <p className="text-sm font-semibold mb-3">개인 고객</p>
             <div className="grid grid-cols-2 gap-3">
               <Link href="/dashboard/clients">
                 <div className="rounded-lg bg-muted/50 p-3 hover:bg-muted transition-colors">
@@ -481,6 +557,60 @@ export default async function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* 오늘 연락 예정 거래처 */}
+      {todayFollowUpCount > 0 && (
+        <div className="bg-white rounded-xl border border-border overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <div className="flex items-center gap-2">
+              <PhoneCall className="h-4 w-4 text-violet-500" />
+              <h2 className="font-semibold text-sm">오늘 연락 예정 거래처</h2>
+              <span className="text-xs font-semibold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">
+                {todayFollowUpCount}곳
+              </span>
+            </div>
+            <Link
+              href="/dashboard/pipeline"
+              className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-0.5"
+            >
+              전체 보기 <ChevronRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="divide-y divide-border">
+            {(todayFollowUps ?? []).map((lead) => {
+              const stage = {
+                new: '새 문의', contacted: '연락함', follow_up: '현장 방문',
+                quoted: '견적 보냄', negotiating: '금액 협의',
+              }[lead.status] ?? lead.status
+              return (
+                <Link key={lead.id} href={`/dashboard/pipeline/${lead.id}`}>
+                  <div className="flex items-center px-5 py-3.5 hover:bg-muted/20 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{lead.company_name}</p>
+                      {lead.contact_name && (
+                        <p className="text-xs text-muted-foreground mt-0.5">담당 {lead.contact_name}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                      <span className="text-xs text-muted-foreground">{stage}</span>
+                      {lead.phone && (
+                        <a
+                          href={`tel:${lead.phone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center hover:bg-violet-200 transition-colors"
+                        >
+                          <Phone className="h-3.5 w-3.5 text-violet-600" />
+                        </a>
+                      )}
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 이번 주 예정 */}
       {upcomingBookings && upcomingBookings.length > 0 && (
