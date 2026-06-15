@@ -147,7 +147,7 @@ export function PipelineList({ leads, filterStatus }: Props) {
   const handleAdd = () => {
     executeCreate({
       company_name:        form.company_name,
-      customer_type:       form.customer_type,
+      customer_type:       'company',
       contact_name:        form.contact_name || undefined,
       phone:               form.phone || undefined,
       address:             form.address || undefined,
@@ -176,7 +176,7 @@ export function PipelineList({ leads, filterStatus }: Props) {
     executeUpdate({
       leadId:              editLead.id,
       company_name:        form.company_name,
-      customer_type:       form.customer_type,
+      customer_type:       'company',
       contact_name:        form.contact_name || undefined,
       phone:               form.phone || undefined,
       address:             form.address || undefined,
@@ -265,11 +265,8 @@ export function PipelineList({ leads, filterStatus }: Props) {
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
 
-                  {/* 이름 + 배지 */}
+                  {/* 이름 */}
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${isCompany ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'}`}>
-                      {isCompany ? '거래처' : '일반'}
-                    </span>
                     <p className="font-semibold">{lead.company_name}</p>
                     {lead.contact_name && (
                       <span className="text-xs text-muted-foreground">담당 {lead.contact_name}</span>
@@ -392,53 +389,28 @@ function LeadForm({
   form: typeof emptyForm
   onChange: (key: keyof typeof emptyForm, value: string) => void
 }) {
-  const isCompany = form.customer_type === 'company'
-
   return (
-    <div className="space-y-4">
-      {/* 유형 선택 */}
-      <div className="grid grid-cols-2 gap-2">
-        {[
-          { value: 'company',    label: '거래처 (사무실·건물)' },
-          { value: 'individual', label: '일반 고객 (가정 등)' },
-        ].map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => onChange('customer_type', opt.value)}
-            className={`py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-              form.customer_type === opt.value
-                ? 'border-primary bg-primary/5 text-primary'
-                : 'border-border text-muted-foreground hover:border-primary/30'
-            }`}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="space-y-3">
+    <div className="space-y-3">
+      <div>
         <div>
-          <Label>{isCompany ? '업체명 (필수)' : '이름 (필수)'}</Label>
+          <Label>업체명 (필수)</Label>
           <Input
             value={form.company_name}
             onChange={(e) => onChange('company_name', e.target.value)}
-            placeholder={isCompany ? '예: (주)클린빌딩' : '예: 홍길동'}
+            placeholder="예: (주)클린빌딩"
             className="mt-1"
           />
         </div>
 
-        {isCompany && (
-          <div>
-            <Label>담당자 이름</Label>
-            <Input
-              value={form.contact_name}
-              onChange={(e) => onChange('contact_name', e.target.value)}
-              placeholder="예: 김대리"
-              className="mt-1"
-            />
-          </div>
-        )}
+        <div className="mt-3">
+          <Label>담당자 이름</Label>
+          <Input
+            value={form.contact_name}
+            onChange={(e) => onChange('contact_name', e.target.value)}
+            placeholder="예: 김대리"
+            className="mt-1"
+          />
+        </div>
 
         <div>
           <Label>전화번호</Label>
@@ -461,18 +433,16 @@ function LeadForm({
           />
         </div>
 
-        {isCompany && (
-          <div>
-            <Label>예상 월 금액 (원)</Label>
-            <Input
-              value={form.monthly_budget}
-              onChange={(e) => onChange('monthly_budget', e.target.value)}
-              placeholder="예: 700000"
-              inputMode="numeric"
-              className="mt-1"
-            />
-          </div>
-        )}
+        <div>
+          <Label>예상 월 금액 (원)</Label>
+          <Input
+            value={form.monthly_budget}
+            onChange={(e) => onChange('monthly_budget', e.target.value)}
+            placeholder="예: 700000"
+            inputMode="numeric"
+            className="mt-1"
+          />
+        </div>
 
         <div>
           <Label>다음 연락 예정일</Label>
