@@ -1118,6 +1118,37 @@ export type Database = {
     }
     Functions: {
       get_my_business_id: { Args: never; Returns: string }
+      insert_lead: {
+        Args: {
+          p_business_id: string
+          p_company_name: string
+          p_contact_name?: string | null
+          p_contact_title?: string | null
+          p_email?: string | null
+          p_phone?: string | null
+          p_address?: string | null
+          p_monthly_budget?: number | null
+          p_next_follow_up_date?: string | null
+          p_notes?: string | null
+        }
+        Returns: string
+      }
+      update_lead: {
+        Args: {
+          p_id: string
+          p_business_id: string
+          p_company_name: string
+          p_contact_name?: string | null
+          p_contact_title?: string | null
+          p_email?: string | null
+          p_phone?: string | null
+          p_address?: string | null
+          p_monthly_budget?: number | null
+          p_next_follow_up_date?: string | null
+          p_notes?: string | null
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

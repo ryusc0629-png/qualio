@@ -103,17 +103,17 @@ export const createLeadAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getAuthenticatedBusinessId()
 
-    const { error } = await db.from('leads').insert({
-      business_id:         businessId,
-      company_name:        parsedInput.company_name,
-      contact_name:        parsedInput.contact_name ?? null,
-      contact_title:       parsedInput.contact_title ?? null,
-      email:               parsedInput.email ?? null,
-      phone:               parsedInput.phone ?? null,
-      address:             parsedInput.address ?? null,
-      monthly_budget:      parsedInput.monthly_budget ?? null,
-      next_follow_up_date: parsedInput.next_follow_up_date ?? null,
-      notes:               parsedInput.notes ?? null,
+    const { error } = await db.rpc('insert_lead', {
+      p_business_id:         businessId,
+      p_company_name:        parsedInput.company_name,
+      p_contact_name:        parsedInput.contact_name ?? null,
+      p_contact_title:       parsedInput.contact_title ?? null,
+      p_email:               parsedInput.email ?? null,
+      p_phone:               parsedInput.phone ?? null,
+      p_address:             parsedInput.address ?? null,
+      p_monthly_budget:      parsedInput.monthly_budget ?? null,
+      p_next_follow_up_date: parsedInput.next_follow_up_date ?? null,
+      p_notes:               parsedInput.notes ?? null,
     })
 
     if (error) {
@@ -147,21 +147,19 @@ export const updateLeadAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getAuthenticatedBusinessId()
 
-    const { error } = await db
-      .from('leads')
-      .update({
-        company_name:        parsedInput.company_name,
-        contact_name:        parsedInput.contact_name ?? null,
-        contact_title:       parsedInput.contact_title ?? null,
-        email:               parsedInput.email ?? null,
-        phone:               parsedInput.phone ?? null,
-        address:             parsedInput.address ?? null,
-        monthly_budget:      parsedInput.monthly_budget ?? null,
-        next_follow_up_date: parsedInput.next_follow_up_date ?? null,
-        notes:               parsedInput.notes ?? null,
-      })
-      .eq('id', parsedInput.leadId)
-      .eq('business_id', businessId)
+    const { error } = await db.rpc('update_lead', {
+      p_id:                  parsedInput.leadId,
+      p_business_id:         businessId,
+      p_company_name:        parsedInput.company_name,
+      p_contact_name:        parsedInput.contact_name ?? null,
+      p_contact_title:       parsedInput.contact_title ?? null,
+      p_email:               parsedInput.email ?? null,
+      p_phone:               parsedInput.phone ?? null,
+      p_address:             parsedInput.address ?? null,
+      p_monthly_budget:      parsedInput.monthly_budget ?? null,
+      p_next_follow_up_date: parsedInput.next_follow_up_date ?? null,
+      p_notes:               parsedInput.notes ?? null,
+    })
 
     if (error) throw new Error('[APP] 수정에 실패했습니다')
     revalidatePath('/dashboard/pipeline')
