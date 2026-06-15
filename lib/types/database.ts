@@ -714,6 +714,7 @@ export type Database = {
           tier_better_items: string[] | null
           tier_good_items: string[] | null
           unit: string
+          unit_prices: Json | null
           updated_at: string
         }
         Insert: {
@@ -733,6 +734,7 @@ export type Database = {
           tier_better_items?: string[] | null
           tier_good_items?: string[] | null
           unit?: string
+          unit_prices?: Json | null
           updated_at?: string
         }
         Update: {
@@ -752,6 +754,7 @@ export type Database = {
           tier_better_items?: string[] | null
           tier_good_items?: string[] | null
           unit?: string
+          unit_prices?: Json | null
           updated_at?: string
         }
         Relationships: [

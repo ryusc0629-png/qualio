@@ -10,6 +10,12 @@ const VALID_UNITS = ['정액', '평당', '시간', '개'] as const
 // AC 유형별 단가 스키마
 const acTypePricesSchema = z.record(z.string(), z.number().min(0)).optional()
 
+// 항목별 단가 스키마 (줄눌·화장실청소 등) — [{name: "화장실", price: 50000}]
+const unitPricesSchema = z.array(z.object({
+  name:  z.string().min(1),
+  price: z.number().min(0),
+})).optional()
+
 // 서비스 항목 생성 스키마 — z.enum() 대신 z.string().refine() 사용 (Zod v4 호환)
 const createServiceItemSchema = z.object({
   name: z.string().min(1, '서비스명을 입력해주세요'),
@@ -20,6 +26,7 @@ const createServiceItemSchema = z.object({
     '올바른 단위를 선택해주세요'
   ),
   ac_type_prices: acTypePricesSchema,
+  unit_prices:    unitPricesSchema,
 })
 
 // 서비스 항목 수정 스키마
@@ -34,6 +41,7 @@ const updateServiceItemSchema = z.object({
   ),
   photos: z.array(z.string()).optional(),
   ac_type_prices: acTypePricesSchema,
+  unit_prices:    unitPricesSchema,
   tier_good_items:   z.array(z.string()).optional(),
   tier_better_items: z.array(z.string()).optional(),
   tier_best_items:   z.array(z.string()).optional(),
@@ -84,6 +92,7 @@ export const createServiceItemAction = action
       base_price:     parsedInput.base_price,
       unit:           parsedInput.unit,
       ac_type_prices: parsedInput.ac_type_prices ?? null,
+      unit_prices:    parsedInput.unit_prices    ?? null,
     })
 
     if (error) throw new Error('[APP] 서비스 추가에 실패했습니다')
@@ -121,6 +130,7 @@ export const updateServiceItemAction = action
         unit:              parsedInput.unit,
         photos:            parsedInput.photos ?? [],
         ac_type_prices:    parsedInput.ac_type_prices ?? null,
+        unit_prices:       parsedInput.unit_prices    ?? null,
         tier_good_items:   parsedInput.tier_good_items ?? [],
         tier_better_items: parsedInput.tier_better_items ?? [],
         tier_best_items:   parsedInput.tier_best_items ?? [],

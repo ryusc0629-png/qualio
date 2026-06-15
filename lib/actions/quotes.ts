@@ -38,6 +38,8 @@ const calculateAndCreateQuoteSchema = z.object({
   customer_phone: z.string().optional(),
   // 에어컨 유형별 선택 수량 { wall_standard: 2, stand_standard: 1 }
   ac_selections: z.record(z.string(), z.number().min(0)).optional(),
+  // 항목별 선택 수량 { "화장실": 2, "주방": 1 }
+  unit_selections: z.record(z.string(), z.number().min(0)).optional(),
 })
 
 export const calculateAndCreateQuoteAction = publicAction
@@ -54,10 +56,10 @@ export const calculateAndCreateQuoteAction = publicAction
 
     if (!business) throw new Error('[APP] 존재하지 않는 업체입니다')
 
-    // 선택한 서비스 조회 (에어컨 유형별 단가 포함)
+    // 선택한 서비스 조회 (에어컨·항목별 단가 포함)
     const { data: service } = await db
       .from('service_items')
-      .select('id, name, base_price, unit, ac_type_prices')
+      .select('id, name, base_price, unit, ac_type_prices, unit_prices')
       .eq('id', parsedInput.service_id)
       .eq('business_id', parsedInput.business_id)
       .eq('is_active', true)
@@ -80,10 +82,20 @@ export const calculateAndCreateQuoteAction = publicAction
         const unitPrice = prices[typeId] ?? service.base_price
         return sum + unitPrice * count
       }, 0)
+    } else if (
+      parsedInput.unit_selections &&
+      service.unit_prices &&
+      Array.isArray(service.unit_prices)
+    ) {
+      // 항목별 단가 × 수량 합산 (줄눌·화장실청소 등)
+      const items = service.unit_prices as Array<{ name: string; price: number }>
+      baseCalc = items.reduce((sum, item) => {
+        const count = parsedInput.unit_selections![item.name] ?? 0
+        return sum + item.price * count
+      }, 0)
     } else if (service.unit === '평당') {
       baseCalc = service.base_price * (parsedInput.space_size || 1)
     } else if (service.unit === '개') {
-      // 개당 × 수량 (에어컨 기본 단가 방식 fallback)
       baseCalc = service.base_price * (parsedInput.space_size || 1)
     } else {
       baseCalc = service.base_price

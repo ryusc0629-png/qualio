@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { updateServiceItemAction } from '@/lib/actions/services'
 import { createClient } from '@/lib/supabase/client'
-import { Pencil, X, ImagePlus, Loader2, Zap } from 'lucide-react'
+import { Pencil, X, ImagePlus, Loader2, Zap, ListPlus, Trash2, Plus } from 'lucide-react'
 import { isAcService } from '@/lib/utils'
 
 const CATEGORIES = ['주거 공간', '가전 케어', '특수/시공', '상업 공간', '사무실', '기타'] as const
@@ -51,6 +51,7 @@ interface EditServiceButtonProps {
     unit: string
     photos: string[] | null
     ac_type_prices: Record<string, number> | null
+    unit_prices: Array<{ name: string; price: number }> | null
     tier_good_items: string[]
     tier_better_items: string[]
     tier_best_items: string[]
@@ -127,6 +128,16 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
     }
     return init
   })
+  // 항목별 단가 상태 (기존 값으로 초기화)
+  const [showUnitPrices, setShowUnitPrices] = useState(() =>
+    Array.isArray(service.unit_prices) && service.unit_prices.length > 0
+  )
+  const [unitItems, setUnitItems] = useState<Array<{ name: string; price: string }>>(() => {
+    if (Array.isArray(service.unit_prices) && service.unit_prices.length > 0) {
+      return service.unit_prices.map((item) => ({ name: item.name, price: String(item.price) }))
+    }
+    return [{ name: '', price: '' }]
+  })
 
   const { register, handleSubmit, watch, formState: { errors } } = useForm<FormInput>({
     resolver: zodResolver(schema),
@@ -138,8 +149,15 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
     },
   })
 
-  const currentName = watch('name') ?? ''
-  const isAcByName  = isAcService(currentName)
+  const currentName  = watch('name') ?? ''
+  const isAcByName   = isAcService(currentName)
+  const isUnitByName = !isAcByName && showUnitPrices
+
+  const updateUnitItem = (idx: number, field: 'name' | 'price', value: string) => {
+    setUnitItems((prev) => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item))
+  }
+  const addUnitItem    = () => setUnitItems((prev) => [...prev, { name: '', price: '' }])
+  const removeUnitItem = (idx: number) => setUnitItems((prev) => prev.filter((_, i) => i !== idx))
 
   const { execute, isPending } = useAction(updateServiceItemAction, {
     onSuccess: () => {
@@ -195,6 +213,7 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
           <form
             onSubmit={handleSubmit((data) => {
               let acTypePrices: Record<string, number> | undefined
+              let unitPrices: Array<{ name: string; price: number }> | undefined
               let basePrice = Number(data.base_price)
 
               if (isAcByName) {
@@ -211,6 +230,14 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
                   acTypePrices = parsed
                   basePrice = minPrice === Infinity ? basePrice : minPrice
                 }
+              } else if (isUnitByName) {
+                const items = unitItems
+                  .filter((item) => item.name.trim() && Number(item.price) > 0)
+                  .map((item) => ({ name: item.name.trim(), price: Number(item.price) }))
+                if (items.length > 0) {
+                  unitPrices = items
+                  basePrice = Math.min(...items.map((i) => i.price))
+                }
               }
 
               execute({
@@ -221,6 +248,7 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
                 unit:              data.unit,
                 photos,
                 ac_type_prices:    acTypePrices,
+                unit_prices:       unitPrices,
                 tier_good_items:   tierGood.filter(Boolean),
                 tier_better_items: tierBetter.filter(Boolean),
                 tier_best_items:   tierBest.filter(Boolean),
@@ -254,8 +282,74 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
               </div>
             </div>
 
-            {/* 기본가 — 에어컨은 유형별 단가에서 자동 계산 */}
+            {/* 항목별 단가 토글 (에어컨이 아닐 때만) */}
             {!isAcByName && (
+              <button
+                type="button"
+                onClick={() => setShowUnitPrices((v) => !v)}
+                className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors ${
+                  showUnitPrices
+                    ? 'border-primary/40 bg-primary/5 text-primary'
+                    : 'border-dashed text-muted-foreground hover:text-foreground hover:border-border'
+                }`}
+              >
+                <ListPlus className="h-3.5 w-3.5 shrink-0" />
+                {showUnitPrices ? '항목별 단가 설정 중 (클릭하면 해제)' : '항목별 단가 설정하기 (예: 화장실 1곳 얼마, 주방 얼마)'}
+              </button>
+            )}
+
+            {/* 항목별 단가 입력 */}
+            {isUnitByName && (
+              <div className="space-y-3">
+                <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-1">
+                  <div className="flex items-center gap-1.5">
+                    <ListPlus className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <p className="text-xs font-bold text-primary">항목별 단가를 설정하면 자동으로 계산됩니다</p>
+                  </div>
+                  <p className="text-xs text-primary/80 leading-relaxed">
+                    고객이 견적 폼에서 항목·수량을 선택하면, 아래 단가를 기준으로 자동 합산됩니다.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {unitItems.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Input
+                        placeholder="항목명 (예: 화장실)"
+                        value={item.name}
+                        onChange={(e) => updateUnitItem(idx, 'name', e.target.value)}
+                        className="h-9 text-sm flex-1"
+                      />
+                      <div className="relative w-32 shrink-0">
+                        <Input
+                          type="number"
+                          inputMode="numeric"
+                          placeholder="50000"
+                          value={item.price}
+                          onChange={(e) => updateUnitItem(idx, 'price', e.target.value)}
+                          className="h-9 text-sm pr-6"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
+                      </div>
+                      {unitItems.length > 1 && (
+                        <button type="button" onClick={() => removeUnitItem(idx)} className="text-muted-foreground hover:text-destructive transition-colors">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addUnitItem}
+                    className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> 항목 추가
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 기본가 — 에어컨/항목별 단가 모드에서는 자동 계산 */}
+            {!isAcByName && !isUnitByName && (
               <div className="space-y-1">
                 <Label>기본 가격 (원) *</Label>
                 <Input type="number" {...register('base_price')} />

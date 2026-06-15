@@ -8,10 +8,11 @@ import { Input } from '@/components/ui/input'
 import { calculateAndCreateQuoteAction } from '@/lib/actions/quotes'
 import { isAcService } from '@/lib/utils'
 
-// 에어컨 청소 여부에 따라 스텝 분기
+// 서비스 유형에 따라 스텝 분기
 const STEP_SEQUENCE_DEFAULT = ['service', 'space', 'context', 'date', 'notes', 'name', 'phone'] as const
 const STEP_SEQUENCE_AC      = ['service', 'ac_detail', 'context', 'date', 'notes', 'name', 'phone'] as const
-type Step = 'service' | 'space' | 'ac_detail' | 'context' | 'date' | 'notes' | 'name' | 'phone'
+const STEP_SEQUENCE_UNIT    = ['service', 'unit_detail', 'context', 'date', 'notes', 'name', 'phone'] as const
+type Step = 'service' | 'space' | 'ac_detail' | 'unit_detail' | 'context' | 'date' | 'notes' | 'name' | 'phone'
 
 const SPACE_CHIPS = ['15평', '20평', '25평', '30평', '35평', '40평', '50평 이상']
 const SPACE_CHIP_VALUES: Record<string, number> = {
@@ -41,6 +42,7 @@ interface ServiceItem {
   base_price: number
   unit: string
   ac_type_prices: Record<string, number> | null
+  unit_prices: Array<{ name: string; price: number }> | null
 }
 
 interface QuoteFormProps {
@@ -146,6 +148,101 @@ function AcDetailSelector({
         className="w-full h-13 rounded-2xl bg-primary disabled:opacity-30 text-white font-bold text-sm transition-opacity py-3.5"
       >
         {totalCount > 0 ? `총 ${totalCount}대 선택 완료 →` : '에어컨을 1대 이상 선택해주세요'}
+      </button>
+    </div>
+  )
+}
+
+// 항목별 수량 선택 컴포넌트 (줄눌·화장실청소 등)
+function UnitDetailSelector({
+  unitPrices,
+  onConfirm,
+}: {
+  unitPrices: Array<{ name: string; price: number }>
+  onConfirm: (summary: string, selections: Record<string, number>) => void
+}) {
+  const [counts, setCounts] = useState<Record<string, number>>({})
+
+  const change = (name: string, delta: number) => {
+    setCounts((prev) => {
+      const next = Math.max(0, (prev[name] ?? 0) + delta)
+      if (next === 0) {
+        const { [name]: _, ...rest } = prev
+        return rest
+      }
+      return { ...prev, [name]: next }
+    })
+  }
+
+  const total = unitPrices.reduce((sum, item) => sum + item.price * (counts[item.name] ?? 0), 0)
+  const hasSelection = Object.values(counts).some((c) => c > 0)
+
+  const handleConfirm = () => {
+    if (!hasSelection) return
+    const summary = unitPrices
+      .filter((item) => (counts[item.name] ?? 0) > 0)
+      .map((item) => `${item.name} ${counts[item.name]}곳`)
+      .join(', ')
+    onConfirm(summary, counts)
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        {unitPrices.map((item) => {
+          const count = counts[item.name] ?? 0
+          return (
+            <div
+              key={item.name}
+              className={[
+                'flex items-center justify-between rounded-2xl border-2 px-4 py-3 transition-colors',
+                count > 0 ? 'border-primary bg-primary/5' : 'border-border bg-[#FAFAFA]',
+              ].join(' ')}
+            >
+              <div>
+                <p className="font-semibold text-sm text-[#1A1A1A]">{item.name}</p>
+                <p className="text-xs font-bold text-primary tabular-nums mt-0.5">
+                  {item.price.toLocaleString('ko-KR')}원 / 곳
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => change(item.name, -1)}
+                  disabled={count === 0}
+                  className="w-8 h-8 rounded-full border-2 border-border bg-white flex items-center justify-center text-[#6B6B6B] disabled:opacity-30 active:bg-slate-50 font-bold text-lg leading-none"
+                >
+                  −
+                </button>
+                <span className={['w-5 text-center font-black text-base tabular-nums', count > 0 ? 'text-primary' : 'text-[#B0B0B0]'].join(' ')}>
+                  {count}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => change(item.name, 1)}
+                  className="w-8 h-8 rounded-full border-2 border-primary bg-primary flex items-center justify-center text-white font-bold text-lg leading-none active:opacity-80"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {hasSelection && (
+        <p className="text-center text-sm font-bold text-primary tabular-nums">
+          예상 금액 {total.toLocaleString('ko-KR')}원
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={handleConfirm}
+        disabled={!hasSelection}
+        className="w-full h-13 rounded-2xl bg-primary disabled:opacity-30 text-white font-bold text-sm transition-opacity py-3.5"
+      >
+        {hasSelection ? `선택 완료 →` : '항목을 1개 이상 선택해주세요'}
       </button>
     </div>
   )
@@ -335,10 +432,14 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   const [selectedServiceId, setSelectedServiceId] = useState('')
   const [selectedServiceName, setSelectedServiceName] = useState('')
   const [isAcMode, setIsAcMode] = useState(false)
-  const [acSummary, setAcSummary] = useState('')                      // "벽걸이형 일반 2대, 스탠드형 1대"
+  const [isUnitMode, setIsUnitMode] = useState(false)
+  const [acSummary, setAcSummary] = useState('')
   const [acTotalCount, setAcTotalCount] = useState(0)
-  const [acSelections, setAcSelections] = useState<Record<string, number>>({})  // 서버로 전달할 유형별 수량
+  const [acSelections, setAcSelections] = useState<Record<string, number>>({})
   const [acTypePrices, setAcTypePrices] = useState<Record<string, number> | null>(null)
+  const [unitPrices, setUnitPrices] = useState<Array<{ name: string; price: number }> | null>(null)
+  const [unitSummary, setUnitSummary] = useState('')
+  const [unitSelections, setUnitSelections] = useState<Record<string, number>>({})
   const [spaceSize, setSpaceSize] = useState('')
   const [customSpace, setCustomSpace] = useState('')
   const [contextAnswer, setContextAnswer] = useState('')
@@ -349,7 +450,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   const [customerPhone, setCustomerPhone] = useState('')
 
   // 현재 서비스에 맞는 스텝 순서
-  const stepSequence = isAcMode ? STEP_SEQUENCE_AC : STEP_SEQUENCE_DEFAULT
+  const stepSequence = isAcMode ? STEP_SEQUENCE_AC : isUnitMode ? STEP_SEQUENCE_UNIT : STEP_SEQUENCE_DEFAULT
 
   const chatEndRef = useRef<HTMLDivElement>(null)
 
@@ -374,7 +475,8 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
     switch (step) {
       case 'service':   return '안녕하세요! 어떤 청소 서비스가 필요하신가요?'
       case 'space':     return '공간이 몇 평인가요?'
-      case 'ac_detail': return '에어컨 유형과 대수를 알려주세요'
+      case 'ac_detail':   return '에어컨 유형과 대수를 알려주세요'
+      case 'unit_detail': return '항목별 수량을 선택해주세요'
       case 'context':   return '주거 형태가 어떻게 되세요?'
       case 'date':      return '언제 방문해 드릴까요?'
       case 'notes':     return '특별히 신경 써드릴 부분이 있나요?'
@@ -387,7 +489,8 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
     switch (step) {
       case 'service':   return selectedServiceName
       case 'space':     return `${spaceSize}평`
-      case 'ac_detail': return acSummary
+      case 'ac_detail':   return acSummary
+      case 'unit_detail': return unitSummary
       case 'context':   return contextAnswer
       case 'date':      return preferredDateLabel
       case 'notes':     return notes.trim() || '특별 요청 없음'
@@ -406,12 +509,16 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   }
 
   const handleServiceSelect = (service: ServiceItem) => {
-    const isAc = isAcService(service.name)
+    const isAc   = isAcService(service.name)
+    const isUnit = !isAc && Array.isArray(service.unit_prices) && service.unit_prices.length > 0
     setSelectedServiceId(service.id)
     setSelectedServiceName(service.name)
     setIsAcMode(isAc)
+    setIsUnitMode(isUnit)
     setAcTypePrices(service.ac_type_prices)
-    setTimeout(() => advance('service', isAc ? 'ac_detail' : 'space'), 50)
+    setUnitPrices(isUnit ? service.unit_prices : null)
+    const nextStep = isAc ? 'ac_detail' : isUnit ? 'unit_detail' : 'space'
+    setTimeout(() => advance('service', nextStep), 50)
   }
 
   const handleAcDetail = (summary: string, totalCount: number, selections: Record<string, number>) => {
@@ -419,6 +526,12 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
     setAcTotalCount(totalCount)
     setAcSelections(selections)
     setTimeout(() => advance('ac_detail', 'context'), 50)
+  }
+
+  const handleUnitDetail = (summary: string, selections: Record<string, number>) => {
+    setUnitSummary(summary)
+    setUnitSelections(selections)
+    setTimeout(() => advance('unit_detail', 'context'), 50)
   }
 
   const handleSpaceChip = (chip: string) => {
@@ -472,12 +585,13 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
     execute({
       business_id:    businessId,
       service_id:     selectedServiceId,
-      space_size:     isAcMode ? acTotalCount : Number(spaceSize),
+      space_size:     isAcMode ? acTotalCount : isUnitMode ? 0 : Number(spaceSize),
       preferred_date: preferredDate || undefined,
       extra_notes:    combinedNotes || undefined,
       customer_name:  customerName.trim(),
       customer_phone: clean,
-      ac_selections:  isAcMode && Object.keys(acSelections).length > 0 ? acSelections : undefined,
+      ac_selections:   isAcMode   && Object.keys(acSelections).length   > 0 ? acSelections   : undefined,
+      unit_selections: isUnitMode && Object.keys(unitSelections).length > 0 ? unitSelections : undefined,
     })
   }
 
@@ -580,6 +694,11 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
           {/* 에어컨 유형·대수 선택 */}
           {!isTyping && !isPending && currentStep === 'ac_detail' && (
             <AcDetailSelector acTypePrices={acTypePrices} onConfirm={handleAcDetail} />
+          )}
+
+          {/* 항목별 수량 선택 (줄눌 시공 등) */}
+          {!isTyping && !isPending && currentStep === 'unit_detail' && unitPrices && (
+            <UnitDetailSelector unitPrices={unitPrices} onConfirm={handleUnitDetail} />
           )}
 
           {/* 평수 선택 */}
