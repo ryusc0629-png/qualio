@@ -608,6 +608,7 @@ export type Database = {
           company_name: string
           contact_name: string | null
           contact_title: string | null
+          email: string | null
           phone: string | null
           address: string | null
           category: string | null
@@ -625,6 +626,7 @@ export type Database = {
           company_name: string
           contact_name?: string | null
           contact_title?: string | null
+          email?: string | null
           phone?: string | null
           address?: string | null
           category?: string | null
@@ -642,6 +644,7 @@ export type Database = {
           company_name?: string
           contact_name?: string | null
           contact_title?: string | null
+          email?: string | null
           phone?: string | null
           address?: string | null
           category?: string | null

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useCallback } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -54,11 +54,26 @@ const FILTER_TABS = [
 
 // ── 타입 ──────────────────────────────────────────────────
 
+// 카카오 우편번호 서비스 타입
+interface DaumPostcodeResult {
+  roadAddress: string
+  jibunAddress: string
+}
+interface DaumPostcodeInstance {
+  open(): void
+}
+interface DaumPostcodeWindow {
+  daum?: {
+    Postcode: new (config: { oncomplete: (data: DaumPostcodeResult) => void }) => DaumPostcodeInstance
+  }
+}
+
 type Lead = {
   id: string
   company_name: string
   contact_name: string | null
   contact_title: string | null
+  email: string | null
   phone: string | null
   address: string | null
   status: string
@@ -82,6 +97,7 @@ const emptyForm = {
   customer_type: 'company',
   contact_name: '',
   contact_title: '',
+  email: '',
   phone: '',
   address: '',
   monthly_budget: '',
@@ -152,6 +168,7 @@ export function PipelineList({ leads, filterStatus }: Props) {
       customer_type:       'company',
       contact_name:        form.contact_name || undefined,
       contact_title:       form.contact_title || undefined,
+      email:               form.email || undefined,
       phone:               form.phone || undefined,
       address:             form.address || undefined,
       monthly_budget:      form.monthly_budget ? Number(form.monthly_budget) : undefined,
@@ -166,6 +183,7 @@ export function PipelineList({ leads, filterStatus }: Props) {
       customer_type:       lead.customer_type,
       contact_name:        lead.contact_name ?? '',
       contact_title:       lead.contact_title ?? '',
+      email:               lead.email ?? '',
       phone:               lead.phone ?? '',
       address:             lead.address ?? '',
       monthly_budget:      lead.monthly_budget?.toString() ?? '',
@@ -183,6 +201,7 @@ export function PipelineList({ leads, filterStatus }: Props) {
       customer_type:       'company',
       contact_name:        form.contact_name || undefined,
       contact_title:       form.contact_title || undefined,
+      email:               form.email || undefined,
       phone:               form.phone || undefined,
       address:             form.address || undefined,
       monthly_budget:      form.monthly_budget ? Number(form.monthly_budget) : undefined,
@@ -394,91 +413,134 @@ function LeadForm({
   form: typeof emptyForm
   onChange: (key: keyof typeof emptyForm, value: string) => void
 }) {
+  const handleAddressSearch = useCallback(() => {
+    const run = () => {
+      new (window as unknown as DaumPostcodeWindow).daum!.Postcode({
+        oncomplete: (data) => {
+          onChange('address', data.roadAddress || data.jibunAddress)
+        },
+      }).open()
+    }
+
+    if ((window as unknown as DaumPostcodeWindow).daum?.Postcode) {
+      run()
+    } else {
+      const script = document.createElement('script')
+      script.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js'
+      script.onload = run
+      document.body.appendChild(script)
+    }
+  }, [onChange])
+
+  const displayBudget = form.monthly_budget
+    ? Number(form.monthly_budget).toLocaleString('ko-KR')
+    : ''
+
   return (
     <div className="space-y-3">
       <div>
-        <div>
-          <Label>업체명 (필수)</Label>
-          <Input
-            value={form.company_name}
-            onChange={(e) => onChange('company_name', e.target.value)}
-            placeholder="예: (주)클린빌딩"
-            className="mt-1"
-          />
-        </div>
+        <Label>업체명 (필수)</Label>
+        <Input
+          value={form.company_name}
+          onChange={(e) => onChange('company_name', e.target.value)}
+          placeholder="예: (주)클린빌딩"
+          className="mt-1"
+        />
+      </div>
 
-        <div className="mt-3">
-          <Label>담당자 이름</Label>
-          <Input
-            value={form.contact_name}
-            onChange={(e) => onChange('contact_name', e.target.value)}
-            placeholder="예: 김민수"
-            className="mt-1"
-          />
-        </div>
+      <div>
+        <Label>담당자 이름</Label>
+        <Input
+          value={form.contact_name}
+          onChange={(e) => onChange('contact_name', e.target.value)}
+          placeholder="예: 김민수"
+          className="mt-1"
+        />
+      </div>
 
-        <div>
-          <Label>직함 또는 직급</Label>
-          <Input
-            value={form.contact_title}
-            onChange={(e) => onChange('contact_title', e.target.value)}
-            placeholder="예: 총무팀장, 대표이사, 시설관리팀장"
-            className="mt-1"
-          />
-        </div>
+      <div>
+        <Label>직함 또는 직급</Label>
+        <Input
+          value={form.contact_title}
+          onChange={(e) => onChange('contact_title', e.target.value)}
+          placeholder="예: 총무팀장, 대표이사, 시설관리팀장"
+          className="mt-1"
+        />
+      </div>
 
-        <div>
-          <Label>전화번호</Label>
-          <Input
-            value={form.phone}
-            onChange={(e) => onChange('phone', e.target.value)}
-            placeholder="예: 010-1234-5678"
-            inputMode="tel"
-            className="mt-1"
-          />
-        </div>
+      <div>
+        <Label>전화번호</Label>
+        <Input
+          value={form.phone}
+          onChange={(e) => onChange('phone', e.target.value.replace(/[^0-9-]/g, ''))}
+          placeholder="예: 010-1234-5678"
+          inputMode="tel"
+          className="mt-1"
+        />
+      </div>
 
-        <div>
-          <Label>주소</Label>
+      <div>
+        <Label>이메일</Label>
+        <Input
+          value={form.email}
+          onChange={(e) => onChange('email', e.target.value)}
+          placeholder="예: manager@company.co.kr"
+          inputMode="email"
+          type="email"
+          className="mt-1"
+        />
+      </div>
+
+      <div>
+        <Label>주소</Label>
+        <div className="flex gap-2 mt-1">
           <Input
             value={form.address}
             onChange={(e) => onChange('address', e.target.value)}
-            placeholder="예: 서울시 강남구 역삼동"
-            className="mt-1"
+            placeholder="주소 찾기 버튼을 눌러주세요"
+            readOnly
+            className="flex-1 bg-muted/40 cursor-pointer"
+            onClick={handleAddressSearch}
           />
+          <Button type="button" variant="outline" size="sm" className="shrink-0 h-10" onClick={handleAddressSearch}>
+            주소 찾기
+          </Button>
         </div>
+      </div>
 
-        <div>
-          <Label>예상 월 금액 (원)</Label>
-          <Input
-            value={form.monthly_budget}
-            onChange={(e) => onChange('monthly_budget', e.target.value)}
-            placeholder="예: 700000"
-            inputMode="numeric"
-            className="mt-1"
-          />
-        </div>
+      <div>
+        <Label>예상 월 금액 (원)</Label>
+        <Input
+          value={displayBudget}
+          onChange={(e) => {
+            const raw = e.target.value.replace(/[^0-9]/g, '')
+            onChange('monthly_budget', raw)
+          }}
+          placeholder="예: 700,000"
+          inputMode="numeric"
+          className="mt-1"
+        />
+      </div>
 
-        <div>
-          <Label>다음 연락 예정일</Label>
-          <Input
-            type="date"
-            value={form.next_follow_up_date}
-            onChange={(e) => onChange('next_follow_up_date', e.target.value)}
-            className="mt-1"
-          />
-        </div>
+      <div>
+        <Label>다음 연락 예정일</Label>
+        <Input
+          type="date"
+          value={form.next_follow_up_date}
+          onChange={(e) => onChange('next_follow_up_date', e.target.value)}
+          className="mt-1"
+        />
+      </div>
 
-        <div>
-          <Label>메모</Label>
-          <Textarea
-            value={form.notes}
-            onChange={(e) => onChange('notes', e.target.value)}
-            placeholder="요구사항, 특이사항 등을 적어두세요"
-            rows={3}
-            className="mt-1 resize-none"
-          />
-        </div>
+      <div>
+        <Label>메모</Label>
+        <Textarea
+          value={form.notes}
+          onChange={(e) => onChange('notes', e.target.value)}
+          placeholder="요구사항, 특이사항 등을 적어두세요"
+          rows={3}
+          className="mt-1 resize-none"
+        />
       </div>
     </div>
   )

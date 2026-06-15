@@ -24,7 +24,7 @@ export default async function PipelinePage({
 
   const { data: leads } = await db
     .from('leads')
-    .select('id, company_name, contact_name, contact_title, phone, address, status, customer_type, monthly_budget, next_follow_up_date, notes, created_at')
+    .select('id, company_name, contact_name, contact_title, email, phone, address, status, customer_type, monthly_budget, next_follow_up_date, notes, created_at')
     .eq('business_id', profile.business_id)
     .order('created_at', { ascending: false })
 

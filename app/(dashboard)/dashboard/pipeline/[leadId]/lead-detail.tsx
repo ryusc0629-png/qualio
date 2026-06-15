@@ -18,7 +18,7 @@ import { toast } from 'sonner'
 import { createLeadActivityAction, updateLeadStatusAction } from '@/lib/actions/crm'
 import { STAGE_CONFIG } from '../pipeline-list'
 import { B2bQuoteForm } from './b2b-quote-form'
-import { Phone, MapPin, Calendar, ArrowLeft, Plus, PhoneCall, MapPin as VisitIcon, FileText, StickyNote } from 'lucide-react'
+import { Phone, MapPin, Calendar, ArrowLeft, Plus, PhoneCall, MapPin as VisitIcon, FileText, StickyNote, Mail } from 'lucide-react'
 import Link from 'next/link'
 
 // ── 타입 ──────────────────────────────────────────────────
@@ -28,6 +28,7 @@ type Lead = {
   company_name: string
   contact_name: string | null
   contact_title: string | null
+  email: string | null
   phone: string | null
   address: string | null
   status: string
@@ -148,6 +149,12 @@ export function LeadDetail({ lead, activities, existingQuote }: { lead: Lead; ac
                 <p className="text-sm flex items-center gap-1.5 text-muted-foreground">
                   <Phone className="h-3.5 w-3.5 shrink-0" />
                   {lead.phone}
+                </p>
+              )}
+              {lead.email && (
+                <p className="text-sm flex items-center gap-1.5 text-muted-foreground">
+                  <Mail className="h-3.5 w-3.5 shrink-0" />
+                  {lead.email}
                 </p>
               )}
               {lead.address && (
