@@ -61,7 +61,7 @@ export default async function WorkPage({
       .order('created_at', { ascending: false }),
 
     db.from('bookings')
-      .select('id, customer_name, customer_phone, service_address, scheduled_at, selected_tier, final_price, status, memo, created_at')
+      .select('id, customer_name, customer_phone, service_address, scheduled_at, selected_tier, final_price, status, memo, created_at, quotes!quote_id(cleaning_type, space_size)')
       .eq('business_id', businessId)
       .is('deleted_at', null)
       .order('scheduled_at', { ascending: false }),

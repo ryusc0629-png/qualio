@@ -34,6 +34,7 @@ export type BookingItem = {
   status: string
   memo: string | null
   created_at: string
+  quotes: { cleaning_type: string | null; space_size: number | null } | null
 }
 
 function formatDate(iso: string) {
@@ -152,6 +153,19 @@ export function BookingCardList({ bookings }: { bookings: BookingItem[] }) {
                 </DialogHeader>
 
                 <div className="mt-6 space-y-5">
+                  {/* 서비스 */}
+                  {selected.quotes?.cleaning_type && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground">서비스</p>
+                      <p className="text-sm font-semibold">
+                        {selected.quotes.cleaning_type}
+                        {selected.quotes.space_size && (
+                          <span className="ml-1 text-muted-foreground font-normal">{selected.quotes.space_size}평</span>
+                        )}
+                      </p>
+                    </div>
+                  )}
+
                   {/* 예약 일시 */}
                   <div className="space-y-1">
                     <p className="text-xs font-medium text-muted-foreground">예약 일시</p>
