@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { sendWorkCompleteAlimtalk } from '@/lib/kakao/alimtalk'
+import { sendWorkCompleteAlimtalk, sendReviewRequestAlimtalk } from '@/lib/kakao/alimtalk'
 import { revalidatePath } from 'next/cache'
 
 const saveReportSchema = z.object({
@@ -108,4 +108,61 @@ export const saveReportAction = action
 
     revalidatePath('/dashboard/work')
     return { reportId: report.id }
+  })
+
+const sendReviewSchema = z.object({
+  reportId: z.string().uuid(),
+})
+
+export const sendReviewRequestAction = action
+  .schema(sendReviewSchema)
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    // 보고서 + 예약 + 업체 정보 조회
+    const { data: report } = await db
+      .from('reports')
+      .select('id, bookings!booking_id(customer_name, customer_phone, quotes!quote_id(cleaning_type)), businesses!business_id(name, naver_place_url)')
+      .eq('id', parsedInput.reportId)
+      .eq('business_id', profile.business_id)
+      .single()
+
+    if (!report) throw new Error('[APP] 보고서 정보를 찾을 수 없습니다')
+
+    const booking = Array.isArray(report.bookings) ? report.bookings[0] : report.bookings
+    const biz     = Array.isArray(report.businesses) ? report.businesses[0] : report.businesses
+    const bizInfo = biz as { name: string; naver_place_url: string | null } | null
+    const bookingInfo = booking as { customer_name: string | null; customer_phone: string | null; quotes: { cleaning_type: string | null } | { cleaning_type: string | null }[] | null } | null
+    const quote   = Array.isArray(bookingInfo?.quotes) ? bookingInfo?.quotes[0] : bookingInfo?.quotes
+
+    if (!bizInfo?.naver_place_url) throw new Error('[APP] 설정에서 네이버 플레이스 URL을 먼저 등록해주세요')
+    if (!bookingInfo?.customer_phone) throw new Error('[APP] 고객 연락처가 없습니다')
+
+    await sendReviewRequestAlimtalk({
+      customerPhone: bookingInfo.customer_phone,
+      customerName:  bookingInfo.customer_name ?? '고객',
+      businessName:  bizInfo.name,
+      cleaningType:  (quote as { cleaning_type: string | null } | null)?.cleaning_type ?? '청소 서비스',
+      reviewUrl:     bizInfo.naver_place_url,
+    })
+
+    // 리뷰 요청 발송 시각 기록
+    await db
+      .from('reports')
+      .update({ review_request_sent_at: new Date().toISOString() })
+      .eq('id', parsedInput.reportId)
+
+    return { success: true }
   })

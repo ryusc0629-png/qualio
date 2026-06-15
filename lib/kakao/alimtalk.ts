@@ -183,6 +183,55 @@ export async function sendReminderAlimtalk(params: ReminderParams): Promise<void
   })
 }
 
+// 리뷰 요청 알림톡 파라미터
+export interface ReviewRequestParams {
+  customerPhone: string
+  customerName:  string
+  businessName:  string
+  cleaningType:  string
+  reviewUrl:     string  // 네이버 플레이스 리뷰 링크
+}
+
+// 리뷰 요청 알림톡 발송 (작업 완료 후 고객에게 발송)
+export async function sendReviewRequestAlimtalk(params: ReviewRequestParams): Promise<void> {
+  const apiKey     = process.env.SOLAPI_API_KEY
+  const apiSecret  = process.env.SOLAPI_API_SECRET
+  const sender     = process.env.SOLAPI_SENDER_PHONE
+  const templateId = process.env.SOLAPI_TEMPLATE_ID_REVIEW_REQUEST
+  const pfId       = process.env.SOLAPI_KAKAO_PF_ID
+
+  if (!apiKey || !apiSecret || !sender || !templateId || !pfId) {
+    console.warn('[Alimtalk] REVIEW_REQUEST 템플릿 미설정 — 발송 생략')
+    return
+  }
+
+  const service = new SolapiMessageService(apiKey, apiSecret)
+
+  await service.sendOne({
+    to:   params.customerPhone,
+    from: sender,
+    type: 'ATA',
+    kakaoOptions: {
+      pfId,
+      templateId,
+      variables: {
+        '#{고객명}':   params.customerName,
+        '#{업체명}':   params.businessName,
+        '#{서비스명}': params.cleaningType,
+        '#{리뷰링크}': params.reviewUrl,
+      },
+      buttons: [
+        {
+          buttonType: 'WL' as const,
+          buttonName: '리뷰 남기기',
+          linkMo: params.reviewUrl,
+          linkPc: params.reviewUrl,
+        },
+      ],
+    },
+  })
+}
+
 // 작업 완료 보고서 알림톡 파라미터
 export interface WorkCompleteParams {
   customerPhone: string

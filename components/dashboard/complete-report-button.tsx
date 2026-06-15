@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { createClient } from '@/lib/supabase/client'
-import { saveReportAction } from '@/lib/actions/reports'
+import { saveReportAction, sendReviewRequestAction } from '@/lib/actions/reports'
 
 interface CompleteReportButtonProps {
   bookingId:    string
@@ -19,23 +19,26 @@ interface CompleteReportButtonProps {
 type PhotoSlot = { url: string; uploading: boolean }
 
 export function CompleteReportButton({ bookingId, customerName, businessId }: CompleteReportButtonProps) {
-  const [open, setOpen]         = useState(false)
-  const [notes, setNotes]       = useState('')
-  const [before, setBefore]     = useState<PhotoSlot[]>([])
-  const [after, setAfter]       = useState<PhotoSlot[]>([])
-  const beforeInputRef          = useRef<HTMLInputElement>(null)
-  const afterInputRef           = useRef<HTMLInputElement>(null)
+  const [open, setOpen]           = useState(false)
+  const [notes, setNotes]         = useState('')
+  const [before, setBefore]       = useState<PhotoSlot[]>([])
+  const [after, setAfter]         = useState<PhotoSlot[]>([])
+  const [savedReportId, setSavedReportId] = useState<string | null>(null)
+  const beforeInputRef            = useRef<HTMLInputElement>(null)
+  const afterInputRef             = useRef<HTMLInputElement>(null)
 
   const isUploading = before.some((p) => p.uploading) || after.some((p) => p.uploading)
 
   const { execute, isPending } = useAction(saveReportAction, {
     onSuccess: ({ data }) => {
       toast.success('보고서가 저장됐어요!')
-      setOpen(false)
-      // 보고서 링크 복사 안내
-      const reportUrl = `${window.location.origin}/q/${businessId}/report/${data?.reportId}`
-      navigator.clipboard?.writeText(reportUrl).catch(() => null)
+      if (data?.reportId) setSavedReportId(data.reportId)
     },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  const { execute: sendReview, isPending: isSendingReview } = useAction(sendReviewRequestAction, {
+    onSuccess: () => toast.success('리뷰 요청 알림톡을 보냈어요!'),
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
@@ -161,7 +164,7 @@ export function CompleteReportButton({ bookingId, customerName, businessId }: Co
         variant="default"
         size="sm"
         className="w-full h-11"
-        onClick={() => setOpen(true)}
+        onClick={() => { setOpen(true); setSavedReportId(null); setBefore([]); setAfter([]); setNotes('') }}
       >
         <ClipboardList className="h-4 w-4 mr-2" />
         완료 보고서 작성
@@ -202,24 +205,55 @@ export function CompleteReportButton({ bookingId, customerName, businessId }: Co
             </div>
 
             <div className="space-y-2 pt-2 border-t border-border">
-              {/* 알림톡 발송 버튼 */}
-              <Button
-                className="w-full h-12 font-bold"
-                disabled={isPending || isUploading || (before.length === 0 && after.length === 0)}
-                onClick={() => handleSave(true)}
-              >
-                {isPending ? '저장 중...' : '카카오 알림톡으로 고객에게 보내기'}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full h-10 text-sm"
-                disabled={isPending || isUploading}
-                onClick={() => handleSave(false)}
-              >
-                {isPending ? '저장 중...' : '저장만 하기 (알림 없이)'}
-              </Button>
-              {before.length === 0 && after.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center">사진을 1장 이상 추가해야 알림톡을 보낼 수 있어요</p>
+              {!savedReportId ? (
+                <>
+                  <Button
+                    className="w-full h-12 font-bold"
+                    disabled={isPending || isUploading || (before.length === 0 && after.length === 0)}
+                    onClick={() => handleSave(true)}
+                  >
+                    {isPending ? '저장 중...' : '카카오 알림톡으로 고객에게 보내기'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full h-10 text-sm"
+                    disabled={isPending || isUploading}
+                    onClick={() => handleSave(false)}
+                  >
+                    {isPending ? '저장 중...' : '저장만 하기 (알림 없이)'}
+                  </Button>
+                  {before.length === 0 && after.length === 0 && (
+                    <p className="text-xs text-muted-foreground text-center">사진을 1장 이상 추가해야 알림톡을 보낼 수 있어요</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 bg-green-50 rounded-xl px-4 py-3">
+                    <span className="text-green-600 text-lg">✅</span>
+                    <p className="text-sm font-semibold text-green-800">보고서가 저장됐어요!</p>
+                  </div>
+                  <Button
+                    className="w-full h-12 font-bold"
+                    disabled={isSendingReview}
+                    onClick={() => sendReview({ reportId: savedReportId })}
+                  >
+                    {isSendingReview ? '발송 중...' : '⭐ 리뷰 요청 알림톡 보내기'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full h-10 text-sm"
+                    onClick={() => {
+                      const reportUrl = `${window.location.origin}/q/${businessId}/report/${savedReportId}`
+                      navigator.clipboard?.writeText(reportUrl).catch(() => null)
+                      toast.success('보고서 링크가 복사됐어요!')
+                    }}
+                  >
+                    보고서 링크 복사
+                  </Button>
+                  <Button variant="ghost" className="w-full h-9 text-sm text-muted-foreground" onClick={() => setOpen(false)}>
+                    닫기
+                  </Button>
+                </>
               )}
             </div>
           </div>

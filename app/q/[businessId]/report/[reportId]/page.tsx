@@ -34,7 +34,7 @@ export default async function ReportPage({
         selected_tier,
         quotes!quote_id(cleaning_type, space_size)
       ),
-      businesses!business_id(name, phone)
+      businesses!business_id(name, phone, naver_place_url)
     `)
     .eq('id', reportId)
     .eq('business_id', businessId)
@@ -53,7 +53,7 @@ export default async function ReportPage({
   const biz     = Array.isArray(report.businesses) ? report.businesses[0] : report.businesses
   const quote   = Array.isArray(booking?.quotes) ? booking?.quotes[0] : booking?.quotes
 
-  const bizInfo = biz as { name: string; phone: string | null } | null
+  const bizInfo = biz as { name: string; phone: string | null; naver_place_url: string | null } | null
   const bookingInfo = booking as {
     customer_name: string | null
     customer_phone: string | null
@@ -180,6 +180,24 @@ export default async function ReportPage({
                 </a>
               )}
             </div>
+          </div>
+        )}
+
+        {/* 리뷰 요청 */}
+        {bizInfo?.naver_place_url && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-5 space-y-3 text-center">
+            <p className="text-sm font-bold text-yellow-900">서비스가 만족스러우셨나요? ⭐</p>
+            <p className="text-xs text-yellow-800 leading-relaxed">
+              리뷰 한 줄이 저희에게 큰 힘이 됩니다.<br />30초면 충분해요!
+            </p>
+            <a
+              href={bizInfo.naver_place_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full bg-[#03C75A] text-white font-bold text-sm py-3 rounded-xl active:opacity-80 transition-opacity"
+            >
+              네이버 리뷰 남기기 →
+            </a>
           </div>
         )}
 
