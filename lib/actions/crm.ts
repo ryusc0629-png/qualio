@@ -5,15 +5,17 @@ import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-const LEAD_STATUSES = ['new', 'contacted', 'follow_up', 'quoted', 'contracted', 'rejected'] as const
+const LEAD_STATUSES = ['new', 'contacted', 'follow_up', 'quoted', 'negotiating', 'contracted', 'rejected'] as const
+const ACTIVITY_TYPES = ['call', 'visit', 'quote', 'note'] as const
 
 // 잠재고객 추가 스키마
 const createLeadSchema = z.object({
-  company_name: z.string().min(1, '업체명을 입력해주세요'),
+  company_name: z.string().min(1, '이름 또는 업체명을 입력해주세요'),
+  customer_type: z.string().refine((v) => ['company', 'individual'].includes(v), '유효하지 않은 유형입니다'),
   contact_name: z.string().optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
-  category: z.string().optional(),
+  monthly_budget: z.number().optional(),
   next_follow_up_date: z.string().optional(),
   notes: z.string().optional(),
 })
@@ -27,13 +29,22 @@ const updateLeadStatusSchema = z.object({
 // 리드 수정 스키마
 const updateLeadSchema = z.object({
   leadId: z.string().uuid(),
-  company_name: z.string().min(1, '업체명을 입력해주세요'),
+  company_name: z.string().min(1, '이름 또는 업체명을 입력해주세요'),
+  customer_type: z.string().refine((v) => ['company', 'individual'].includes(v), '유효하지 않은 유형입니다'),
   contact_name: z.string().optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
-  category: z.string().optional(),
+  monthly_budget: z.number().optional(),
   next_follow_up_date: z.string().optional(),
   notes: z.string().optional(),
+})
+
+// 상담 기록 추가 스키마
+const createActivitySchema = z.object({
+  leadId: z.string().uuid(),
+  type: z.string().refine((v) => ACTIVITY_TYPES.includes(v as typeof ACTIVITY_TYPES[number]), '유효하지 않은 유형입니다'),
+  content: z.string().min(1, '내용을 입력해주세요'),
+  activity_at: z.string().optional(),
 })
 
 // 삭제 스키마
@@ -91,18 +102,19 @@ export const createLeadAction = action
     const { db, businessId } = await getAuthenticatedBusinessId()
 
     const { error } = await db.from('leads').insert({
-      business_id: businessId,
-      company_name: parsedInput.company_name,
-      contact_name: parsedInput.contact_name ?? null,
-      phone: parsedInput.phone ?? null,
-      address: parsedInput.address ?? null,
-      category: parsedInput.category ?? null,
+      business_id:         businessId,
+      company_name:        parsedInput.company_name,
+      customer_type:       parsedInput.customer_type,
+      contact_name:        parsedInput.contact_name ?? null,
+      phone:               parsedInput.phone ?? null,
+      address:             parsedInput.address ?? null,
+      monthly_budget:      parsedInput.monthly_budget ?? null,
       next_follow_up_date: parsedInput.next_follow_up_date ?? null,
-      notes: parsedInput.notes ?? null,
+      notes:               parsedInput.notes ?? null,
     })
 
-    if (error) throw new Error('[APP] 잠재고객 추가에 실패했습니다')
-    revalidatePath('/dashboard/clients')
+    if (error) throw new Error('[APP] 거래처 추가에 실패했습니다')
+    revalidatePath('/dashboard/pipeline')
     return { success: true }
   })
 
@@ -118,8 +130,8 @@ export const updateLeadStatusAction = action
       .eq('id', parsedInput.leadId)
       .eq('business_id', businessId)
 
-    if (error) throw new Error('[APP] 상태 변경에 실패했습니다')
-    revalidatePath('/dashboard/clients')
+    if (error) throw new Error('[APP] 단계 변경에 실패했습니다')
+    revalidatePath('/dashboard/pipeline')
     return { success: true }
   })
 
@@ -132,19 +144,39 @@ export const updateLeadAction = action
     const { error } = await db
       .from('leads')
       .update({
-        company_name: parsedInput.company_name,
-        contact_name: parsedInput.contact_name ?? null,
-        phone: parsedInput.phone ?? null,
-        address: parsedInput.address ?? null,
-        category: parsedInput.category ?? null,
+        company_name:        parsedInput.company_name,
+        customer_type:       parsedInput.customer_type,
+        contact_name:        parsedInput.contact_name ?? null,
+        phone:               parsedInput.phone ?? null,
+        address:             parsedInput.address ?? null,
+        monthly_budget:      parsedInput.monthly_budget ?? null,
         next_follow_up_date: parsedInput.next_follow_up_date ?? null,
-        notes: parsedInput.notes ?? null,
+        notes:               parsedInput.notes ?? null,
       })
       .eq('id', parsedInput.leadId)
       .eq('business_id', businessId)
 
     if (error) throw new Error('[APP] 수정에 실패했습니다')
-    revalidatePath('/dashboard/clients')
+    revalidatePath('/dashboard/pipeline')
+    return { success: true }
+  })
+
+// 상담 기록 추가
+export const createLeadActivityAction = action
+  .schema(createActivitySchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuthenticatedBusinessId()
+
+    const { error } = await db.from('lead_activities').insert({
+      lead_id:     parsedInput.leadId,
+      business_id: businessId,
+      type:        parsedInput.type,
+      content:     parsedInput.content,
+      activity_at: parsedInput.activity_at ?? new Date().toISOString(),
+    })
+
+    if (error) throw new Error('[APP] 상담 기록 저장에 실패했습니다')
+    revalidatePath('/dashboard/pipeline')
     return { success: true }
   })
 
@@ -161,6 +193,6 @@ export const deleteLeadAction = action
       .eq('business_id', businessId)
 
     if (error) throw new Error('[APP] 삭제에 실패했습니다')
-    revalidatePath('/dashboard/clients')
+    revalidatePath('/dashboard/pipeline')
     return { success: true }
   })

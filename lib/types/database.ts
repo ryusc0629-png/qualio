@@ -503,6 +503,44 @@ export type Database = {
           },
         ]
       }
+      lead_activities: {
+        Row: {
+          id: string
+          lead_id: string
+          business_id: string
+          type: string
+          content: string | null
+          activity_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          lead_id: string
+          business_id: string
+          type?: string
+          content?: string | null
+          activity_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          lead_id?: string
+          business_id?: string
+          type?: string
+          content?: string | null
+          activity_at?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           id: string
@@ -513,6 +551,8 @@ export type Database = {
           address: string | null
           category: string | null
           status: string
+          customer_type: string
+          monthly_budget: number | null
           next_follow_up_date: string | null
           notes: string | null
           created_at: string
@@ -527,6 +567,8 @@ export type Database = {
           address?: string | null
           category?: string | null
           status?: string
+          customer_type?: string
+          monthly_budget?: number | null
           next_follow_up_date?: string | null
           notes?: string | null
           created_at?: string
@@ -541,6 +583,8 @@ export type Database = {
           address?: string | null
           category?: string | null
           status?: string
+          customer_type?: string
+          monthly_budget?: number | null
           next_follow_up_date?: string | null
           notes?: string | null
           created_at?: string

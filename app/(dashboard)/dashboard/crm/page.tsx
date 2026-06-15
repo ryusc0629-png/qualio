@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
 export default function CrmPage() {
-  redirect('/dashboard/clients?tab=lead')
+  redirect('/dashboard/pipeline')
 }
