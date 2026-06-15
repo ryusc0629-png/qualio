@@ -15,6 +15,8 @@ interface Business {
   naver_place_url: string | null
   google_place_url: string | null
   youtube_url: string | null
+  review_reward_type: string
+  review_reward_description: string | null
 }
 
 interface Props {
@@ -33,13 +35,15 @@ export function SettingsForm({ business }: Props) {
     const data = new FormData(form)
 
     execute({
-      name:             data.get('name') as string,
-      phone:            data.get('phone') as string,
-      address:          data.get('address') as string,
-      description:      data.get('description') as string,
-      naver_place_url:  data.get('naver_place_url') as string,
-      google_place_url: data.get('google_place_url') as string,
-      youtube_url:      data.get('youtube_url') as string,
+      name:                      data.get('name') as string,
+      phone:                     data.get('phone') as string,
+      address:                   data.get('address') as string,
+      description:               data.get('description') as string,
+      naver_place_url:           data.get('naver_place_url') as string,
+      google_place_url:          data.get('google_place_url') as string,
+      youtube_url:               data.get('youtube_url') as string,
+      review_reward_type:        data.get('review_reward_type') as string,
+      review_reward_description: data.get('review_reward_description') as string,
     })
   }
 
@@ -127,6 +131,49 @@ export function SettingsForm({ business }: Props) {
             placeholder="https://www.youtube.com/watch?v=..."
           />
           <p className="text-xs text-muted-foreground">등록 시 고객 견적서에 시공 영상이 자동 표시됩니다</p>
+        </div>
+      </div>
+
+      {/* 후기 보상 설정 */}
+      <div className="rounded-lg border bg-card p-5 space-y-4">
+        <div>
+          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">후기 보상</h2>
+          <p className="text-xs text-muted-foreground mt-1">후기 작성 고객에게 자동 안내할 혜택을 설정하세요</p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>보상 유형</Label>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { value: 'none',     label: '없음' },
+              { value: 'discount', label: '할인 쿠폰' },
+              { value: 'other',    label: '기타 혜택' },
+            ].map((opt) => (
+              <label key={opt.value} className="relative">
+                <input
+                  type="radio"
+                  name="review_reward_type"
+                  value={opt.value}
+                  defaultChecked={business.review_reward_type === opt.value}
+                  className="peer sr-only"
+                />
+                <div className="h-10 flex items-center justify-center rounded-lg border text-sm cursor-pointer peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:text-primary peer-checked:font-medium hover:bg-muted transition-colors">
+                  {opt.label}
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="review_reward_description">보상 내용</Label>
+          <Input
+            id="review_reward_description"
+            name="review_reward_description"
+            defaultValue={business.review_reward_description ?? ''}
+            placeholder="예: 다음 방문 10% 할인 쿠폰을 드립니다"
+          />
+          <p className="text-xs text-muted-foreground">고객 인증 페이지와 사장님 알림에 표시됩니다</p>
         </div>
       </div>
 

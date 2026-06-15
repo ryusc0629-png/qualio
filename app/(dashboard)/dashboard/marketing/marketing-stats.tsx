@@ -14,7 +14,7 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
   const sixMonthsAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1)).toISOString()
 
-  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, reviewResult] = await Promise.all([
+  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, reviewResult, claimsResult] = await Promise.all([
     // 이번 달 견적 신청 수
     db
       .from('quotes')
@@ -53,6 +53,13 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
       .eq('business_id', businessId)
       .eq('status', 'completed')
       .gte('scheduled_at', monthStart),
+
+    // 이번 달 후기 인증 클릭 수
+    db
+      .from('review_claims')
+      .select('id, claimed_at')
+      .eq('business_id', businessId)
+      .gte('sent_at', monthStart),
   ])
 
   const quoteCount = quotesResult.count ?? 0
@@ -63,6 +70,8 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
   const completedBookings = reviewResult.data ?? []
   const reviewSentCount = completedBookings.filter((b) => b.auto_review_sent_at).length
   const reviewFollowupCount = completedBookings.filter((b) => b.auto_review_followup_sent_at).length
+  const claims = claimsResult.data ?? []
+  const claimedCount = claims.filter((c) => c.claimed_at).length
 
   const views = postViewsResult.data ?? []
   const totalViews = views.length
@@ -137,18 +146,22 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
         <div className="px-5 py-3.5 border-b bg-slate-50">
           <p className="font-semibold text-sm">이번 달 후기 요청 현황</p>
         </div>
-        <div className="grid grid-cols-3 divide-x">
-          <div className="px-4 py-4 text-center">
+        <div className="grid grid-cols-4 divide-x">
+          <div className="px-3 py-4 text-center">
             <p className="text-xl font-bold">{completedBookings.length}</p>
             <p className="text-xs text-muted-foreground mt-0.5">완료 건수</p>
           </div>
-          <div className="px-4 py-4 text-center">
+          <div className="px-3 py-4 text-center">
             <p className="text-xl font-bold text-blue-600">{reviewSentCount}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">후기 요청 발송</p>
+            <p className="text-xs text-muted-foreground mt-0.5">요청 발송</p>
           </div>
-          <div className="px-4 py-4 text-center">
+          <div className="px-3 py-4 text-center">
             <p className="text-xl font-bold text-amber-600">{reviewFollowupCount}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">팔로업 발송</p>
+            <p className="text-xs text-muted-foreground mt-0.5">팔로업</p>
+          </div>
+          <div className="px-3 py-4 text-center">
+            <p className="text-xl font-bold text-emerald-600">{claimedCount}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">인증 완료</p>
           </div>
         </div>
         {completedBookings.length > 0 && reviewSentCount === 0 && (

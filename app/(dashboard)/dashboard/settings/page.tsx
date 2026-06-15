@@ -29,7 +29,7 @@ export default async function SettingsPage() {
   const [businessResult, subscriptionResult] = await Promise.all([
     db
       .from('businesses')
-      .select('id, name, phone, address, description, naver_place_url, google_place_url, youtube_url, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, naver_blog_id')
+      .select('id, name, phone, address, description, naver_place_url, google_place_url, youtube_url, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, naver_blog_id')
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
