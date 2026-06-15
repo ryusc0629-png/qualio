@@ -119,7 +119,10 @@ export const createLeadAction = action
       notes:               parsedInput.notes ?? null,
     })
 
-    if (error) throw new Error('[APP] 거래처 추가에 실패했습니다')
+    if (error) {
+      console.error('[createLeadAction] DB 오류:', error)
+      throw new Error('[APP] 거래처 추가에 실패했습니다')
+    }
     revalidatePath('/dashboard/pipeline')
     return { success: true }
   })
