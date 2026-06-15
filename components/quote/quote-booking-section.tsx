@@ -251,9 +251,9 @@ export function QuoteBookingSection({
           <div className="bg-white rounded-xl px-4 py-3 space-y-2.5">
             <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide">예약 후 진행 순서</p>
             {[
-              { step: '1', text: '담당자 확인 연락', sub: '평균 1시간 내 연락드려요' },
-              { step: '2', text: '방문 일정 최종 확정', sub: '원하는 날짜로 조율해드려요' },
-              { step: '3', text: '방문 당일 카카오 알림', sub: '잊지 않도록 미리 알려드려요' },
+              { step: '1', text: '예약 확인 알림톡 발송', sub: '예약 즉시 카카오톡으로 안내드려요' },
+              { step: '2', text: '방문 전날 리마인드 알림', sub: '날짜·주소·담당자 연락처 포함' },
+              { step: '3', text: '방문 완료 후 사진 보고서', sub: '작업 전·후 사진을 카카오톡으로' },
             ].map(({ step, text, sub }) => (
               <div key={step} className="flex items-center gap-3">
                 <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center shrink-0">

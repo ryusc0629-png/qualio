@@ -11,6 +11,9 @@ export interface BookingConfirmParams {
   serviceAddress: string
   selectedTier: 'good' | 'better' | 'best'
   finalPrice: number
+  // V2 버튼 템플릿용 (선택) — 전화 연결·일정 변경 버튼
+  bookingId?: string
+  businessId?: string
 }
 
 // 티어 한국어 라벨 매핑
@@ -201,13 +204,23 @@ export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): 
   const priceFormatted  = params.finalPrice.toLocaleString('ko-KR')
   const contactInfo     = params.businessPhone ?? '업체에 문의해 주세요'
 
+  // V2 템플릿(버튼 포함) 설정 여부 확인
+  const templateIdV2 = process.env.SOLAPI_TEMPLATE_ID_BOOKING_CONFIRM_V2
+  const useV2 = !!(templateIdV2 && params.bookingId && params.businessId)
+  const activeTemplateId = useV2 ? templateIdV2! : templateId
+
+  const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.kr'
+  const rescheduleUrl = useV2
+    ? `${appBaseUrl}/q/${params.businessId}/reschedule/${params.bookingId}`
+    : undefined
+
   await service.sendOne({
     to:   params.customerPhone,
     from: sender,
     type: 'ATA',
     kakaoOptions: {
       pfId,
-      templateId,
+      templateId: activeTemplateId,
       variables: {
         '#{업체명}':     params.businessName,
         '#{서비스명}':   params.cleaningType,
@@ -217,6 +230,23 @@ export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): 
         '#{최종금액}':   priceFormatted,
         '#{업체연락처}': contactInfo,
       },
+      // V2 버튼: 전화 연결 + 일정 변경 요청
+      ...(useV2 && params.businessPhone && rescheduleUrl ? {
+        buttons: [
+          {
+            buttonType: 'WL' as const,
+            buttonName: '전화 연결',
+            linkMo: `tel:${params.businessPhone}`,
+            linkPc: `tel:${params.businessPhone}`,
+          },
+          {
+            buttonType: 'WL' as const,
+            buttonName: '일정 변경 요청',
+            linkMo: rescheduleUrl,
+            linkPc: rescheduleUrl,
+          },
+        ],
+      } : {}),
     },
   })
 }
