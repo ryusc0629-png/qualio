@@ -417,6 +417,55 @@ export interface ReviewClaimedParams {
 }
 
 // 고객이 후기 인증 시 사장님에게 알림톡 발송
+interface QuoteFollowupParams {
+  customerPhone: string
+  customerName:  string
+  businessName:  string
+  cleaningType:  string
+  quoteUrl:      string   // 견적 페이지 URL
+  isSecond:      boolean  // D+3 팔로업 여부
+}
+
+export async function sendQuoteFollowupAlimtalk(params: QuoteFollowupParams): Promise<void> {
+  const apiKey     = process.env.SOLAPI_API_KEY
+  const apiSecret  = process.env.SOLAPI_API_SECRET
+  const sender     = process.env.SOLAPI_SENDER_PHONE
+  const templateId = params.isSecond
+    ? process.env.SOLAPI_TEMPLATE_ID_QUOTE_FOLLOWUP2
+    : process.env.SOLAPI_TEMPLATE_ID_QUOTE_FOLLOWUP
+  const pfId       = process.env.SOLAPI_KAKAO_PF_ID
+
+  if (!apiKey || !apiSecret || !sender || !templateId || !pfId) {
+    console.warn('[Alimtalk] QUOTE_FOLLOWUP 템플릿 미설정 — 발송 생략')
+    return
+  }
+
+  const service = new SolapiMessageService(apiKey, apiSecret)
+
+  await service.sendOne({
+    to:   params.customerPhone,
+    from: sender,
+    type: 'ATA',
+    kakaoOptions: {
+      pfId,
+      templateId,
+      variables: {
+        '#{업체명}':    params.businessName,
+        '#{고객명}':    params.customerName,
+        '#{서비스명}':  params.cleaningType,
+      },
+      buttons: [
+        {
+          buttonType: 'WL' as const,
+          buttonName: '견적 확인하고 예약하기',
+          linkMo: params.quoteUrl,
+          linkPc: params.quoteUrl,
+        },
+      ],
+    },
+  })
+}
+
 export async function sendReviewClaimedAlimtalk(params: ReviewClaimedParams): Promise<void> {
   const apiKey     = process.env.SOLAPI_API_KEY
   const apiSecret  = process.env.SOLAPI_API_SECRET

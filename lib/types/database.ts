@@ -686,6 +686,8 @@ export type Database = {
           customer_phone: string | null
           expires_at: string
           extra_notes: string | null
+          followup_sent_at: string | null
+          followup2_sent_at: string | null
           good_price: number | null
           id: string
           preferred_date: string | null
@@ -705,6 +707,8 @@ export type Database = {
           customer_phone?: string | null
           expires_at?: string
           extra_notes?: string | null
+          followup_sent_at?: string | null
+          followup2_sent_at?: string | null
           good_price?: number | null
           id?: string
           preferred_date?: string | null
@@ -724,6 +728,8 @@ export type Database = {
           customer_phone?: string | null
           expires_at?: string
           extra_notes?: string | null
+          followup_sent_at?: string | null
+          followup2_sent_at?: string | null
           good_price?: number | null
           id?: string
           preferred_date?: string | null
