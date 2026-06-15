@@ -27,6 +27,7 @@ type Lead = {
   id: string
   company_name: string
   contact_name: string | null
+  contact_title: string | null
   phone: string | null
   address: string | null
   status: string
@@ -136,7 +137,9 @@ export function LeadDetail({ lead, activities, existingQuote }: { lead: Lead; ac
               </span>
               <h1 className="text-lg font-bold">{lead.company_name}</h1>
               {lead.contact_name && (
-                <span className="text-sm text-muted-foreground">담당 {lead.contact_name}</span>
+                <span className="text-sm text-muted-foreground">
+                  {lead.contact_title ? `${lead.contact_title} ` : '담당 '}{lead.contact_name}
+                </span>
               )}
             </div>
 

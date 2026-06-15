@@ -58,6 +58,7 @@ type Lead = {
   id: string
   company_name: string
   contact_name: string | null
+  contact_title: string | null
   phone: string | null
   address: string | null
   status: string
@@ -80,6 +81,7 @@ const emptyForm = {
   company_name: '',
   customer_type: 'company',
   contact_name: '',
+  contact_title: '',
   phone: '',
   address: '',
   monthly_budget: '',
@@ -149,6 +151,7 @@ export function PipelineList({ leads, filterStatus }: Props) {
       company_name:        form.company_name,
       customer_type:       'company',
       contact_name:        form.contact_name || undefined,
+      contact_title:       form.contact_title || undefined,
       phone:               form.phone || undefined,
       address:             form.address || undefined,
       monthly_budget:      form.monthly_budget ? Number(form.monthly_budget) : undefined,
@@ -162,6 +165,7 @@ export function PipelineList({ leads, filterStatus }: Props) {
       company_name:        lead.company_name,
       customer_type:       lead.customer_type,
       contact_name:        lead.contact_name ?? '',
+      contact_title:       lead.contact_title ?? '',
       phone:               lead.phone ?? '',
       address:             lead.address ?? '',
       monthly_budget:      lead.monthly_budget?.toString() ?? '',
@@ -178,6 +182,7 @@ export function PipelineList({ leads, filterStatus }: Props) {
       company_name:        form.company_name,
       customer_type:       'company',
       contact_name:        form.contact_name || undefined,
+      contact_title:       form.contact_title || undefined,
       phone:               form.phone || undefined,
       address:             form.address || undefined,
       monthly_budget:      form.monthly_budget ? Number(form.monthly_budget) : undefined,
@@ -407,7 +412,17 @@ function LeadForm({
           <Input
             value={form.contact_name}
             onChange={(e) => onChange('contact_name', e.target.value)}
-            placeholder="예: 김대리"
+            placeholder="예: 김민수"
+            className="mt-1"
+          />
+        </div>
+
+        <div>
+          <Label>직함 또는 직급</Label>
+          <Input
+            value={form.contact_title}
+            onChange={(e) => onChange('contact_title', e.target.value)}
+            placeholder="예: 총무팀장, 대표이사, 시설관리팀장"
             className="mt-1"
           />
         </div>

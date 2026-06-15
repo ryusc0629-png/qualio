@@ -25,7 +25,7 @@ export default async function LeadDetailPage({
   const [leadResult, activitiesResult, quoteResult] = await Promise.all([
     db
       .from('leads')
-      .select('id, company_name, contact_name, phone, address, status, customer_type, monthly_budget, next_follow_up_date, notes, created_at')
+      .select('id, company_name, contact_name, contact_title, phone, address, status, customer_type, monthly_budget, next_follow_up_date, notes, created_at')
       .eq('id', leadId)
       .eq('business_id', profile.business_id)
       .maybeSingle(),
