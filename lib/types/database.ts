@@ -59,6 +59,8 @@ export type Database = {
           service_address: string
           status: string
           updated_at: string
+          auto_review_sent_at: string | null
+          auto_review_followup_sent_at: string | null
         }
         Insert: {
           business_id: string
@@ -79,6 +81,8 @@ export type Database = {
           service_address: string
           status?: string
           updated_at?: string
+          auto_review_sent_at?: string | null
+          auto_review_followup_sent_at?: string | null
         }
         Update: {
           business_id?: string
@@ -99,6 +103,8 @@ export type Database = {
           service_address?: string
           status?: string
           updated_at?: string
+          auto_review_sent_at?: string | null
+          auto_review_followup_sent_at?: string | null
         }
         Relationships: [
           {
@@ -253,6 +259,7 @@ export type Database = {
           naver_blog_id: string | null
           naver_blog_api_key: string | null
           naver_place_url: string | null
+          google_place_url: string | null
           youtube_url: string | null
           owner_id: string
           phone: string | null
@@ -276,6 +283,7 @@ export type Database = {
           naver_blog_id?: string | null
           naver_blog_api_key?: string | null
           naver_place_url?: string | null
+          google_place_url?: string | null
           youtube_url?: string | null
           owner_id: string
           phone?: string | null
@@ -299,6 +307,7 @@ export type Database = {
           naver_blog_id?: string | null
           naver_blog_api_key?: string | null
           naver_place_url?: string | null
+          google_place_url?: string | null
           youtube_url?: string | null
           owner_id?: string
           phone?: string | null

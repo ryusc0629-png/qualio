@@ -14,7 +14,7 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
   const sixMonthsAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1)).toISOString()
 
-  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult] = await Promise.all([
+  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, reviewResult] = await Promise.all([
     // 이번 달 견적 신청 수
     db
       .from('quotes')
@@ -45,11 +45,24 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
       .eq('business_id', businessId)
       .eq('published', true)
       .gte('published_at', sixMonthsAgo),
+
+    // 이번 달 후기 요청 현황
+    db
+      .from('bookings')
+      .select('id, auto_review_sent_at, auto_review_followup_sent_at')
+      .eq('business_id', businessId)
+      .eq('status', 'completed')
+      .gte('scheduled_at', monthStart),
   ])
 
   const quoteCount = quotesResult.count ?? 0
   const bookingCount = bookingsResult.count ?? 0
   const conversionRate = quoteCount > 0 ? Math.round((bookingCount / quoteCount) * 100) : 0
+
+  // 후기 요청 현황
+  const completedBookings = reviewResult.data ?? []
+  const reviewSentCount = completedBookings.filter((b) => b.auto_review_sent_at).length
+  const reviewFollowupCount = completedBookings.filter((b) => b.auto_review_followup_sent_at).length
 
   const views = postViewsResult.data ?? []
   const totalViews = views.length
@@ -99,7 +112,7 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
         <p className="text-xs text-muted-foreground mt-0.5">이번 달 기준 · 조회수는 최근 6개월</p>
       </div>
 
-      {/* 상단 지표 카드 4개 */}
+      {/* 상단 지표 카드 */}
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border bg-white p-4 space-y-0.5">
           <p className="text-2xl font-bold text-primary">{quoteCount}</p>
@@ -117,6 +130,32 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
           <p className="text-2xl font-bold text-emerald-600">{aiViews.toLocaleString()}</p>
           <p className="text-xs text-muted-foreground">AI 검색 유입</p>
         </div>
+      </div>
+
+      {/* 후기 요청 현황 */}
+      <div className="rounded-xl border bg-white overflow-hidden">
+        <div className="px-5 py-3.5 border-b bg-slate-50">
+          <p className="font-semibold text-sm">이번 달 후기 요청 현황</p>
+        </div>
+        <div className="grid grid-cols-3 divide-x">
+          <div className="px-4 py-4 text-center">
+            <p className="text-xl font-bold">{completedBookings.length}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">완료 건수</p>
+          </div>
+          <div className="px-4 py-4 text-center">
+            <p className="text-xl font-bold text-blue-600">{reviewSentCount}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">후기 요청 발송</p>
+          </div>
+          <div className="px-4 py-4 text-center">
+            <p className="text-xl font-bold text-amber-600">{reviewFollowupCount}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">팔로업 발송</p>
+          </div>
+        </div>
+        {completedBookings.length > 0 && reviewSentCount === 0 && (
+          <p className="px-5 pb-3 text-xs text-muted-foreground">
+            설정에서 구글/네이버 플레이스 URL을 등록하면 자동 발송이 시작돼요
+          </p>
+        )}
       </div>
 
       {/* 차트 (클라이언트 컴포넌트) */}

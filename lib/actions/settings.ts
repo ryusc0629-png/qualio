@@ -17,8 +17,9 @@ const updateBusinessSchema = z.object({
     .optional(),
   address: z.string().max(200).optional(),
   description: z.string().max(500).optional(),
-  naver_place_url: z.string().max(300).optional(),
-  youtube_url:     z.string().max(300).optional(),
+  naver_place_url:  z.string().max(300).optional(),
+  google_place_url: z.string().max(300).optional(),
+  youtube_url:      z.string().max(300).optional(),
 })
 
 export const updateBusinessAction = action
@@ -44,8 +45,9 @@ export const updateBusinessAction = action
         phone:            parsedInput.phone || null,
         address:          parsedInput.address || null,
         description:     parsedInput.description || null,
-        naver_place_url: parsedInput.naver_place_url || null,
-        youtube_url:     parsedInput.youtube_url     || null,
+        naver_place_url:  parsedInput.naver_place_url  || null,
+        google_place_url: parsedInput.google_place_url || null,
+        youtube_url:      parsedInput.youtube_url      || null,
       })
       .eq('id', profile.business_id)
 

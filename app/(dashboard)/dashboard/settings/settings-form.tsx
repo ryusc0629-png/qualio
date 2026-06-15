@@ -13,6 +13,7 @@ interface Business {
   address: string | null
   description: string | null
   naver_place_url: string | null
+  google_place_url: string | null
   youtube_url: string | null
 }
 
@@ -32,12 +33,13 @@ export function SettingsForm({ business }: Props) {
     const data = new FormData(form)
 
     execute({
-      name:            data.get('name') as string,
-      phone:           data.get('phone') as string,
-      address:         data.get('address') as string,
-      description:     data.get('description') as string,
-      naver_place_url: data.get('naver_place_url') as string,
-      youtube_url:     data.get('youtube_url') as string,
+      name:             data.get('name') as string,
+      phone:            data.get('phone') as string,
+      address:          data.get('address') as string,
+      description:      data.get('description') as string,
+      naver_place_url:  data.get('naver_place_url') as string,
+      google_place_url: data.get('google_place_url') as string,
+      youtube_url:      data.get('youtube_url') as string,
     })
   }
 
@@ -95,13 +97,25 @@ export function SettingsForm({ business }: Props) {
         <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">채널 연동</h2>
 
         <div className="space-y-2">
-          <Label htmlFor="naver_place_url">네이버 플레이스 URL</Label>
+          <Label htmlFor="google_place_url">구글 플레이스 후기 URL</Label>
+          <Input
+            id="google_place_url"
+            name="google_place_url"
+            defaultValue={business.google_place_url ?? ''}
+            placeholder="https://g.page/r/..."
+          />
+          <p className="text-xs text-muted-foreground">구글 지도 업체 페이지 → 리뷰 작성 링크 (우선 사용)</p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="naver_place_url">네이버 플레이스 후기 URL</Label>
           <Input
             id="naver_place_url"
             name="naver_place_url"
             defaultValue={business.naver_place_url ?? ''}
             placeholder="https://naver.me/..."
           />
+          <p className="text-xs text-muted-foreground">구글 링크가 없을 때 대신 사용됩니다</p>
         </div>
 
         <div className="space-y-2">
