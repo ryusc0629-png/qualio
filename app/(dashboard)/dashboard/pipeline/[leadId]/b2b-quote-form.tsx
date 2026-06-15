@@ -1,0 +1,347 @@
+'use client'
+
+import { useState, useTransition } from 'react'
+import { useAction } from 'next-safe-action/hooks'
+import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { toast } from 'sonner'
+import { saveB2bQuoteAction, generateSpecAction } from '@/lib/actions/b2b-quotes'
+import { FileText, Plus, Trash2, Sparkles } from 'lucide-react'
+
+interface QuoteItem {
+  name: string
+  unit: string
+  qty: number
+  unit_price: number
+}
+
+interface ExistingQuote {
+  id: string
+  quote_number: string | null
+  valid_until: string | null
+  items: QuoteItem[]
+  total_amount: number
+  tax_included: boolean
+  conditions: string | null
+  site_name: string | null
+  site_address: string | null
+  site_area: string | null
+  frequency: string | null
+  worker_count: number | null
+  spec_content: string | null
+}
+
+interface Props {
+  leadId: string
+  leadName: string
+  existingQuote: ExistingQuote | null
+}
+
+const defaultItem = (): QuoteItem => ({ name: '', unit: '월', qty: 1, unit_price: 0 })
+
+export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [, startTransition] = useTransition()
+
+  const today = new Date().toISOString().slice(0, 10)
+  const defaultQuoteNumber = `Q-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`
+
+  const [quoteNumber, setQuoteNumber] = useState(existingQuote?.quote_number ?? defaultQuoteNumber)
+  const [validUntil, setValidUntil] = useState(existingQuote?.valid_until ?? '')
+  const [items, setItems] = useState<QuoteItem[]>(
+    existingQuote?.items && (existingQuote.items as QuoteItem[]).length > 0
+      ? (existingQuote.items as QuoteItem[])
+      : [defaultItem()]
+  )
+  const [taxIncluded, setTaxIncluded] = useState(existingQuote?.tax_included ?? false)
+  const [conditions, setConditions] = useState(existingQuote?.conditions ?? '')
+  const [siteName, setSiteName] = useState(existingQuote?.site_name ?? '')
+  const [siteAddress, setSiteAddress] = useState(existingQuote?.site_address ?? '')
+  const [siteArea, setSiteArea] = useState(existingQuote?.site_area ?? '')
+  const [frequency, setFrequency] = useState(existingQuote?.frequency ?? '')
+  const [workerCount, setWorkerCount] = useState(existingQuote?.worker_count?.toString() ?? '')
+  const [specContent, setSpecContent] = useState(existingQuote?.spec_content ?? '')
+
+  const subtotal = items.reduce((s, it) => s + it.qty * it.unit_price, 0)
+  const tax = taxIncluded ? Math.floor(subtotal * 0.1) : 0
+  const total = subtotal + tax
+
+  const { execute: executeSave, isPending: saving } = useAction(saveB2bQuoteAction, {
+    onSuccess: () => {
+      toast.success('저장됐어요!')
+      setOpen(false)
+      startTransition(() => router.refresh())
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  const { execute: executeGenSpec, isPending: generatingSpec } = useAction(generateSpecAction, {
+    onSuccess: ({ data }) => {
+      if (data?.specContent) {
+        setSpecContent(data.specContent)
+        toast.success('시방서 초안을 만들었어요! 검토 후 수정하세요')
+      }
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? 'AI 생성에 실패했습니다'),
+  })
+
+  const updateItem = (idx: number, key: keyof QuoteItem, val: string | number) => {
+    setItems((prev) => prev.map((it, i) => i === idx ? { ...it, [key]: val } : it))
+  }
+
+  const handleSave = () => {
+    executeSave({
+      leadId,
+      quoteNumber:  quoteNumber || undefined,
+      validUntil:   validUntil || undefined,
+      items:        items.filter((it) => it.name),
+      totalAmount:  total,
+      taxIncluded,
+      conditions:   conditions || undefined,
+      siteName:     siteName || undefined,
+      siteAddress:  siteAddress || undefined,
+      siteArea:     siteArea || undefined,
+      frequency:    frequency || undefined,
+      workerCount:  workerCount ? Number(workerCount) : undefined,
+      specContent:  specContent || undefined,
+    })
+  }
+
+  const handleGenerateSpec = () => {
+    executeGenSpec({
+      leadId,
+      clientName:   leadName,
+      siteName:     siteName || undefined,
+      siteAddress:  siteAddress || undefined,
+      siteArea:     siteArea || undefined,
+      frequency:    frequency || undefined,
+      workerCount:  workerCount ? Number(workerCount) : undefined,
+      serviceItems: items.filter((it) => it.name).map((it) => it.name),
+      conditions:   conditions || undefined,
+    })
+  }
+
+  const handlePreview = () => {
+    handleSave()
+    window.open(`/dashboard/pipeline/${leadId}/quote/print`, '_blank')
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8">
+          <FileText className="h-3.5 w-3.5 mr-1.5" />
+          {existingQuote ? '견적서 수정' : '견적서 만들기'}
+        </Button>
+      </DialogTrigger>
+
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>견적서 + 시방서</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-6">
+
+          {/* 견적서 기본 정보 */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">견적 정보</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">견적 번호</Label>
+                <Input value={quoteNumber} onChange={(e) => setQuoteNumber(e.target.value)} className="mt-1 h-9" />
+              </div>
+              <div>
+                <Label className="text-xs">유효 기간</Label>
+                <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} className="mt-1 h-9" />
+              </div>
+            </div>
+          </section>
+
+          {/* 견적 항목 */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">견적 항목</h3>
+
+            <div className="space-y-2">
+              {items.map((item, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-4">
+                    {idx === 0 && <Label className="text-xs">서비스 내용</Label>}
+                    <Input
+                      value={item.name}
+                      onChange={(e) => updateItem(idx, 'name', e.target.value)}
+                      placeholder="예: 사무실 정기청소"
+                      className="mt-1 h-9"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    {idx === 0 && <Label className="text-xs">단위</Label>}
+                    <Input
+                      value={item.unit}
+                      onChange={(e) => updateItem(idx, 'unit', e.target.value)}
+                      placeholder="월"
+                      className="mt-1 h-9"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    {idx === 0 && <Label className="text-xs">수량</Label>}
+                    <Input
+                      type="number"
+                      value={item.qty}
+                      onChange={(e) => updateItem(idx, 'qty', Number(e.target.value))}
+                      min={1}
+                      className="mt-1 h-9"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    {idx === 0 && <Label className="text-xs">단가 (원)</Label>}
+                    <Input
+                      type="number"
+                      value={item.unit_price || ''}
+                      onChange={(e) => updateItem(idx, 'unit_price', Number(e.target.value))}
+                      placeholder="700000"
+                      className="mt-1 h-9"
+                      inputMode="numeric"
+                    />
+                  </div>
+                  <div className="col-span-1 flex justify-end">
+                    {idx === 0 && <div className="text-xs invisible">X</div>}
+                    <button
+                      onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
+                      disabled={items.length === 1}
+                      className="mt-1 p-2 text-muted-foreground hover:text-destructive disabled:opacity-30"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => setItems((prev) => [...prev, defaultItem()])}
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              항목 추가
+            </Button>
+
+            {/* 합계 */}
+            <div className="bg-muted/40 rounded-lg p-3 space-y-1.5">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">소계</span>
+                <span>{subtotal.toLocaleString()}원</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={taxIncluded}
+                    onChange={(e) => setTaxIncluded(e.target.checked)}
+                    className="rounded"
+                  />
+                  부가세 (10%) 포함
+                </label>
+                {taxIncluded && <span className="text-sm">{tax.toLocaleString()}원</span>}
+              </div>
+              <div className="flex justify-between font-bold text-base border-t pt-1.5">
+                <span>합계</span>
+                <span className="text-primary">{total.toLocaleString()}원</span>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs">계약 조건 및 특이사항</Label>
+              <Textarea
+                value={conditions}
+                onChange={(e) => setConditions(e.target.value)}
+                placeholder="예: 월별 후불 결제, 서버실 출입 불가"
+                rows={2}
+                className="mt-1 resize-none"
+              />
+            </div>
+          </section>
+
+          {/* 현장 정보 (시방서용) */}
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">현장 정보 (시방서용)</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">현장명</Label>
+                <Input value={siteName} onChange={(e) => setSiteName(e.target.value)} placeholder="예: (주)한국빌딩 강남사옥" className="mt-1 h-9" />
+              </div>
+              <div>
+                <Label className="text-xs">면적</Label>
+                <Input value={siteArea} onChange={(e) => setSiteArea(e.target.value)} placeholder="예: 450평 (15층)" className="mt-1 h-9" />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">현장 주소</Label>
+              <Input value={siteAddress} onChange={(e) => setSiteAddress(e.target.value)} placeholder="예: 서울시 강남구 역삼동 000" className="mt-1 h-9" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">청소 주기</Label>
+                <Input value={frequency} onChange={(e) => setFrequency(e.target.value)} placeholder="예: 주 3회 (월수금)" className="mt-1 h-9" />
+              </div>
+              <div>
+                <Label className="text-xs">투입 인원</Label>
+                <Input
+                  value={workerCount}
+                  onChange={(e) => setWorkerCount(e.target.value)}
+                  placeholder="예: 2"
+                  inputMode="numeric"
+                  className="mt-1 h-9"
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* 시방서 */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">시방서</h3>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={handleGenerateSpec}
+                disabled={generatingSpec || items.filter((it) => it.name).length === 0}
+              >
+                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                {generatingSpec ? 'AI 작성 중...' : 'AI로 초안 만들기'}
+              </Button>
+            </div>
+            <Textarea
+              value={specContent}
+              onChange={(e) => setSpecContent(e.target.value)}
+              placeholder="위 현장 정보를 입력 후 'AI로 초안 만들기'를 누르거나, 직접 작성하세요"
+              rows={10}
+              className="resize-none font-mono text-xs leading-relaxed"
+            />
+          </section>
+
+          {/* 버튼 */}
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" className="flex-1 h-12" onClick={handleSave} disabled={saving}>
+              {saving ? '저장 중...' : '저장만 하기'}
+            </Button>
+            <Button className="flex-1 h-12" onClick={handlePreview} disabled={saving}>
+              <FileText className="h-4 w-4 mr-1.5" />
+              저장 후 미리보기
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

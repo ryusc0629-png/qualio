@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner'
 import { createLeadActivityAction, updateLeadStatusAction } from '@/lib/actions/crm'
 import { STAGE_CONFIG } from '../pipeline-list'
+import { B2bQuoteForm } from './b2b-quote-form'
 import { Phone, MapPin, Calendar, ArrowLeft, Plus, PhoneCall, MapPin as VisitIcon, FileText, StickyNote } from 'lucide-react'
 import Link from 'next/link'
 
@@ -34,6 +35,29 @@ type Lead = {
   next_follow_up_date: string | null
   notes: string | null
   created_at: string
+}
+
+interface QuoteItem {
+  name: string
+  unit: string
+  qty: number
+  unit_price: number
+}
+
+type ExistingQuote = {
+  id: string
+  quote_number: string | null
+  valid_until: string | null
+  items: QuoteItem[]
+  total_amount: number
+  tax_included: boolean
+  conditions: string | null
+  site_name: string | null
+  site_address: string | null
+  site_area: string | null
+  frequency: string | null
+  worker_count: number | null
+  spec_content: string | null
 }
 
 type Activity = {
@@ -55,7 +79,7 @@ const STAGE_ORDER = ['new', 'contacted', 'follow_up', 'quoted', 'negotiating', '
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────
 
-export function LeadDetail({ lead, activities }: { lead: Lead; activities: Activity[] }) {
+export function LeadDetail({ lead, activities, existingQuote }: { lead: Lead; activities: Activity[]; existingQuote: ExistingQuote | null }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
   const [showAddForm, setShowAddForm] = useState(false)
@@ -143,19 +167,28 @@ export function LeadDetail({ lead, activities }: { lead: Lead; activities: Activ
             </div>
           </div>
 
-          {/* 단계 변경 */}
-          <Select value={lead.status} onValueChange={(v) => executeStatus({ leadId: lead.id, status: v })}>
-            <SelectTrigger className={`h-8 text-xs px-2.5 border-0 font-medium w-auto shrink-0 ${stage.color}`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {STAGE_ORDER.map((s) => (
-                <SelectItem key={s} value={s} className="text-sm">
-                  {STAGE_CONFIG[s]?.text ?? s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* 단계 변경 + 견적서 버튼 */}
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <Select value={lead.status} onValueChange={(v) => executeStatus({ leadId: lead.id, status: v })}>
+              <SelectTrigger className={`h-8 text-xs px-2.5 border-0 font-medium w-auto ${stage.color}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {STAGE_ORDER.map((s) => (
+                  <SelectItem key={s} value={s} className="text-sm">
+                    {STAGE_CONFIG[s]?.text ?? s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {isCompany && (
+              <B2bQuoteForm
+                leadId={lead.id}
+                leadName={lead.company_name}
+                existingQuote={existingQuote}
+              />
+            )}
+          </div>
         </div>
 
         {/* 단계 진행 바 */}

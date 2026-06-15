@@ -250,6 +250,66 @@ export type Database = {
           },
         ]
       }
+      b2b_quotes: {
+        Row: {
+          id: string
+          lead_id: string
+          business_id: string
+          quote_number: string | null
+          valid_until: string | null
+          items: Json
+          total_amount: number
+          tax_included: boolean
+          conditions: string | null
+          site_name: string | null
+          site_address: string | null
+          site_area: string | null
+          frequency: string | null
+          worker_count: number | null
+          spec_content: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          lead_id: string
+          business_id: string
+          quote_number?: string | null
+          valid_until?: string | null
+          items?: Json
+          total_amount?: number
+          tax_included?: boolean
+          conditions?: string | null
+          site_name?: string | null
+          site_address?: string | null
+          site_area?: string | null
+          frequency?: string | null
+          worker_count?: number | null
+          spec_content?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          lead_id?: string
+          business_id?: string
+          quote_number?: string | null
+          valid_until?: string | null
+          items?: Json
+          total_amount?: number
+          tax_included?: boolean
+          conditions?: string | null
+          site_name?: string | null
+          site_address?: string | null
+          site_area?: string | null
+          frequency?: string | null
+          worker_count?: number | null
+          spec_content?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       businesses: {
         Row: {
           address: string | null
