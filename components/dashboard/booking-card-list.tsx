@@ -5,6 +5,7 @@ import { Calendar, Phone, MapPin, FileText, X } from 'lucide-react'
 import { BookingStatusSelect } from '@/components/dashboard/booking-status-select'
 import { RescheduleBookingButton } from '@/components/dashboard/reschedule-booking-button'
 import { CompleteReportButton } from '@/components/dashboard/complete-report-button'
+import { SendReceiptButton } from '@/components/dashboard/send-receipt-button'
 import {
   Dialog,
   DialogContent,
@@ -240,11 +241,16 @@ export function BookingCardList({ bookings, businessId }: { bookings: BookingIte
                       </div>
                     )}
                     {selected.status === 'completed' && (
-                      <div onClick={(e) => e.stopPropagation()}>
+                      <div onClick={(e) => e.stopPropagation()} className="space-y-2">
                         <CompleteReportButton
                           bookingId={selected.id}
                           customerName={selected.customer_name}
                           businessId={businessId}
+                        />
+                        <SendReceiptButton
+                          bookingId={selected.id}
+                          businessId={businessId}
+                          customerPhone={selected.customer_phone}
                         />
                       </div>
                     )}

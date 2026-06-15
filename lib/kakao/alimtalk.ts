@@ -285,19 +285,19 @@ export async function sendWorkCompleteAlimtalk(params: WorkCompleteParams): Prom
   })
 }
 
-// 영수증 알림톡 파라미터
+// 영수증 알림톡 파라미터 (결제 완료 후 사장님이 직접 발송)
 export interface ReceiptParams {
-  customerPhone: string
-  customerName:  string
-  businessName:  string
-  businessPhone: string | null
-  cleaningType:  string
-  scheduledAt:   string  // ISO 문자열
-  finalPrice:    number
-  receiptUrl:    string  // 고객용 영수증 링크
+  customerPhone:  string
+  customerName:   string
+  businessName:   string
+  businessPhone:  string | null
+  cleaningType:   string
+  completedAt:    string  // 작업 완료일 ISO 문자열
+  paidAmount:     number  // 실제 결제 금액
+  receiptUrl:     string  // 고객용 영수증 링크
 }
 
-// 영수증 알림톡 발송 (예약 확정 직후 고객에게 발송)
+// 영수증 알림톡 발송 — 작업 완료 후 사장님이 "영수증 발송" 버튼으로 수동 트리거
 export async function sendReceiptAlimtalk(params: ReceiptParams): Promise<void> {
   const apiKey     = process.env.SOLAPI_API_KEY
   const apiSecret  = process.env.SOLAPI_API_SECRET
@@ -323,15 +323,15 @@ export async function sendReceiptAlimtalk(params: ReceiptParams): Promise<void> 
         '#{고객명}':     params.customerName,
         '#{업체명}':     params.businessName,
         '#{서비스명}':   params.cleaningType,
-        '#{예약일시}':   formatKoreanDate(params.scheduledAt),
-        '#{최종금액}':   params.finalPrice.toLocaleString('ko-KR'),
+        '#{작업일시}':   formatKoreanDate(params.completedAt),
+        '#{결제금액}':   params.paidAmount.toLocaleString('ko-KR'),
         '#{업체연락처}': params.businessPhone ?? '업체에 문의해 주세요',
         '#{영수증링크}': params.receiptUrl,
       },
       buttons: [
         {
           buttonType: 'WL' as const,
-          buttonName: '예약 영수증 확인',
+          buttonName: '영수증 확인하기',
           linkMo: params.receiptUrl,
           linkPc: params.receiptUrl,
         },
