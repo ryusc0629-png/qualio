@@ -165,7 +165,6 @@ export function PipelineList({ leads, filterStatus }: Props) {
   const handleAdd = () => {
     executeCreate({
       company_name:        form.company_name,
-      customer_type:       'company',
       contact_name:        form.contact_name || undefined,
       contact_title:       form.contact_title || undefined,
       email:               form.email || undefined,
@@ -198,7 +197,6 @@ export function PipelineList({ leads, filterStatus }: Props) {
     executeUpdate({
       leadId:              editLead.id,
       company_name:        form.company_name,
-      customer_type:       'company',
       contact_name:        form.contact_name || undefined,
       contact_title:       form.contact_title || undefined,
       email:               form.email || undefined,

@@ -11,7 +11,6 @@ const ACTIVITY_TYPES = ['call', 'visit', 'quote', 'note'] as const
 // 잠재고객 추가 스키마
 const createLeadSchema = z.object({
   company_name: z.string().min(1, '이름 또는 업체명을 입력해주세요'),
-  customer_type: z.string().refine((v) => ['company', 'individual'].includes(v), '유효하지 않은 유형입니다'),
   contact_name: z.string().optional(),
   contact_title: z.string().optional(),
   email: z.string().optional(),
@@ -32,7 +31,6 @@ const updateLeadStatusSchema = z.object({
 const updateLeadSchema = z.object({
   leadId: z.string().uuid(),
   company_name: z.string().min(1, '이름 또는 업체명을 입력해주세요'),
-  customer_type: z.string().refine((v) => ['company', 'individual'].includes(v), '유효하지 않은 유형입니다'),
   contact_name: z.string().optional(),
   contact_title: z.string().optional(),
   email: z.string().optional(),
@@ -108,7 +106,6 @@ export const createLeadAction = action
     const { error } = await db.from('leads').insert({
       business_id:         businessId,
       company_name:        parsedInput.company_name,
-      customer_type:       parsedInput.customer_type,
       contact_name:        parsedInput.contact_name ?? null,
       contact_title:       parsedInput.contact_title ?? null,
       email:               parsedInput.email ?? null,
@@ -121,7 +118,7 @@ export const createLeadAction = action
 
     if (error) {
       console.error('[createLeadAction] DB 오류:', error)
-      throw new Error(`[APP] DB 오류: ${error.message}`)
+      throw new Error('[APP] 거래처 추가에 실패했습니다')
     }
     revalidatePath('/dashboard/pipeline')
     return { success: true }
@@ -154,7 +151,6 @@ export const updateLeadAction = action
       .from('leads')
       .update({
         company_name:        parsedInput.company_name,
-        customer_type:       parsedInput.customer_type,
         contact_name:        parsedInput.contact_name ?? null,
         contact_title:       parsedInput.contact_title ?? null,
         email:               parsedInput.email ?? null,

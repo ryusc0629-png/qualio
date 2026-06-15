@@ -120,7 +120,7 @@ export function AddClientForm() {
 
         {clientType === 'lead' ? (
           <form
-            onSubmit={leadForm.handleSubmit((data) => executeLead({ ...data, customer_type: 'company' }))}
+            onSubmit={leadForm.handleSubmit((data) => executeLead({ ...data }))}
             className="space-y-3"
           >
             <p className="text-xs text-muted-foreground -mt-1">

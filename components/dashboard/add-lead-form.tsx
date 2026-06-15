@@ -62,7 +62,7 @@ export function AddLeadForm() {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit((data) => execute({ ...data, customer_type: 'company' }))} className="space-y-3">
+        <form onSubmit={handleSubmit((data) => execute({ ...data }))} className="space-y-3">
           {/* 업체명 */}
           <div className="space-y-1">
             <Label htmlFor="company_name">업체명 *</Label>
