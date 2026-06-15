@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
-import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction } from '@/lib/actions/posts'
+import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, publishTodayAction } from '@/lib/actions/posts'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -176,6 +176,18 @@ const { execute: deletePost, isPending: isDeleting } = useAction(deletePostActio
     onError: ({ error }) => { toast.error(error.serverError ?? '삭제에 실패했습니다') },
   })
 
+  const { execute: publishToday, isPending: isPublishing } = useAction(publishTodayAction, {
+    onSuccess: ({ data }) => {
+      if (data?.published === 0) {
+        toast.success(data.message ?? '오늘 목표를 이미 달성했어요!')
+      } else {
+        toast.success(`포스트 ${data?.published}건 발행 완료!`)
+        window.location.reload()
+      }
+    },
+    onError: ({ error }) => { toast.error(error.serverError ?? '발행에 실패했습니다') },
+  })
+
 const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/posts/${slug}` : null
   const publishedCount = schedule.filter((s) => s.status === 'published').length
   const upcomingCount = schedule.filter((s) => s.status === 'upcoming' || s.status === 'today').length
@@ -306,6 +318,16 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
 
       {/* 액션 버튼 */}
       <div className="flex gap-2 flex-wrap">
+        <Button
+          onClick={() => publishToday({})}
+          disabled={isPublishing}
+          className="gap-2"
+        >
+          {isPublishing
+            ? <><Loader2 className="h-4 w-4 animate-spin" />AI가 작성 중이에요...</>
+            : <><Play className="h-4 w-4" />지금 발행</>
+          }
+        </Button>
         <Button variant="outline" onClick={() => { setShowEditor(!showEditor); setEditingPost(null) }} className="gap-2">
           <Plus className="h-4 w-4" />직접 작성
         </Button>

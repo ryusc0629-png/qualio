@@ -236,6 +236,127 @@ export const setMonthlyTargetAction = action
     return { success: true, limit }
   })
 
+// 오늘 자동 발행 수동 트리거 — "지금 발행" 버튼용
+// Cron과 동일한 로직, 세션 인증으로 현재 업체만 실행
+export const publishTodayAction = action
+  .schema(z.object({}))
+  .action(async () => {
+    const { db, businessId } = await getBusinessId()
+
+    const now = new Date()
+    const year = now.getUTCFullYear()
+    const month = now.getUTCMonth() + 1
+    const dayOfMonth = now.getUTCDate()
+    const daysInMonth = new Date(year, month, 0).getDate()
+
+    // 플랜 한도 조회
+    const { data: sub } = await db
+      .from('subscriptions')
+      .select('plan')
+      .eq('business_id', businessId)
+      .eq('status', 'active')
+      .maybeSingle()
+
+    const planId = ((sub?.plan as PlanId) ?? 'beta')
+    const planLimit = getAutoPostLimit(planId)
+
+    const monthStart = new Date(year, month - 1, 1).toISOString()
+
+    // 이번 달 발행 건수
+    const { count } = await db
+      .from('biz_posts')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .eq('published', true)
+      .gte('published_at', monthStart)
+
+    const postsThisMonth = count ?? 0
+
+    // 오늘까지 발행됐어야 할 누적 건수
+    const expectedSoFar = Math.floor(planLimit * dayOfMonth / daysInMonth)
+    const needed = Math.max(0, expectedSoFar - postsThisMonth)
+
+    if (needed === 0) {
+      return { success: true, published: 0, message: '오늘 발행할 포스트가 없어요 (이미 목표 달성)' }
+    }
+
+    // 업체 정보 + 서비스 조회
+    const [businessResult, servicesResult] = await Promise.all([
+      db.from('businesses').select('name, address, description').eq('id', businessId).maybeSingle(),
+      db.from('service_items').select('name, base_price, unit')
+        .eq('business_id', businessId).eq('is_active', true).is('deleted_at', null),
+    ])
+
+    if (!businessResult.data) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const business = businessResult.data
+    const services = servicesResult.data ?? []
+
+    // 이번 달 발행 제목 목록 (중복 방지)
+    const { data: publishedThisMonth } = await db
+      .from('biz_posts')
+      .select('title')
+      .eq('business_id', businessId)
+      .gte('published_at', monthStart)
+    const publishedTitles = (publishedThisMonth ?? []).map((p) => p.title)
+
+    const titles: string[] = []
+
+    for (let i = 0; i < needed; i++) {
+      // 주제 추천
+      let topic: string | undefined
+      try {
+        const suggestions = await generateTopicSuggestions({
+          businessName: business.name,
+          services,
+          currentMonth: month,
+        })
+        const unused = suggestions.find(
+          (s) => !publishedTitles.some((t) => t.includes(s.title.slice(0, 10)))
+        )
+        topic = unused?.topic ?? suggestions[0]?.topic
+      } catch { /* 주제 추천 실패 시 AI 자유 선택 */ }
+
+      const postContent = await generatePostContent({
+        businessName: business.name,
+        address: business.address,
+        description: business.description,
+        services,
+        topic,
+      })
+
+      // slug 중복 방지
+      const baseSlug = postContent.slug
+      let slug = baseSlug
+      const { data: existing } = await db
+        .from('biz_posts').select('slug')
+        .eq('business_id', businessId).eq('slug', slug).maybeSingle()
+      if (existing) slug = `${baseSlug}-${Date.now().toString(36)}`
+
+      const metaBlock = (postContent.keyPoints?.length || postContent.faqs?.length)
+        ? `\`\`\`json\n${JSON.stringify({ keyPoints: postContent.keyPoints ?? [], faqs: postContent.faqs ?? [] })}\n\`\`\`\n`
+        : ''
+
+      const { error } = await db.from('biz_posts').insert({
+        business_id: businessId,
+        slug,
+        title: postContent.title,
+        content: metaBlock + postContent.content,
+        summary: postContent.summary,
+        ai_generated: true,
+        published: true,
+      })
+
+      if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
+
+      publishedTitles.push(postContent.title)
+      titles.push(postContent.title)
+    }
+
+    revalidatePath('/dashboard/marketing')
+    return { success: true, published: needed, titles }
+  })
+
 // 포스트 삭제 액션
 export const deletePostAction = action
   .schema(z.object({ id: z.string().uuid() }))
