@@ -244,8 +244,12 @@ export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): 
   const templateId = process.env.SOLAPI_TEMPLATE_ID_BOOKING_CONFIRM
   const pfId       = process.env.SOLAPI_KAKAO_PF_ID   // 퀄리오 단일 채널 ID
 
-  // 환경변수 미설정 시 발송 생략 (개발 환경 안전)
-  if (!apiKey || !apiSecret || !sender || !templateId || !pfId) {
+  // V2 템플릿이 있으면 V1 없이도 발송 가능
+  const templateIdV2    = process.env.SOLAPI_TEMPLATE_ID_BOOKING_CONFIRM_V2
+  const useV2           = !!(templateIdV2 && params.bookingId && params.businessId)
+  const activeTemplateId = useV2 ? templateIdV2! : templateId
+
+  if (!apiKey || !apiSecret || !sender || !activeTemplateId || !pfId) {
     console.warn('[Alimtalk] 환경변수 미설정 — 발송 생략')
     return
   }
@@ -256,11 +260,6 @@ export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): 
   const tierLabel       = TIER_LABELS[params.selectedTier] ?? params.selectedTier
   const priceFormatted  = params.finalPrice.toLocaleString('ko-KR')
   const contactInfo     = params.businessPhone ?? '업체에 문의해 주세요'
-
-  // V2 템플릿(버튼 포함) 설정 여부 확인
-  const templateIdV2 = process.env.SOLAPI_TEMPLATE_ID_BOOKING_CONFIRM_V2
-  const useV2 = !!(templateIdV2 && params.bookingId && params.businessId)
-  const activeTemplateId = useV2 ? templateIdV2! : templateId
 
   const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.kr'
   const rescheduleUrl = useV2
