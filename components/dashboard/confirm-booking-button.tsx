@@ -81,9 +81,7 @@ export function ConfirmBookingButton({
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!date) { toast.error('날짜를 선택해주세요'); return }
+  const doConfirm = () => {
     const fullAddress = addressDetail ? `${address} — ${addressDetail}` : address
     execute({
       quote_id:        quoteId,
@@ -92,6 +90,15 @@ export function ConfirmBookingButton({
       final_price:     Number(finalPrice),
       service_address: fullAddress || undefined,
     })
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!date) { toast.error('날짜를 선택해주세요'); return }
+    if (!address) {
+      if (!window.confirm('주소가 입력되지 않았어요.\n나중에 따로 확인하실 건가요?')) return
+    }
+    doConfirm()
   }
 
   return (
