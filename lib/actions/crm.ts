@@ -118,7 +118,7 @@ export const createLeadAction = action
 
     if (error) {
       console.error('[createLeadAction] DB 오류:', error)
-      throw new Error('[APP] 거래처 추가에 실패했습니다')
+      throw new Error(`[APP] ${error.message}`)
     }
     revalidatePath('/dashboard/pipeline')
     return { success: true }
