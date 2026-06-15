@@ -5,7 +5,7 @@ import { useAction } from 'next-safe-action/hooks'
 import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, publishTodayAction } from '@/lib/actions/posts'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -56,6 +56,9 @@ interface Post {
   published: boolean
   ai_generated: boolean
   published_at: string
+  naver_title: string | null
+  naver_content: string | null
+  naver_tags: string[] | null
 }
 
 interface PostListProps {
@@ -144,6 +147,14 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   const [publishResult, setPublishResult] = useState<{ published: number; message?: string } | null>(
     isTodayComplete ? { published: 0, message: '오늘 발행 완료!' } : null
   )
+  const [naverPost, setNaverPost] = useState<Post | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const handleNaverCopy = (content: string) => {
+    navigator.clipboard.writeText(content)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   const now = new Date()
   const postsThisMonth = posts.filter((p) => {
@@ -378,6 +389,17 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                     <p className="text-xs text-muted-foreground mt-0.5">{new Date(post.published_at).toLocaleDateString('ko-KR')}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    {/* 네이버 블로그용 복사 버튼 */}
+                    {post.naver_content && (
+                      <button
+                        type="button"
+                        onClick={() => setNaverPost(post)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold text-white bg-[#03C75A] hover:bg-[#02b050] transition-colors"
+                        title="네이버 블로그용 글 복사"
+                      >
+                        N
+                      </button>
+                    )}
                     {url && (
                       <a href={url} target="_blank" rel="noopener noreferrer">
                         <Button size="icon" variant="ghost" className="h-8 w-8"><ExternalLink className="h-3.5 w-3.5" /></Button>
@@ -410,6 +432,73 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           <a href={`${appUrl}/biz/${businessSlug}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
             {appUrl}/biz/{businessSlug}
           </a>
+        </div>
+      )}
+
+      {/* 네이버 블로그용 글 모달 */}
+      {naverPost && naverPost.naver_content && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl">
+            {/* 헤더 */}
+            <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-md bg-[#03C75A] flex items-center justify-center text-white font-bold text-sm">N</div>
+                <div>
+                  <p className="font-semibold text-sm">네이버 블로그용 글</p>
+                  <p className="text-xs text-muted-foreground">복사 후 네이버 블로그에 붙여넣기 하세요</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setNaverPost(null)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* 제목 */}
+            <div className="px-5 py-3 border-b bg-slate-50 shrink-0">
+              <p className="text-xs text-muted-foreground mb-1">제목</p>
+              <p className="font-semibold text-sm">{naverPost.naver_title}</p>
+            </div>
+
+            {/* 태그 */}
+            {naverPost.naver_tags && naverPost.naver_tags.length > 0 && (
+              <div className="px-5 py-2.5 border-b bg-slate-50 shrink-0 flex flex-wrap gap-1.5">
+                {naverPost.naver_tags.map((tag) => (
+                  <span key={tag} className="px-2 py-0.5 rounded-full bg-[#03C75A]/10 text-[#03C75A] text-xs font-medium">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* 본문 스크롤 영역 */}
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed">
+                {naverPost.naver_content}
+              </pre>
+            </div>
+
+            {/* 액션 버튼 */}
+            <div className="px-5 py-4 border-t flex gap-2 shrink-0">
+              <Button
+                className="flex-1 h-12 gap-2"
+                onClick={() => handleNaverCopy(`${naverPost.naver_title}\n\n${naverPost.naver_content}`)}
+              >
+                {copied
+                  ? <><CheckCircle2 className="h-4 w-4" />복사됐어요!</>
+                  : <><Copy className="h-4 w-4" />전체 복사</>
+                }
+              </Button>
+              <a
+                href="https://blog.naver.com/compose/write"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 px-4 h-12 rounded-md border border-[#03C75A] text-[#03C75A] text-sm font-medium hover:bg-[#03C75A]/10 transition-colors"
+              >
+                <ExternalLink className="h-4 w-4" />
+                블로그 열기
+              </a>
+            </div>
+          </div>
         </div>
       )}
     </div>

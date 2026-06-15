@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { createNaverBlogDraft, markdownToNaverHtml } from '@/lib/naver/blog'
+import { generateNaverContent } from '@/lib/ai/naver-content'
 
 // 공통: 현재 유저의 business_id 조회
 async function getBusinessId() {
@@ -24,6 +25,35 @@ async function getBusinessId() {
 
   if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
   return { db, businessId: profile.business_id }
+}
+
+// GEO 포스트 → 네이버 SEO 버전 생성 후 DB 저장 (실패해도 무시)
+async function tryGenerateAndSaveNaverContent(
+  db: ReturnType<typeof createServiceClient>,
+  postId: string,
+  businessName: string,
+  address: string | null,
+  title: string,
+  content: string,
+) {
+  try {
+    const naver = await generateNaverContent({
+      businessName,
+      address,
+      geoTitle: title,
+      geoContent: content,
+    })
+    await db
+      .from('biz_posts')
+      .update({
+        naver_title:   naver.title,
+        naver_content: naver.content,
+        naver_tags:    naver.tags,
+      })
+      .eq('id', postId)
+  } catch {
+    // 네이버 변환 실패는 무시 — GEO 포스팅은 정상 발행됨
+  }
 }
 
 // 네이버 블로그 초안 생성 (실패해도 포스팅은 계속 진행)
@@ -132,6 +162,9 @@ export const generatePostAction = action
       .single()
 
     if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
+
+    // 네이버 SEO 버전 자동 생성 (실패해도 무시)
+    await tryGenerateAndSaveNaverContent(db, post.id, business.name, business.address, postContent.title, fullContent)
 
     // 네이버 블로그 연동 시 초안 자동 생성 (실패해도 무시)
     await tryCreateNaverDraft(db, businessId, postContent.title, fullContent)
@@ -367,20 +400,25 @@ export const publishTodayAction = action
         ? `\`\`\`json\n${JSON.stringify({ keyPoints: postContent.keyPoints ?? [], faqs: postContent.faqs ?? [] })}\n\`\`\`\n`
         : ''
 
-      const { error } = await db.from('biz_posts').insert({
+      const fullContent = metaBlock + postContent.content
+      const { data: savedPost, error } = await db.from('biz_posts').insert({
         business_id: businessId,
         slug,
         title: postContent.title,
-        content: metaBlock + postContent.content,
+        content: fullContent,
         summary: postContent.summary,
         ai_generated: true,
         published: true,
-      })
+      }).select('id').single()
 
       if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
 
+      // 네이버 SEO 버전 자동 생성 (실패해도 무시)
+      if (savedPost?.id) {
+        await tryGenerateAndSaveNaverContent(db, savedPost.id, business.name, business.address, postContent.title, fullContent)
+      }
+
       // 네이버 블로그 연동 시 초안 자동 생성 (실패해도 무시)
-      const fullContent = metaBlock + postContent.content
       await tryCreateNaverDraft(db, businessId, postContent.title, fullContent)
 
       publishedTitles.push(postContent.title)

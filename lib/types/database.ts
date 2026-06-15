@@ -335,6 +335,9 @@ export type Database = {
           published_at: string
           created_at: string
           updated_at: string
+          naver_title: string | null
+          naver_content: string | null
+          naver_tags: string[] | null
         }
         Insert: {
           id?: string
@@ -349,6 +352,9 @@ export type Database = {
           published_at?: string
           created_at?: string
           updated_at?: string
+          naver_title?: string | null
+          naver_content?: string | null
+          naver_tags?: string[] | null
         }
         Update: {
           id?: string
@@ -363,6 +369,9 @@ export type Database = {
           published_at?: string
           created_at?: string
           updated_at?: string
+          naver_title?: string | null
+          naver_content?: string | null
+          naver_tags?: string[] | null
         }
         Relationships: [
           {
