@@ -242,8 +242,8 @@ export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): 
           {
             buttonType: 'WL' as const,
             buttonName: '일정 변경 요청',
-            linkMo: rescheduleUrl,
-            linkPc: rescheduleUrl,
+            linkMo: rescheduleUrl!,
+            linkPc: rescheduleUrl!,
           },
         ],
       } : {}),

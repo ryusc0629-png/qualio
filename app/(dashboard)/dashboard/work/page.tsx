@@ -59,11 +59,11 @@ export default async function WorkPage({
     { data: archivedQuotes },
     { data: bookings },
   ] = await Promise.all([
-    // 활성 견적 — archived 제외
+    // 활성 견적 — archived·booked 제외 (예약 확정된 견적은 예약 탭에서 관리)
     db.from('quotes')
       .select('id, cleaning_type, space_size, preferred_date, good_price, better_price, best_price, status, customer_name, customer_phone, created_at')
       .eq('business_id', businessId)
-      .not('status', 'eq', 'archived')
+      .in('status', ['pending', 'expired', 'cancelled'])
       .order('created_at', { ascending: false }),
 
     // 보관함 — archived만
