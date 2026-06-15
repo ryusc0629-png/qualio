@@ -60,6 +60,9 @@ interface Post {
   naver_title: string | null
   naver_content: string | null
   naver_tags: string[] | null
+  daangn_content: string | null
+  instagram_content: string | null
+  instagram_hashtags: string[] | null
 }
 
 interface PostListProps {
@@ -149,13 +152,16 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
     isTodayComplete ? { published: 0, message: '오늘 발행 완료!' } : null
   )
   const [naverPost, setNaverPost] = useState<Post | null>(null)
+  const [daangnPost, setDaangnPost] = useState<Post | null>(null)
+  const [instaPost, setInstaPost] = useState<Post | null>(null)
   const [copied, setCopied] = useState(false)
 
-  const handleNaverCopy = (content: string) => {
+  const handleCopy = (content: string) => {
     navigator.clipboard.writeText(content)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+  const handleNaverCopy = (content: string) => handleCopy(content)
 
   const now = new Date()
   const postsThisMonth = posts.filter((p) => {
@@ -390,7 +396,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                     <p className="text-xs text-muted-foreground mt-0.5">{new Date(post.published_at).toLocaleDateString('ko-KR')}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    {/* 네이버 블로그용 복사 버튼 */}
+                    {/* 네이버 블로그용 */}
                     {post.naver_content && (
                       <button
                         type="button"
@@ -399,6 +405,28 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                         title="네이버 블로그용 글 복사"
                       >
                         N
+                      </button>
+                    )}
+                    {/* 당근마켓용 */}
+                    {post.daangn_content && (
+                      <button
+                        type="button"
+                        onClick={() => setDaangnPost(post)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold text-white bg-[#FF6F0F] hover:bg-[#e5620d] transition-colors"
+                        title="당근마켓용 글 복사"
+                      >
+                        🥕
+                      </button>
+                    )}
+                    {/* 인스타그램용 */}
+                    {post.instagram_content && (
+                      <button
+                        type="button"
+                        onClick={() => setInstaPost(post)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold text-white bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] hover:opacity-90 transition-opacity"
+                        title="인스타그램용 글 복사"
+                      >
+                        IG
                       </button>
                     )}
                     {url && (
@@ -433,6 +461,117 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           <a href={`${appUrl}/biz/${businessSlug}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
             {appUrl}/biz/{businessSlug}
           </a>
+        </div>
+      )}
+
+      {/* 당근마켓용 글 모달 */}
+      {daangnPost && daangnPost.daangn_content && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-md bg-[#FF6F0F] flex items-center justify-center text-sm">🥕</div>
+                <div>
+                  <p className="font-semibold text-sm">당근마켓 비즈프로필용 글</p>
+                  <p className="text-xs text-muted-foreground">복사 후 당근 앱에서 붙여넣기 하세요</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => { setDaangnPost(null); setCopied(false) }} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-5 py-5 flex-1">
+              <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed bg-orange-50 rounded-xl p-4 border border-orange-100">
+                {daangnPost.daangn_content}
+              </pre>
+            </div>
+            <div className="px-5 py-4 border-t flex gap-2 shrink-0">
+              <Button
+                className="flex-1 h-12 gap-2 bg-[#FF6F0F] hover:bg-[#e5620d]"
+                onClick={() => handleCopy(daangnPost.daangn_content!)}
+              >
+                {copied
+                  ? <><CheckCircle2 className="h-4 w-4" />복사됐어요!</>
+                  : <><Copy className="h-4 w-4" />복사하기</>
+                }
+              </Button>
+              <a
+                href="https://www.daangn.com/kr/business"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 px-4 h-12 rounded-md border border-[#FF6F0F] text-[#FF6F0F] text-sm font-medium hover:bg-orange-50 transition-colors"
+              >
+                <ExternalLink className="h-4 w-4" />
+                당근 열기
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 인스타그램용 글 모달 */}
+      {instaPost && instaPost.instagram_content && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-md bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] flex items-center justify-center text-white font-bold text-xs">IG</div>
+                <div>
+                  <p className="font-semibold text-sm">인스타그램 캡션</p>
+                  <p className="text-xs text-muted-foreground">복사 후 인스타그램 앱에서 붙여넣기 하세요</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => { setInstaPost(null); setCopied(false) }} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 flex-1 space-y-3">
+              {/* 본문 */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5">본문 캡션</p>
+                <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed bg-pink-50 rounded-xl p-4 border border-pink-100">
+                  {instaPost.instagram_content}
+                </pre>
+              </div>
+              {/* 해시태그 */}
+              {instaPost.instagram_hashtags && instaPost.instagram_hashtags.length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1.5">해시태그</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {instaPost.instagram_hashtags.map((tag) => (
+                      <span key={tag} className="px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 text-xs font-medium">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-4 border-t flex gap-2 shrink-0">
+              <Button
+                className="flex-1 h-12 gap-2 bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] hover:opacity-90"
+                onClick={() => {
+                  const hashtags = instaPost.instagram_hashtags?.map((t) => `#${t}`).join(' ') ?? ''
+                  handleCopy(`${instaPost.instagram_content}\n\n${hashtags}`)
+                }}
+              >
+                {copied
+                  ? <><CheckCircle2 className="h-4 w-4" />복사됐어요!</>
+                  : <><Copy className="h-4 w-4" />전체 복사</>
+                }
+              </Button>
+              <a
+                href="https://www.instagram.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 px-4 h-12 rounded-md border text-sm font-medium hover:bg-pink-50 transition-colors"
+                style={{ borderColor: '#e6683c', color: '#e6683c' }}
+              >
+                <ExternalLink className="h-4 w-4" />
+                인스타 열기
+              </a>
+            </div>
+          </div>
         </div>
       )}
 

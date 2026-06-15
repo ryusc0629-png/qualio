@@ -10,6 +10,7 @@ import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { createNaverBlogDraft, markdownToNaverHtml } from '@/lib/naver/blog'
 import { generateNaverContent } from '@/lib/ai/naver-content'
+import { generateSocialContent } from '@/lib/ai/social-content'
 
 // 공통: 현재 유저의 business_id 조회
 async function getBusinessId() {
@@ -54,6 +55,30 @@ async function tryGenerateAndSaveNaverContent(
       .eq('id', postId)
   } catch {
     // 네이버 변환 실패는 무시 — GEO 포스팅은 정상 발행됨
+  }
+}
+
+// 당근마켓·인스타그램 버전 자동 생성 후 DB 저장 (실패해도 무시)
+async function tryGenerateAndSaveSocialContent(
+  db: ReturnType<typeof createServiceClient>,
+  postId: string,
+  businessName: string,
+  address: string | null,
+  title: string,
+  content: string,
+) {
+  try {
+    const social = await generateSocialContent({ businessName, address, geoTitle: title, geoContent: content })
+    await db
+      .from('biz_posts')
+      .update({
+        daangn_content:      social.daangn,
+        instagram_content:   social.instagram,
+        instagram_hashtags:  social.instagramHashtags,
+      })
+      .eq('id', postId)
+  } catch {
+    // 소셜 변환 실패는 무시 — GEO 포스팅은 정상 발행됨
   }
 }
 
@@ -170,8 +195,11 @@ export const generatePostAction = action
 
     if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
 
-    // 네이버 SEO 버전 자동 생성 (실패해도 무시)
-    await tryGenerateAndSaveNaverContent(db, post.id, business.name, business.address, postContent.title, fullContent)
+    // 네이버 SEO 버전 + 소셜 버전 자동 생성 (실패해도 무시)
+    await Promise.all([
+      tryGenerateAndSaveNaverContent(db, post.id, business.name, business.address, postContent.title, fullContent),
+      tryGenerateAndSaveSocialContent(db, post.id, business.name, business.address, postContent.title, fullContent),
+    ])
 
     // 네이버 블로그 연동 시 초안 자동 생성 (실패해도 무시)
     await tryCreateNaverDraft(db, businessId, postContent.title, fullContent)
@@ -427,9 +455,12 @@ export const publishTodayAction = action
 
       if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
 
-      // 네이버 SEO 버전 자동 생성 (실패해도 무시)
+      // 네이버 SEO 버전 + 소셜 버전 자동 생성 (실패해도 무시)
       if (savedPost?.id) {
-        await tryGenerateAndSaveNaverContent(db, savedPost.id, business.name, business.address, postContent.title, fullContent)
+        await Promise.all([
+          tryGenerateAndSaveNaverContent(db, savedPost.id, business.name, business.address, postContent.title, fullContent),
+          tryGenerateAndSaveSocialContent(db, savedPost.id, business.name, business.address, postContent.title, fullContent),
+        ])
       }
 
       // 네이버 블로그 연동 시 초안 자동 생성 (실패해도 무시)
