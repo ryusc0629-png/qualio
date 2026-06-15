@@ -145,12 +145,13 @@ export function QuoteBookingSection({
     <div className="space-y-4">
       {/* 플랜 카드 */}
       <div className="space-y-3">
-        {tiers.map((tier) => {
+        {tiers.map((tier, idx) => {
           const isSelected = selectedTier === tier.tier
           const aiItems = tierIncludes?.[tier.tier as keyof typeof tierIncludes]
           const upsellReason =
             tier.tier === 'better' ? tierReasons?.better :
             tier.tier === 'best'   ? tierReasons?.best   : undefined
+          const delta = idx > 0 ? tier.price - tiers[idx - 1].price : 0
 
           return (
             <button
@@ -193,6 +194,11 @@ export function QuoteBookingSection({
                   <p className="text-xl font-black text-[#1A1A1A] tabular-nums">
                     {tier.price.toLocaleString('ko-KR')}원
                   </p>
+                  {delta > 0 && (
+                    <p className="text-xs text-primary font-semibold mt-0.5 tabular-nums">
+                      기본보다 +{delta.toLocaleString('ko-KR')}원
+                    </p>
+                  )}
                 </div>
               </div>
 
