@@ -290,87 +290,84 @@ export default async function WorkPage({
       )}
 
       {/* ── 예약 탭 ── */}
-      {activeTab === 'bookings' && (
-        <>
-          {!bookings || bookings.length === 0 ? (
-            <div className="bg-white rounded-xl border border-dashed border-border p-12 text-center space-y-2">
-              <p className="text-sm text-muted-foreground">아직 예약이 없어요</p>
-              <p className="text-xs text-muted-foreground">전화로 받은 예약은 오른쪽 위 버튼으로 직접 추가해보세요</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {bookings.map((booking) => {
-                const status = BOOKING_STATUS[booking.status] ?? { text: booking.status, className: 'bg-gray-100 text-gray-600' }
-                const scheduledDate = new Date(booking.scheduled_at).toLocaleDateString('ko-KR', {
-                  month: 'short', day: 'numeric', weekday: 'short',
-                })
-                const scheduledTime = new Date(booking.scheduled_at).toLocaleTimeString('ko-KR', {
-                  hour: '2-digit', minute: '2-digit',
-                })
+      {activeTab === 'bookings' && (() => {
+        const activeBookings = (bookings ?? []).filter((b) => b.status === 'confirmed' || b.status === 'in_progress')
+        const doneBookings   = (bookings ?? []).filter((b) => b.status === 'completed' || b.status === 'cancelled' || b.status === 'no_show')
 
-                return (
-                  <div
-                    key={booking.id}
-                    className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition-colors"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-semibold">{booking.customer_name}</p>
-                          {booking.selected_tier && (
-                            <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
-                              {TIER_LABEL[booking.selected_tier] ?? booking.selected_tier}
-                            </span>
-                          )}
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.className}`}>
-                            {status.text}
-                          </span>
-                        </div>
-
-                        <div className="mt-1.5 space-y-0.5">
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Calendar className="h-3 w-3 shrink-0" />
-                            {scheduledDate} {scheduledTime}
-                          </p>
-                          {booking.customer_phone && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Phone className="h-3 w-3 shrink-0" />
-                              {booking.customer_phone}
-                            </p>
-                          )}
-                          {booking.service_address && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                              <MapPin className="h-3 w-3 shrink-0" />
-                              {booking.service_address}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 flex flex-col items-end gap-2">
-                        <p className="text-base font-bold tabular-nums">
-                          {booking.final_price.toLocaleString('ko-KR')}원
-                        </p>
-                        <BookingStatusSelect
-                          bookingId={booking.id}
-                          currentStatus={booking.status}
-                        />
-                        {(booking.status === 'confirmed' || booking.status === 'in_progress') && (
-                          <RescheduleBookingButton
-                            bookingId={booking.id}
-                            scheduledAt={booking.scheduled_at}
-                            customerPhone={booking.customer_phone}
-                          />
-                        )}
-                      </div>
-                    </div>
+        const BookingCard = (booking: typeof activeBookings[number]) => {
+          const status = BOOKING_STATUS[booking.status] ?? { text: booking.status, className: 'bg-gray-100 text-gray-600' }
+          const scheduledDate = new Date(booking.scheduled_at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short' })
+          const scheduledTime = new Date(booking.scheduled_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+          return (
+            <div key={booking.id} className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition-colors">
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold">{booking.customer_name}</p>
+                    {booking.selected_tier && (
+                      <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                        {TIER_LABEL[booking.selected_tier] ?? booking.selected_tier}
+                      </span>
+                    )}
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${status.className}`}>
+                      {status.text}
+                    </span>
                   </div>
-                )
-              })}
+                  <div className="mt-1.5 space-y-0.5">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Calendar className="h-3 w-3 shrink-0" />{scheduledDate} {scheduledTime}
+                    </p>
+                    {booking.customer_phone && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Phone className="h-3 w-3 shrink-0" />{booking.customer_phone}
+                      </p>
+                    )}
+                    {booking.service_address && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                        <MapPin className="h-3 w-3 shrink-0" />{booking.service_address}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="shrink-0 flex flex-col items-end gap-2">
+                  <p className="text-base font-bold tabular-nums">{booking.final_price.toLocaleString('ko-KR')}원</p>
+                  <BookingStatusSelect bookingId={booking.id} currentStatus={booking.status} />
+                  {(booking.status === 'confirmed' || booking.status === 'in_progress') && (
+                    <RescheduleBookingButton bookingId={booking.id} scheduledAt={booking.scheduled_at} customerPhone={booking.customer_phone} />
+                  )}
+                </div>
+              </div>
             </div>
-          )}
-        </>
-      )}
+          )
+        }
+
+        return (
+          <>
+            {activeBookings.length === 0 ? (
+              <div className="bg-white rounded-xl border border-dashed border-border p-12 text-center space-y-2">
+                <p className="text-sm text-muted-foreground">처리할 예약이 없어요</p>
+                <p className="text-xs text-muted-foreground">전화로 받은 예약은 오른쪽 위 버튼으로 직접 추가해보세요</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {activeBookings.map(BookingCard)}
+              </div>
+            )}
+
+            {doneBookings.length > 0 && (
+              <details className="group">
+                <summary className="cursor-pointer list-none flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors py-2 select-none">
+                  <span className="text-xs border border-border rounded px-1.5 py-0.5 group-open:hidden">▶ 완료·취소 내역 {doneBookings.length}건 보기</span>
+                  <span className="text-xs border border-border rounded px-1.5 py-0.5 hidden group-open:inline">▼ 접기</span>
+                </summary>
+                <div className="space-y-2 mt-2">
+                  {doneBookings.map(BookingCard)}
+                </div>
+              </details>
+            )}
+          </>
+        )
+      })()}
 
     </div>
   )
