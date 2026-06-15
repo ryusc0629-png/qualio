@@ -27,7 +27,7 @@ export default async function MarketingPage() {
       .maybeSingle(),
     db
       .from('biz_posts')
-      .select('id, slug, title, summary, published, ai_generated, published_at, naver_title, naver_content, naver_tags')
+      .select('id, slug, title, summary, published, ai_generated, published_at, image_url, naver_title, naver_content, naver_tags')
       .eq('business_id', profile.business_id)
       .order('published_at', { ascending: false }),
     db

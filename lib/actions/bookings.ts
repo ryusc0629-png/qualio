@@ -113,7 +113,7 @@ export const updateBookingStatusAction = action
     if (error) throw new Error('[APP] 상태 변경에 실패했습니다')
 
     // 청소 완료 → 고객 DB 자동 upsert (전화번호 기준, 이미 있으면 스킵)
-    if (parsedInput.status === 'completed' && bookingForCustomer?.customer_phone) {
+    if (parsedInput.status === 'completed' && bookingForCustomer?.customer_phone?.trim()) {
       const { data: existing } = await db
         .from('customers')
         .select('id')
@@ -127,7 +127,7 @@ export const updateBookingStatusAction = action
           name: bookingForCustomer.customer_name,
           phone: bookingForCustomer.customer_phone,
           address: bookingForCustomer.service_address ?? null,
-          type: 'individual',
+          type: 'one_time',
         })
       }
     }

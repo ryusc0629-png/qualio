@@ -56,6 +56,7 @@ interface Post {
   published: boolean
   ai_generated: boolean
   published_at: string
+  image_url: string | null
   naver_title: string | null
   naver_content: string | null
   naver_tags: string[] | null
@@ -467,6 +468,18 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                     #{tag}
                   </span>
                 ))}
+              </div>
+            )}
+
+            {/* 이미지 (있는 경우) */}
+            {naverPost.image_url && (
+              <div className="px-5 py-3 border-b bg-slate-50 shrink-0">
+                <p className="text-xs text-muted-foreground mb-2">첨부 이미지 — 우클릭 후 저장하여 네이버 블로그에 업로드하세요</p>
+                <img
+                  src={naverPost.image_url}
+                  alt="포스트 이미지"
+                  className="rounded-lg w-full max-h-48 object-cover border"
+                />
               </div>
             )}
 
