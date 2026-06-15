@@ -444,6 +444,7 @@ export function ScheduleBoard({
 
       {/* 캘린더 그리드 */}
       <DndContext
+        id="schedule-board-dnd"
         sensors={sensors}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
