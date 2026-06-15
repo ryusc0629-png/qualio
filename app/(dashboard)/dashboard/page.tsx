@@ -2,7 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { CopyLinkButton } from '@/components/dashboard/copy-link-button'
 import Link from 'next/link'
-import { AlertCircle, Calendar, CheckCircle2, ChevronRight, Clock, RefreshCw, Sparkles, Wallet } from 'lucide-react'
+import { AlertCircle, Calendar, CheckCircle2, ChevronRight, Clock, RefreshCw, Sparkles, Wallet, ClipboardList, Star, Phone } from 'lucide-react'
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
   confirmed:   { text: '확정',    className: 'bg-primary/10 text-primary' },
@@ -59,6 +59,9 @@ export default async function DashboardPage() {
     { data: todayBookings },
     { data: upcomingBookings },
     { count: pendingQuoteCount },
+    { data: completedBookingIds },
+    { data: reportedBookings },
+    { count: unreviewedCount },
   ] = await Promise.all([
     // 이번 달 완료 예약 (매출 계산용)
     db.from('bookings')
@@ -117,6 +120,25 @@ export default async function DashboardPage() {
       .select('id', { count: 'exact', head: true })
       .eq('business_id', businessId)
       .eq('status', 'pending'),
+
+    // 완료 예약 중 보고서 미작성 (보고서 링크 못 받은 고객)
+    db.from('bookings')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('status', 'completed')
+      .is('deleted_at', null),
+
+    // 보고서 발송된 booking_id 목록
+    db.from('reports')
+      .select('booking_id')
+      .eq('business_id', businessId),
+
+    // 보고서 보냈지만 리뷰 요청 안 한 건수
+    db.from('reports')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .not('kakao_sent_at', 'is', null)
+      .is('review_request_sent_at', null),
   ])
 
   // 이달 매출
@@ -140,6 +162,10 @@ export default async function DashboardPage() {
 
   // 퀄리오 자동 처리 예약 건수
   const qualioAutoCount = qualioAutoBookings?.length ?? 0
+
+  // 완료 예약 중 보고서 미작성 건수
+  const reportedSet = new Set((reportedBookings ?? []).map((r) => r.booking_id))
+  const unreportedCount = (completedBookingIds ?? []).filter((b) => !reportedSet.has(b.id)).length
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   const quoteUrl = `${baseUrl}/q/${businessId}`
@@ -207,20 +233,57 @@ export default async function DashboardPage() {
         </h1>
       </div>
 
-      {/* 미답변 견적 알림 */}
-      {(pendingQuoteCount ?? 0) > 0 && (
-        <Link href="/dashboard/work">
-          <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 hover:bg-amber-100 transition-colors">
-            <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-amber-800">
-                아직 확인 안 된 견적이 {pendingQuoteCount}건 있어요
-              </p>
-              <p className="text-xs text-amber-600 mt-0.5">48시간 안에 예약으로 전환하지 않으면 자동으로 만료돼요</p>
-            </div>
-            <ChevronRight className="h-4 w-4 text-amber-600 shrink-0" />
-          </div>
-        </Link>
+      {/* 액션 알림 배너 묶음 */}
+      {((pendingQuoteCount ?? 0) > 0 || unreportedCount > 0 || (unreviewedCount ?? 0) > 0) && (
+        <div className="space-y-2">
+          {/* 미답변 견적 */}
+          {(pendingQuoteCount ?? 0) > 0 && (
+            <Link href="/dashboard/work">
+              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 hover:bg-amber-100 transition-colors">
+                <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-amber-800">
+                    아직 확인 안 된 견적이 {pendingQuoteCount}건 있어요
+                  </p>
+                  <p className="text-xs text-amber-600 mt-0.5">48시간 안에 예약으로 전환하지 않으면 자동으로 만료돼요</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-amber-600 shrink-0" />
+              </div>
+            </Link>
+          )}
+
+          {/* 보고서 미작성 */}
+          {unreportedCount > 0 && (
+            <Link href="/dashboard/work?tab=bookings">
+              <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 hover:bg-orange-100 transition-colors">
+                <ClipboardList className="h-5 w-5 text-orange-600 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-orange-800">
+                    완료 후 보고서를 아직 안 보낸 고객이 {unreportedCount}명이에요
+                  </p>
+                  <p className="text-xs text-orange-600 mt-0.5">작업 전·후 사진을 보내면 신뢰도가 올라가요</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-orange-600 shrink-0" />
+              </div>
+            </Link>
+          )}
+
+          {/* 리뷰 요청 미발송 */}
+          {(unreviewedCount ?? 0) > 0 && (
+            <Link href="/dashboard/work?tab=bookings">
+              <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 hover:bg-yellow-100 transition-colors">
+                <Star className="h-5 w-5 text-yellow-600 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-yellow-800">
+                    리뷰 요청을 아직 안 보낸 고객이 {unreviewedCount}명이에요
+                  </p>
+                  <p className="text-xs text-yellow-600 mt-0.5">리뷰 한 줄이 새 고객을 불러와요</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-yellow-600 shrink-0" />
+              </div>
+            </Link>
+          )}
+        </div>
       )}
 
       {/* 이달 현황 KPI */}
@@ -292,13 +355,21 @@ export default async function DashboardPage() {
                     <p className="font-medium text-sm truncate">{booking.customer_name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{TIER_LABEL[booking.selected_tier ?? ''] ?? '—'}</p>
                   </div>
-                  <div className="flex items-center gap-3 ml-4 shrink-0">
+                  <div className="flex items-center gap-2 ml-4 shrink-0">
                     <p className="text-sm font-semibold tabular-nums text-foreground">
                       {booking.final_price ? `${booking.final_price.toLocaleString('ko-KR')}원` : '—'}
                     </p>
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${status.className}`}>
                       {status.text}
                     </span>
+                    {booking.customer_phone && (
+                      <a
+                        href={`tel:${booking.customer_phone}`}
+                        className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center hover:bg-primary/20 transition-colors shrink-0"
+                      >
+                        <Phone className="h-3.5 w-3.5 text-primary" />
+                      </a>
+                    )}
                   </div>
                 </div>
               )
