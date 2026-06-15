@@ -23,10 +23,7 @@ export default async function PipelinePage({
   if (!profile?.business_id) redirect('/onboarding')
 
   const { data: leads } = await db
-    .from('leads')
-    .select('id, company_name, contact_name, contact_title, email, phone, address, status, customer_type, monthly_budget, next_follow_up_date, notes, created_at')
-    .eq('business_id', profile.business_id)
-    .order('created_at', { ascending: false })
+    .rpc('get_leads_for_pipeline', { p_business_id: profile.business_id })
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">

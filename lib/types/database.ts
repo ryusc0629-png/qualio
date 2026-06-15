@@ -1118,6 +1118,26 @@ export type Database = {
     }
     Functions: {
       get_my_business_id: { Args: never; Returns: string }
+      get_leads_for_pipeline: {
+        Args: { p_business_id: string }
+        Returns: {
+          id: string; company_name: string; contact_name: string | null
+          contact_title: string | null; email: string | null; phone: string | null
+          address: string | null; status: string; customer_type: string
+          monthly_budget: number | null; next_follow_up_date: string | null
+          notes: string | null; created_at: string
+        }[]
+      }
+      get_lead_detail: {
+        Args: { p_id: string; p_business_id: string }
+        Returns: {
+          id: string; company_name: string; contact_name: string | null
+          contact_title: string | null; email: string | null; phone: string | null
+          address: string | null; status: string; customer_type: string
+          monthly_budget: number | null; next_follow_up_date: string | null
+          notes: string | null; created_at: string
+        }[]
+      }
       insert_lead: {
         Args: {
           p_business_id: string

@@ -22,13 +22,8 @@ export default async function LeadDetailPage({
 
   if (!profile?.business_id) redirect('/onboarding')
 
-  const [leadResult, activitiesResult, quoteResult] = await Promise.all([
-    db
-      .from('leads')
-      .select('id, company_name, contact_name, contact_title, email, phone, address, status, customer_type, monthly_budget, next_follow_up_date, notes, created_at')
-      .eq('id', leadId)
-      .eq('business_id', profile.business_id)
-      .maybeSingle(),
+  const [leadRpcResult, activitiesResult, quoteResult] = await Promise.all([
+    db.rpc('get_lead_detail', { p_id: leadId, p_business_id: profile.business_id }),
     db
       .from('lead_activities')
       .select('id, type, content, activity_at, created_at')
@@ -43,7 +38,8 @@ export default async function LeadDetailPage({
       .maybeSingle(),
   ])
 
-  if (!leadResult.data) notFound()
+  const leadData = Array.isArray(leadRpcResult.data) ? leadRpcResult.data[0] : null
+  if (!leadData) notFound()
 
   const rawQuote = quoteResult.data
   const existingQuote = rawQuote
@@ -58,7 +54,7 @@ export default async function LeadDetailPage({
   return (
     <div className="max-w-2xl mx-auto">
       <LeadDetail
-        lead={leadResult.data}
+        lead={leadData}
         activities={activitiesResult.data ?? []}
         existingQuote={existingQuote}
       />
