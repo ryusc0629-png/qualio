@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Calendar, Phone, MapPin, FileText, X } from 'lucide-react'
 import { BookingStatusSelect } from '@/components/dashboard/booking-status-select'
 import { RescheduleBookingButton } from '@/components/dashboard/reschedule-booking-button'
+import { CompleteReportButton } from '@/components/dashboard/complete-report-button'
 import {
   Dialog,
   DialogContent,
@@ -44,7 +45,7 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
 }
 
-export function BookingCardList({ bookings }: { bookings: BookingItem[] }) {
+export function BookingCardList({ bookings, businessId }: { bookings: BookingItem[]; businessId: string }) {
   const [selected, setSelected] = useState<BookingItem | null>(null)
 
   const activeBookings = bookings.filter((b) => b.status === 'confirmed' || b.status === 'in_progress')
@@ -235,6 +236,15 @@ export function BookingCardList({ bookings }: { bookings: BookingItem[] }) {
                           bookingId={selected.id}
                           scheduledAt={selected.scheduled_at}
                           customerPhone={selected.customer_phone}
+                        />
+                      </div>
+                    )}
+                    {selected.status === 'completed' && (
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <CompleteReportButton
+                          bookingId={selected.id}
+                          customerName={selected.customer_name}
+                          businessId={businessId}
                         />
                       </div>
                     )}

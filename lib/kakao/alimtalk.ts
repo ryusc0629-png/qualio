@@ -183,6 +183,59 @@ export async function sendReminderAlimtalk(params: ReminderParams): Promise<void
   })
 }
 
+// 작업 완료 보고서 알림톡 파라미터
+export interface WorkCompleteParams {
+  customerPhone: string
+  customerName:  string
+  businessName:  string
+  businessPhone: string | null
+  cleaningType:  string
+  scheduledAt:   string  // ISO 문자열
+  reportUrl:     string  // 고객용 공개 보고서 링크
+}
+
+// 작업 완료 보고서 알림톡 발송
+export async function sendWorkCompleteAlimtalk(params: WorkCompleteParams): Promise<void> {
+  const apiKey     = process.env.SOLAPI_API_KEY
+  const apiSecret  = process.env.SOLAPI_API_SECRET
+  const sender     = process.env.SOLAPI_SENDER_PHONE
+  const templateId = process.env.SOLAPI_TEMPLATE_ID_WORK_COMPLETE
+  const pfId       = process.env.SOLAPI_KAKAO_PF_ID
+
+  if (!apiKey || !apiSecret || !sender || !templateId || !pfId) {
+    console.warn('[Alimtalk] WORK_COMPLETE 템플릿 미설정 — 발송 생략')
+    return
+  }
+
+  const service = new SolapiMessageService(apiKey, apiSecret)
+
+  await service.sendOne({
+    to:   params.customerPhone,
+    from: sender,
+    type: 'ATA',
+    kakaoOptions: {
+      pfId,
+      templateId,
+      variables: {
+        '#{고객명}':     params.customerName,
+        '#{업체명}':     params.businessName,
+        '#{서비스명}':   params.cleaningType,
+        '#{작업일시}':   formatKoreanDate(params.scheduledAt),
+        '#{업체연락처}': params.businessPhone ?? '업체에 문의해 주세요',
+        '#{보고서링크}': params.reportUrl,
+      },
+      buttons: [
+        {
+          buttonType: 'WL' as const,
+          buttonName: '작업 보고서 확인',
+          linkMo: params.reportUrl,
+          linkPc: params.reportUrl,
+        },
+      ],
+    },
+  })
+}
+
 // 예약 확정 알림톡 발송 (퀄리오 채널로 고객사 대신 발송)
 export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): Promise<void> {
   const apiKey     = process.env.SOLAPI_API_KEY

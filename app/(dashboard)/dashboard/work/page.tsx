@@ -278,7 +278,7 @@ export default async function WorkPage({
 
       {/* ── 예약 탭 ── */}
       {activeTab === 'bookings' && (
-        <BookingCardList bookings={bookings ?? []} />
+        <BookingCardList bookings={bookings ?? []} businessId={businessId} />
       )}
 
     </div>
