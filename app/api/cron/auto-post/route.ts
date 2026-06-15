@@ -2,36 +2,31 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
 import { generatePostImage } from '@/lib/ai/image-gen'
-import { getAutoPostLimit } from '@/lib/config/plans'
+import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
 // Vercel Cron: 매일 00:00 UTC (한국 오전 9시) 실행
 // 1회 실행 시 오늘 발행해야 할 건수만큼 반복 발행 (스케일 플랜 하루 2건 지원)
 // vercel.json에 등록된 cron만 호출 가능 — CRON_SECRET으로 인증
 
-// 오늘 발행해야 할 건수 계산 — 구독 시작일 기준 30일 롤링 균등 분포
+// 오늘 발행해야 할 건수 계산 — 달력 월 기준 균등 분포 + 일 한도 cap
 function postsToPublishToday(
-  postsThisPeriod: number,
+  postsThisMonth: number,
   target: number,
-  daysElapsed: number,
+  dayOfMonth: number,
+  daysInMonth: number,
+  dailyLimit: number,
 ): number {
-  if (postsThisPeriod >= target) return 0
-  // 오늘까지 발행됐어야 할 누적 건수 (30일 기준)
-  const expectedSoFar = Math.floor(target * Math.min(daysElapsed, 30) / 30)
-  return Math.max(0, expectedSoFar - postsThisPeriod)
+  if (postsThisMonth >= target) return 0
+  // 오늘까지 발행됐어야 할 누적 건수
+  const expectedSoFar = Math.floor(target * dayOfMonth / daysInMonth)
+  const needed = Math.max(0, expectedSoFar - postsThisMonth)
+  // 하루 최대 발행 한도 적용
+  return Math.min(needed, dailyLimit)
 }
 
-// 구독 시작일 기준 현재 청구 주기 시작일 계산 (30일 롤링)
-function getBillingPeriodStart(subscriptionCreatedAt: string | null, now: Date): Date {
-  if (!subscriptionCreatedAt) {
-    // 구독일 없으면 이번 달 1일로 폴백
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-  }
-  const subStart = new Date(subscriptionCreatedAt)
-  const elapsedMs = now.getTime() - subStart.getTime()
-  const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24))
-  const periodIndex = Math.floor(elapsedDays / 30)
-  return new Date(subStart.getTime() + periodIndex * 30 * 24 * 60 * 60 * 1000)
+function getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate()
 }
 
 // 포스트 1건 생성 및 저장
@@ -113,7 +108,10 @@ export async function GET(request: NextRequest) {
 
   const db = createServiceClient()
   const now = new Date()
+  const year = now.getUTCFullYear()
   const month = now.getUTCMonth() + 1
+  const dayOfMonth = now.getUTCDate()
+  const daysInMonth = getDaysInMonth(year, month)
 
   const { data: businesses, error: bizError } = await db
     .from('businesses')
@@ -135,40 +133,39 @@ export async function GET(request: NextRequest) {
     try {
       const { data: sub } = await db
         .from('subscriptions')
-        .select('plan, created_at')
+        .select('plan')
         .eq('business_id', business.id)
         .eq('status', 'active')
         .maybeSingle()
 
       const planId = ((sub?.plan as PlanId) ?? 'beta')
       const planLimit = getAutoPostLimit(planId)
+      const dailyLimit = getAutoDailyPostLimit(planId)
       const effectiveTarget = Math.min(business.monthly_post_target, planLimit)
 
-      // 구독 시작일 기준 현재 청구 주기 시작일 (30일 롤링)
-      const periodStart = getBillingPeriodStart(sub?.created_at ?? null, now)
-      const daysElapsed = Math.floor((now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
-
+      // 달력 월 기준 발행 건수 집계
+      const monthStart = new Date(Date.UTC(year, month - 1, 1)).toISOString()
       const { count } = await db
         .from('biz_posts')
         .select('id', { count: 'exact', head: true })
         .eq('business_id', business.id)
         .eq('published', true)
-        .gte('published_at', periodStart.toISOString())
+        .gte('published_at', monthStart)
 
-      const postsThisPeriod = count ?? 0
-      const needed = postsToPublishToday(postsThisPeriod, effectiveTarget, daysElapsed)
+      const postsThisMonth = count ?? 0
+      const needed = postsToPublishToday(postsThisMonth, effectiveTarget, dayOfMonth, daysInMonth, dailyLimit)
 
       if (needed === 0) {
         results.push({ businessId: business.id, action: 'skipped' })
         continue
       }
 
-      // 이번 주기 발행 제목 목록 (중복 방지용)
+      // 이번 달 발행 제목 목록 (중복 방지용)
       const { data: publishedThisMonth } = await db
         .from('biz_posts')
         .select('title')
         .eq('business_id', business.id)
-        .gte('published_at', periodStart.toISOString())
+        .gte('published_at', monthStart)
       const publishedTitles = (publishedThisMonth ?? []).map((p) => p.title)
 
       const { data: services } = await db

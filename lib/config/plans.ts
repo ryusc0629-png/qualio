@@ -10,6 +10,7 @@ export const PLANS = {
     description: '무료 베타 기간 — 모든 기능 제한 없이 사용',
     target: '초기 사용자',
     autoPostLimit: 5,        // 월 자동 발행 한도
+    autoDailyPostLimit: 1,   // 일 자동 발행 한도
     features: [
       '예약 관리',
       '고객 견적 폼',
@@ -28,6 +29,7 @@ export const PLANS = {
     description: '"내 인건비/시간을 아껴주는 비서"',
     target: '1~2인 부부 창업, 영세 업체',
     autoPostLimit: 10,
+    autoDailyPostLimit: 1,
     features: [
       '예약 관리',
       '고객 견적 폼',
@@ -47,6 +49,7 @@ export const PLANS = {
     description: '"알아서 돈을 벌어오는 영업실장"',
     target: '월 매출 1천만원 이상, 상위 20%',
     autoPostLimit: 30,
+    autoDailyPostLimit: 2,
     features: [
       'Starter 전체 기능',
       '다중 직원 계정',
@@ -66,6 +69,7 @@ export const PLANS = {
     description: '"내 브랜드를 지키는 요새"',
     target: '다수 팀/지점 보유 기업형',
     autoPostLimit: 60,
+    autoDailyPostLimit: 2,
     features: [
       'Pro 전체 기능',
       '다지점 통합 관리',
@@ -97,4 +101,9 @@ export function getPlanPrice(planId: PlanId): number {
 // 플랜별 월 자동 발행 한도 조회
 export function getAutoPostLimit(planId: PlanId): number {
   return PLANS[planId].autoPostLimit
+}
+
+// 플랜별 일 자동 발행 한도 조회
+export function getAutoDailyPostLimit(planId: PlanId): number {
+  return PLANS[planId].autoDailyPostLimit
 }
