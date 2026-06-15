@@ -1,7 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { CopyLinkButton } from '@/components/dashboard/copy-link-button'
+import { QuoteLinkShare } from '@/components/dashboard/quote-link-share'
 import {
   AlertCircle, Calendar, ChevronRight, RefreshCw,
   Wallet, ClipboardList, Star, Phone,
@@ -197,9 +197,12 @@ export default async function DashboardPage() {
     <div className="max-w-5xl mx-auto space-y-5">
 
       {/* 인사말 */}
-      <div>
-        <p className="text-xs text-muted-foreground">{dateLabel}</p>
-        <h1 className="text-2xl font-bold mt-0.5">{greeting}, {businessName}</h1>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs text-muted-foreground">{dateLabel}</p>
+          <h1 className="text-2xl font-bold mt-0.5">{greeting}, {businessName}</h1>
+        </div>
+        <QuoteLinkShare url={quoteUrl} />
       </div>
 
       {/* 액션 알림 */}
@@ -565,17 +568,6 @@ export default async function DashboardPage() {
           </div>
         </div>
       )}
-
-      {/* 견적 링크 */}
-      <div className="bg-white rounded-xl border border-border p-5 space-y-3">
-        <div>
-          <h2 className="font-semibold text-sm">고객 견적 요청 링크</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            카카오톡이나 문자로 공유하면 고객이 직접 견적을 요청할 수 있어요
-          </p>
-        </div>
-        <CopyLinkButton url={quoteUrl} />
-      </div>
 
     </div>
   )
