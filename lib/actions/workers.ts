@@ -180,3 +180,46 @@ export const assignBookingAction = action
     revalidatePath('/dashboard/schedule')
     return { success: true }
   })
+
+// 예약 상태 변경 (일정 보드에서 직접 처리)
+export const updateBookingStatusAction = action
+  .schema(z.object({
+    bookingId: z.string().uuid(),
+    status: z.string().refine(
+      (v) => ['confirmed', 'in_progress', 'completed', 'no_show'].includes(v),
+      { message: '유효하지 않은 상태값입니다' }
+    ),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { data: booking } = await db
+      .from('bookings')
+      .select('status')
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+      .maybeSingle()
+
+    if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
+
+    // 상태 전이 규칙
+    const allowed: Record<string, string[]> = {
+      confirmed:   ['in_progress', 'no_show'],
+      in_progress: ['completed', 'confirmed'],
+      completed:   ['in_progress'],
+    }
+
+    if (!allowed[booking.status]?.includes(parsedInput.status)) {
+      throw new Error('[APP] 현재 상태에서 변경할 수 없어요')
+    }
+
+    const { error } = await db
+      .from('bookings')
+      .update({ status: parsedInput.status })
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+
+    if (error) throw new Error('[APP] 상태 변경에 실패했어요')
+    revalidatePath('/dashboard/schedule')
+    return { success: true, newStatus: parsedInput.status }
+  })

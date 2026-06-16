@@ -27,6 +27,7 @@ import {
   assignBookingAction,
   updateBookingTimeAction,
   cancelBookingFromScheduleAction,
+  updateBookingStatusAction,
 } from '@/lib/actions/workers'
 
 // ── 타입 ──────────────────────────────────────────────────
@@ -58,6 +59,7 @@ interface Props {
   onWorkerChange: (bookingId: string, newWorkerId: string | null) => void
   onTimeChange:   (bookingId: string, newScheduledAt: string) => void
   onCancel:       (bookingId: string) => void
+  onStatusChange?: (bookingId: string, newStatus: string) => void
 }
 
 // ── 상태 배지 ────────────────────────────────────────────
@@ -106,12 +108,13 @@ export function BookingDetailSheet({
   onWorkerChange,
   onTimeChange,
   onCancel,
+  onStatusChange,
 }: Props) {
   const [editingTime, setEditingTime] = useState(false)
   const [timeValue, setTimeValue]     = useState('')
 
-  const isClosed = !booking ||
-    ['completed', 'cancelled', 'no_show'].includes(booking.status)
+  const isCancelled = !booking ||
+    ['cancelled', 'no_show'].includes(booking.status)
 
   // 시간 변경 액션
   const { execute: saveTime, isPending: timePending } = useAction(updateBookingTimeAction, {
@@ -137,6 +140,16 @@ export function BookingDetailSheet({
       toast.success('예약이 취소됐어요')
       onCancel(booking.id)
       onClose()
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 상태 변경 액션
+  const { execute: updateStatus, isPending: statusPending } = useAction(updateBookingStatusAction, {
+    onSuccess: ({ data }) => {
+      if (!booking || !data?.newStatus) return
+      onStatusChange?.(booking.id, data.newStatus)
+      toast.success('상태가 변경됐어요!')
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -258,7 +271,7 @@ export function BookingDetailSheet({
               ) : (
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{scheduledTime}</span>
-                  {!isClosed && (
+                  {!isCancelled && (
                     <button
                       onClick={startEditTime}
                       className="flex items-center gap-1 text-xs text-primary hover:underline"
@@ -273,7 +286,7 @@ export function BookingDetailSheet({
 
             {/* 담당자 */}
             <Row icon={<User className="h-4 w-4" />} label="담당자">
-              {isClosed ? (
+              {isCancelled ? (
                 <span className="font-medium">
                   {currentWorker ? currentWorker.name : '미배정'}
                 </span>
@@ -360,17 +373,56 @@ export function BookingDetailSheet({
           </a>
         </div>
 
-        {/* 하단 — 취소 버튼 (완료·취소된 예약은 숨김) */}
-        {!isClosed && (
-          <div className="px-5 pb-5 pt-3 border-t border-border">
-            <Button
-              variant="outline"
-              className="w-full h-12 text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive font-semibold"
-              disabled={cancelPending}
-              onClick={handleCancelBooking}
-            >
-              {cancelPending ? '취소 중...' : '예약 취소하기'}
-            </Button>
+        {/* 하단 — 상태 변경 + 취소 */}
+        {!isCancelled && (
+          <div className="px-5 pb-5 pt-3 border-t border-border space-y-2">
+            {/* 상태 변경 버튼 */}
+            {booking?.status === 'confirmed' && (
+              <Button
+                className="w-full h-12 font-semibold gap-2 bg-amber-500 hover:bg-amber-600"
+                disabled={statusPending}
+                onClick={() => updateStatus({ bookingId: booking.id, status: 'in_progress' })}
+              >
+                {statusPending ? '처리 중...' : '작업 시작하기'}
+              </Button>
+            )}
+            {booking?.status === 'in_progress' && (
+              <Button
+                className="w-full h-12 font-semibold gap-2 bg-emerald-600 hover:bg-emerald-700"
+                disabled={statusPending}
+                onClick={() => {
+                  if (!confirm('작업을 완료 처리할까요?')) return
+                  updateStatus({ bookingId: booking.id, status: 'completed' })
+                }}
+              >
+                {statusPending ? '처리 중...' : '작업 완료 처리'}
+              </Button>
+            )}
+            {booking?.status === 'completed' && (
+              <Button
+                variant="outline"
+                className="w-full h-12 font-semibold gap-2"
+                disabled={statusPending}
+                onClick={() => {
+                  if (!confirm('진행 중 상태로 되돌릴까요?')) return
+                  updateStatus({ bookingId: booking.id, status: 'in_progress' })
+                }}
+              >
+                {statusPending ? '처리 중...' : '진행 중으로 되돌리기'}
+              </Button>
+            )}
+
+            {/* 취소 버튼 */}
+            {booking?.status !== 'completed' && (
+              <Button
+                variant="outline"
+                className="w-full h-12 text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive font-semibold"
+                disabled={cancelPending}
+                onClick={handleCancelBooking}
+              >
+                {cancelPending ? '취소 중...' : '예약 취소하기'}
+              </Button>
+            )}
           </div>
         )}
 

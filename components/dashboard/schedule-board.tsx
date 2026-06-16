@@ -374,6 +374,12 @@ export function ScheduleBoard({
     setSelectedBookingId(null)
   }
 
+  const handleSheetStatusChange = (bookingId: string, newStatus: string) => {
+    setBookings((prev) =>
+      prev.map((b) => b.id === bookingId ? { ...b, status: newStatus } : b)
+    )
+  }
+
   const handleDragStart = (event: DragStartEvent) => {
     const booking = bookings.find((b) => b.id === event.active.id)
     setActiveBooking(booking ?? null)
@@ -567,6 +573,7 @@ export function ScheduleBoard({
         onWorkerChange={handleSheetWorkerChange}
         onTimeChange={handleSheetTimeChange}
         onCancel={handleSheetCancel}
+        onStatusChange={handleSheetStatusChange}
       />
     </div>
   )
