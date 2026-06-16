@@ -5,6 +5,7 @@ import { AddClientForm } from '@/components/dashboard/add-client-form'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { DeleteCustomerButton } from '@/components/dashboard/delete-customer-button'
 import { ContractStatusSelect } from '@/components/dashboard/contract-status-select'
+import { ConfirmBookingButton } from '@/components/dashboard/confirm-booking-button'
 import { formatFrequency } from '@/lib/utils/frequency'
 import { Phone, MapPin, Calendar, TrendingUp, ChevronRight, Building2, User, Archive } from 'lucide-react'
 
@@ -18,6 +19,8 @@ type PendingQuoteRow = {
   space_size: number | null
   preferred_date: string | null
   good_price: number | null
+  better_price: number | null
+  best_price: number | null
   created_at: string
 }
 
@@ -167,7 +170,7 @@ export default async function ClientsPage({
 
     // 예약 미확정 견적 요청 (공개 폼으로 들어온)
     db.from('quotes')
-      .select('id, customer_name, customer_phone, cleaning_type, space_size, preferred_date, good_price, created_at')
+      .select('id, customer_name, customer_phone, cleaning_type, space_size, preferred_date, good_price, better_price, best_price, created_at')
       .eq('business_id', businessId)
       .eq('status', 'pending')
       .order('created_at', { ascending: false }),
@@ -360,12 +363,15 @@ export default async function ClientsPage({
                         )}
                       </div>
                     </div>
-                    <Link
-                      href="/dashboard/work"
-                      className="shrink-0 text-xs font-medium text-amber-800 border border-amber-300 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
-                    >
-                      예약 확정하기 →
-                    </Link>
+                    <div className="shrink-0">
+                      <ConfirmBookingButton
+                        quoteId={quote.id}
+                        goodPrice={quote.good_price}
+                        betterPrice={quote.better_price}
+                        bestPrice={quote.best_price}
+                        preferredDate={quote.preferred_date}
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
