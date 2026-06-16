@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useAction } from 'next-safe-action/hooks'
@@ -41,7 +41,7 @@ interface EditCustomerButtonProps {
 export function EditCustomerButton({ customer }: EditCustomerButtonProps) {
   const [open, setOpen] = useState(false)
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormInput>({
+  const { register, handleSubmit, control, formState: { errors } } = useForm<FormInput>({
     resolver: zodResolver(schema),
     defaultValues: {
       customerId: customer.id,
@@ -54,13 +54,17 @@ export function EditCustomerButton({ customer }: EditCustomerButtonProps) {
     },
   })
 
+  const selectedType = useWatch({ control, name: 'type' })
+  const isCompany = selectedType === 'recurring'
+
   const { execute, isPending } = useAction(updateCustomerAction, {
     onSuccess: () => {
-      toast.success('고객 정보가 수정되었습니다')
+      toast.success('수정했어요!')
       setOpen(false)
+      window.location.replace(isCompany ? '/dashboard/clients?type=company' : '/dashboard/clients?type=individual')
     },
     onError: ({ error }) => {
-      toast.error(error.serverError ?? '수정에 실패했습니다')
+      toast.error(error.serverError ?? '다시 시도해주세요')
     },
   })
 
@@ -78,7 +82,9 @@ export function EditCustomerButton({ customer }: EditCustomerButtonProps) {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-lg">고객 정보 수정</h2>
+              <h2 className="font-semibold text-lg">
+                {isCompany ? '법인 고객 수정' : '개인 고객 수정'}
+              </h2>
               <button onClick={() => setOpen(false)}>
                 <X className="h-5 w-5 text-muted-foreground" />
               </button>
@@ -88,8 +94,8 @@ export function EditCustomerButton({ customer }: EditCustomerButtonProps) {
               <input type="hidden" {...register('customerId')} />
 
               <div className="space-y-1">
-                <Label htmlFor="edit-name">고객(업체)명 *</Label>
-                <Input id="edit-name" {...register('name')} />
+                <Label htmlFor="edit-name">{isCompany ? '업체명 *' : '고객명 *'}</Label>
+                <Input id="edit-name" placeholder={isCompany ? '예: (주)클린빌딩' : '예: 김영희'} {...register('name')} />
                 {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
               </div>
 
