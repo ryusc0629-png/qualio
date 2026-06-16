@@ -120,15 +120,21 @@ export function EditCustomerButton({ customer }: EditCustomerButtonProps) {
               </div>
 
               <div className="space-y-1">
-                <Label>고객 유형</Label>
+                <Label>고객 구분</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="flex items-center gap-2 rounded-lg border p-2.5 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                     <input type="radio" value="one_time" {...register('type')} className="accent-primary" />
-                    <span className="text-sm">일회성</span>
+                    <div>
+                      <p className="text-sm font-medium">개인 고객</p>
+                      <p className="text-xs text-muted-foreground">개인·일회성</p>
+                    </div>
                   </label>
                   <label className="flex items-center gap-2 rounded-lg border p-2.5 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                     <input type="radio" value="recurring" {...register('type')} className="accent-primary" />
-                    <span className="text-sm">정기 고객</span>
+                    <div>
+                      <p className="text-sm font-medium">법인 고객</p>
+                      <p className="text-xs text-muted-foreground">법인·정기계약</p>
+                    </div>
                   </label>
                 </div>
               </div>

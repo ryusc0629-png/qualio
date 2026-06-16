@@ -224,20 +224,20 @@ export function AddClientForm() {
             </div>
 
             <div className="space-y-1">
-              <Label>방문 유형</Label>
+              <Label>고객 구분</Label>
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                   <input type="radio" value="one_time" {...customerForm.register('type')} className="accent-primary" />
                   <div>
-                    <p className="text-sm font-medium">일회성</p>
-                    <p className="text-xs text-muted-foreground">입주청소 등 단발</p>
+                    <p className="text-sm font-medium">개인 고객</p>
+                    <p className="text-xs text-muted-foreground">개인·일회성</p>
                   </div>
                 </label>
                 <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                   <input type="radio" value="recurring" {...customerForm.register('type')} className="accent-primary" />
                   <div>
-                    <p className="text-sm font-medium">정기 고객</p>
-                    <p className="text-xs text-muted-foreground">주기적으로 방문</p>
+                    <p className="text-sm font-medium">법인 고객</p>
+                    <p className="text-xs text-muted-foreground">법인·정기계약</p>
                   </div>
                 </label>
               </div>
