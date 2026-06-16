@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -56,6 +56,13 @@ export function EditCustomerButton({ customer }: EditCustomerButtonProps) {
 
   const selectedType = useWatch({ control, name: 'type' })
   const isCompany = selectedType === 'recurring'
+
+  // 다이얼로그 열림 시 배경 스크롤 잠금
+  useEffect(() => {
+    if (!open) return
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [open])
 
   const { execute, isPending } = useAction(updateCustomerAction, {
     onSuccess: () => {
