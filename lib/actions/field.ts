@@ -119,7 +119,7 @@ export const fieldSaveMemoAction = action
         .eq('id', parsedInput.bookingId)
     }
 
-    // 3. 다음 방문 참고사항 → customers.notes (전화번호로 고객 찾기)
+    // 3. 다음 방문 참고사항 → customers.notes (전화번호로 고객 찾기, 없으면 생성)
     if (parsedInput.nextVisitNote && booking.customer_phone) {
       const { data: customer } = await db
         .from('customers')
@@ -128,16 +128,28 @@ export const fieldSaveMemoAction = action
         .eq('phone', booking.customer_phone)
         .maybeSingle()
 
+      const today = new Date().toLocaleDateString('ko-KR')
+      const noteEntry = `[${today}] ${parsedInput.nextVisitNote}`
+
       if (customer) {
-        const today = new Date().toLocaleDateString('ko-KR')
         const newNote = customer.notes
-          ? `${customer.notes}\n\n[${today}] ${parsedInput.nextVisitNote}`
-          : `[${today}] ${parsedInput.nextVisitNote}`
+          ? `${customer.notes}\n\n${noteEntry}`
+          : noteEntry
 
         await db
           .from('customers')
           .update({ notes: newNote })
           .eq('id', customer.id)
+      } else {
+        // 고객이 아직 없으면 생성
+        await db.from('customers').insert({
+          business_id: worker.business_id,
+          name: booking.customer_name,
+          phone: booking.customer_phone,
+          address: booking.service_address ?? null,
+          type: 'one_time',
+          notes: noteEntry,
+        })
       }
     }
 

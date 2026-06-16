@@ -30,7 +30,7 @@ export default async function FieldBookingPage({ params }: Props) {
   // 예약 조회 (해당 직원에게 배정된 것만)
   const { data: booking } = await db
     .from('bookings')
-    .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, quote_id' as never)
+    .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, customer_request, quote_id' as never)
     .eq('id', bookingId)
     .eq('business_id', worker.business_id)
     .eq('worker_id' as never, workerId)
