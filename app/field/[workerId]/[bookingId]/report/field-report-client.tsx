@@ -36,6 +36,7 @@ interface ExistingReport {
   sentAt: string | null
   beforeUrls: string[]
   afterUrls: string[]
+  aiReportData: AiReportData | null
 }
 
 interface AiReportData {
@@ -69,8 +70,10 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   )
   const [savedReportId, setSavedReportId] = useState<string | null>(existingReport?.id ?? null)
   const [alreadySent, setAlreadySent] = useState(!!existingReport?.sentAt)
-  const [aiReport, setAiReport] = useState<AiReportData | null>(null)
-  const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set())
+  const [aiReport, setAiReport] = useState<AiReportData | null>(existingReport?.aiReportData ?? null)
+  const [selectedServices, setSelectedServices] = useState<Set<string>>(
+    new Set(existingReport?.aiReportData?.recommendedServices ?? [])
+  )
 
   const beforeInputRef = useRef<HTMLInputElement>(null)
   const afterInputRef = useRef<HTMLInputElement>(null)
@@ -163,6 +166,11 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       notes: notes.trim() || undefined,
       beforePhotoUrls: before.filter((p) => !p.uploading && p.url).map((p) => p.url),
       afterPhotoUrls: after.filter((p) => !p.uploading && p.url).map((p) => p.url),
+      aiReportData: aiReport ? {
+        ...aiReport,
+        // 선택된 서비스만 저장
+        recommendedServices: aiReport.recommendedServices.filter((s) => selectedServices.has(s)),
+      } : undefined,
     })
   }
 
@@ -402,37 +410,62 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             </div>
           </div>
 
-          <Textarea
-            placeholder="예: 주방 기름때 심함, 화장실 곰팡이 제거, 후드 필터 교체 필요"
-            value={notes}
-            onChange={(e) => { setNotes(e.target.value); setAiReport(null) }}
-            rows={3}
-          />
+          {/* AI 보고서가 없을 때: 메모 입력 + 생성 버튼 */}
+          {!aiReport ? (
+            <>
+              <Textarea
+                placeholder="예: 주방 기름때 심함, 화장실 곰팡이 제거, 후드 필터 교체 필요"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+              />
 
-          <Button
-            variant="outline"
-            className="w-full h-11 gap-2"
-            disabled={isGenerating || notes.trim().length < 5}
-            onClick={() => generateAi({ workerId, memo: notes.trim(), serviceItems })}
-          >
-            <Sparkles className="h-4 w-4" />
-            {isGenerating ? 'AI가 작성 중이에요...' : 'AI로 전문 보고서 작성하기'}
-          </Button>
+              <Button
+                variant="outline"
+                className="w-full h-11 gap-2"
+                disabled={isGenerating || notes.trim().length < 5}
+                onClick={() => generateAi({ workerId, memo: notes.trim(), serviceItems })}
+              >
+                <Sparkles className="h-4 w-4" />
+                {isGenerating ? 'AI가 작성 중이에요...' : 'AI로 전문 보고서 작성하기'}
+              </Button>
 
-          {notes.trim().length > 0 && notes.trim().length < 5 && (
-            <p className="text-xs text-amber-600 text-center">5자 이상 작성하면 AI 보고서를 만들 수 있어요</p>
-          )}
-          {notes.trim().length === 0 && !aiReport && (
-            <p className="text-xs text-muted-foreground text-center">
-              작업 내용을 간단히 메모하면 AI가 전문 보고서로 변환해드려요
-            </p>
-          )}
-
-          {/* AI 결과 미리보기 */}
-          {aiReport && (
-            <div className="space-y-2 pt-2 border-t">
-              <p className="text-xs font-medium text-primary">AI 보고서 미리보기</p>
+              {notes.trim().length > 0 && notes.trim().length < 5 && (
+                <p className="text-xs text-amber-600 text-center">5자 이상 작성하면 AI 보고서를 만들 수 있어요</p>
+              )}
+              {notes.trim().length === 0 && (
+                <p className="text-xs text-muted-foreground text-center">
+                  작업 내용을 간단히 메모하면 AI가 전문 보고서로 변환해드려요
+                </p>
+              )}
+            </>
+          ) : (
+            /* AI 보고서가 있을 때: 결과 표시 + 재작성 버튼 */
+            <div className="space-y-3">
               <AiReportView report={aiReport} />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-xs text-muted-foreground gap-1.5"
+                disabled={isGenerating}
+                onClick={() => {
+                  const confirmed = window.confirm('AI 보고서를 다시 작성할까요?\n\n현재 보고서 내용이 새로 작성됩니다.')
+                  if (!confirmed) return
+                  // 원본 메모 추출 (AI 포맷팅 전 텍스트)
+                  const rawMemo = notes.replace(/📋 작업 전 상태\n[\s\S]*$/, '').trim()
+                  if (rawMemo.length >= 5) {
+                    generateAi({ workerId, memo: rawMemo, serviceItems })
+                  } else {
+                    // 메모가 너무 짧으면 AI 보고서 초기화해서 메모 입력 모드로 전환
+                    setAiReport(null)
+                    setSelectedServices(new Set())
+                    setNotes('')
+                  }
+                }}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {isGenerating ? 'AI가 재작성 중이에요...' : 'AI 보고서 다시 작성하기'}
+              </Button>
             </div>
           )}
         </div>

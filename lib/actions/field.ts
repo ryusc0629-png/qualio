@@ -334,19 +334,31 @@ export const fieldSaveReportAction = action
     notes:           z.string().max(2000).optional(),
     beforePhotoUrls: z.array(z.string().min(1)).max(5),
     afterPhotoUrls:  z.array(z.string().min(1)).max(5),
+    aiReportData:    z.object({
+      beforeStatus: z.string(),
+      workDetails: z.string(),
+      afterResult: z.string(),
+      additionalNotes: z.string(),
+      recommendedServices: z.array(z.string()),
+    }).optional(),
   }))
   .action(async ({ parsedInput }) => {
     const { db, worker } = await verifyWorker(parsedInput.workerId)
     await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
 
     // 보고서 upsert
+    const upsertData: Record<string, unknown> = {
+      business_id: worker.business_id,
+      booking_id:  parsedInput.bookingId,
+      notes:       parsedInput.notes ?? null,
+    }
+    if (parsedInput.aiReportData) {
+      upsertData.ai_report_data = parsedInput.aiReportData
+    }
+
     const { data: report, error: reportError } = await db
       .from('reports')
-      .upsert({
-        business_id: worker.business_id,
-        booking_id:  parsedInput.bookingId,
-        notes:       parsedInput.notes ?? null,
-      }, { onConflict: 'booking_id' })
+      .upsert(upsertData as never, { onConflict: 'booking_id' })
       .select('id')
       .single()
 
