@@ -26,14 +26,13 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { href: '/dashboard',          label: '대시보드',    desc: undefined,      icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/work',     label: '일반 예약',   desc: '개인·일회성',  icon: ClipboardList },
-  { href: '/dashboard/schedule', label: '일정·배정',   desc: undefined,      icon: CalendarDays },
-  { href: '/dashboard/pipeline', label: '정기계약',    desc: '법인·영업',    icon: Handshake },
-  { href: '/dashboard/clients',  label: '고객',        desc: undefined,      icon: Users },
-  { href: '/dashboard/services', label: '서비스 설정', desc: undefined,      icon: Wrench },
-  { href: '/dashboard/marketing',label: '마케팅',      desc: undefined,      icon: Megaphone },
-  { href: '/dashboard/settings', label: '설정',        desc: undefined,      icon: Settings },
+  { href: '/dashboard',          label: '대시보드',    desc: undefined,       icon: LayoutDashboard, exact: true },
+  { href: '/dashboard/work',     label: '일반 예약',   desc: '개인·일회성',   icon: ClipboardList },
+  { href: '/dashboard/schedule', label: '일정·배정',   desc: undefined,       icon: CalendarDays },
+  { href: '/dashboard/clients',  label: '고객 관리',   desc: '개인+법인 통합', icon: Users },
+  { href: '/dashboard/services', label: '서비스 설정', desc: undefined,       icon: Wrench },
+  { href: '/dashboard/marketing',label: '마케팅',      desc: undefined,       icon: Megaphone },
+  { href: '/dashboard/settings', label: '설정',        desc: undefined,       icon: Settings },
 ]
 
 export function Sidebar({ businessName, isOpen = false, onClose }: SidebarProps) {
