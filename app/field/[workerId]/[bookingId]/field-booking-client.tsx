@@ -25,7 +25,6 @@ import {
   FileText,
   CheckCircle2,
   CircleDollarSign,
-  Receipt,
   Play,
   Upload,
   X,
@@ -65,7 +64,7 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
   const [nextVisitNote, setNextVisitNote] = useState(existingNextVisitNote)
   const [memoOpen, setMemoOpen] = useState(false)
   const [memoSaved, setMemoSaved] = useState(false)
-  const [receiptSent, setReceiptSent] = useState(false)
+  const [paymentRequested, setPaymentRequested] = useState(false)
   const [beforePhotos, setBeforePhotos] = useState<PhotoSlot[]>(
     existingBeforeUrls.map((url) => ({ url, uploading: false }))
   )
@@ -98,11 +97,11 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
-  // 영수증 발송 (선택)
-  const { execute: sendReceipt, isPending: isSendingReceipt } = useAction(fieldRequestPaymentAction, {
+  // 결제 요청 (고객에게 알림톡 발송)
+  const { execute: requestPayment, isPending: isRequestingPayment } = useAction(fieldRequestPaymentAction, {
     onSuccess: () => {
-      setReceiptSent(true)
-      toast.success('영수증이 고객에게 발송됐어요!')
+      setPaymentRequested(true)
+      toast.success('고객에게 결제 요청을 보냈어요!')
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -423,30 +422,6 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
               </p>
             </div>
 
-            {/* 영수증 발송 (선택) */}
-            {booking.customerPhone && (
-              <div className="rounded-xl bg-white border p-4 space-y-2">
-                {receiptSent ? (
-                  <div className="flex items-center gap-2 text-sm text-emerald-600">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>영수증이 발송됐어요</span>
-                  </div>
-                ) : (
-                  <>
-                    <p className="text-xs text-muted-foreground">고객에게 영수증을 보내시겠어요?</p>
-                    <Button
-                      variant="outline"
-                      className="w-full h-11 gap-2"
-                      disabled={isSendingReceipt}
-                      onClick={() => sendReceipt({ workerId, bookingId: booking.id })}
-                    >
-                      <Receipt className="h-4 w-4" />
-                      {isSendingReceipt ? '발송 중...' : '영수증 보내기'}
-                    </Button>
-                  </>
-                )}
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -466,7 +441,31 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
             </Button>
           )}
 
-          {currentStatus === 'in_progress' && (
+          {currentStatus === 'in_progress' && !paymentRequested && (
+            <div className="space-y-2">
+              <Button
+                size="lg"
+                className="w-full h-14 text-base gap-2"
+                disabled={isRequestingPayment || !booking.customerPhone}
+                onClick={() => requestPayment({ workerId, bookingId: booking.id })}
+              >
+                <CircleDollarSign className="h-5 w-5" />
+                {isRequestingPayment ? '발송 중...' : `결제 요청하기 · ${booking.finalPrice.toLocaleString()}원`}
+              </Button>
+              {!booking.customerPhone && (
+                <p className="text-xs text-muted-foreground text-center">고객 연락처가 없어 결제 요청을 보낼 수 없어요</p>
+              )}
+              <button
+                type="button"
+                className="w-full text-xs text-muted-foreground underline py-1"
+                onClick={() => setPaymentRequested(true)}
+              >
+                현금 수금 등 직접 결제한 경우 →
+              </button>
+            </div>
+          )}
+
+          {currentStatus === 'in_progress' && paymentRequested && (
             <Button
               size="lg"
               className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700"
@@ -477,7 +476,7 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                 }
               }}
             >
-              <CircleDollarSign className="h-5 w-5" />
+              <CheckCircle2 className="h-5 w-5" />
               {isCompleting ? '처리 중...' : `수금 완료 · ${booking.finalPrice.toLocaleString()}원`}
             </Button>
           )}
