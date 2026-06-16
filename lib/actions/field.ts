@@ -331,7 +331,7 @@ export const fieldSaveReportAction = action
   .schema(z.object({
     workerId:        z.string().uuid(),
     bookingId:       z.string().uuid(),
-    notes:           z.string().max(2000).optional(),
+    notes:           z.string().max(5000).optional(),
     beforePhotoUrls: z.array(z.string().min(1)).max(5),
     afterPhotoUrls:  z.array(z.string().min(1)).max(5),
     aiReportData:    z.object({

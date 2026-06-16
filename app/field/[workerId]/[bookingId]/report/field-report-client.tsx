@@ -99,20 +99,34 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
+  // AI 포맷된 notes 텍스트 생성 헬퍼
+  const formatAiNotes = (report: AiReportData, services: Set<string>) => {
+    const recSection = report.recommendedServices.filter(s => services.has(s)).length > 0
+      ? `\n\n💡 추천 서비스\n${report.recommendedServices.filter(s => services.has(s)).join(', ')}`
+      : ''
+    return `📋 작업 전 상태\n${report.beforeStatus}\n\n🔧 작업 내용\n${report.workDetails}\n\n✨ 작업 결과\n${report.afterResult}\n\n📌 참고사항\n${report.additionalNotes}${recSection}`
+  }
+
   // AI 보고서 생성
   const { execute: generateAi, isPending: isGenerating } = useAction(fieldGenerateAiReportAction, {
     onSuccess: ({ data }) => {
       if (data?.report) {
+        const newServices = new Set(data.report.recommendedServices)
         setAiReport(data.report)
-        // 추천 서비스 기본 전체 선택 (opt-out)
-        setSelectedServices(new Set(data.report.recommendedServices))
-        // AI 결과를 메모에 반영 (추천 서비스는 선택된 것만 포함)
-        const recSection = data.report.recommendedServices.length > 0
-          ? `\n\n💡 추천 서비스\n${data.report.recommendedServices.join(', ')}`
-          : ''
-        const formatted = `📋 작업 전 상태\n${data.report.beforeStatus}\n\n🔧 작업 내용\n${data.report.workDetails}\n\n✨ 작업 결과\n${data.report.afterResult}\n\n📌 참고사항\n${data.report.additionalNotes}${recSection}`
+        setSelectedServices(newServices)
+        const formatted = formatAiNotes(data.report, newServices)
         setNotes(formatted)
         toast.success('AI 보고서가 작성됐어요!')
+
+        // AI 보고서 생성 즉시 자동 저장 (API 비용 낭비 방지)
+        saveReport({
+          workerId,
+          bookingId: booking.id,
+          notes: formatted,
+          beforePhotoUrls: before.filter((p) => !p.uploading && p.url).map((p) => p.url),
+          afterPhotoUrls: after.filter((p) => !p.uploading && p.url).map((p) => p.url),
+          aiReportData: data.report,
+        })
       }
     },
     onError: ({ error }) => toast.error(error.serverError ?? 'AI 작성에 실패했어요. 다시 시도해주세요'),
@@ -268,24 +282,13 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
 
   // 추천 서비스 선택/해제 토글
   const toggleService = (name: string) => {
-    setSelectedServices((prev) => {
-      const next = new Set(prev)
-      if (next.has(name)) next.delete(name)
-      else next.add(name)
-      return next
-    })
-    // notes 내 추천 서비스 섹션 업데이트
+    const next = new Set(selectedServices)
+    if (next.has(name)) next.delete(name)
+    else next.add(name)
+    setSelectedServices(next)
+    // notes 업데이트
     if (aiReport) {
-      setNotes((prev) => {
-        const idx = prev.indexOf('\n\n💡 추천 서비스\n')
-        const base = idx >= 0 ? prev.slice(0, idx) : prev
-        const newSelected = aiReport.recommendedServices.filter((s) => {
-          if (s === name) return !selectedServices.has(name)
-          return selectedServices.has(s)
-        })
-        if (newSelected.length === 0) return base
-        return `${base}\n\n💡 추천 서비스\n${newSelected.join(', ')}`
-      })
+      setNotes(formatAiNotes(aiReport, next))
     }
   }
 
