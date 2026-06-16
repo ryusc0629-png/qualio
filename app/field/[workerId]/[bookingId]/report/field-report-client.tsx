@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   Save,
   Sparkles,
+  Plus,
 } from 'lucide-react'
 
 type PhotoSlot = { url: string; uploading: boolean }
@@ -74,6 +75,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   const [selectedServices, setSelectedServices] = useState<Set<string>>(
     new Set(existingReport?.aiReportData?.recommendedServices ?? [])
   )
+  const [showServicePicker, setShowServicePicker] = useState(false)
 
   const beforeInputRef = useRef<HTMLInputElement>(null)
   const afterInputRef = useRef<HTMLInputElement>(null)
@@ -286,11 +288,30 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     if (next.has(name)) next.delete(name)
     else next.add(name)
     setSelectedServices(next)
-    // notes 업데이트
     if (aiReport) {
-      setNotes(formatAiNotes(aiReport, next))
+      // aiReport.recommendedServices에 없는 수동 추가 서비스도 포함
+      const updated = { ...aiReport, recommendedServices: Array.from(new Set([...aiReport.recommendedServices, ...next])) }
+      setAiReport(updated)
+      setNotes(formatAiNotes(updated, next))
     }
   }
+
+  // 서비스 직접 추가
+  const addService = (name: string) => {
+    if (!aiReport) return
+    const next = new Set(selectedServices)
+    next.add(name)
+    setSelectedServices(next)
+    const updated = { ...aiReport, recommendedServices: [...new Set([...aiReport.recommendedServices, name])] }
+    setAiReport(updated)
+    setNotes(formatAiNotes(updated, next))
+    setShowServicePicker(false)
+  }
+
+  // 추가 가능한 서비스 목록 (이미 추천 목록에 있는 것 제외)
+  const availableServices = serviceItems.filter(
+    (s) => !aiReport?.recommendedServices.includes(s.name)
+  )
 
   // AI 보고서 표시 컴포넌트
   const AiReportView = ({ report }: { report: AiReportData }) => (
@@ -311,12 +332,14 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
         <p className="text-xs font-semibold text-gray-700">참고사항</p>
         <p className="text-sm text-gray-800">{report.additionalNotes}</p>
       </div>
-      {report.recommendedServices.length > 0 && (
-        <div className="rounded-lg bg-violet-50 border border-violet-100 p-3 space-y-2">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-violet-800">추천 서비스</p>
+      <div className="rounded-lg bg-violet-50 border border-violet-100 p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold text-violet-800">추천 서비스</p>
+          {report.recommendedServices.length > 0 && (
             <p className="text-[10px] text-violet-500">체크 해제하면 보고서에서 빠져요</p>
-          </div>
+          )}
+        </div>
+        {report.recommendedServices.length > 0 && (
           <div className="space-y-1.5">
             {report.recommendedServices.map((name) => {
               const svc = getServicePrice(name)
@@ -351,8 +374,46 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
               )
             })}
           </div>
-        </div>
-      )}
+        )}
+        {/* 서비스 직접 추가 */}
+        {availableServices.length > 0 && (
+          <div className="pt-1">
+            {!showServicePicker ? (
+              <button
+                type="button"
+                onClick={() => setShowServicePicker(true)}
+                className="w-full flex items-center justify-center gap-1.5 rounded-md px-3 py-2 border border-dashed border-violet-300 text-violet-600 hover:bg-violet-100/50 transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">서비스 직접 추가</span>
+              </button>
+            ) : (
+              <div className="space-y-1.5 bg-white rounded-md border border-violet-200 p-2">
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-xs font-medium text-violet-700">추가할 서비스 선택</p>
+                  <button type="button" onClick={() => setShowServicePicker(false)} className="p-0.5">
+                    <X className="h-3.5 w-3.5 text-violet-400" />
+                  </button>
+                </div>
+                {availableServices.map((svc) => (
+                  <button
+                    key={svc.name}
+                    type="button"
+                    onClick={() => addService(svc.name)}
+                    className="w-full flex items-center justify-between rounded-md px-3 py-2.5 hover:bg-violet-50 transition-colors text-left"
+                  >
+                    <span className="text-sm text-violet-900">{svc.name}</span>
+                    <span className="text-xs text-violet-500">{svc.basePrice.toLocaleString()}원~</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {report.recommendedServices.length === 0 && availableServices.length === 0 && (
+          <p className="text-xs text-violet-500 text-center py-1">등록된 서비스 항목이 없어요</p>
+        )}
+      </div>
     </div>
   )
 
