@@ -23,6 +23,7 @@ interface UnreportedBooking {
   customer_phone: string | null
   scheduled_at: string
   final_price?: number
+  service_address?: string | null
   cleaning_type?: string | null
 }
 
@@ -42,14 +43,31 @@ interface Props {
 
 function UnreportedRow({ booking }: { booking: UnreportedBooking }) {
   const dateLabel = booking.scheduled_at
-    ? format(new Date(booking.scheduled_at), 'M월 d일 (EEE)', { locale: ko })
+    ? format(new Date(booking.scheduled_at), 'M월 d일 (EEE) HH:mm', { locale: ko })
     : '—'
 
   return (
     <div className="flex items-center gap-3 py-3.5 border-b border-border last:border-0">
-      <div className="flex-1 min-w-0">
-        <p className="font-semibold text-sm">{booking.customer_name}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{dateLabel}</p>
+      <div className="flex-1 min-w-0 space-y-0.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className="font-semibold text-sm">{booking.customer_name}</p>
+          {booking.cleaning_type && (
+            <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-md font-medium">
+              {booking.cleaning_type}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground">{dateLabel}</p>
+        {booking.service_address && (
+          <p className="text-xs text-muted-foreground truncate max-w-[220px]">
+            📍 {booking.service_address}
+          </p>
+        )}
+        {booking.final_price != null && booking.final_price > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {new Intl.NumberFormat('ko-KR').format(booking.final_price)}원
+          </p>
+        )}
       </div>
       <Link href={`/dashboard/bookings/${booking.bookingId}/report`}>
         <Button size="sm" className="h-10 gap-1.5 shrink-0 px-4">

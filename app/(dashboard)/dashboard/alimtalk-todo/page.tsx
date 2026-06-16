@@ -26,7 +26,7 @@ export default async function AlimtalkTodoPage() {
   ] = await Promise.all([
     // 완료된 예약 전체
     db.from('bookings')
-      .select('id, customer_name, customer_phone, scheduled_at, final_price, quotes!quote_id(cleaning_type)')
+      .select('id, customer_name, customer_phone, scheduled_at, final_price, service_address, quotes!quote_id(cleaning_type)')
       .eq('business_id', businessId)
       .eq('status', 'completed')
       .is('deleted_at', null)
@@ -50,7 +50,7 @@ export default async function AlimtalkTodoPage() {
   const sentSet = new Set((sentReportRows ?? []).map((r) => r.booking_id))
   type CompletedBookingRow = {
     id: string; customer_name: string; customer_phone: string | null
-    scheduled_at: string; final_price: number
+    scheduled_at: string; final_price: number; service_address: string | null
     quotes: { cleaning_type: string | null } | { cleaning_type: string | null }[] | null
   }
   const unreportedBookings = (completedBookings ?? [])
@@ -59,12 +59,13 @@ export default async function AlimtalkTodoPage() {
       const row = b as unknown as CompletedBookingRow
       const qt  = Array.isArray(row.quotes) ? row.quotes[0] : row.quotes
       return {
-        bookingId:      row.id,
-        customer_name:  row.customer_name,
-        customer_phone: row.customer_phone,
-        scheduled_at:   row.scheduled_at,
-        final_price:    row.final_price,
-        cleaning_type:  qt?.cleaning_type ?? null,
+        bookingId:       row.id,
+        customer_name:   row.customer_name,
+        customer_phone:  row.customer_phone,
+        scheduled_at:    row.scheduled_at,
+        final_price:     row.final_price,
+        service_address: row.service_address,
+        cleaning_type:   qt?.cleaning_type ?? null,
       }
     })
 
