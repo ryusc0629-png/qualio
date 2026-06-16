@@ -4,12 +4,9 @@ import Link from 'next/link'
 import { AddClientForm } from '@/components/dashboard/add-client-form'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { DeleteCustomerButton } from '@/components/dashboard/delete-customer-button'
-import { DeleteLeadButton } from '@/components/dashboard/delete-lead-button'
-import { LeadStatusSelect } from '@/components/dashboard/lead-status-select'
-import { RegisterFromLeadButton } from '@/components/dashboard/register-from-lead-button'
 import { ContractStatusSelect } from '@/components/dashboard/contract-status-select'
 import { formatFrequency } from '@/lib/utils/frequency'
-import { Phone, MapPin, Calendar, TrendingUp, ChevronRight } from 'lucide-react'
+import { Phone, MapPin, Calendar, TrendingUp, ChevronRight, Building2, User } from 'lucide-react'
 
 // ── 타입 ────────────────────────────────────────────────
 
@@ -30,8 +27,9 @@ type LeadRow = {
   company_name: string
   phone: string | null
   address: string | null
-  category: string | null
   status: string
+  customer_type: string
+  monthly_budget: number | null
   next_follow_up_date: string | null
   notes: string | null
   created_at: string
@@ -46,46 +44,49 @@ type ContractRow = {
   status: string
 }
 
-type UnifiedRow =
-  | {
-      kind: 'customer'
-      customer: CustomerRow
-      ltv: number
-      bookingCount: number
-      lastVisitDate: string | null
-      activeContract: ContractRow | null
-      hasAnyContract: boolean
-      sortScore: number
-    }
-  | {
-      kind: 'lead'
-      lead: LeadRow
-      isOverdue: boolean
-      alreadyRegistered: boolean
-      sortScore: number
-    }
+type B2bQuoteRow = {
+  lead_id: string | null
+  total_amount: number
+  frequency: string | null
+}
 
 // ── 상수 ────────────────────────────────────────────────
 
 const CUSTOMER_STATUS: Record<string, { label: string; className: string }> = {
-  contract:   { label: '정기계약',   className: 'bg-emerald-100 text-emerald-700' },
+  contract:   { label: '정기계약',    className: 'bg-emerald-100 text-emerald-700' },
   repeat:     { label: '재방문 고객', className: 'bg-primary/10 text-primary' },
   first:      { label: '첫방문 완료', className: 'bg-blue-100 text-blue-700' },
-  registered: { label: '등록됨',     className: 'bg-gray-100 text-gray-500' },
+  registered: { label: '등록됨',      className: 'bg-gray-100 text-gray-500' },
 }
 
-const LEAD_STATUS: Record<string, { label: string; className: string; priority: number }> = {
-  follow_up:  { label: '팔로업',   className: 'bg-amber-100 text-amber-700',   priority: 0 },
-  quoted:     { label: '견적중',   className: 'bg-violet-100 text-violet-700', priority: 1 },
-  contacted:  { label: '1차방문', className: 'bg-blue-100 text-blue-700',     priority: 2 },
-  new:        { label: '신규',     className: 'bg-gray-100 text-gray-600',     priority: 3 },
-  contracted: { label: '계약완료', className: 'bg-emerald-100 text-emerald-700', priority: 4 },
-  rejected:   { label: '거절',     className: 'bg-red-100 text-red-600',       priority: 5 },
+const PIPELINE_STAGE: Record<string, { text: string; color: string }> = {
+  new:         { text: '새 문의',   color: 'bg-gray-100 text-gray-700' },
+  contacted:   { text: '연락함',    color: 'bg-blue-100 text-blue-700' },
+  follow_up:   { text: '현장 방문', color: 'bg-indigo-100 text-indigo-700' },
+  quoted:      { text: '견적 보냄', color: 'bg-amber-100 text-amber-700' },
+  negotiating: { text: '금액 협의', color: 'bg-orange-100 text-orange-700' },
+  contracted:  { text: '계약 완료', color: 'bg-green-100 text-green-700' },
+  rejected:    { text: '포기',      color: 'bg-red-100 text-red-600' },
 }
+
+// ── 탭 ────────────────────────────────────────────────
+
+const TABS = [
+  { key: 'all',        label: '전체' },
+  { key: 'individual', label: '개인 고객' },
+  { key: 'company',    label: '법인·거래처' },
+]
 
 // ── 페이지 ────────────────────────────────────────────────
 
-export default async function ClientsPage() {
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ type?: string }>
+}) {
+  const { type } = await searchParams
+  const activeTab = ['individual', 'company'].includes(type ?? '') ? type! : 'all'
+
   const authClient = await createClient()
   const { data: { user } } = await authClient.auth.getUser()
   if (!user) redirect('/login')
@@ -106,6 +107,7 @@ export default async function ClientsPage() {
     { data: completedBookings },
     { data: leads },
     { data: registeredLeadRows },
+    { data: b2bQuotes },
   ] = await Promise.all([
     db.from('customers')
       .select('id, name, phone, address, category, type, notes, lead_id, created_at')
@@ -115,7 +117,6 @@ export default async function ClientsPage() {
       .select('id, customer_id, service_type, frequency, contract_price, status')
       .eq('business_id', businessId),
 
-    // 전화번호로 LTV 계산 (bookings에 customer_id FK 없음)
     db.from('bookings')
       .select('customer_phone, final_price, scheduled_at')
       .eq('business_id', businessId)
@@ -123,13 +124,18 @@ export default async function ClientsPage() {
       .is('deleted_at', null),
 
     db.from('leads')
-      .select('id, company_name, phone, address, category, status, next_follow_up_date, notes, created_at')
+      .select('id, company_name, phone, address, status, customer_type, monthly_budget, next_follow_up_date, notes, created_at')
       .eq('business_id', businessId),
 
     db.from('customers')
       .select('lead_id')
       .eq('business_id', businessId)
       .not('lead_id', 'is', null),
+
+    // B2B 견적 금액 (법인 카드에 표시)
+    db.from('b2b_quotes')
+      .select('lead_id, total_amount, frequency')
+      .eq('business_id', businessId),
   ])
 
   // 전화번호 → 예약 실적 맵
@@ -142,11 +148,7 @@ export default async function ClientsPage() {
       prev.count += 1
       if ((b.scheduled_at ?? '') > prev.lastDate) prev.lastDate = b.scheduled_at ?? ''
     } else {
-      bookingMap[b.customer_phone] = {
-        ltv: b.final_price ?? 0,
-        count: 1,
-        lastDate: b.scheduled_at ?? '',
-      }
+      bookingMap[b.customer_phone] = { ltv: b.final_price ?? 0, count: 1, lastDate: b.scheduled_at ?? '' }
     }
   }
 
@@ -157,114 +159,61 @@ export default async function ClientsPage() {
     contractMap[c.customer_id]!.push(c)
   }
 
+  // lead_id → b2b 견적 맵
+  const b2bQuoteMap: Record<string, B2bQuoteRow> = {}
+  for (const q of b2bQuotes ?? []) {
+    if (q.lead_id) b2bQuoteMap[q.lead_id] = q
+  }
+
   const registeredLeadIds = new Set((registeredLeadRows ?? []).map((r) => r.lead_id))
   const today = new Date().toISOString().slice(0, 10)
 
-  // ── 통합 행 생성 ──
-
-  const rows: UnifiedRow[] = []
-
-  for (const customer of customers ?? []) {
-    const booking = customer.phone ? bookingMap[customer.phone] : undefined
-    const customerContracts = contractMap[customer.id] ?? []
-    const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
-    const hasAnyContract = customerContracts.length > 0
-    const ltv = booking?.ltv ?? 0
-    const bookingCount = booking?.count ?? 0
-    const lastVisitDate = booking?.lastDate ?? null
-
-    // 정렬 점수: 계약 > LTV 내림차순
-    const sortScore = activeContract
-      ? 10_000_000 + (activeContract.contract_price * 12)
-      : ltv
-
-    rows.push({
-      kind: 'customer',
-      customer: customer as CustomerRow,
-      ltv,
-      bookingCount,
-      lastVisitDate,
-      activeContract,
-      hasAnyContract,
-      sortScore,
-    })
-  }
-
-  for (const lead of leads ?? []) {
-    if (registeredLeadIds.has(lead.id)) continue // 고객으로 전환됨 → 건너뜀
-
-    const isOverdue = Boolean(
-      lead.next_follow_up_date &&
-      lead.next_follow_up_date < today &&
-      lead.status !== 'contracted' &&
-      lead.status !== 'rejected'
-    )
-    const priority = LEAD_STATUS[lead.status]?.priority ?? 3
-    // 리드는 고객보다 항상 아래, 우선순위 높을수록 위
-    const sortScore = -1_000_000 + (10 - priority) * 1000 + (isOverdue ? 500 : 0)
-
-    rows.push({
-      kind: 'lead',
-      lead: lead as LeadRow,
-      isOverdue,
-      alreadyRegistered: false,
-      sortScore,
-    })
-  }
-
-  rows.sort((a, b) => b.sortScore - a.sortScore)
-
   // ── 요약 통계 ──
-
-  const totalLTV = rows
-    .filter((r): r is Extract<UnifiedRow, { kind: 'customer' }> => r.kind === 'customer')
-    .reduce((s, r) => s + r.ltv, 0)
-
+  const totalLtv = (completedBookings ?? []).reduce((s, b) => s + (b.final_price ?? 0), 0)
   const monthlyRecurring = (contracts ?? [])
     .filter((c) => c.status === 'active')
     .reduce((s, c) => s + c.contract_price, 0)
-
-  const customerCount = rows.filter((r) => r.kind === 'customer').length
-  const leadCount = rows.filter((r) => r.kind === 'lead').length
-
-  // ── 렌더링 ──
+  const individualCount = (customers ?? []).length
+  const companyLeadCount = (leads ?? []).filter(l => l.customer_type === 'company' && !registeredLeadIds.has(l.id)).length
+  const contractedCount = (leads ?? []).filter(l => l.status === 'contracted').length
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
 
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold">고객 관리</h1>
-          <p className="text-sm text-muted-foreground mt-1">고객 가치(LTV) 순으로 정렬돼요</p>
+          <h1 className="text-xl font-bold">고객 관리</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            개인 고객과 법인 거래처를 한 곳에서 관리해요
+          </p>
         </div>
         <AddClientForm />
       </div>
 
-      {/* 요약 */}
+      {/* 요약 통계 */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-xl border border-border p-4">
-          <p className="text-xs text-muted-foreground">전체</p>
-          <p className="text-2xl font-bold mt-1 tabular-nums">
-            {customerCount + leadCount}
+        <div className="bg-white rounded-xl border p-4">
+          <p className="text-xs text-muted-foreground">개인 고객</p>
+          <p className="text-2xl font-bold mt-1 tabular-nums text-blue-600">
+            {individualCount}
             <span className="text-sm font-normal text-muted-foreground ml-0.5">명</span>
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">고객 {customerCount} · 잠재 {leadCount}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-border p-4">
-          <p className="text-xs text-muted-foreground">누적 LTV</p>
-          <p className="text-2xl font-bold mt-1 tabular-nums">
-            {totalLTV > 0
-              ? `${Math.round(totalLTV / 10000).toLocaleString('ko-KR')}만`
-              : '—'}
-            {totalLTV > 0 && <span className="text-sm font-normal text-muted-foreground ml-0.5">원</span>}
+          <p className="text-xs text-muted-foreground mt-0.5">
+            누적 {totalLtv > 0 ? `${Math.round(totalLtv / 10000)}만원` : '—'}
           </p>
         </div>
-        <div className="bg-white rounded-xl border border-border p-4">
+        <div className="bg-white rounded-xl border p-4">
+          <p className="text-xs text-muted-foreground">법인 영업 중</p>
+          <p className="text-2xl font-bold mt-1 tabular-nums text-violet-600">
+            {companyLeadCount}
+            <span className="text-sm font-normal text-muted-foreground ml-0.5">곳</span>
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">계약 완료 {contractedCount}곳</p>
+        </div>
+        <div className="bg-white rounded-xl border p-4">
           <p className="text-xs text-muted-foreground">월 정기 매출</p>
           <p className="text-2xl font-bold mt-1 tabular-nums text-emerald-600">
-            {monthlyRecurring > 0
-              ? monthlyRecurring.toLocaleString('ko-KR')
-              : '—'}
+            {monthlyRecurring > 0 ? monthlyRecurring.toLocaleString('ko-KR') : '—'}
             {monthlyRecurring > 0 && <span className="text-sm font-normal text-muted-foreground ml-0.5">원</span>}
           </p>
           {monthlyRecurring > 0 && (
@@ -275,20 +224,49 @@ export default async function ClientsPage() {
         </div>
       </div>
 
-      {/* 통합 목록 */}
-      {rows.length === 0 ? (
-        <div className="bg-white rounded-xl border border-dashed border-border p-12 text-center space-y-2">
-          <p className="text-sm text-muted-foreground">아직 등록된 고객이 없어요</p>
-          <p className="text-xs text-muted-foreground">오른쪽 위 버튼으로 첫 번째 고객을 추가해보세요</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {rows.map((row) => {
+      {/* 탭 */}
+      <div className="flex gap-1">
+        {TABS.map((tab) => (
+          <Link
+            key={tab.key}
+            href={tab.key === 'all' ? '/dashboard/clients' : `/dashboard/clients?type=${tab.key}`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            {tab.label}
+          </Link>
+        ))}
+      </div>
 
-            if (row.kind === 'customer') {
-              const { customer, ltv, bookingCount, lastVisitDate, activeContract, hasAnyContract } = row
-              const hasContract = Boolean(activeContract)
-              const statusKey = hasContract ? 'contract' : bookingCount >= 2 ? 'repeat' : bookingCount === 1 ? 'first' : 'registered'
+      {/* ── 개인 고객 목록 ── */}
+      {(activeTab === 'all' || activeTab === 'individual') && (
+        <section className="space-y-2">
+          {activeTab === 'all' && (
+            <div className="flex items-center gap-2">
+              <User className="h-4 w-4 text-blue-600" />
+              <h2 className="text-sm font-semibold text-blue-600">개인 고객</h2>
+              <span className="text-xs text-muted-foreground">({individualCount}명)</span>
+            </div>
+          )}
+
+          {(customers ?? []).length === 0 ? (
+            <div className="bg-white rounded-xl border border-dashed p-8 text-center space-y-2">
+              <p className="text-sm text-muted-foreground">아직 개인 고객이 없어요</p>
+              <p className="text-xs text-muted-foreground">일반 예약 메뉴에서 견적을 보내면 자동으로 등록돼요</p>
+            </div>
+          ) : (
+            (customers ?? []).map((customer) => {
+              const booking = customer.phone ? bookingMap[customer.phone] : undefined
+              const customerContracts = contractMap[customer.id] ?? []
+              const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
+              const hasAnyContract = customerContracts.length > 0
+              const ltv = booking?.ltv ?? 0
+              const bookingCount = booking?.count ?? 0
+              const lastVisitDate = booking?.lastDate ?? null
+              const statusKey = activeContract ? 'contract' : bookingCount >= 2 ? 'repeat' : bookingCount === 1 ? 'first' : 'registered'
               const statusMeta = CUSTOMER_STATUS[statusKey]!
 
               return (
@@ -299,6 +277,7 @@ export default async function ClientsPage() {
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-sky-100 text-sky-700">개인</span>
                         <Link
                           href={`/dashboard/clients/${customer.id}`}
                           className="font-semibold hover:text-primary hover:underline transition-colors"
@@ -332,13 +311,13 @@ export default async function ClientsPage() {
                           <p className="text-xs text-muted-foreground flex items-center gap-1">
                             <Calendar className="h-3 w-3 shrink-0" />
                             마지막 방문 {new Date(lastVisitDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
-                            {bookingCount > 1 && ` · 총 ${bookingCount}회 방문`}
+                            {bookingCount > 1 && ` · 총 ${bookingCount}회`}
                           </p>
                         )}
                       </div>
 
                       {activeContract && (
-                        <div className="mt-2 pt-2 border-t border-border flex items-center gap-2 flex-wrap">
+                        <div className="mt-2 pt-2 border-t flex items-center gap-2 flex-wrap">
                           <p className="text-xs text-muted-foreground">
                             {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
                           </p>
@@ -351,12 +330,9 @@ export default async function ClientsPage() {
                     </div>
 
                     <div className="shrink-0 flex flex-col items-end gap-2">
-                      {/* LTV */}
                       <div className="text-right">
                         {ltv > 0 && (
-                          <p className="text-base font-bold tabular-nums">
-                            {ltv.toLocaleString('ko-KR')}원
-                          </p>
+                          <p className="text-base font-bold tabular-nums">{ltv.toLocaleString('ko-KR')}원</p>
                         )}
                         {activeContract && (
                           <p className="text-xs text-emerald-600 font-medium tabular-nums">
@@ -367,12 +343,10 @@ export default async function ClientsPage() {
                           <p className="text-xs text-muted-foreground">실적 없음</p>
                         )}
                       </div>
-
-                      {/* 액션 */}
                       <div className="flex items-center gap-1">
                         <Link
                           href={`/dashboard/clients/${customer.id}`}
-                          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border hover:border-primary/30"
+                          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:border-primary/30"
                         >
                           이력
                           <ChevronRight className="h-3 w-3" />
@@ -390,87 +364,181 @@ export default async function ClientsPage() {
                   </div>
                 </div>
               )
-            }
-
-            // ── 리드 카드 ──
-            const { lead, isOverdue, alreadyRegistered } = row
-            const leadMeta = LEAD_STATUS[lead.status] ?? LEAD_STATUS['new']!
-
-            return (
-              <div
-                key={`lead-${lead.id}`}
-                className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition-colors"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold">{lead.company_name}</p>
-                      {lead.category && (
-                        <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
-                          {lead.category}
-                        </span>
-                      )}
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${leadMeta.className}`}>
-                        {leadMeta.label}
-                      </span>
-                      {isOverdue && (
-                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-600">
-                          연락 지연
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mt-1.5 space-y-0.5">
-                      {lead.phone && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Phone className="h-3 w-3 shrink-0" />
-                          {lead.phone}
-                        </p>
-                      )}
-                      {lead.address && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                          <MapPin className="h-3 w-3 shrink-0" />
-                          {lead.address}
-                        </p>
-                      )}
-                      {lead.next_follow_up_date && (
-                        <p className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}>
-                          <Calendar className="h-3 w-3 shrink-0" />
-                          다음 연락: {new Date(lead.next_follow_up_date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
-                          {isOverdue && ' (지났어요)'}
-                        </p>
-                      )}
-                      {lead.notes && (
-                        <p className="text-xs text-muted-foreground line-clamp-1 mt-1">{lead.notes}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="shrink-0 flex flex-col items-end gap-2">
-                    <p className="text-xs text-muted-foreground">잠재고객</p>
-                    <div className="flex items-center gap-1 flex-wrap justify-end">
-                      <LeadStatusSelect leadId={lead.id} currentStatus={lead.status} />
-                      {lead.status === 'contracted' && (
-                        <RegisterFromLeadButton
-                          lead={{
-                            id: lead.id,
-                            company_name: lead.company_name,
-                            phone: lead.phone,
-                            address: lead.address,
-                            category: lead.category,
-                          }}
-                          alreadyRegistered={alreadyRegistered}
-                        />
-                      )}
-                      <DeleteLeadButton leadId={lead.id} leadName={lead.company_name} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+            })
+          )}
+        </section>
       )}
+
+      {/* ── 법인·거래처 목록 ── */}
+      {(activeTab === 'all' || activeTab === 'company') && (
+        <section className="space-y-2">
+          {activeTab === 'all' && (
+            <div className="flex items-center gap-2 mt-2">
+              <Building2 className="h-4 w-4 text-violet-600" />
+              <h2 className="text-sm font-semibold text-violet-600">법인·거래처</h2>
+              <span className="text-xs text-muted-foreground">({companyLeadCount}곳 영업 중)</span>
+            </div>
+          )}
+
+          {(leads ?? []).filter(l => l.customer_type === 'company' && !registeredLeadIds.has(l.id)).length === 0 ? (
+            <div className="bg-white rounded-xl border border-dashed p-8 text-center space-y-2">
+              <p className="text-sm text-muted-foreground">영업 중인 법인 거래처가 없어요</p>
+              <Link
+                href="/dashboard/pipeline"
+                className="inline-block text-xs text-primary underline"
+              >
+                거래처 추가하기 →
+              </Link>
+            </div>
+          ) : (
+            (leads ?? [])
+              .filter(l => l.customer_type === 'company' && !registeredLeadIds.has(l.id))
+              .sort((a, b) => {
+                // 계약 완료 먼저, 그 다음 단계순
+                const stageOrder = ['contracted', 'negotiating', 'quoted', 'follow_up', 'contacted', 'new', 'rejected']
+                return stageOrder.indexOf(a.status) - stageOrder.indexOf(b.status)
+              })
+              .map((lead) => {
+                const stage = PIPELINE_STAGE[lead.status] ?? PIPELINE_STAGE['new']!
+                const b2bQuote = b2bQuoteMap[lead.id] ?? null
+                const isOverdue = Boolean(
+                  lead.next_follow_up_date &&
+                  lead.next_follow_up_date < today &&
+                  lead.status !== 'contracted' &&
+                  lead.status !== 'rejected'
+                )
+
+                return (
+                  <div
+                    key={`lead-${lead.id}`}
+                    className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-violet-100 text-violet-700">법인</span>
+                          <Link
+                            href={`/dashboard/pipeline/${lead.id}`}
+                            className="font-semibold hover:text-primary hover:underline transition-colors"
+                          >
+                            {lead.company_name}
+                          </Link>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stage.color}`}>
+                            {stage.text}
+                          </span>
+                          {isOverdue && (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-600">
+                              연락 지연
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mt-1.5 space-y-0.5">
+                          {lead.phone && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Phone className="h-3 w-3 shrink-0" />
+                              {lead.phone}
+                            </p>
+                          )}
+                          {lead.address && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                              <MapPin className="h-3 w-3 shrink-0" />
+                              {lead.address}
+                            </p>
+                          )}
+                          {lead.next_follow_up_date && (
+                            <p className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-600 font-medium' : 'text-amber-600'}`}>
+                              <Calendar className="h-3 w-3 shrink-0" />
+                              다음 연락: {new Date(lead.next_follow_up_date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
+                              {isOverdue && ' (지났어요)'}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 flex flex-col items-end gap-2">
+                        {b2bQuote ? (
+                          <div className="text-right">
+                            <p className="text-base font-bold tabular-nums">
+                              {b2bQuote.total_amount.toLocaleString('ko-KR')}원
+                            </p>
+                            {b2bQuote.frequency && (
+                              <p className="text-xs text-muted-foreground">{formatFrequency(b2bQuote.frequency)}</p>
+                            )}
+                          </div>
+                        ) : lead.monthly_budget ? (
+                          <div className="text-right">
+                            <p className="text-sm font-semibold tabular-nums text-muted-foreground">
+                              ~{lead.monthly_budget.toLocaleString('ko-KR')}원/월
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">예상</p>
+                          </div>
+                        ) : null}
+                        <Link
+                          href={`/dashboard/pipeline/${lead.id}`}
+                          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:border-primary/30"
+                        >
+                          영업 관리
+                          <ChevronRight className="h-3 w-3" />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
+          )}
+
+          {/* 이미 고객으로 전환된 법인 고객 표시 */}
+          {(customers ?? []).filter(c => c.lead_id && registeredLeadIds.has(c.lead_id)).length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs text-muted-foreground px-1 mb-2">계약 고객으로 전환됨</p>
+              {(customers ?? [])
+                .filter(c => c.lead_id && registeredLeadIds.has(c.lead_id))
+                .map((customer) => {
+                  const customerContracts = contractMap[customer.id] ?? []
+                  const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
+
+                  return (
+                    <div
+                      key={`converted-${customer.id}`}
+                      className="bg-emerald-50 rounded-xl border border-emerald-100 p-4 hover:border-emerald-300 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-emerald-100 text-emerald-700">계약 고객</span>
+                            <Link
+                              href={`/dashboard/clients/${customer.id}`}
+                              className="font-semibold hover:text-primary hover:underline"
+                            >
+                              {customer.name}
+                            </Link>
+                          </div>
+                          {activeContract && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
+                              <span className="text-emerald-600 font-medium ml-2">
+                                {activeContract.contract_price.toLocaleString('ko-KR')}원/월
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                        <Link
+                          href={`/dashboard/clients/${customer.id}`}
+                          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-emerald-200 hover:border-emerald-400"
+                        >
+                          이력
+                          <ChevronRight className="h-3 w-3" />
+                        </Link>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          )}
+        </section>
+      )}
+
     </div>
   )
 }
