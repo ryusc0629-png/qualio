@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -57,12 +57,24 @@ export function EditCustomerButton({ customer }: EditCustomerButtonProps) {
   const selectedType = useWatch({ control, name: 'type' })
   const isCompany = selectedType === 'recurring'
 
-  // 다이얼로그 열림 시 배경 스크롤 잠금
+  const notesRef = useRef<HTMLTextAreaElement | null>(null)
+
+  // 메모 높이 자동 조절
+  const autoResize = useCallback(() => {
+    const el = notesRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.max(120, el.scrollHeight) + 'px'
+  }, [])
+
+  // 다이얼로그 열림 시 배경 스크롤 잠금 + 메모 높이 초기화
   useEffect(() => {
     if (!open) return
     document.body.style.overflow = 'hidden'
+    // 다음 프레임에서 메모 높이 조절
+    requestAnimationFrame(autoResize)
     return () => { document.body.style.overflow = '' }
-  }, [open])
+  }, [open, autoResize])
 
   const { execute, isPending } = useAction(updateCustomerAction, {
     onSuccess: () => {
@@ -156,8 +168,15 @@ export function EditCustomerButton({ customer }: EditCustomerButtonProps) {
                 <Label htmlFor="edit-notes">메모</Label>
                 <textarea
                   id="edit-notes"
-                  {...register('notes')}
-                  className="w-full min-h-[60px] rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none"
+                  {...register('notes', {
+                    onChange: autoResize,
+                  })}
+                  ref={(el) => {
+                    register('notes').ref(el)
+                    notesRef.current = el
+                  }}
+                  className="w-full min-h-[120px] rounded-lg border border-border bg-background px-3 py-2 text-sm resize-y"
+                  placeholder="비밀번호, 주의사항 등 메모를 입력해주세요"
                 />
               </div>
 
