@@ -266,6 +266,46 @@ export const fieldCompletePaymentAction = action
     return { success: true }
   })
 
+// 작업 전 현장 사진 저장 (메모와 함께 저장, 보고서에 자동 연결)
+export const fieldSaveBeforePhotosAction = action
+  .schema(z.object({
+    workerId:        z.string().uuid(),
+    bookingId:       z.string().uuid(),
+    beforePhotoUrls: z.array(z.string().min(1)).max(5),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    // 보고서 upsert (없으면 생성)
+    const { data: report, error: reportError } = await db
+      .from('reports')
+      .upsert({
+        business_id: worker.business_id,
+        booking_id:  parsedInput.bookingId,
+      }, { onConflict: 'booking_id' })
+      .select('id')
+      .single()
+
+    if (reportError || !report) throw new Error('[APP] 저장에 실패했어요')
+
+    // 기존 before 사진만 삭제 후 재입력 (after 사진은 유지)
+    await db.from('report_photos').delete().eq('report_id', report.id).eq('type', 'before')
+
+    if (parsedInput.beforePhotoUrls.length > 0) {
+      await db.from('report_photos').insert(
+        parsedInput.beforePhotoUrls.map((url, i) => ({
+          report_id:  report.id,
+          url,
+          type:       'before' as const,
+          sort_order: i,
+        }))
+      )
+    }
+
+    return { success: true, reportId: report.id }
+  })
+
 // 보고서 저장 (사진 + 메모, 발송은 별도 액션)
 export const fieldSaveReportAction = action
   .schema(z.object({

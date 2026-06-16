@@ -1,15 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { createClient } from '@/lib/supabase/client'
 import {
   fieldStartWorkAction,
   fieldSaveMemoAction,
+  fieldSaveBeforePhotosAction,
   fieldCompletePaymentAction,
   fieldRequestPaymentAction,
 } from '@/lib/actions/field'
@@ -25,6 +27,8 @@ import {
   CircleDollarSign,
   Receipt,
   Play,
+  Upload,
+  X,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react'
@@ -40,15 +44,19 @@ interface BookingData {
   memo: string | null
 }
 
+type PhotoSlot = { url: string; uploading: boolean }
+
 interface Props {
   workerId: string
   workerName: string
+  businessId: string
   booking: BookingData
   reportId: string | null
   reportSentAt: string | null
+  existingBeforeUrls: string[]
 }
 
-export function FieldBookingClient({ workerId, workerName, booking, reportId, reportSentAt }: Props) {
+export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, existingBeforeUrls }: Props) {
   const [currentStatus, setCurrentStatus] = useState(booking.status)
   const [siteMemo, setSiteMemo] = useState(booking.memo ?? '')
   const [customerRequest, setCustomerRequest] = useState('')
@@ -56,6 +64,10 @@ export function FieldBookingClient({ workerId, workerName, booking, reportId, re
   const [memoOpen, setMemoOpen] = useState(false)
   const [memoSaved, setMemoSaved] = useState(false)
   const [receiptSent, setReceiptSent] = useState(false)
+  const [beforePhotos, setBeforePhotos] = useState<PhotoSlot[]>(
+    existingBeforeUrls.map((url) => ({ url, uploading: false }))
+  )
+  const beforeInputRef = useRef<HTMLInputElement>(null)
 
   // 작업 시작
   const { execute: startWork, isPending: isStarting } = useAction(fieldStartWorkAction, {
@@ -92,6 +104,65 @@ export function FieldBookingClient({ workerId, workerName, booking, reportId, re
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
+
+  // 작업 전 사진 저장
+  const { execute: saveBeforePhotos, isPending: isSavingPhotos } = useAction(fieldSaveBeforePhotosAction, {
+    onSuccess: () => toast.success('현장 사진이 저장됐어요!'),
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 사진 업로드
+  const handleBeforePhotoUpload = async (files: FileList) => {
+    const remaining = 5 - beforePhotos.length
+    if (remaining <= 0) {
+      toast.error('사진은 최대 5장까지 등록할 수 있어요')
+      return
+    }
+    const toUpload = Array.from(files).slice(0, remaining)
+    const placeholders = toUpload.map(() => ({ url: '', uploading: true }))
+    setBeforePhotos((prev) => [...prev, ...placeholders])
+
+    const supabase = createClient()
+    const uploaded: string[] = []
+
+    for (const file of toUpload) {
+      const ext = file.name.split('.').pop() ?? 'jpg'
+      const path = `${businessId}/${booking.id}/before/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error } = await supabase.storage.from('report-photos').upload(path, file, { upsert: true })
+      if (error) {
+        toast.error('사진 업로드에 실패했어요')
+        continue
+      }
+      const { data: { publicUrl } } = supabase.storage.from('report-photos').getPublicUrl(path)
+      uploaded.push(publicUrl)
+    }
+
+    setBeforePhotos((prev) => {
+      const result = [...prev.filter((p) => !p.uploading)]
+      uploaded.forEach((url) => result.push({ url, uploading: false }))
+      return result
+    })
+
+    // 업로드 완료 후 자동 저장
+    const allUrls = [
+      ...beforePhotos.filter((p) => !p.uploading && p.url).map((p) => p.url),
+      ...uploaded,
+    ]
+    if (allUrls.length > 0) {
+      saveBeforePhotos({ workerId, bookingId: booking.id, beforePhotoUrls: allUrls })
+    }
+  }
+
+  const removeBeforePhoto = (url: string) => {
+    const updated = beforePhotos.filter((p) => p.url !== url)
+    setBeforePhotos(updated)
+    // 삭제 후 자동 저장
+    saveBeforePhotos({
+      workerId,
+      bookingId: booking.id,
+      beforePhotoUrls: updated.filter((p) => p.url).map((p) => p.url),
+    })
+  }
 
   // 시간 포맷
   const time = new Date(booking.scheduledAt).toLocaleTimeString('ko-KR', {
@@ -206,6 +277,58 @@ export function FieldBookingClient({ workerId, workerName, booking, reportId, re
                     onChange={(e) => { setSiteMemo(e.target.value); setMemoSaved(false) }}
                     rows={2}
                   />
+
+                  {/* 작업 전 현장 사진 */}
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      현장 사진을 찍어두면 보고서에 자동으로 올라가요
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {beforePhotos.map((photo) => (
+                        <div key={photo.url || 'uploading'} className="relative w-20 h-20 rounded-lg overflow-hidden border bg-muted">
+                          {photo.uploading ? (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            </div>
+                          ) : (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={photo.url} alt="현장 사진" className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => removeBeforePhoto(photo.url)}
+                                className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
+                              >
+                                <X className="h-3 w-3 text-white" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                      {beforePhotos.length < 5 && (
+                        <button
+                          type="button"
+                          onClick={() => beforeInputRef.current?.click()}
+                          className="w-20 h-20 rounded-lg border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1 hover:border-primary/50 transition-colors"
+                        >
+                          <Camera className="h-5 w-5 text-muted-foreground" />
+                          <span className="text-[10px] text-muted-foreground">사진 추가</span>
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      ref={beforeInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files?.length) handleBeforePhotoUpload(e.target.files)
+                        e.target.value = ''
+                      }}
+                    />
+                  </div>
                 </div>
 
                 {/* 고객 추가 요청 */}

@@ -38,17 +38,23 @@ export default async function FieldBookingPage({ params }: Props) {
 
   if (!booking) notFound()
 
-  // 보고서 유무 확인
+  // 보고서 + 작업 전 사진 조회
   const { data: report } = await db
     .from('reports')
-    .select('id, kakao_sent_at')
+    .select('id, kakao_sent_at, report_photos(url, type, sort_order)')
     .eq('booking_id', bookingId)
     .maybeSingle()
+
+  const beforeUrls = ((report?.report_photos ?? []) as { url: string; type: string; sort_order: number }[])
+    .filter((p) => p.type === 'before')
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((p) => p.url)
 
   return (
     <FieldBookingClient
       workerId={workerId}
       workerName={worker.name}
+      businessId={worker.business_id}
       booking={{
         id: booking.id,
         customerName: booking.customer_name,
@@ -61,6 +67,7 @@ export default async function FieldBookingPage({ params }: Props) {
       }}
       reportId={report?.id ?? null}
       reportSentAt={report?.kakao_sent_at ?? null}
+      existingBeforeUrls={beforeUrls}
     />
   )
 }
