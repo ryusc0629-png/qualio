@@ -123,6 +123,8 @@ export function BookingDetailSheet({
   onStatusChange,
 }: Props) {
   const [editingTime, setEditingTime] = useState(false)
+  const [editingDate, setEditingDate] = useState(false)
+  const [dateValue, setDateValue]     = useState('')
   const [timeValue, setTimeValue]     = useState('')
   const [currentReportId, setCurrentReportId]     = useState<string | null>(null)
   const [currentReviewSent, setCurrentReviewSent] = useState(false)
@@ -211,6 +213,28 @@ export function BookingDetailSheet({
     cancelBooking({ bookingId: booking.id })
   }
 
+  // 날짜 변경 저장
+  const handleSaveDate = () => {
+    if (!booking || !dateValue) return
+    assignWorker({
+      bookingId: booking.id,
+      workerId:  booking.worker_id,
+      newDate:   dateValue,
+    })
+    // 낙관적 업데이트: scheduled_at의 날짜 부분만 교체
+    const currentTime = format(new Date(booking.scheduled_at), 'HH:mm:ssXXX')
+    onTimeChange(booking.id, new Date(`${dateValue}T${currentTime}`).toISOString())
+    setEditingDate(false)
+    toast.success('날짜를 변경했어요!')
+  }
+
+  // 날짜 편집 모드 시작
+  const startEditDate = () => {
+    if (!booking) return
+    setDateValue(format(new Date(booking.scheduled_at), 'yyyy-MM-dd'))
+    setEditingDate(true)
+  }
+
   // 시간 편집 모드 시작 시 현재 시간으로 초기화
   const startEditTime = () => {
     if (!booking) return
@@ -234,7 +258,7 @@ export function BookingDetailSheet({
 
   return (
     <>
-    <Sheet open={!!booking} onOpenChange={(isOpen: boolean) => { if (!isOpen) { setEditingTime(false); onClose() } }}>
+    <Sheet open={!!booking} onOpenChange={(isOpen: boolean) => { if (!isOpen) { setEditingTime(false); setEditingDate(false); onClose() } }}>
       <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0" showCloseButton={false}>
 
         {/* 헤더 */}
@@ -268,7 +292,49 @@ export function BookingDetailSheet({
           <div className="rounded-xl border border-border bg-card px-4 mb-4">
             {/* 날짜 */}
             <Row icon={<CalendarDays className="h-4 w-4" />} label="예약 날짜">
-              <span className="font-medium">{scheduledDate}</span>
+              {editingDate ? (
+                <div className="space-y-2">
+                  <input
+                    type="date"
+                    value={dateValue}
+                    onChange={(e) => setDateValue(e.target.value)}
+                    className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">
+                      {dateValue ? format(new Date(dateValue + 'T00:00:00'), 'M월 d일 (EEE)', { locale: ko }) : ''}
+                    </span>
+                    <button
+                      onClick={handleSaveDate}
+                      disabled={assignPending || !dateValue}
+                      className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                      aria-label="저장"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setEditingDate(false)}
+                      className="p-1.5 rounded-lg border border-border hover:bg-muted transition-colors"
+                      aria-label="취소"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{scheduledDate}</span>
+                  {!isCancelled && (
+                    <button
+                      onClick={startEditDate}
+                      className="flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      <Pencil className="h-3 w-3" />
+                      수정
+                    </button>
+                  )}
+                </div>
+              )}
             </Row>
 
             {/* 시간 */}

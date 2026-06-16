@@ -1,15 +1,16 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { startOfWeek, endOfWeek, addWeeks, subWeeks, format } from 'date-fns'
+import { startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, addDays, subDays, format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { ScheduleBoard } from '@/components/dashboard/schedule-board'
 
 interface PageProps {
-  searchParams: Promise<{ week?: string }>
+  searchParams: Promise<{ week?: string; view?: string; date?: string }>
 }
 
 export default async function SchedulePage({ searchParams }: PageProps) {
-  const { week } = await searchParams
+  const { week, view: viewParam, date: dateParam } = await searchParams
+  const view = (['day', 'week', 'month'].includes(viewParam ?? '') ? viewParam! : 'week') as 'day' | 'week' | 'month'
 
   const authClient = await createClient()
   const { data: { user } } = await authClient.auth.getUser()
@@ -25,14 +26,35 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   if (!profile?.business_id) redirect('/onboarding')
   const businessId = profile.business_id
 
-  // 주간 범위 계산
-  const baseDate = week ? new Date(week + 'T00:00:00') : new Date()
-  const weekStart = startOfWeek(baseDate, { weekStartsOn: 1 }) // 월요일 시작
-  const weekEnd   = endOfWeek(baseDate, { weekStartsOn: 1 })
+  // 뷰별 범위 계산
+  const baseDate = (dateParam ?? week) ? new Date((dateParam ?? week) + 'T00:00:00') : new Date()
 
-  const prevWeek = format(subWeeks(weekStart, 1), 'yyyy-MM-dd')
-  const nextWeek = format(addWeeks(weekStart, 1), 'yyyy-MM-dd')
-  const weekLabel = `${format(weekStart, 'M월 d일', { locale: ko })} — ${format(weekEnd, 'M월 d일', { locale: ko })}`
+  let rangeStart: Date
+  let rangeEnd: Date
+  let prevNav: string
+  let nextNav: string
+  let rangeLabel: string
+
+  if (view === 'day') {
+    rangeStart = new Date(format(baseDate, 'yyyy-MM-dd') + 'T00:00:00')
+    rangeEnd   = new Date(format(baseDate, 'yyyy-MM-dd') + 'T23:59:59')
+    prevNav = format(subDays(rangeStart, 1), 'yyyy-MM-dd')
+    nextNav = format(addDays(rangeStart, 1), 'yyyy-MM-dd')
+    rangeLabel = format(rangeStart, 'M월 d일 (EEE)', { locale: ko })
+  } else if (view === 'month') {
+    rangeStart = startOfMonth(baseDate)
+    rangeEnd   = endOfMonth(baseDate)
+    prevNav = format(subMonths(rangeStart, 1), 'yyyy-MM-dd')
+    nextNav = format(addMonths(rangeStart, 1), 'yyyy-MM-dd')
+    rangeLabel = format(rangeStart, 'yyyy년 M월', { locale: ko })
+  } else {
+    // week (기본)
+    rangeStart = startOfWeek(baseDate, { weekStartsOn: 1 })
+    rangeEnd   = endOfWeek(baseDate, { weekStartsOn: 1 })
+    prevNav = format(subWeeks(rangeStart, 1), 'yyyy-MM-dd')
+    nextNav = format(addWeeks(rangeStart, 1), 'yyyy-MM-dd')
+    rangeLabel = `${format(rangeStart, 'M월 d일', { locale: ko })} — ${format(rangeEnd, 'M월 d일', { locale: ko })}`
+  }
 
   const [workersResult, bookingsResult] = await Promise.all([
     db
@@ -47,8 +69,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, worker_id, quotes!quote_id(cleaning_type)')
       .eq('business_id' as never, businessId)
       .in('status' as never, ['confirmed', 'in_progress', 'completed'])
-      .gte('scheduled_at' as never, weekStart.toISOString())
-      .lte('scheduled_at' as never, weekEnd.toISOString())
+      .gte('scheduled_at' as never, rangeStart.toISOString())
+      .lte('scheduled_at' as never, rangeEnd.toISOString())
       .is('deleted_at' as never, null)
       .order('scheduled_at' as never),
   ])
@@ -121,10 +143,11 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           reportId:        reportMap.get(b.id)?.id ?? null,
           reviewSent:      reportMap.get(b.id)?.reviewSent ?? false,
         }))}
-        weekStart={weekStart.toISOString()}
-        weekLabel={weekLabel}
-        prevWeek={prevWeek}
-        nextWeek={nextWeek}
+        weekStart={rangeStart.toISOString()}
+        weekLabel={rangeLabel}
+        prevNav={prevNav}
+        nextNav={nextNav}
+        view={view}
       />
     </div>
   )

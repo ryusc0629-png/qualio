@@ -15,7 +15,7 @@ import {
   type DragOverEvent,
 } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
-import { addDays, format } from 'date-fns'
+import { addDays, format, getDaysInMonth } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -64,8 +64,9 @@ interface Props {
   bookings: Booking[]
   weekStart: string
   weekLabel: string
-  prevWeek: string
-  nextWeek: string
+  prevNav: string
+  nextNav: string
+  view: 'day' | 'week' | 'month'
 }
 
 const WORKER_COLORS = [
@@ -304,13 +305,20 @@ function DeleteWorkerButton({ workerId, workerName }: { workerId: string; worker
 
 // ── 메인 보드 ────────────────────────────────────────────
 
+const VIEW_OPTIONS = [
+  { key: 'day',   label: '일' },
+  { key: 'week',  label: '주' },
+  { key: 'month', label: '월' },
+] as const
+
 export function ScheduleBoard({
   workers,
   bookings: initialBookings,
   weekStart,
   weekLabel,
-  prevWeek,
-  nextWeek,
+  prevNav,
+  nextNav,
+  view,
 }: Props) {
   const [bookings, setBookings] = useState(initialBookings)
   const [activeBooking, setActiveBooking] = useState<Booking | null>(null)
@@ -331,12 +339,18 @@ export function ScheduleBoard({
     },
   })
 
-  // 요일 7개 생성
-  const days = Array.from({ length: 7 }, (_, i) => {
+  // 뷰에 따라 날짜 열 생성
+  const dayCount = view === 'day' ? 1
+    : view === 'month' ? getDaysInMonth(new Date(weekStart))
+    : 7
+
+  const days = Array.from({ length: dayCount }, (_, i) => {
     const d = addDays(new Date(weekStart), i)
     return {
       date:    format(d, 'yyyy-MM-dd'),
-      label:   format(d, 'M/d (EEE)', { locale: ko }),
+      label:   view === 'month'
+        ? format(d, 'd일 (EEE)', { locale: ko })
+        : format(d, 'M/d (EEE)', { locale: ko }),
       isToday: format(d, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd'),
     }
   })
@@ -436,26 +450,44 @@ export function ScheduleBoard({
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => window.location.replace(`/dashboard/schedule?week=${prevWeek}`)}
+            onClick={() => window.location.replace(`/dashboard/schedule?view=${view}&date=${prevNav}`)}
             className="p-1.5 rounded-lg border border-border hover:bg-muted transition-colors"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <span className="text-sm font-semibold min-w-[160px] text-center">{weekLabel}</span>
           <button
-            onClick={() => window.location.replace(`/dashboard/schedule?week=${nextWeek}`)}
+            onClick={() => window.location.replace(`/dashboard/schedule?view=${view}&date=${nextNav}`)}
             className="p-1.5 rounded-lg border border-border hover:bg-muted transition-colors"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
           <button
-            onClick={() => window.location.replace('/dashboard/schedule')}
+            onClick={() => window.location.replace(`/dashboard/schedule?view=${view}`)}
             className="text-xs text-primary hover:underline ml-1"
           >
             오늘
           </button>
         </div>
-        <AddWorkerDialog />
+        <div className="flex items-center gap-2">
+          {/* 뷰 전환 */}
+          <div className="flex rounded-lg border border-border overflow-hidden">
+            {VIEW_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => window.location.replace(`/dashboard/schedule?view=${opt.key}&date=${format(new Date(weekStart), 'yyyy-MM-dd')}`)}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  view === opt.key
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <AddWorkerDialog />
+        </div>
       </div>
 
       {/* 캘린더 그리드 */}
@@ -467,11 +499,17 @@ export function ScheduleBoard({
         onDragEnd={handleDragEnd}
       >
         <div className="overflow-x-auto -mx-4 px-4 pb-2">
-          <div style={{ minWidth: '1050px' }}>
+          <div style={{ minWidth: view === 'day' ? '400px' : view === 'month' ? '2200px' : '1050px' }}>
 
             {/* 헤더 행: 요일 */}
             <div
-              style={{ display: 'grid', gridTemplateColumns: '140px repeat(7, 130px)', marginBottom: '4px' }}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: view === 'day'
+                  ? '140px 1fr'
+                  : `140px repeat(${dayCount}, ${view === 'month' ? '64px' : '130px'})`,
+                marginBottom: '4px',
+              }}
             >
               <div />
               {days.map((day) => (
@@ -492,7 +530,13 @@ export function ScheduleBoard({
               {rows.map((row) => (
                 <div
                   key={String(row.id)}
-                  style={{ display: 'grid', gridTemplateColumns: '140px repeat(7, 130px)', alignItems: 'start' }}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: view === 'day'
+                      ? '140px 1fr'
+                      : `140px repeat(${dayCount}, ${view === 'month' ? '64px' : '130px'})`,
+                    alignItems: 'start',
+                  }}
                 >
                   {/* 작업자 레이블 */}
                   <div className="flex items-center gap-2 px-2 py-2 min-h-[72px]">
