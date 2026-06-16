@@ -369,6 +369,15 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             {isGenerating ? 'AI가 작성 중이에요...' : 'AI로 전문 보고서 작성하기'}
           </Button>
 
+          {notes.trim().length > 0 && notes.trim().length < 5 && (
+            <p className="text-xs text-amber-600 text-center">5자 이상 작성하면 AI 보고서를 만들 수 있어요</p>
+          )}
+          {notes.trim().length === 0 && !aiReport && (
+            <p className="text-xs text-muted-foreground text-center">
+              작업 내용을 간단히 메모하면 AI가 전문 보고서로 변환해드려요
+            </p>
+          )}
+
           {/* AI 결과 미리보기 */}
           {aiReport && (
             <div className="space-y-2 pt-2 border-t">
