@@ -232,18 +232,18 @@ export default async function ClientsPage({
       {/* 요약 통계 */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white rounded-xl border p-4">
-          <p className="text-xs text-muted-foreground">개인 고객</p>
+          <p className="text-xs text-muted-foreground">개인·일반 고객</p>
           <p className="text-2xl font-bold mt-1 tabular-nums text-blue-600">
             {allCustomers.length}<span className="text-sm font-normal text-muted-foreground ml-0.5">명</span>
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">누적 {totalLtv > 0 ? `${Math.round(totalLtv / 10000)}만원` : '—'}</p>
         </div>
         <div className="bg-white rounded-xl border p-4">
-          <p className="text-xs text-muted-foreground">법인 영업 중</p>
+          <p className="text-xs text-muted-foreground">정기계약·법인 고객</p>
           <p className="text-2xl font-bold mt-1 tabular-nums text-violet-600">
             {activeLeads.length}<span className="text-sm font-normal text-muted-foreground ml-0.5">곳</span>
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">계약 완료 {activeLeads.filter(l => l.status === 'contracted').length}곳</p>
+          <p className="text-xs text-muted-foreground mt-0.5">계약 중인 고객 {convertedCustomers.length}곳</p>
         </div>
         <div className="bg-white rounded-xl border p-4">
           <p className="text-xs text-muted-foreground">월 정기 매출</p>
