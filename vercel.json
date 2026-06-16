@@ -5,20 +5,8 @@
       "schedule": "0 0 * * *"
     },
     {
-      "path": "/api/cron/expire-quotes",
-      "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/cron/review-request",
+      "path": "/api/cron/daily-maintenance",
       "schedule": "0 1 * * *"
-    },
-    {
-      "path": "/api/cron/quote-followup",
-      "schedule": "0 1 * * *"
-    },
-    {
-      "path": "/api/cron/reengagement",
-      "schedule": "0 2 * * *"
     }
   ]
 }

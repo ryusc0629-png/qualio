@@ -9,6 +9,10 @@ import type { PlanId } from '@/lib/config/plans'
 // 1회 실행 시 오늘 발행해야 할 건수만큼 반복 발행 (스케일 플랜 하루 2건 지원)
 // vercel.json에 등록된 cron만 호출 가능 — CRON_SECRET으로 인증
 
+// AI 글 생성 + 이미지 생성을 여러 건 반복하므로 실행 시간을 넉넉히 확보
+export const maxDuration = 300
+export const dynamic = 'force-dynamic'
+
 // 오늘 발행해야 할 건수 계산 — 달력 월 기준 균등 분포 + 일 한도 cap
 function postsToPublishToday(
   postsThisMonth: number,
