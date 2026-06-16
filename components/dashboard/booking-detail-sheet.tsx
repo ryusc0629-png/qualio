@@ -273,31 +273,70 @@ export function BookingDetailSheet({
             {/* 시간 */}
             <Row icon={<Clock className="h-4 w-4" />} label="예약 시간">
               {editingTime ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="time"
-                    value={timeValue}
-                    onChange={(e) => setTimeValue(e.target.value)}
-                    className="border border-border rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 w-28"
-                  />
-                  <button
-                    onClick={handleSaveTime}
-                    disabled={timePending || !timeValue}
-                    className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                    aria-label="저장"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setEditingTime(false)}
-                    className="p-1.5 rounded-lg border border-border hover:bg-muted transition-colors"
-                    aria-label="취소"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                  {timePending && (
-                    <span className="text-xs text-muted-foreground">저장 중...</span>
-                  )}
+                <div className="space-y-2">
+                  {/* 시 선택 */}
+                  <div className="flex flex-wrap gap-1">
+                    {Array.from({ length: 17 }, (_, i) => i + 6).map((h) => {
+                      const hStr = String(h).padStart(2, '0')
+                      const selected = timeValue.startsWith(hStr + ':')
+                      return (
+                        <button
+                          key={h}
+                          type="button"
+                          onClick={() => setTimeValue(`${hStr}:${timeValue.split(':')[1] ?? '00'}`)}
+                          className={`px-2 py-1 text-xs rounded-md border transition-colors ${
+                            selected
+                              ? 'border-primary bg-primary/10 text-primary font-semibold'
+                              : 'border-border text-muted-foreground hover:border-primary/50'
+                          }`}
+                        >
+                          {h}시
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {/* 분 선택 */}
+                  <div className="flex gap-1">
+                    {['00', '30'].map((m) => {
+                      const selected = timeValue.endsWith(':' + m)
+                      return (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setTimeValue(`${timeValue.split(':')[0] ?? '10'}:${m}`)}
+                          className={`px-3 py-1 text-xs rounded-md border transition-colors ${
+                            selected
+                              ? 'border-primary bg-primary/10 text-primary font-semibold'
+                              : 'border-border text-muted-foreground hover:border-primary/50'
+                          }`}
+                        >
+                          {m}분
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {/* 선택된 시간 + 저장/취소 */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-sm font-medium">{timeValue}</span>
+                    <button
+                      onClick={handleSaveTime}
+                      disabled={timePending || !timeValue}
+                      className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                      aria-label="저장"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setEditingTime(false)}
+                      className="p-1.5 rounded-lg border border-border hover:bg-muted transition-colors"
+                      aria-label="취소"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                    {timePending && (
+                      <span className="text-xs text-muted-foreground">저장 중...</span>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
