@@ -176,6 +176,10 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     setSlots((prev) => prev.filter((p) => p.url !== url))
 
   const handleSave = () => {
+    if (!hasPhotos) {
+      const confirmed = window.confirm('사진을 업로드하지 않고 저장하시겠습니까?')
+      if (!confirmed) return
+    }
     saveReport({
       workerId,
       bookingId: booking.id,
@@ -581,7 +585,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           <Button
             size="lg"
             className="w-full h-14 text-base gap-2"
-            disabled={isSaving || isUploading || !hasPhotos}
+            disabled={isSaving || isUploading}
             onClick={handleSave}
           >
             <Save className="h-5 w-5" />
@@ -613,7 +617,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
         )}
 
         {!hasPhotos && !savedReportId && (
-          <p className="text-xs text-muted-foreground text-center">사진을 1장 이상 추가해주세요</p>
+          <p className="text-xs text-muted-foreground text-center">사진 없이도 저장할 수 있어요</p>
         )}
       </div>
     </div>

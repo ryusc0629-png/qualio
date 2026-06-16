@@ -175,6 +175,10 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
     setSlots((prev) => prev.filter((p) => p.url !== url))
 
   const handleSave = () => {
+    if (!hasPhotos) {
+      const confirmed = window.confirm('사진을 업로드하지 않고 저장하시겠습니까?')
+      if (!confirmed) return
+    }
     saveReport({
       bookingId:       booking.id,
       notes:           notes.trim() || undefined,
@@ -554,7 +558,7 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
           <Button
             size="lg"
             className="w-full h-14 text-base gap-2"
-            disabled={isSaving || isUploading || !hasPhotos}
+            disabled={isSaving || isUploading}
             onClick={handleSave}
           >
             <Save className="h-5 w-5" />
@@ -583,9 +587,6 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
               {isSaving ? '저장 중...' : '사진/메모 수정 후 다시 저장'}
             </Button>
           </>
-        )}
-        {!hasPhotos && !savedReportId && (
-          <p className="text-xs text-muted-foreground text-center">사진을 1장 이상 추가해주세요</p>
         )}
       </div>
     </div>
