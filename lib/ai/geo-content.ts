@@ -209,9 +209,13 @@ faqs: 이 주제에서 독자가 실제로 궁금해할 질문 3개 + 명확한 
 
 slug: 제목을 영문 URL slug로 변환 (예: "air-conditioner-cleaning-guide")
 
-imagePrompt: 이 포스트 주제에 어울리는 AI 이미지 생성용 영문 프롬프트 (50자 이내)
-  예시: "professional air conditioner cleaning service, Korean apartment, bright clean room"
-  규칙: 영문만, 청소 현장 묘사, 사실적 사진 스타일
+imagePrompt: 이 포스트 주제에 정확히 맞는 AI 이미지 생성용 영문 장면 묘사 (1~2문장, 영문만)
+  예시: "close-up of a spotless modern air conditioner being professionally cleaned in a bright Korean apartment, sparkling clean cooling fins, water droplets"
+  규칙:
+  - 글 주제의 핵심 대상(예: 에어컨/욕실 타일/사무실 바닥)을 구체적으로 묘사할 것
+  - 사람 얼굴 클로즈업은 피하고 깨끗한 공간·청소 결과 중심으로
+  - 글자/간판/로고가 들어가지 않는 장면으로 (이미지에 텍스트 금지)
+  - 사실적 사진 스타일 (style 수식어는 시스템이 자동 추가하므로 장면만 묘사)
 
 === 반드시 아래 JSON 형식으로만 응답 ===
 {

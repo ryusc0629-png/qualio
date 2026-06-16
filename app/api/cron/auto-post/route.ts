@@ -81,10 +81,8 @@ async function publishOnePost(
     ? `\`\`\`json\n${JSON.stringify({ keyPoints: postContent.keyPoints ?? [], faqs: postContent.faqs ?? [] })}\n\`\`\`\n`
     : ''
 
-  // 포스트 주제에 맞는 이미지 자동 생성 (실패해도 포스팅 진행)
-  const imageUrl = postContent.imagePrompt
-    ? await generatePostImage(postContent.imagePrompt)
-    : null
+  // 포스트 주제에 맞는 이미지 자동 생성 (실패해도 포스팅 진행) — 힌트 없으면 제목 기반
+  const imageUrl = await generatePostImage(postContent.imagePrompt || postContent.title)
 
   const fullContent = metaBlock + postContent.content
   const { data: saved, error } = await db.from('biz_posts').insert({

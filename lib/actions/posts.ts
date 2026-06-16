@@ -92,10 +92,8 @@ export const generatePostAction = action
       : ''
     const fullContent = metaBlock + postContent.content
 
-    // 이미지 자동 생성 (실패해도 포스팅 진행)
-    const imageUrl = postContent.imagePrompt
-      ? await generatePostImage(postContent.imagePrompt)
-      : null
+    // 이미지 자동 생성 (실패해도 포스팅 진행) — 힌트 없으면 제목 기반 맥락 생성
+    const imageUrl = await generatePostImage(postContent.imagePrompt || postContent.title)
 
     // DB 저장
     const { data: post, error } = await db
@@ -356,10 +354,8 @@ export const publishTodayAction = action
 
       const fullContent = metaBlock + postContent.content
 
-      // 이미지 자동 생성 (실패해도 포스팅 진행)
-      const imageUrl = postContent.imagePrompt
-        ? await generatePostImage(postContent.imagePrompt)
-        : null
+      // 이미지 자동 생성 (실패해도 포스팅 진행) — 힌트 없으면 제목 기반 맥락 생성
+      const imageUrl = await generatePostImage(postContent.imagePrompt || postContent.title)
 
       const { data: savedPost, error } = await db.from('biz_posts').insert({
         business_id: businessId,
