@@ -96,6 +96,19 @@ export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, 
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
+  const { execute: executeArchive, isPending: archiving } = useAction(updateLeadStatusAction, {
+    onSuccess: () => {
+      toast.success('보관했어요. 고객 관리에서 확인할 수 있어요.')
+      window.location.replace('/dashboard/clients?type=company')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  const { execute: executeUnarchive, isPending: unarchiving } = useAction(updateLeadStatusAction, {
+    onSuccess: () => startTransition(() => router.refresh()),
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
   const { execute: executeActivity, isPending: addingActivity } = useAction(createLeadActivityAction, {
     onSuccess: () => {
       toast.success('기록했어요!')
@@ -121,14 +134,37 @@ export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, 
 
   return (
     <div className="space-y-5">
-      {/* 뒤로가기 */}
-      <Link
-        href="/dashboard/pipeline"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        거래처 목록
-      </Link>
+      {/* 뒤로가기 + 보관하기 */}
+      <div className="flex items-center justify-between">
+        <Link
+          href="/dashboard/clients?type=company"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          고객 관리
+        </Link>
+        {lead.status === 'archived' ? (
+          <button
+            onClick={() => executeUnarchive({ leadId: lead.id, status: 'new' })}
+            disabled={unarchiving}
+            className="text-xs text-primary font-medium hover:underline disabled:opacity-50"
+          >
+            {unarchiving ? '처리 중...' : '보관 해제'}
+          </button>
+        ) : (
+          <button
+            onClick={() => {
+              if (confirm('이 거래처를 보관할까요?\n고객 데이터와 상담 기록은 그대로 유지돼요.')) {
+                executeArchive({ leadId: lead.id, status: 'archived' })
+              }
+            }}
+            disabled={archiving}
+            className="text-xs text-muted-foreground hover:text-red-600 disabled:opacity-50"
+          >
+            {archiving ? '처리 중...' : '보관하기'}
+          </button>
+        )}
+      </div>
 
       {/* 거래처 정보 카드 */}
       <div className="bg-white rounded-xl border p-5 space-y-4">

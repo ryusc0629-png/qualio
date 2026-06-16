@@ -43,6 +43,7 @@ export const STAGE_CONFIG: Record<string, { text: string; color: string }> = {
   negotiating: { text: '금액 협의', color: 'bg-orange-100 text-orange-700' },
   contracted:  { text: '계약 완료', color: 'bg-green-100 text-green-700' },
   rejected:    { text: '포기',      color: 'bg-red-100 text-red-600' },
+  archived:    { text: '보관됨',    color: 'bg-gray-100 text-gray-400' },
 }
 
 const STAGE_ORDER = ['new', 'contacted', 'follow_up', 'quoted', 'negotiating', 'contracted', 'rejected']
@@ -173,8 +174,9 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
-  // 필터 적용
+  // 필터 적용 (보관된 거래처는 항상 제외)
   const filtered = leads.filter((lead) => {
+    if (lead.status === 'archived') return false
     if (activeFilter === '') return true
     if (activeFilter === 'contracted') return lead.status === 'contracted'
     if (activeFilter === 'rejected') return lead.status === 'rejected'

@@ -5,7 +5,7 @@ import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-const LEAD_STATUSES = ['new', 'contacted', 'follow_up', 'quoted', 'negotiating', 'contracted', 'rejected'] as const
+const LEAD_STATUSES = ['new', 'contacted', 'follow_up', 'quoted', 'negotiating', 'contracted', 'rejected', 'archived'] as const
 const ACTIVITY_TYPES = ['call', 'visit', 'quote', 'note'] as const
 
 // 고객 구분 값 (company=거래처, individual=일반)
@@ -144,6 +144,7 @@ export const updateLeadStatusAction = action
 
     if (error) throw new Error('[APP] 단계 변경에 실패했습니다')
     revalidatePath('/dashboard/pipeline')
+    revalidatePath('/dashboard/clients')
     return { success: true }
   })
 

@@ -6,7 +6,7 @@ import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { DeleteCustomerButton } from '@/components/dashboard/delete-customer-button'
 import { ContractStatusSelect } from '@/components/dashboard/contract-status-select'
 import { formatFrequency } from '@/lib/utils/frequency'
-import { Phone, MapPin, Calendar, TrendingUp, ChevronRight, Building2, User } from 'lucide-react'
+import { Phone, MapPin, Calendar, TrendingUp, ChevronRight, Building2, User, Archive } from 'lucide-react'
 
 // ── 타입 ────────────────────────────────────────────────
 
@@ -69,23 +69,40 @@ const PIPELINE_STAGE: Record<string, { text: string; color: string }> = {
   rejected:    { text: '포기',      color: 'bg-red-100 text-red-600' },
 }
 
-// ── 탭 ────────────────────────────────────────────────
-
 const TABS = [
   { key: 'all',        label: '전체' },
-  { key: 'individual', label: '개인 고객' },
-  { key: 'company',    label: '법인·거래처' },
+  { key: 'individual', label: '개인·일반 고객' },
+  { key: 'company',    label: '정기계약·법인 고객' },
 ]
+
+const SORT_OPTIONS = [
+  { key: 'ltv_desc', label: 'LTV 높은순' },
+  { key: 'ltv_asc',  label: 'LTV 낮은순' },
+  { key: 'newest',   label: '최신순' },
+  { key: 'oldest',   label: '오래된순' },
+]
+
+// ── URL 파라미터 헬퍼 ────────────────────────────────────
+
+function buildHref(params: { type?: string; sort?: string; show_archived?: string }) {
+  const p = new URLSearchParams()
+  if (params.type && params.type !== 'all') p.set('type', params.type)
+  if (params.sort && params.sort !== 'ltv_desc') p.set('sort', params.sort)
+  if (params.show_archived === '1') p.set('show_archived', '1')
+  const qs = p.toString()
+  return `/dashboard/clients${qs ? '?' + qs : ''}`
+}
 
 // ── 페이지 ────────────────────────────────────────────────
 
 export default async function ClientsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string }>
+  searchParams: Promise<{ type?: string; sort?: string; show_archived?: string }>
 }) {
-  const { type } = await searchParams
+  const { type, sort = 'ltv_desc', show_archived } = await searchParams
   const activeTab = ['individual', 'company'].includes(type ?? '') ? type! : 'all'
+  const showArchived = show_archived === '1'
 
   const authClient = await createClient()
   const { data: { user } } = await authClient.auth.getUser()
@@ -132,7 +149,6 @@ export default async function ClientsPage({
       .eq('business_id', businessId)
       .not('lead_id', 'is', null),
 
-    // B2B 견적 금액 (법인 카드에 표시)
     db.from('b2b_quotes')
       .select('lead_id, total_amount, frequency')
       .eq('business_id', businessId),
@@ -152,14 +168,12 @@ export default async function ClientsPage({
     }
   }
 
-  // customer_id → 계약 맵
   const contractMap: Record<string, ContractRow[]> = {}
   for (const c of contracts ?? []) {
     if (!contractMap[c.customer_id]) contractMap[c.customer_id] = []
     contractMap[c.customer_id]!.push(c)
   }
 
-  // lead_id → b2b 견적 맵
   const b2bQuoteMap: Record<string, B2bQuoteRow> = {}
   for (const q of b2bQuotes ?? []) {
     if (q.lead_id) b2bQuoteMap[q.lead_id] = q
@@ -168,24 +182,43 @@ export default async function ClientsPage({
   const registeredLeadIds = new Set((registeredLeadRows ?? []).map((r) => r.lead_id))
   const today = new Date().toISOString().slice(0, 10)
 
-  // ── 요약 통계 ──
+  // ── 정렬 함수 ──
+
+  function sortCustomers(list: CustomerRow[]): CustomerRow[] {
+    const withLtv = list.map(c => ({ c, ltv: c.phone ? (bookingMap[c.phone]?.ltv ?? 0) : 0 }))
+    if (sort === 'ltv_asc') return withLtv.sort((a, b) => a.ltv - b.ltv).map(x => x.c)
+    if (sort === 'newest')  return [...list].sort((a, b) => b.created_at.localeCompare(a.created_at))
+    if (sort === 'oldest')  return [...list].sort((a, b) => a.created_at.localeCompare(b.created_at))
+    return withLtv.sort((a, b) => b.ltv - a.ltv).map(x => x.c)
+  }
+
+  function sortLeads(list: LeadRow[]): LeadRow[] {
+    const withVal = list.map(l => ({ l, val: b2bQuoteMap[l.id]?.total_amount ?? l.monthly_budget ?? 0 }))
+    if (sort === 'ltv_asc') return withVal.sort((a, b) => a.val - b.val).map(x => x.l)
+    if (sort === 'newest')  return [...list].sort((a, b) => b.created_at.localeCompare(a.created_at))
+    if (sort === 'oldest')  return [...list].sort((a, b) => a.created_at.localeCompare(b.created_at))
+    return withVal.sort((a, b) => b.val - a.val).map(x => x.l)
+  }
+
+  // ── 데이터 분류 ──
+
+  const allCustomers = sortCustomers(customers ?? [])
+  const activeLeads = sortLeads(
+    (leads ?? []).filter(l => l.customer_type === 'company' && l.status !== 'archived' && !registeredLeadIds.has(l.id))
+  )
+  const archivedLeads = (leads ?? []).filter(l => l.customer_type === 'company' && l.status === 'archived')
+  const convertedCustomers = allCustomers.filter(c => c.lead_id && registeredLeadIds.has(c.lead_id))
+
   const totalLtv = (completedBookings ?? []).reduce((s, b) => s + (b.final_price ?? 0), 0)
-  const monthlyRecurring = (contracts ?? [])
-    .filter((c) => c.status === 'active')
-    .reduce((s, c) => s + c.contract_price, 0)
-  const individualCount = (customers ?? []).length
-  const companyLeadCount = (leads ?? []).filter(l => l.customer_type === 'company' && !registeredLeadIds.has(l.id)).length
-  const contractedCount = (leads ?? []).filter(l => l.status === 'contracted').length
+  const monthlyRecurring = (contracts ?? []).filter(c => c.status === 'active').reduce((s, c) => s + c.contract_price, 0)
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-5">
 
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-bold">고객 관리</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            개인 고객과 법인 거래처를 한 곳에서 관리해요
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">개인 고객과 법인 거래처를 한 곳에서 관리해요</p>
         </div>
         <AddClientForm />
       </div>
@@ -195,20 +228,16 @@ export default async function ClientsPage({
         <div className="bg-white rounded-xl border p-4">
           <p className="text-xs text-muted-foreground">개인 고객</p>
           <p className="text-2xl font-bold mt-1 tabular-nums text-blue-600">
-            {individualCount}
-            <span className="text-sm font-normal text-muted-foreground ml-0.5">명</span>
+            {allCustomers.length}<span className="text-sm font-normal text-muted-foreground ml-0.5">명</span>
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            누적 {totalLtv > 0 ? `${Math.round(totalLtv / 10000)}만원` : '—'}
-          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">누적 {totalLtv > 0 ? `${Math.round(totalLtv / 10000)}만원` : '—'}</p>
         </div>
         <div className="bg-white rounded-xl border p-4">
           <p className="text-xs text-muted-foreground">법인 영업 중</p>
           <p className="text-2xl font-bold mt-1 tabular-nums text-violet-600">
-            {companyLeadCount}
-            <span className="text-sm font-normal text-muted-foreground ml-0.5">곳</span>
+            {activeLeads.length}<span className="text-sm font-normal text-muted-foreground ml-0.5">곳</span>
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">계약 완료 {contractedCount}곳</p>
+          <p className="text-xs text-muted-foreground mt-0.5">계약 완료 {activeLeads.filter(l => l.status === 'contracted').length}곳</p>
         </div>
         <div className="bg-white rounded-xl border p-4">
           <p className="text-xs text-muted-foreground">월 정기 매출</p>
@@ -224,41 +253,58 @@ export default async function ClientsPage({
         </div>
       </div>
 
-      {/* 탭 */}
-      <div className="flex gap-1">
-        {TABS.map((tab) => (
-          <Link
-            key={tab.key}
-            href={tab.key === 'all' ? '/dashboard/clients' : `/dashboard/clients?type=${tab.key}`}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === tab.key
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted'
-            }`}
-          >
-            {tab.label}
-          </Link>
-        ))}
+      {/* 탭 + 정렬 */}
+      <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+        <div className="flex gap-1 overflow-x-auto">
+          {TABS.map((tab) => (
+            <Link
+              key={tab.key}
+              href={buildHref({ type: tab.key, sort, show_archived: showArchived ? '1' : undefined })}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                activeTab === tab.key
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </div>
+        <div className="flex gap-1 overflow-x-auto shrink-0">
+          {SORT_OPTIONS.map((opt) => (
+            <Link
+              key={opt.key}
+              href={buildHref({ type: activeTab, sort: opt.key, show_archived: showArchived ? '1' : undefined })}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
+                sort === opt.key
+                  ? 'bg-foreground text-background'
+                  : 'text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              {opt.label}
+            </Link>
+          ))}
+        </div>
       </div>
 
-      {/* ── 개인 고객 목록 ── */}
+      {/* ── 개인·일반 고객 ── */}
       {(activeTab === 'all' || activeTab === 'individual') && (
         <section className="space-y-2">
           {activeTab === 'all' && (
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-blue-600" />
-              <h2 className="text-sm font-semibold text-blue-600">개인 고객</h2>
-              <span className="text-xs text-muted-foreground">({individualCount}명)</span>
+              <h2 className="text-sm font-semibold text-blue-600">개인·일반 고객</h2>
+              <span className="text-xs text-muted-foreground">({allCustomers.length}명)</span>
             </div>
           )}
 
-          {(customers ?? []).length === 0 ? (
+          {allCustomers.length === 0 ? (
             <div className="bg-white rounded-xl border border-dashed p-8 text-center space-y-2">
               <p className="text-sm text-muted-foreground">아직 개인 고객이 없어요</p>
               <p className="text-xs text-muted-foreground">일반 예약 메뉴에서 견적을 보내면 자동으로 등록돼요</p>
             </div>
           ) : (
-            (customers ?? []).map((customer) => {
+            allCustomers.map((customer) => {
               const booking = customer.phone ? bookingMap[customer.phone] : undefined
               const customerContracts = contractMap[customer.id] ?? []
               const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
@@ -270,41 +316,28 @@ export default async function ClientsPage({
               const statusMeta = CUSTOMER_STATUS[statusKey]!
 
               return (
-                <div
-                  key={`customer-${customer.id}`}
-                  className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition-colors"
-                >
+                <div key={`customer-${customer.id}`} className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition-colors">
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-sky-100 text-sky-700">개인</span>
-                        <Link
-                          href={`/dashboard/clients/${customer.id}`}
-                          className="font-semibold hover:text-primary hover:underline transition-colors"
-                        >
+                        <Link href={`/dashboard/clients/${customer.id}`} className="font-semibold hover:text-primary hover:underline transition-colors">
                           {customer.name}
                         </Link>
                         {customer.category && (
-                          <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
-                            {customer.category}
-                          </span>
+                          <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">{customer.category}</span>
                         )}
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusMeta.className}`}>
-                          {statusMeta.label}
-                        </span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusMeta.className}`}>{statusMeta.label}</span>
                       </div>
-
                       <div className="mt-1.5 space-y-0.5">
                         {customer.phone && (
                           <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Phone className="h-3 w-3 shrink-0" />
-                            {customer.phone}
+                            <Phone className="h-3 w-3 shrink-0" />{customer.phone}
                           </p>
                         )}
                         {customer.address && (
                           <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                            <MapPin className="h-3 w-3 shrink-0" />
-                            {customer.address}
+                            <MapPin className="h-3 w-3 shrink-0" />{customer.address}
                           </p>
                         )}
                         {lastVisitDate && (
@@ -315,50 +348,31 @@ export default async function ClientsPage({
                           </p>
                         )}
                       </div>
-
                       {activeContract && (
                         <div className="mt-2 pt-2 border-t flex items-center gap-2 flex-wrap">
                           <p className="text-xs text-muted-foreground">
                             {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
                           </p>
-                          <ContractStatusSelect
-                            contractId={activeContract.id}
-                            currentStatus={activeContract.status}
-                          />
+                          <ContractStatusSelect contractId={activeContract.id} currentStatus={activeContract.status} />
                         </div>
                       )}
                     </div>
-
                     <div className="shrink-0 flex flex-col items-end gap-2">
                       <div className="text-right">
-                        {ltv > 0 && (
-                          <p className="text-base font-bold tabular-nums">{ltv.toLocaleString('ko-KR')}원</p>
-                        )}
+                        {ltv > 0 && <p className="text-base font-bold tabular-nums">{ltv.toLocaleString('ko-KR')}원</p>}
                         {activeContract && (
                           <p className="text-xs text-emerald-600 font-medium tabular-nums">
                             {activeContract.contract_price.toLocaleString('ko-KR')}원/월
                           </p>
                         )}
-                        {ltv === 0 && !activeContract && (
-                          <p className="text-xs text-muted-foreground">실적 없음</p>
-                        )}
+                        {ltv === 0 && !activeContract && <p className="text-xs text-muted-foreground">실적 없음</p>}
                       </div>
                       <div className="flex items-center gap-1">
-                        <Link
-                          href={`/dashboard/clients/${customer.id}`}
-                          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:border-primary/30"
-                        >
-                          이력
-                          <ChevronRight className="h-3 w-3" />
+                        <Link href={`/dashboard/clients/${customer.id}`} className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:border-primary/30">
+                          이력<ChevronRight className="h-3 w-3" />
                         </Link>
-                        {customer.phone && (
-                          <EditCustomerButton customer={{ ...customer, phone: customer.phone }} />
-                        )}
-                        <DeleteCustomerButton
-                          customerId={customer.id}
-                          customerName={customer.name}
-                          hasContract={hasAnyContract}
-                        />
+                        {customer.phone && <EditCustomerButton customer={{ ...customer, phone: customer.phone }} />}
+                        <DeleteCustomerButton customerId={customer.id} customerName={customer.name} hasContract={hasAnyContract} />
                       </div>
                     </div>
                   </div>
@@ -369,176 +383,176 @@ export default async function ClientsPage({
         </section>
       )}
 
-      {/* ── 법인·거래처 목록 ── */}
+      {/* ── 정기계약·법인 고객 ── */}
       {(activeTab === 'all' || activeTab === 'company') && (
         <section className="space-y-2">
           {activeTab === 'all' && (
             <div className="flex items-center gap-2 mt-2">
               <Building2 className="h-4 w-4 text-violet-600" />
-              <h2 className="text-sm font-semibold text-violet-600">법인·거래처</h2>
-              <span className="text-xs text-muted-foreground">({companyLeadCount}곳 영업 중)</span>
+              <h2 className="text-sm font-semibold text-violet-600">정기계약·법인 고객</h2>
+              <span className="text-xs text-muted-foreground">({activeLeads.length}곳 영업 중)</span>
             </div>
           )}
 
-          {(leads ?? []).filter(l => l.customer_type === 'company' && !registeredLeadIds.has(l.id)).length === 0 ? (
+          {activeLeads.length === 0 && convertedCustomers.length === 0 ? (
             <div className="bg-white rounded-xl border border-dashed p-8 text-center space-y-2">
               <p className="text-sm text-muted-foreground">영업 중인 법인 거래처가 없어요</p>
-              <Link
-                href="/dashboard/pipeline"
-                className="inline-block text-xs text-primary underline"
-              >
+              <Link href="/dashboard/pipeline" className="inline-block text-xs text-primary underline">
                 거래처 추가하기 →
               </Link>
             </div>
           ) : (
-            (leads ?? [])
-              .filter(l => l.customer_type === 'company' && !registeredLeadIds.has(l.id))
-              .sort((a, b) => {
-                // 계약 완료 먼저, 그 다음 단계순
-                const stageOrder = ['contracted', 'negotiating', 'quoted', 'follow_up', 'contacted', 'new', 'rejected']
-                return stageOrder.indexOf(a.status) - stageOrder.indexOf(b.status)
-              })
-              .map((lead) => {
-                const stage = PIPELINE_STAGE[lead.status] ?? PIPELINE_STAGE['new']!
-                const b2bQuote = b2bQuoteMap[lead.id] ?? null
-                const isOverdue = Boolean(
-                  lead.next_follow_up_date &&
-                  lead.next_follow_up_date < today &&
-                  lead.status !== 'contracted' &&
-                  lead.status !== 'rejected'
-                )
+            activeLeads.map((lead) => {
+              const stage = PIPELINE_STAGE[lead.status] ?? PIPELINE_STAGE['new']!
+              const b2bQuote = b2bQuoteMap[lead.id] ?? null
+              const isOverdue = Boolean(
+                lead.next_follow_up_date &&
+                lead.next_follow_up_date < today &&
+                lead.status !== 'contracted' &&
+                lead.status !== 'rejected'
+              )
 
-                return (
-                  <div
-                    key={`lead-${lead.id}`}
-                    className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition-colors"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-violet-100 text-violet-700">법인</span>
-                          <Link
-                            href={`/dashboard/pipeline/${lead.id}`}
-                            className="font-semibold hover:text-primary hover:underline transition-colors"
-                          >
-                            {lead.company_name}
-                          </Link>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stage.color}`}>
-                            {stage.text}
-                          </span>
-                          {isOverdue && (
-                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-600">
-                              연락 지연
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="mt-1.5 space-y-0.5">
-                          {lead.phone && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Phone className="h-3 w-3 shrink-0" />
-                              {lead.phone}
-                            </p>
-                          )}
-                          {lead.address && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                              <MapPin className="h-3 w-3 shrink-0" />
-                              {lead.address}
-                            </p>
-                          )}
-                          {lead.next_follow_up_date && (
-                            <p className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-600 font-medium' : 'text-amber-600'}`}>
-                              <Calendar className="h-3 w-3 shrink-0" />
-                              다음 연락: {new Date(lead.next_follow_up_date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
-                              {isOverdue && ' (지났어요)'}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 flex flex-col items-end gap-2">
-                        {b2bQuote ? (
-                          <div className="text-right">
-                            <p className="text-base font-bold tabular-nums">
-                              {b2bQuote.total_amount.toLocaleString('ko-KR')}원
-                            </p>
-                            {b2bQuote.frequency && (
-                              <p className="text-xs text-muted-foreground">{formatFrequency(b2bQuote.frequency)}</p>
-                            )}
-                          </div>
-                        ) : lead.monthly_budget ? (
-                          <div className="text-right">
-                            <p className="text-sm font-semibold tabular-nums text-muted-foreground">
-                              ~{lead.monthly_budget.toLocaleString('ko-KR')}원/월
-                            </p>
-                            <p className="text-[10px] text-muted-foreground">예상</p>
-                          </div>
-                        ) : null}
-                        <Link
-                          href={`/dashboard/pipeline/${lead.id}`}
-                          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:border-primary/30"
-                        >
-                          영업 관리
-                          <ChevronRight className="h-3 w-3" />
+              return (
+                <div key={`lead-${lead.id}`} className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-violet-100 text-violet-700">법인</span>
+                        <Link href={`/dashboard/pipeline/${lead.id}`} className="font-semibold hover:text-primary hover:underline transition-colors">
+                          {lead.company_name}
                         </Link>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stage.color}`}>{stage.text}</span>
+                        {isOverdue && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-600">연락 지연</span>
+                        )}
                       </div>
+                      <div className="mt-1.5 space-y-0.5">
+                        {lead.phone && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Phone className="h-3 w-3 shrink-0" />{lead.phone}
+                          </p>
+                        )}
+                        {lead.address && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                            <MapPin className="h-3 w-3 shrink-0" />{lead.address}
+                          </p>
+                        )}
+                        {lead.next_follow_up_date && (
+                          <p className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-600 font-medium' : 'text-amber-600'}`}>
+                            <Calendar className="h-3 w-3 shrink-0" />
+                            다음 연락: {new Date(lead.next_follow_up_date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
+                            {isOverdue && ' (지났어요)'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="shrink-0 flex flex-col items-end gap-2">
+                      {b2bQuote ? (
+                        <div className="text-right">
+                          <p className="text-base font-bold tabular-nums">{b2bQuote.total_amount.toLocaleString('ko-KR')}원</p>
+                          {b2bQuote.frequency && <p className="text-xs text-muted-foreground">{formatFrequency(b2bQuote.frequency)}</p>}
+                        </div>
+                      ) : lead.monthly_budget ? (
+                        <div className="text-right">
+                          <p className="text-sm font-semibold tabular-nums text-muted-foreground">~{lead.monthly_budget.toLocaleString('ko-KR')}원/월</p>
+                          <p className="text-[10px] text-muted-foreground">예상</p>
+                        </div>
+                      ) : null}
+                      <Link href={`/dashboard/pipeline/${lead.id}`} className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:border-primary/30">
+                        영업 관리<ChevronRight className="h-3 w-3" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )
+            })
+          )}
+
+          {/* 계약 전환된 법인 고객 */}
+          {convertedCustomers.length > 0 && (
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-muted-foreground px-1">계약 고객으로 전환됨</p>
+              {convertedCustomers.map((customer) => {
+                const customerContracts = contractMap[customer.id] ?? []
+                const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
+                return (
+                  <div key={`converted-${customer.id}`} className="bg-emerald-50 rounded-xl border border-emerald-100 p-4 hover:border-emerald-300 transition-colors">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-emerald-100 text-emerald-700">계약 고객</span>
+                          <Link href={`/dashboard/clients/${customer.id}`} className="font-semibold hover:text-primary hover:underline">
+                            {customer.name}
+                          </Link>
+                        </div>
+                        {activeContract && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
+                            <span className="text-emerald-600 font-medium ml-2">{activeContract.contract_price.toLocaleString('ko-KR')}원/월</span>
+                          </p>
+                        )}
+                      </div>
+                      <Link href={`/dashboard/clients/${customer.id}`} className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-emerald-200 hover:border-emerald-400">
+                        이력<ChevronRight className="h-3 w-3" />
+                      </Link>
                     </div>
                   </div>
                 )
-              })
+              })}
+            </div>
           )}
 
-          {/* 이미 고객으로 전환된 법인 고객 표시 */}
-          {(customers ?? []).filter(c => c.lead_id && registeredLeadIds.has(c.lead_id)).length > 0 && (
-            <div className="mt-2">
-              <p className="text-xs text-muted-foreground px-1 mb-2">계약 고객으로 전환됨</p>
-              {(customers ?? [])
-                .filter(c => c.lead_id && registeredLeadIds.has(c.lead_id))
-                .map((customer) => {
-                  const customerContracts = contractMap[customer.id] ?? []
-                  const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
-
-                  return (
-                    <div
-                      key={`converted-${customer.id}`}
-                      className="bg-emerald-50 rounded-xl border border-emerald-100 p-4 hover:border-emerald-300 transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-emerald-100 text-emerald-700">계약 고객</span>
-                            <Link
-                              href={`/dashboard/clients/${customer.id}`}
-                              className="font-semibold hover:text-primary hover:underline"
-                            >
-                              {customer.name}
-                            </Link>
+          {/* 보관된 거래처 토글 */}
+          {archivedLeads.length > 0 && (
+            <div className="mt-4">
+              {!showArchived ? (
+                <Link
+                  href={buildHref({ type: activeTab, sort, show_archived: '1' })}
+                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                  보관된 거래처 {archivedLeads.length}곳 보기
+                </Link>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Archive className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground font-medium">보관된 거래처 ({archivedLeads.length}곳)</span>
+                    </div>
+                    <Link href={buildHref({ type: activeTab, sort })} className="text-xs text-muted-foreground hover:text-foreground underline">
+                      숨기기
+                    </Link>
+                  </div>
+                  {archivedLeads.map((lead) => (
+                    <div key={`archived-${lead.id}`} className="bg-muted/30 rounded-xl border border-dashed border-border p-4 opacity-70">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-500">보관됨</span>
+                            <p className="font-medium text-muted-foreground">{lead.company_name}</p>
                           </div>
-                          {activeContract && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
-                              <span className="text-emerald-600 font-medium ml-2">
-                                {activeContract.contract_price.toLocaleString('ko-KR')}원/월
-                              </span>
-                            </p>
-                          )}
+                          <div className="mt-1 space-y-0.5">
+                            {lead.phone && (
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Phone className="h-3 w-3 shrink-0" />{lead.phone}
+                              </p>
+                            )}
+                            {lead.notes && <p className="text-xs text-muted-foreground line-clamp-1 mt-1">{lead.notes}</p>}
+                          </div>
                         </div>
-                        <Link
-                          href={`/dashboard/clients/${customer.id}`}
-                          className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-emerald-200 hover:border-emerald-400"
-                        >
-                          이력
-                          <ChevronRight className="h-3 w-3" />
+                        <Link href={`/dashboard/pipeline/${lead.id}`} className="text-xs text-primary hover:underline shrink-0 whitespace-nowrap">
+                          다시 영업하기 →
                         </Link>
                       </div>
                     </div>
-                  )
-                })}
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </section>
       )}
-
     </div>
   )
 }

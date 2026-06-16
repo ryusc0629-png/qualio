@@ -3,6 +3,8 @@ import { redirect, notFound } from 'next/navigation'
 import { LeadDetail } from './lead-detail'
 import { getLiveStatusForPhone } from '@/lib/utils/lead-live-status'
 
+// RPC 대신 직접 쿼리 사용 — RPC 가용성에 무관하게 안정적으로 데이터 조회
+
 export default async function LeadDetailPage({
   params,
 }: {
@@ -23,8 +25,12 @@ export default async function LeadDetailPage({
 
   if (!profile?.business_id) redirect('/onboarding')
 
-  const [leadRpcResult, activitiesResult, quoteResult, convertedResult, publicQuotesResult, bookingsResult] = await Promise.all([
-    db.rpc('get_lead_detail', { p_id: leadId, p_business_id: profile.business_id }),
+  const [leadResult, activitiesResult, quoteResult, convertedResult, publicQuotesResult, bookingsResult] = await Promise.all([
+    db.from('leads')
+      .select('id, company_name, contact_name, contact_title, email, phone, address, status, customer_type, monthly_budget, next_follow_up_date, notes, created_at')
+      .eq('id', leadId)
+      .eq('business_id', profile.business_id)
+      .maybeSingle(),
     db
       .from('lead_activities')
       .select('id, type, content, activity_at, created_at')
@@ -56,7 +62,7 @@ export default async function LeadDetailPage({
       .is('deleted_at', null),
   ])
 
-  const leadData = Array.isArray(leadRpcResult.data) ? leadRpcResult.data[0] : null
+  const leadData = leadResult.data
   if (!leadData) notFound()
 
   const alreadyConverted = Boolean(convertedResult.data)
