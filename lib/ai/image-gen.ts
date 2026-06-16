@@ -19,19 +19,20 @@ interface FalResult {
 }
 
 // 청소 업종 키워드 → 영문 장면 묘사 매핑 (Claude 없이도 맥락 맞춤 가능)
+// 신뢰감을 위해 '작업하는 손/뒷모습'을 넣되, 얼굴은 노출하지 않는다(진정성·왜곡 리스크 회피).
 const SCENE_MAP: { kw: string[]; scene: string }[] = [
-  { kw: ['에어컨', '냉방', '실외기'], scene: 'close-up of a spotless modern wall-mounted air conditioner being professionally cleaned indoors, sparkling clean cooling fins, water droplets' },
-  { kw: ['이사', '입주', '이주', '새집'], scene: 'a bright empty freshly cleaned modern Korean apartment interior before move-in, warm sunlight through large windows, spotless glossy floor' },
-  { kw: ['줄눈', '타일', '욕실', '화장실', '곰팡이'], scene: 'a sparkling clean modern bathroom with bright white tile grout, immaculate tiles, fresh and hygienic, soft daylight' },
-  { kw: ['사무실', '오피스', '상가', '매장', '대규모'], scene: 'a clean modern office interior with polished reflective floor, tidy organized workspace, bright professional lighting' },
-  { kw: ['마루', '바닥', '왁스', '원목'], scene: 'a glossy spotless hardwood floor in a bright modern living room, reflective surface, warm sunlight' },
-  { kw: ['방충망', '창문', '유리', '샷시'], scene: 'a crystal clear clean window with spotless glass in a bright modern home, sunlight streaming through' },
-  { kw: ['카펫', '소파', '매트리스', '침대'], scene: 'a freshly cleaned cozy sofa and carpet in a tidy modern living room, soft natural light' },
-  { kw: ['주방', '싱크', '후드', '레인지'], scene: 'a sparkling clean modern kitchen with spotless countertops and shiny sink, bright daylight' },
+  { kw: ['에어컨', '냉방', '실외기'], scene: 'gloved hands of a professional cleaner wiping a spotless modern wall-mounted air conditioner indoors, close-up on hands and equipment, sparkling clean cooling fins, water droplets' },
+  { kw: ['이사', '입주', '이주', '새집'], scene: 'a professional cleaner seen from behind mopping the glossy floor of a bright freshly cleaned empty Korean apartment before move-in, full back view, warm sunlight through large windows' },
+  { kw: ['줄눈', '타일', '욕실', '화장실', '곰팡이'], scene: 'gloved hands scrubbing bright white tile grout in a sparkling clean modern bathroom, close-up on hands and brush, immaculate tiles, fresh and hygienic' },
+  { kw: ['사무실', '오피스', '상가', '매장', '대규모'], scene: 'a professional cleaner seen from behind cleaning the polished reflective floor of a bright modern office, full back view, tidy organized workspace' },
+  { kw: ['마루', '바닥', '왁스', '원목'], scene: 'gloved hands polishing a glossy spotless hardwood floor in a bright modern living room, close-up on hands and cloth, reflective surface, warm sunlight' },
+  { kw: ['방충망', '창문', '유리', '샷시'], scene: 'gloved hands wiping a crystal clear spotless window with a squeegee in a bright modern home, close-up on hands, sunlight streaming through' },
+  { kw: ['카펫', '소파', '매트리스', '침대'], scene: 'a professional cleaner seen from behind vacuuming a cozy sofa and carpet in a tidy modern living room, full back view, soft natural light' },
+  { kw: ['주방', '싱크', '후드', '레인지'], scene: 'gloved hands wiping a spotless modern kitchen countertop with a cloth, close-up on hands, shiny sink, bright daylight' },
 ]
 
 const STYLE_SUFFIX =
-  'photorealistic, professional commercial photography, natural soft daylight, ultra detailed, high resolution, clean and bright atmosphere, no text, no letters, no logo, no watermark'
+  'photorealistic, candid professional commercial photography, natural soft daylight, ultra detailed, high resolution, clean and bright atmosphere, no visible faces, no close-up of faces, no text, no letters, no logo, no watermark'
 
 // 글 맥락(제목 또는 Claude 힌트)을 받아 강한 영문 이미지 프롬프트로 변환
 export function buildImagePrompt(seed: string): string {
