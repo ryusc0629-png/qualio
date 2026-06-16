@@ -17,7 +17,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { addDays, format, getDaysInMonth } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2, Link2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
 import { assignBookingAction, addWorkerAction, deleteWorkerAction } from '@/lib/actions/workers'
@@ -273,6 +273,31 @@ function AddWorkerDialog() {
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ── 현장 앱 링크 복사 버튼 ────────────────────────────────
+
+function CopyFieldLinkButton({ workerId, workerName }: { workerId: string; workerName: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    const url = `${window.location.origin}/field/${workerId}`
+    await navigator.clipboard.writeText(url)
+    setCopied(true)
+    toast.success(`${workerName}님 링크를 복사했어요`)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title="현장 앱 링크 복사"
+      className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+    >
+      <Link2 className={`h-3 w-3 ${copied ? 'text-emerald-600' : ''}`} />
+    </button>
   )
 }
 
@@ -539,12 +564,12 @@ export function ScheduleBoard({
                   }}
                 >
                   {/* 작업자 레이블 */}
-                  <div className="flex items-center gap-2 px-2 py-2 min-h-[72px]">
+                  <div className="flex items-center gap-1.5 px-2 py-2 min-h-[72px]">
                     <div
                       className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: row.color }}
                     />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold truncate">{row.label}</p>
                       {row.type && (
                         <p className="text-[10px] text-muted-foreground">
@@ -558,7 +583,10 @@ export function ScheduleBoard({
                       )}
                     </div>
                     {row.id && (
-                      <DeleteWorkerButton workerId={row.id} workerName={row.label} />
+                      <div className="flex flex-col gap-0.5 shrink-0">
+                        <CopyFieldLinkButton workerId={row.id} workerName={row.label} />
+                        <DeleteWorkerButton workerId={row.id} workerName={row.label} />
+                      </div>
                     )}
                   </div>
 
