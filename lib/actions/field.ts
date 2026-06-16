@@ -136,7 +136,56 @@ export const fieldSaveMemoAction = action
     return { success: true }
   })
 
-// 수금 완료 (in_progress → completed) + 영수증·리뷰 자동 발송
+// 결제 요청 (고객에게 영수증 알림톡 발송)
+export const fieldRequestPaymentAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    if (!booking.customer_phone) throw new Error('[APP] 고객 연락처가 없어 결제 요청을 보낼 수 없어요')
+
+    // 업체 정보
+    const { data: business } = await db
+      .from('businesses')
+      .select('name, phone')
+      .eq('id', worker.business_id)
+      .maybeSingle()
+
+    if (!business) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    // 서비스명
+    let cleaningType = '청소 서비스'
+    if (booking.quote_id) {
+      const { data: quote } = await db
+        .from('quotes')
+        .select('cleaning_type')
+        .eq('id', booking.quote_id)
+        .maybeSingle()
+      if (quote?.cleaning_type) cleaningType = quote.cleaning_type
+    }
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+    const receiptUrl = `${appUrl}/q/${worker.business_id}/receipt/${booking.id}`
+
+    await sendReceiptAlimtalk({
+      customerPhone: booking.customer_phone,
+      customerName:  booking.customer_name,
+      businessName:  business.name,
+      businessPhone: business.phone ?? null,
+      cleaningType,
+      completedAt:   booking.scheduled_at,
+      paidAmount:    booking.final_price,
+      receiptUrl,
+    })
+
+    return { success: true }
+  })
+
+// 수금 완료 (in_progress → completed) + 리뷰 자동 발송
 export const fieldCompletePaymentAction = action
   .schema(z.object({
     workerId:  z.string().uuid(),
@@ -195,27 +244,6 @@ export const fieldCompletePaymentAction = action
           address: booking.service_address ?? null,
           type: 'one_time',
         })
-      }
-    }
-
-    // 영수증 발송 (실패해도 수금 완료는 유지)
-    if (booking.customer_phone) {
-      try {
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
-        const receiptUrl = `${appUrl}/q/${worker.business_id}/receipt/${booking.id}`
-
-        await sendReceiptAlimtalk({
-          customerPhone: booking.customer_phone,
-          customerName:  booking.customer_name,
-          businessName:  business.name,
-          businessPhone: business.phone ?? null,
-          cleaningType,
-          completedAt:   booking.scheduled_at,
-          paidAmount:    booking.final_price,
-          receiptUrl,
-        })
-      } catch (err) {
-        console.error('[Field] 영수증 발송 실패:', err)
       }
     }
 

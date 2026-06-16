@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import {
   fieldStartWorkAction,
   fieldSaveMemoAction,
+  fieldRequestPaymentAction,
   fieldCompletePaymentAction,
 } from '@/lib/actions/field'
 import {
@@ -22,6 +23,7 @@ import {
   FileText,
   CheckCircle2,
   CircleDollarSign,
+  CreditCard,
   Play,
   ChevronDown,
   ChevronUp,
@@ -53,6 +55,7 @@ export function FieldBookingClient({ workerId, workerName, booking, reportId, re
   const [nextVisitNote, setNextVisitNote] = useState('')
   const [memoOpen, setMemoOpen] = useState(false)
   const [memoSaved, setMemoSaved] = useState(false)
+  const [paymentRequested, setPaymentRequested] = useState(false)
 
   // 작업 시작
   const { execute: startWork, isPending: isStarting } = useAction(fieldStartWorkAction, {
@@ -72,11 +75,20 @@ export function FieldBookingClient({ workerId, workerName, booking, reportId, re
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
+  // 결제 요청
+  const { execute: requestPayment, isPending: isRequesting } = useAction(fieldRequestPaymentAction, {
+    onSuccess: () => {
+      setPaymentRequested(true)
+      toast.success('고객에게 결제 요청이 발송됐어요!')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
   // 수금 완료
   const { execute: completePayment, isPending: isCompleting } = useAction(fieldCompletePaymentAction, {
     onSuccess: () => {
       setCurrentStatus('completed')
-      toast.success('수금 완료! 영수증과 리뷰 요청이 자동 발송됐어요')
+      toast.success('수금 완료! 리뷰 요청이 자동 발송됐어요')
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -303,19 +315,53 @@ export function FieldBookingClient({ workerId, workerName, booking, reportId, re
           )}
 
           {currentStatus === 'in_progress' && (
-            <Button
-              size="lg"
-              className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700"
-              disabled={isCompleting}
-              onClick={() => {
-                if (confirm(`${booking.finalPrice.toLocaleString()}원 수금 완료할까요?\n\n확인 시 고객에게 영수증과 리뷰 요청이 자동 발송됩니다.`)) {
-                  completePayment({ workerId, bookingId: booking.id })
-                }
-              }}
-            >
-              <CircleDollarSign className="h-5 w-5" />
-              {isCompleting ? '처리 중...' : `수금 완료 · ${booking.finalPrice.toLocaleString()}원`}
-            </Button>
+            <div className="space-y-2">
+              {!paymentRequested ? (
+                <>
+                  <Button
+                    size="lg"
+                    className="w-full h-14 text-base gap-2"
+                    disabled={isRequesting || !booking.customerPhone}
+                    onClick={() => requestPayment({ workerId, bookingId: booking.id })}
+                  >
+                    <CreditCard className="h-5 w-5" />
+                    {isRequesting ? '발송 중...' : `결제 요청하기 · ${booking.finalPrice.toLocaleString()}원`}
+                  </Button>
+                  {!booking.customerPhone && (
+                    <p className="text-xs text-muted-foreground text-center">고객 연락처가 없어 결제 요청을 보낼 수 없어요</p>
+                  )}
+                  <Button
+                    variant="ghost"
+                    className="w-full h-10 text-sm text-muted-foreground"
+                    disabled={isCompleting}
+                    onClick={() => {
+                      if (confirm(`${booking.finalPrice.toLocaleString()}원 수금 완료할까요?\n\n현금 수금 등 이미 결제가 완료된 경우 눌러주세요.`)) {
+                        completePayment({ workerId, bookingId: booking.id })
+                      }
+                    }}
+                  >
+                    {isCompleting ? '처리 중...' : '이미 수금했어요'}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-center text-emerald-600 font-medium">결제 요청이 고객에게 발송됐어요</p>
+                  <Button
+                    size="lg"
+                    className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700"
+                    disabled={isCompleting}
+                    onClick={() => {
+                      if (confirm(`${booking.finalPrice.toLocaleString()}원 수금 완료할까요?`)) {
+                        completePayment({ workerId, bookingId: booking.id })
+                      }
+                    }}
+                  >
+                    <CircleDollarSign className="h-5 w-5" />
+                    {isCompleting ? '처리 중...' : `수금 완료 · ${booking.finalPrice.toLocaleString()}원`}
+                  </Button>
+                </>
+              )}
+            </div>
           )}
         </div>
       )}
