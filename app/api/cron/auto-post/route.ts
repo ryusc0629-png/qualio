@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
 import { generatePostImage } from '@/lib/ai/image-gen'
+import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
@@ -98,6 +99,16 @@ async function publishOnePost(
   }).select('id').single()
 
   if (error) throw new Error(error.message)
+
+  // 네이버·당근·인스타 채널 텍스트 자동 생성 (실패해도 GEO 발행은 유지)
+  if (saved?.id) {
+    await generateAndSaveChannelContent(db, saved.id, {
+      businessName: business.name,
+      address: business.address,
+      geoTitle: postContent.title,
+      geoContent: fullContent,
+    })
+  }
 
   // 다음 반복에서 중복 방지
   publishedTitles.push(postContent.title)

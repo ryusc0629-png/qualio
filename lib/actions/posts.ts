@@ -8,7 +8,7 @@ import { generatePostImage } from '@/lib/ai/image-gen'
 import { revalidatePath } from 'next/cache'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
-import { generateSocialContent } from '@/lib/ai/social-content'
+import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 
 // 공통: 현재 유저의 business_id 조회
 async function getBusinessId() {
@@ -25,30 +25,6 @@ async function getBusinessId() {
 
   if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
   return { db, businessId: profile.business_id }
-}
-
-// 당근마켓·인스타그램 버전 자동 생성 후 DB 저장 (실패해도 무시)
-async function tryGenerateAndSaveSocialContent(
-  db: ReturnType<typeof createServiceClient>,
-  postId: string,
-  businessName: string,
-  address: string | null,
-  title: string,
-  content: string,
-) {
-  try {
-    const social = await generateSocialContent({ businessName, address, geoTitle: title, geoContent: content })
-    await db
-      .from('biz_posts')
-      .update({
-        daangn_content:      social.daangn,
-        instagram_content:   social.instagram,
-        instagram_hashtags:  social.instagramHashtags,
-      })
-      .eq('id', postId)
-  } catch {
-    // 소셜 변환 실패는 무시 — GEO 포스팅은 정상 발행됨
-  }
 }
 
 // AI 포스트 자동 생성 액션
@@ -139,8 +115,13 @@ export const generatePostAction = action
 
     if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
 
-    // 소셜 버전 자동 생성 (실패해도 무시)
-    await tryGenerateAndSaveSocialContent(db, post.id, business.name, business.address, postContent.title, fullContent)
+    // 네이버·당근·인스타 채널 텍스트 자동 생성 (실패해도 GEO 발행은 유지)
+    await generateAndSaveChannelContent(db, post.id, {
+      businessName: business.name,
+      address: business.address,
+      geoTitle: postContent.title,
+      geoContent: fullContent,
+    })
 
     revalidatePath('/dashboard/marketing')
     return { success: true, postId: post.id, slug: post.slug, postContent }
@@ -393,9 +374,14 @@ export const publishTodayAction = action
 
       if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
 
-      // 소셜 버전 자동 생성 (실패해도 무시)
+      // 네이버·당근·인스타 채널 텍스트 자동 생성 (실패해도 GEO 발행은 유지)
       if (savedPost?.id) {
-        await tryGenerateAndSaveSocialContent(db, savedPost.id, business.name, business.address, postContent.title, fullContent)
+        await generateAndSaveChannelContent(db, savedPost.id, {
+          businessName: business.name,
+          address: business.address,
+          geoTitle: postContent.title,
+          geoContent: fullContent,
+        })
       }
 
       publishedTitles.push(postContent.title)
