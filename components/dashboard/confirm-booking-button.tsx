@@ -175,11 +175,11 @@ export function ConfirmBookingButton({
             <div className="relative">
               <Input
                 id="finalPrice"
-                type="number"
+                type="text"
                 inputMode="numeric"
-                placeholder="450000"
-                value={finalPrice}
-                onChange={(e) => setFinalPrice(e.target.value)}
+                placeholder="450,000"
+                value={finalPrice ? Number(finalPrice).toLocaleString('ko-KR') : ''}
+                onChange={(e) => setFinalPrice(e.target.value.replace(/[^0-9]/g, ''))}
                 required
                 className="pr-6"
               />
