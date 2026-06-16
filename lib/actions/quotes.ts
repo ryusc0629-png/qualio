@@ -397,6 +397,26 @@ export const createBookingAction = publicAction
       .update({ status: 'booked' })
       .eq('id', quote.id)
 
+    // 예약 확정 시 고객 DB 자동 등록 (전화번호 기준, 이미 있으면 스킵)
+    if (parsedInput.customer_phone) {
+      const { data: existing } = await db
+        .from('customers')
+        .select('id')
+        .eq('business_id', quote.business_id)
+        .eq('phone', parsedInput.customer_phone)
+        .maybeSingle()
+
+      if (!existing) {
+        await db.from('customers').insert({
+          business_id: quote.business_id,
+          name: parsedInput.customer_name,
+          phone: parsedInput.customer_phone,
+          address: parsedInput.service_address ?? null,
+          type: 'one_time',
+        })
+      }
+    }
+
     // 예약 ID 조회 (reports 저장 및 알림톡 발송용)
     const { data: newBooking } = await db
       .from('bookings')
@@ -568,6 +588,27 @@ export const confirmBookingFromQuoteAction = authAction
       .update({ status: 'booked' })
       .eq('id', quote.id)
 
+    // 예약 확정 시 고객 DB 자동 등록 (전화번호 기준, 이미 있으면 스킵)
+    if (quote.customer_phone) {
+      const { data: existing } = await db
+        .from('customers')
+        .select('id')
+        .eq('business_id', quote.business_id)
+        .eq('phone', quote.customer_phone)
+        .maybeSingle()
+
+      if (!existing) {
+        await db.from('customers').insert({
+          business_id: quote.business_id,
+          name: quote.customer_name ?? '고객',
+          phone: quote.customer_phone,
+          address: parsedInput.service_address ?? null,
+          type: 'one_time',
+        })
+      }
+    }
+
     revalidatePath('/dashboard/work')
+    revalidatePath('/dashboard/clients')
     return { success: true }
   })

@@ -67,7 +67,26 @@ export const addBookingAction = action
 
     if (error) throw new Error('[APP] 예약 추가에 실패했습니다')
 
+    // 수동 예약 추가 시 고객 DB 자동 등록 (전화번호 기준, 이미 있으면 스킵)
+    const { data: existing } = await db
+      .from('customers')
+      .select('id')
+      .eq('business_id', profile.business_id)
+      .eq('phone', parsedInput.customer_phone)
+      .maybeSingle()
+
+    if (!existing) {
+      await db.from('customers').insert({
+        business_id: profile.business_id,
+        name: parsedInput.customer_name,
+        phone: parsedInput.customer_phone,
+        address: parsedInput.service_address ?? null,
+        type: 'one_time',
+      })
+    }
+
     revalidatePath('/dashboard/bookings')
+    revalidatePath('/dashboard/clients')
     return { success: true }
   })
 
