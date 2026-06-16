@@ -16,6 +16,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -119,6 +126,8 @@ export function BookingDetailSheet({
   const [timeValue, setTimeValue]     = useState('')
   const [currentReportId, setCurrentReportId]     = useState<string | null>(null)
   const [currentReviewSent, setCurrentReviewSent] = useState(false)
+  const [reportDialogOpen, setReportDialogOpen]   = useState(false)
+  const [reviewDialogOpen, setReviewDialogOpen]   = useState(false)
 
   // booking이 바뀔 때마다 보고서 상태 초기화
   useEffect(() => {
@@ -171,6 +180,7 @@ export function BookingDetailSheet({
   const { execute: sendReport, isPending: reportPending } = useAction(saveReportAction, {
     onSuccess: ({ data }) => {
       if (data?.reportId) setCurrentReportId(data.reportId)
+      setReportDialogOpen(false)
       toast.success('작업완료 알림톡을 발송했어요!')
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
@@ -180,6 +190,7 @@ export function BookingDetailSheet({
   const { execute: sendReview, isPending: reviewPending } = useAction(sendReviewRequestAction, {
     onSuccess: () => {
       setCurrentReviewSent(true)
+      setReviewDialogOpen(false)
       toast.success('리뷰 요청 알림톡을 발송했어요!')
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
@@ -233,6 +244,7 @@ export function BookingDetailSheet({
     : null
 
   return (
+    <>
     <Sheet open={!!booking} onOpenChange={(isOpen: boolean) => { if (!isOpen) { setEditingTime(false); onClose() } }}>
       <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0" showCloseButton={false}>
 
@@ -477,24 +489,18 @@ export function BookingDetailSheet({
             )}
             {booking?.status === 'completed' && (
               <>
-                {/* 작업완료 알림톡 미발송 → 발송 버튼 */}
+                {/* 작업완료 알림톡 미발송 → 확인창 열기 */}
                 {!currentReportId && (
                   <Button
                     className="w-full h-12 font-semibold gap-2 bg-blue-600 hover:bg-blue-700"
-                    disabled={reportPending}
-                    onClick={() => sendReport({
-                      bookingId: booking.id,
-                      beforePhotoUrls: [],
-                      afterPhotoUrls: [],
-                      sendAlimtalk: true,
-                    })}
+                    onClick={() => setReportDialogOpen(true)}
                   >
                     <Send className="h-4 w-4" />
-                    {reportPending ? '발송 중...' : '작업완료 알림톡 발송'}
+                    작업완료 알림톡 발송
                   </Button>
                 )}
 
-                {/* 알림톡 발송 완료 → 리뷰 요청 */}
+                {/* 알림톡 발송 완료 → 리뷰 요청 확인창 열기 */}
                 {currentReportId && !currentReviewSent && (
                   <>
                     <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium px-1">
@@ -504,11 +510,10 @@ export function BookingDetailSheet({
                     <Button
                       variant="outline"
                       className="w-full h-12 font-semibold gap-2"
-                      disabled={reviewPending}
-                      onClick={() => sendReview({ reportId: currentReportId })}
+                      onClick={() => setReviewDialogOpen(true)}
                     >
                       <Star className="h-4 w-4" />
-                      {reviewPending ? '발송 중...' : '리뷰 요청 발송'}
+                      리뷰 요청 발송
                     </Button>
                   </>
                 )}
@@ -551,5 +556,114 @@ export function BookingDetailSheet({
 
       </SheetContent>
     </Sheet>
+
+    {/* 작업완료 알림톡 발송 확인 Dialog */}
+
+    <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>작업완료 알림톡 발송</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-sm text-muted-foreground">
+            아래 고객에게 작업완료 알림톡을 발송할까요?
+          </p>
+          <div className="rounded-xl bg-muted/50 p-4 space-y-2.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground w-16 shrink-0">받는 분</span>
+              <span className="text-sm font-semibold">{booking?.customer_name}</span>
+            </div>
+            {booking?.customer_phone && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-16 shrink-0">연락처</span>
+                <span className="text-sm flex items-center gap-1">
+                  <Phone className="h-3 w-3 text-muted-foreground" />
+                  {booking.customer_phone}
+                </span>
+              </div>
+            )}
+            <div className="flex items-start gap-2">
+              <span className="text-xs text-muted-foreground w-16 shrink-0 pt-0.5">내용</span>
+              <span className="text-sm text-muted-foreground leading-relaxed">
+                작업이 완료되었다는 안내와 함께 보고서 확인 링크가 전달돼요
+              </span>
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" className="flex-1" onClick={() => setReportDialogOpen(false)}>
+            취소
+          </Button>
+          <Button
+            className="flex-1 gap-1.5"
+            disabled={reportPending}
+            onClick={() => {
+              if (!booking) return
+              sendReport({
+                bookingId:       booking.id,
+                beforePhotoUrls: [],
+                afterPhotoUrls:  [],
+                sendAlimtalk:    true,
+              })
+            }}
+          >
+            <Send className="h-3.5 w-3.5" />
+            {reportPending ? '발송 중...' : '발송하기'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* 리뷰 요청 알림톡 발송 확인 Dialog */}
+    <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>리뷰 요청 알림톡 발송</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-sm text-muted-foreground">
+            아래 고객에게 리뷰 요청 알림톡을 발송할까요?
+          </p>
+          <div className="rounded-xl bg-muted/50 p-4 space-y-2.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground w-16 shrink-0">받는 분</span>
+              <span className="text-sm font-semibold">{booking?.customer_name}</span>
+            </div>
+            {booking?.customer_phone && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-16 shrink-0">연락처</span>
+                <span className="text-sm flex items-center gap-1">
+                  <Phone className="h-3 w-3 text-muted-foreground" />
+                  {booking.customer_phone}
+                </span>
+              </div>
+            )}
+            <div className="flex items-start gap-2">
+              <span className="text-xs text-muted-foreground w-16 shrink-0 pt-0.5">내용</span>
+              <span className="text-sm text-muted-foreground leading-relaxed">
+                네이버 플레이스 리뷰 작성 링크가 전달돼요
+              </span>
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" className="flex-1" onClick={() => setReviewDialogOpen(false)}>
+            취소
+          </Button>
+          <Button
+            className="flex-1 gap-1.5"
+            disabled={reviewPending}
+            onClick={() => {
+              if (!currentReportId) return
+              sendReview({ reportId: currentReportId })
+            }}
+          >
+            <Star className="h-3.5 w-3.5" />
+            {reviewPending ? '발송 중...' : '리뷰 요청 발송'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

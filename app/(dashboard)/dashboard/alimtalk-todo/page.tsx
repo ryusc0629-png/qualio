@@ -26,7 +26,7 @@ export default async function AlimtalkTodoPage() {
   ] = await Promise.all([
     // 완료된 예약 전체
     db.from('bookings')
-      .select('id, customer_name, scheduled_at')
+      .select('id, customer_name, customer_phone, scheduled_at')
       .eq('business_id', businessId)
       .eq('status', 'completed')
       .is('deleted_at', null)
@@ -51,9 +51,10 @@ export default async function AlimtalkTodoPage() {
   const unreportedBookings = (completedBookings ?? [])
     .filter((b) => !sentSet.has(b.id))
     .map((b) => ({
-      bookingId:     b.id,
-      customer_name: b.customer_name,
-      scheduled_at:  b.scheduled_at,
+      bookingId:      b.id,
+      customer_name:  b.customer_name,
+      customer_phone: b.customer_phone,
+      scheduled_at:   b.scheduled_at,
     }))
 
   // 리뷰 미요청 목록 — 예약에서 고객명 조회
@@ -61,24 +62,26 @@ export default async function AlimtalkTodoPage() {
   const pendingReviews = (pendingReviewRaw ?? []) as PendingReview[]
   const reviewBookingIds = pendingReviews.map((r) => r.booking_id)
 
-  const bookingNameMap = new Map<string, { customer_name: string; scheduled_at: string }>()
+  const bookingNameMap = new Map<string, { customer_name: string; customer_phone: string | null; scheduled_at: string }>()
   if (reviewBookingIds.length > 0) {
     const { data: reviewBookings } = await db
       .from('bookings')
-      .select('id, customer_name, scheduled_at')
+      .select('id, customer_name, customer_phone, scheduled_at')
       .in('id', reviewBookingIds)
     for (const b of reviewBookings ?? []) {
       bookingNameMap.set(b.id, {
-        customer_name: b.customer_name,
-        scheduled_at:  b.scheduled_at,
+        customer_name:  b.customer_name,
+        customer_phone: b.customer_phone,
+        scheduled_at:   b.scheduled_at,
       })
     }
   }
 
   const unreviewedItems = pendingReviews.map((r) => ({
-    reportId:      r.id,
-    customer_name: bookingNameMap.get(r.booking_id)?.customer_name ?? '고객',
-    scheduled_at:  bookingNameMap.get(r.booking_id)?.scheduled_at ?? '',
+    reportId:       r.id,
+    customer_name:  bookingNameMap.get(r.booking_id)?.customer_name ?? '고객',
+    customer_phone: bookingNameMap.get(r.booking_id)?.customer_phone ?? null,
+    scheduled_at:   bookingNameMap.get(r.booking_id)?.scheduled_at ?? '',
   }))
 
   return (
