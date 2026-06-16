@@ -21,50 +21,65 @@ interface FalResult {
   images: FalImage[]
 }
 
-// 청소 업종 키워드 → 영문 장면 묘사 매핑 (Claude 없이도 맥락 맞춤 가능)
-// 신뢰감을 위해 '작업하는 손/뒷모습'을 넣되, 얼굴은 노출하지 않는다(진정성·왜곡 리스크 회피).
-const SCENE_MAP: { kw: string[]; scene: string }[] = [
-  { kw: ['에어컨', '냉방', '실외기'], scene: 'gloved hands of a professional cleaner wiping a spotless modern wall-mounted air conditioner indoors, close-up on hands and equipment, sparkling clean cooling fins, water droplets' },
-  { kw: ['이사', '입주', '이주', '새집'], scene: 'a professional cleaner seen from behind mopping the glossy floor of a bright freshly cleaned empty Korean apartment before move-in, full back view, warm sunlight through large windows' },
-  { kw: ['줄눈', '타일', '욕실', '화장실', '곰팡이'], scene: 'gloved hands scrubbing bright white tile grout in a sparkling clean modern bathroom, close-up on hands and brush, immaculate tiles, fresh and hygienic' },
-  { kw: ['사무실', '오피스', '상가', '매장', '대규모'], scene: 'a professional cleaner seen from behind cleaning the polished reflective floor of a bright modern office, full back view, tidy organized workspace' },
-  { kw: ['마루', '바닥', '왁스', '원목'], scene: 'gloved hands polishing a glossy spotless hardwood floor in a bright modern living room, close-up on hands and cloth, reflective surface, warm sunlight' },
-  { kw: ['방충망', '창문', '유리', '샷시'], scene: 'gloved hands wiping a crystal clear spotless window with a squeegee in a bright modern home, close-up on hands, sunlight streaming through' },
-  { kw: ['카펫', '소파', '매트리스', '침대'], scene: 'a professional cleaner seen from behind vacuuming a cozy sofa and carpet in a tidy modern living room, full back view, soft natural light' },
-  { kw: ['주방', '싱크', '후드', '레인지'], scene: 'gloved hands wiping a spotless modern kitchen countertop with a cloth, close-up on hands, shiny sink, bright daylight' },
+// 청소 업종 키워드 → 대상(subject)·공간(space)·규모(scale) 매핑.
+// 한 주제에서 '작업 / 결과 / 디테일' 3종의 서로 다른 장면을 만들기 위한 재료.
+// scale=object → 작업 컷은 장갑 낀 손 클로즈업 / scale=room → 뒷모습 작업자.
+type SubjectInfo = { subject: string; space: string; scale: 'object' | 'room' }
+
+const SUBJECT_MAP: { kw: string[]; info: SubjectInfo }[] = [
+  { kw: ['에어컨', '냉방', '실외기'], info: { subject: 'modern wall-mounted air conditioner', space: 'bright clean living room', scale: 'object' } },
+  { kw: ['이사', '입주', '이주', '새집'], info: { subject: 'glossy apartment floor', space: 'bright empty freshly cleaned Korean apartment before move-in', scale: 'room' } },
+  { kw: ['줄눈', '타일', '욕실', '화장실', '곰팡이'], info: { subject: 'white bathroom tile and grout', space: 'sparkling clean modern bathroom', scale: 'object' } },
+  { kw: ['사무실', '오피스', '상가', '매장', '대규모'], info: { subject: 'polished office floor', space: 'bright modern open-plan office', scale: 'room' } },
+  { kw: ['마루', '바닥', '왁스', '원목'], info: { subject: 'glossy hardwood floor', space: 'bright modern living room', scale: 'room' } },
+  { kw: ['방충망', '창문', '유리', '샷시'], info: { subject: 'crystal clear window glass', space: 'bright modern home', scale: 'object' } },
+  { kw: ['카펫', '소파', '매트리스', '침대'], info: { subject: 'fabric sofa and carpet', space: 'cozy tidy modern living room', scale: 'room' } },
+  { kw: ['주방', '싱크', '후드', '레인지'], info: { subject: 'kitchen countertop and sink', space: 'spotless modern kitchen', scale: 'object' } },
 ]
+
+const FALLBACK: SubjectInfo = { subject: 'home surfaces', space: 'spotless tidy modern Korean home interior', scale: 'room' }
 
 const STYLE_SUFFIX =
   'photorealistic, candid professional commercial photography, natural soft daylight, ultra detailed, high resolution, clean and bright atmosphere, no visible faces, no close-up of faces, no text, no letters, no logo, no watermark'
 
-// 글 맥락(제목 또는 Claude 힌트)을 받아 강한 영문 이미지 프롬프트로 변환
-export function buildImagePrompt(seed: string): string {
+// 한 주제에서 서로 다른 3종 이상의 장면(작업/결과/디테일/와이드)을 생성
+function sceneVariants(info: SubjectInfo): string[] {
+  const work = info.scale === 'object'
+    ? `gloved hands of a professional cleaner cleaning a ${info.subject}, close-up on hands and equipment, water droplets`
+    : `a professional cleaner seen from behind cleaning the ${info.subject} of a ${info.space}, full back view`
+  return [
+    work, // 1) 작업 컷
+    `a spotless freshly cleaned ${info.space}, immaculate and bright, no person, interior photography`, // 2) 결과 컷 (사람 없음)
+    `extreme macro close-up of a sparkling clean ${info.subject}, fine detail, water droplets, no person`, // 3) 디테일 매크로
+    `wide angle shot of a bright tidy ${info.space} after professional cleaning, no person`, // 4) 와이드 (추가분)
+  ]
+}
+
+// seed → 서로 다른 장면 프롬프트 배열 (스타일 수식어 포함)
+function buildVariantPrompts(seed: string): string[] {
   const trimmed = (seed ?? '').trim()
   const hasKorean = /[가-힣]/.test(trimmed)
 
-  let subject: string
-  if (!trimmed) {
-    subject = 'a professional house cleaning result, spotless and tidy modern Korean home interior'
-  } else if (hasKorean) {
-    // 한국어 제목 → 키워드 매핑 (매칭 없으면 일반 청소 장면)
-    const matched = SCENE_MAP.find((s) => s.kw.some((k) => trimmed.includes(k)))
-    subject = matched?.scene ?? 'a professional house cleaning result, spotless and tidy modern Korean home interior, before and after clean look'
+  let scenes: string[]
+  if (trimmed && !hasKorean) {
+    // 영문 seed(Claude 힌트 등): 같은 대상에 샷 타입만 다르게
+    scenes = [
+      trimmed,
+      `clean spotless result of ${trimmed}, wide shot, no person`,
+      `extreme macro detail close-up of ${trimmed}, no person`,
+      `bright tidy wide-angle view related to ${trimmed}, no person`,
+    ]
   } else {
-    // 이미 영문 프롬프트면 그대로 사용
-    subject = trimmed
+    const matched = trimmed ? SUBJECT_MAP.find((s) => s.kw.some((k) => trimmed.includes(k))) : undefined
+    scenes = sceneVariants(matched?.info ?? FALLBACK)
   }
-
-  return `${subject}, ${STYLE_SUFFIX}`
+  return scenes.map((s) => `${s}, ${STYLE_SUFFIX}`)
 }
 
-// 여러 장 생성 시 서로 다른 앵글로 다양성 확보 (네이버 본문 삽입용)
-const ANGLE_VARIANTS = [
-  '', // 0: 기본 (작업 손/뒷모습 컷)
-  ', wide establishing shot of the clean bright space, result focused',
-  ', extreme close-up detail of the spotless cleaned surface',
-  ', slightly different angle, soft depth of field',
-  ', overhead top-down view of the tidy clean area',
-]
+// 글 맥락(제목/힌트) → 대표 이미지 1장용 프롬프트 (작업 컷)
+export function buildImagePrompt(seed: string): string {
+  return buildVariantPrompts(seed)[0]
+}
 
 async function runFlux(prompt: string): Promise<string | null> {
   try {
@@ -97,7 +112,7 @@ export async function generatePostImage(seed: string): Promise<string | null> {
   return runFlux(buildImagePrompt(seed))
 }
 
-// seed → 맥락 맞춤 이미지 count장 생성 (앵글을 달리해 다양성 확보)
+// seed → 맥락 맞춤 이미지 count장 생성 (작업/결과/디테일 등 서로 다른 장면)
 // 네이버 상위노출용 다중 이미지. 실패한 장은 제외하고 성공한 URL 배열만 반환.
 export async function generatePostImages(seed: string, count: number): Promise<string[]> {
   const apiKey = process.env.FAL_KEY
@@ -107,9 +122,12 @@ export async function generatePostImages(seed: string, count: number): Promise<s
   }
   fal.config({ credentials: apiKey })
 
-  const base = buildImagePrompt(seed)
-  const n = Math.max(1, Math.min(count, ANGLE_VARIANTS.length))
-  const prompts = Array.from({ length: n }, (_, i) => base + ANGLE_VARIANTS[i])
+  const variants = buildVariantPrompts(seed)
+  const n = Math.max(1, count)
+  // 변형 개수보다 많이 요청하면 순환하되 다른 앵글을 덧붙여 중복 회피
+  const prompts = Array.from({ length: n }, (_, i) =>
+    i < variants.length ? variants[i] : `${variants[i % variants.length]}, alternative angle ${i}`,
+  )
 
   const results = await Promise.all(prompts.map((p) => runFlux(p)))
   return results.filter((u): u is string => Boolean(u))
