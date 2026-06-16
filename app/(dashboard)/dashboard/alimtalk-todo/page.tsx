@@ -23,10 +23,11 @@ export default async function AlimtalkTodoPage() {
     { data: completedBookings },
     { data: sentReportRows },
     { data: pendingReviewRaw },
+    workersResult,
   ] = await Promise.all([
-    // 완료된 예약 전체
+    // 완료된 예약 전체 (worker_id, customer_id 포함)
     db.from('bookings')
-      .select('id, customer_name, customer_phone, scheduled_at, final_price, service_address, quotes!quote_id(cleaning_type)')
+      .select('id, customer_name, customer_phone, scheduled_at, final_price, service_address, customer_id, quotes!quote_id(cleaning_type)')
       .eq('business_id', businessId)
       .eq('status', 'completed')
       .is('deleted_at', null)
@@ -44,15 +45,30 @@ export default async function AlimtalkTodoPage() {
       .eq('business_id', businessId)
       .not('kakao_sent_at', 'is', null)
       .is('review_request_sent_at', null),
+
+    // 업체 소속 직원·도급사
+    db.from('workers' as never)
+      .select('id, name' as never)
+      .eq('business_id' as never, businessId)
+      .eq('is_active' as never, true) as unknown as Promise<{ data: { id: string; name: string }[] | null }>,
   ])
+
+  // worker id → name 맵
+  const workerMap = new Map<string, string>(
+    (workersResult.data ?? []).map((w) => [w.id, w.name])
+  )
 
   // 보고서 미발송 예약 필터링
   const sentSet = new Set((sentReportRows ?? []).map((r) => r.booking_id))
+
   type CompletedBookingRow = {
     id: string; customer_name: string; customer_phone: string | null
     scheduled_at: string; final_price: number; service_address: string | null
+    customer_id: string | null
+    worker_id?: string | null
     quotes: { cleaning_type: string | null } | { cleaning_type: string | null }[] | null
   }
+
   const unreportedBookings = (completedBookings ?? [])
     .filter((b) => !sentSet.has(b.id))
     .map((b) => {
@@ -65,36 +81,43 @@ export default async function AlimtalkTodoPage() {
         scheduled_at:    row.scheduled_at,
         final_price:     row.final_price,
         service_address: row.service_address,
+        customer_id:     row.customer_id,
         cleaning_type:   qt?.cleaning_type ?? null,
+        worker_name:     row.worker_id ? (workerMap.get(row.worker_id) ?? null) : null,
       }
     })
 
-  // 리뷰 미요청 목록 — 예약에서 고객명 조회
+  // 리뷰 미요청 목록 — 예약에서 고객명 + worker_id 조회
   type PendingReview = { id: string; booking_id: string }
   const pendingReviews = (pendingReviewRaw ?? []) as PendingReview[]
   const reviewBookingIds = pendingReviews.map((r) => r.booking_id)
 
-  const bookingNameMap = new Map<string, { customer_name: string; customer_phone: string | null; scheduled_at: string }>()
+  type ReviewBookingRow = {
+    id: string; customer_name: string; customer_phone: string | null
+    scheduled_at: string; customer_id: string | null; worker_id?: string | null
+  }
+  const bookingDetailMap = new Map<string, ReviewBookingRow>()
   if (reviewBookingIds.length > 0) {
     const { data: reviewBookings } = await db
       .from('bookings')
-      .select('id, customer_name, customer_phone, scheduled_at')
+      .select('id, customer_name, customer_phone, scheduled_at, customer_id')
       .in('id', reviewBookingIds)
     for (const b of reviewBookings ?? []) {
-      bookingNameMap.set(b.id, {
-        customer_name:  b.customer_name,
-        customer_phone: b.customer_phone,
-        scheduled_at:   b.scheduled_at,
-      })
+      bookingDetailMap.set(b.id, b as unknown as ReviewBookingRow)
     }
   }
 
-  const unreviewedItems = pendingReviews.map((r) => ({
-    reportId:       r.id,
-    customer_name:  bookingNameMap.get(r.booking_id)?.customer_name ?? '고객',
-    customer_phone: bookingNameMap.get(r.booking_id)?.customer_phone ?? null,
-    scheduled_at:   bookingNameMap.get(r.booking_id)?.scheduled_at ?? '',
-  }))
+  const unreviewedItems = pendingReviews.map((r) => {
+    const b = bookingDetailMap.get(r.booking_id)
+    return {
+      reportId:       r.id,
+      customer_name:  b?.customer_name ?? '고객',
+      customer_phone: b?.customer_phone ?? null,
+      scheduled_at:   b?.scheduled_at ?? '',
+      customer_id:    b?.customer_id ?? null,
+      worker_name:    b?.worker_id ? (workerMap.get(b.worker_id) ?? null) : null,
+    }
+  })
 
   return (
     <div className="max-w-2xl mx-auto space-y-5">

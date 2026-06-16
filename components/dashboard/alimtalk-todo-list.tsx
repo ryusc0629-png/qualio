@@ -5,7 +5,7 @@ import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { Send, Star, CheckCircle2, ClipboardList, Phone, FileText } from 'lucide-react'
+import { Send, Star, CheckCircle2, ClipboardList, Phone, FileText, User, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import {
@@ -25,6 +25,8 @@ interface UnreportedBooking {
   final_price?: number
   service_address?: string | null
   cleaning_type?: string | null
+  customer_id?: string | null
+  worker_name?: string | null
 }
 
 interface UnreviewedItem {
@@ -32,6 +34,8 @@ interface UnreviewedItem {
   customer_name: string
   customer_phone: string | null
   scheduled_at: string
+  customer_id?: string | null
+  worker_name?: string | null
 }
 
 interface Props {
@@ -47,34 +51,62 @@ function UnreportedRow({ booking }: { booking: UnreportedBooking }) {
     : '—'
 
   return (
-    <div className="flex items-center gap-3 py-3.5 border-b border-border last:border-0">
-      <div className="flex-1 min-w-0 space-y-0.5">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="font-semibold text-sm">{booking.customer_name}</p>
-          {booking.cleaning_type && (
-            <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-md font-medium">
-              {booking.cleaning_type}
-            </span>
+    <div className="py-3.5 border-b border-border last:border-0">
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0 space-y-1">
+          {/* 고객명 + 서비스 뱃지 */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {booking.customer_id ? (
+              <Link
+                href={`/dashboard/clients/${booking.customer_id}`}
+                className="font-semibold text-sm hover:text-primary hover:underline flex items-center gap-1"
+              >
+                {booking.customer_name}
+                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+              </Link>
+            ) : (
+              <p className="font-semibold text-sm">{booking.customer_name}</p>
+            )}
+            {booking.cleaning_type && (
+              <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-md font-medium">
+                {booking.cleaning_type}
+              </span>
+            )}
+          </div>
+
+          {/* 날짜·시간 */}
+          <p className="text-xs text-muted-foreground">{dateLabel}</p>
+
+          {/* 주소 */}
+          {booking.service_address && (
+            <p className="text-xs text-muted-foreground truncate max-w-[260px]">
+              📍 {booking.service_address}
+            </p>
           )}
+
+          {/* 담당자 + 금액 */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {booking.worker_name && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <User className="h-3 w-3" />
+                {booking.worker_name}
+              </span>
+            )}
+            {booking.final_price != null && booking.final_price > 0 && (
+              <span className="text-xs text-muted-foreground font-medium">
+                {new Intl.NumberFormat('ko-KR').format(booking.final_price)}원
+              </span>
+            )}
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground">{dateLabel}</p>
-        {booking.service_address && (
-          <p className="text-xs text-muted-foreground truncate max-w-[220px]">
-            📍 {booking.service_address}
-          </p>
-        )}
-        {booking.final_price != null && booking.final_price > 0 && (
-          <p className="text-xs text-muted-foreground">
-            {new Intl.NumberFormat('ko-KR').format(booking.final_price)}원
-          </p>
-        )}
+
+        <Link href={`/dashboard/bookings/${booking.bookingId}/report`} className="shrink-0 mt-0.5">
+          <Button size="sm" className="h-10 gap-1.5 px-4">
+            <FileText className="h-3.5 w-3.5" />
+            보고서 작성
+          </Button>
+        </Link>
       </div>
-      <Link href={`/dashboard/bookings/${booking.bookingId}/report`}>
-        <Button size="sm" className="h-10 gap-1.5 shrink-0 px-4">
-          <FileText className="h-3.5 w-3.5" />
-          보고서 작성
-        </Button>
-      </Link>
     </div>
   )
 }
@@ -105,20 +137,44 @@ function UnreviewedRow({
 
   return (
     <>
-      <div className="flex items-center gap-3 py-3.5 border-b border-border last:border-0">
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm">{item.customer_name}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{dateLabel}</p>
+      <div className="py-3.5 border-b border-border last:border-0">
+        <div className="flex items-start gap-3">
+          <div className="flex-1 min-w-0 space-y-1">
+            {/* 고객명 */}
+            {item.customer_id ? (
+              <Link
+                href={`/dashboard/clients/${item.customer_id}`}
+                className="font-semibold text-sm hover:text-primary hover:underline inline-flex items-center gap-1"
+              >
+                {item.customer_name}
+                <ChevronRight className="h-3 w-3 text-muted-foreground" />
+              </Link>
+            ) : (
+              <p className="font-semibold text-sm">{item.customer_name}</p>
+            )}
+
+            {/* 날짜 */}
+            <p className="text-xs text-muted-foreground">{dateLabel}</p>
+
+            {/* 담당자 */}
+            {item.worker_name && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <User className="h-3 w-3" />
+                {item.worker_name}
+              </span>
+            )}
+          </div>
+
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-10 gap-1.5 shrink-0 px-4 mt-0.5"
+            onClick={() => setOpen(true)}
+          >
+            <Star className="h-3.5 w-3.5" />
+            리뷰 요청
+          </Button>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-10 gap-1.5 shrink-0 px-4"
-          onClick={() => setOpen(true)}
-        >
-          <Star className="h-3.5 w-3.5" />
-          리뷰 요청
-        </Button>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -149,6 +205,12 @@ function UnreviewedRow({
                 <span className="text-xs text-muted-foreground w-16 shrink-0">작업일</span>
                 <span className="text-sm">{dateLabel}</span>
               </div>
+              {item.worker_name && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground w-16 shrink-0">담당자</span>
+                  <span className="text-sm">{item.worker_name}</span>
+                </div>
+              )}
               <div className="flex items-start gap-2">
                 <span className="text-xs text-muted-foreground w-16 shrink-0 pt-0.5">내용</span>
                 <span className="text-sm text-muted-foreground leading-relaxed">
@@ -202,15 +264,12 @@ export function AlimtalkTodoList({ unreportedBookings, unreviewedItems }: Props)
           <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-border bg-orange-50">
             <ClipboardList className="h-4 w-4 text-orange-600 shrink-0" />
             <p className="text-sm font-semibold text-orange-800">
-              작업 보고서 미발송 — {visibleUnreported.length}명
+              작업 보고서 미발송 — {visibleUnreported.length}건
             </p>
           </div>
           <div className="px-4">
             {visibleUnreported.map((b) => (
-              <UnreportedRow
-                key={b.bookingId}
-                booking={b}
-              />
+              <UnreportedRow key={b.bookingId} booking={b} />
             ))}
           </div>
         </div>
@@ -221,7 +280,7 @@ export function AlimtalkTodoList({ unreportedBookings, unreviewedItems }: Props)
           <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-border bg-yellow-50">
             <Star className="h-4 w-4 text-yellow-600 shrink-0" />
             <p className="text-sm font-semibold text-yellow-800">
-              리뷰 요청 미발송 — {visibleUnreviewed.length}명
+              리뷰 요청 미발송 — {visibleUnreviewed.length}건
             </p>
           </div>
           <div className="px-4">
