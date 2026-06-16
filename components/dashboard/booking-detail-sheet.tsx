@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import {
-  Phone, MapPin, Clock, User, ChevronRight,
+  Phone, MapPin, Clock, User,
   Pencil, Check, X, CalendarDays,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -203,7 +203,7 @@ export function BookingDetailSheet({
 
   return (
     <Sheet open={!!booking} onOpenChange={(isOpen: boolean) => { if (!isOpen) { setEditingTime(false); onClose() } }}>
-      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0" showCloseButton={false}>
+      <SheetContent side="left" className="w-full sm:max-w-md flex flex-col p-0" showCloseButton={false}>
 
         {/* 헤더 */}
         <SheetHeader className="px-5 pt-5 pb-4 border-b border-border">
@@ -364,13 +364,6 @@ export function BookingDetailSheet({
             )}
           </div>
 
-          {/* 상세 페이지 이동 */}
-          <a href="/dashboard/work">
-            <div className="flex items-center justify-between px-4 py-3 rounded-xl border border-border hover:bg-muted transition-colors cursor-pointer mb-4">
-              <span className="text-sm font-medium">예약 상세 보기</span>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </div>
-          </a>
         </div>
 
         {/* 하단 — 상태 변경 + 취소 */}
