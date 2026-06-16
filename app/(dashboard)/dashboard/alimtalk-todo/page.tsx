@@ -64,28 +64,43 @@ export default async function AlimtalkTodoPage() {
   type CompletedBookingRow = {
     id: string; customer_name: string; customer_phone: string | null
     scheduled_at: string; final_price: number; service_address: string | null
-    customer_id: string | null
     worker_id?: string | null
     quotes: { cleaning_type: string | null } | { cleaning_type: string | null }[] | null
   }
 
-  const unreportedBookings = (completedBookings ?? [])
-    .filter((b) => !sentSet.has(b.id))
-    .map((b) => {
-      const row = b as unknown as CompletedBookingRow
-      const qt  = Array.isArray(row.quotes) ? row.quotes[0] : row.quotes
-      return {
-        bookingId:       row.id,
-        customer_name:   row.customer_name,
-        customer_phone:  row.customer_phone,
-        scheduled_at:    row.scheduled_at,
-        final_price:     row.final_price,
-        service_address: row.service_address,
-        customer_id:     row.customer_id,
-        cleaning_type:   qt?.cleaning_type ?? null,
-        worker_name:     row.worker_id ? (workerMap.get(row.worker_id) ?? null) : null,
-      }
-    })
+  const allBookings = (completedBookings ?? []) as unknown as CompletedBookingRow[]
+  const unreportedRaw = allBookings.filter((b) => !sentSet.has(b.id))
+
+  // 전화번호 → 고객 ID 매핑 (고객 상세 링크용)
+  const allPhones = [...new Set(
+    allBookings.map((b) => b.customer_phone).filter(Boolean)
+  )] as string[]
+  const customerMap = new Map<string, string>()
+  if (allPhones.length > 0) {
+    const { data: customers } = await db
+      .from('customers')
+      .select('id, phone')
+      .eq('business_id', businessId)
+      .in('phone', allPhones)
+    for (const c of customers ?? []) {
+      if (c.phone) customerMap.set(c.phone, c.id)
+    }
+  }
+
+  const unreportedBookings = unreportedRaw.map((row) => {
+    const qt = Array.isArray(row.quotes) ? row.quotes[0] : row.quotes
+    return {
+      bookingId:       row.id,
+      customer_name:   row.customer_name,
+      customer_phone:  row.customer_phone,
+      scheduled_at:    row.scheduled_at,
+      final_price:     row.final_price,
+      service_address: row.service_address,
+      customer_id:     row.customer_phone ? (customerMap.get(row.customer_phone) ?? null) : null,
+      cleaning_type:   qt?.cleaning_type ?? null,
+      worker_name:     row.worker_id ? (workerMap.get(row.worker_id) ?? null) : null,
+    }
+  })
 
   // 리뷰 미요청 목록 — 예약에서 고객명 + worker_id 조회
   type PendingReview = { id: string; booking_id: string }
@@ -94,13 +109,13 @@ export default async function AlimtalkTodoPage() {
 
   type ReviewBookingRow = {
     id: string; customer_name: string; customer_phone: string | null
-    scheduled_at: string; customer_id: string | null; worker_id?: string | null
+    scheduled_at: string; worker_id?: string | null
   }
   const bookingDetailMap = new Map<string, ReviewBookingRow>()
   if (reviewBookingIds.length > 0) {
     const { data: reviewBookings } = await db
       .from('bookings')
-      .select('id, customer_name, customer_phone, scheduled_at, customer_id')
+      .select('id, customer_name, customer_phone, scheduled_at')
       .in('id', reviewBookingIds)
     for (const b of reviewBookings ?? []) {
       bookingDetailMap.set(b.id, b as unknown as ReviewBookingRow)
@@ -114,7 +129,7 @@ export default async function AlimtalkTodoPage() {
       customer_name:  b?.customer_name ?? '고객',
       customer_phone: b?.customer_phone ?? null,
       scheduled_at:   b?.scheduled_at ?? '',
-      customer_id:    b?.customer_id ?? null,
+      customer_id:    b?.customer_phone ? (customerMap.get(b.customer_phone) ?? null) : null,
       worker_name:    b?.worker_id ? (workerMap.get(b.worker_id) ?? null) : null,
     }
   })
