@@ -1,0 +1,361 @@
+'use server'
+
+import { z } from 'zod'
+import { action } from '@/lib/safe-action'
+import { createServiceClient } from '@/lib/supabase/server'
+import {
+  sendReceiptAlimtalk,
+  sendReviewRequestAlimtalk,
+  sendWorkCompleteAlimtalk,
+} from '@/lib/kakao/alimtalk'
+import { generateAiReport } from '@/lib/ai/report-writer'
+
+// workers 테이블 타입 (Supabase 타입 아직 미생성)
+interface WorkerRow {
+  id: string
+  business_id: string
+  name: string
+  is_active: boolean
+}
+
+interface BookingRow {
+  id: string
+  business_id: string
+  worker_id: string
+  customer_name: string
+  customer_phone: string | null
+  service_address: string | null
+  scheduled_at: string
+  final_price: number
+  status: string
+  memo: string | null
+  quote_id: string | null
+}
+
+// 직원 인증 — workerId로 직원과 업체 정보를 한 번에 검증
+async function verifyWorker(workerId: string) {
+  const db = createServiceClient()
+  const { data: worker } = await db
+    .from('workers' as never)
+    .select('id, business_id, name, is_active' as never)
+    .eq('id' as never, workerId)
+    .maybeSingle() as { data: WorkerRow | null }
+
+  if (!worker) throw new Error('[APP] 직원 정보를 찾을 수 없습니다')
+  if (!worker.is_active) throw new Error('[APP] 비활성 계정입니다. 사장님께 문의해주세요')
+
+  return { db, worker }
+}
+
+// 직원에게 배정된 예약인지 확인
+async function verifyBookingOwnership(
+  db: ReturnType<typeof createServiceClient>,
+  bookingId: string,
+  workerId: string,
+  businessId: string,
+) {
+  const { data: booking } = await db
+    .from('bookings')
+    .select('id, business_id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, quote_id')
+    .eq('id', bookingId)
+    .eq('business_id', businessId)
+    .eq('worker_id' as never, workerId)
+    .maybeSingle() as { data: BookingRow | null }
+
+  if (!booking) throw new Error('[APP] 배정된 작업이 아니거나 존재하지 않습니다')
+  return booking
+}
+
+// 작업 시작 (confirmed → in_progress)
+export const fieldStartWorkAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    if (booking.status !== 'confirmed') {
+      throw new Error('[APP] 확정된 예약만 작업을 시작할 수 있어요')
+    }
+
+    const { error } = await db
+      .from('bookings')
+      .update({ status: 'in_progress' })
+      .eq('id', parsedInput.bookingId)
+
+    if (error) throw new Error('[APP] 상태 변경에 실패했어요')
+
+    return { success: true }
+  })
+
+// 메모 저장 (3종 메모를 한 번에 저장)
+export const fieldSaveMemoAction = action
+  .schema(z.object({
+    workerId:        z.string().uuid(),
+    bookingId:       z.string().uuid(),
+    siteMemo:        z.string().max(1000).optional(),
+    customerRequest: z.string().max(1000).optional(),
+    nextVisitNote:   z.string().max(1000).optional(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    // 1. 현장 특이사항 → bookings.memo
+    if (parsedInput.siteMemo !== undefined) {
+      await db
+        .from('bookings')
+        .update({ memo: parsedInput.siteMemo || null })
+        .eq('id', parsedInput.bookingId)
+    }
+
+    // 2. 다음 방문 참고사항 → customers.notes (전화번호로 고객 찾기)
+    if (parsedInput.nextVisitNote && booking.customer_phone) {
+      const { data: customer } = await db
+        .from('customers')
+        .select('id, notes')
+        .eq('business_id', worker.business_id)
+        .eq('phone', booking.customer_phone)
+        .maybeSingle()
+
+      if (customer) {
+        const today = new Date().toLocaleDateString('ko-KR')
+        const newNote = customer.notes
+          ? `${customer.notes}\n\n[${today}] ${parsedInput.nextVisitNote}`
+          : `[${today}] ${parsedInput.nextVisitNote}`
+
+        await db
+          .from('customers')
+          .update({ notes: newNote })
+          .eq('id', customer.id)
+      }
+    }
+
+    return { success: true }
+  })
+
+// 수금 완료 (in_progress → completed) + 영수증·리뷰 자동 발송
+export const fieldCompletePaymentAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    if (booking.status !== 'in_progress') {
+      throw new Error('[APP] 작업 중인 예약만 수금 완료할 수 있어요')
+    }
+
+    // 상태 → completed
+    const { error } = await db
+      .from('bookings')
+      .update({ status: 'completed' })
+      .eq('id', parsedInput.bookingId)
+
+    if (error) throw new Error('[APP] 상태 변경에 실패했어요')
+
+    // 업체 정보 조회
+    const { data: business } = await db
+      .from('businesses')
+      .select('name, phone, naver_place_url, google_place_url')
+      .eq('id', worker.business_id)
+      .maybeSingle()
+
+    if (!business) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    // 서비스명 조회
+    let cleaningType = '청소 서비스'
+    if (booking.quote_id) {
+      const { data: quote } = await db
+        .from('quotes')
+        .select('cleaning_type')
+        .eq('id', booking.quote_id)
+        .maybeSingle()
+      if (quote?.cleaning_type) cleaningType = quote.cleaning_type
+    }
+
+    // 고객 DB 자동 upsert (전화번호 기준)
+    if (booking.customer_phone?.trim()) {
+      const { data: existing } = await db
+        .from('customers')
+        .select('id')
+        .eq('business_id', worker.business_id)
+        .eq('phone', booking.customer_phone)
+        .maybeSingle()
+
+      if (!existing) {
+        await db.from('customers').insert({
+          business_id: worker.business_id,
+          name: booking.customer_name,
+          phone: booking.customer_phone,
+          address: booking.service_address ?? null,
+          type: 'one_time',
+        })
+      }
+    }
+
+    // 영수증 발송 (실패해도 수금 완료는 유지)
+    if (booking.customer_phone) {
+      try {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+        const receiptUrl = `${appUrl}/q/${worker.business_id}/receipt/${booking.id}`
+
+        await sendReceiptAlimtalk({
+          customerPhone: booking.customer_phone,
+          customerName:  booking.customer_name,
+          businessName:  business.name,
+          businessPhone: business.phone ?? null,
+          cleaningType,
+          completedAt:   booking.scheduled_at,
+          paidAmount:    booking.final_price,
+          receiptUrl,
+        })
+      } catch (err) {
+        console.error('[Field] 영수증 발송 실패:', err)
+      }
+    }
+
+    // 리뷰 요청 발송 (실패해도 수금 완료는 유지)
+    const reviewUrl = business.google_place_url || business.naver_place_url
+    if (booking.customer_phone && reviewUrl) {
+      try {
+        await sendReviewRequestAlimtalk({
+          customerPhone: booking.customer_phone,
+          customerName:  booking.customer_name ?? '고객',
+          businessName:  business.name,
+          cleaningType,
+          reviewUrl,
+        })
+      } catch (err) {
+        console.error('[Field] 리뷰 요청 발송 실패:', err)
+      }
+    }
+
+    return { success: true }
+  })
+
+// 보고서 저장 (사진 + 메모, 발송은 별도 액션)
+export const fieldSaveReportAction = action
+  .schema(z.object({
+    workerId:        z.string().uuid(),
+    bookingId:       z.string().uuid(),
+    notes:           z.string().max(2000).optional(),
+    beforePhotoUrls: z.array(z.string().min(1)).max(5),
+    afterPhotoUrls:  z.array(z.string().min(1)).max(5),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    // 보고서 upsert
+    const { data: report, error: reportError } = await db
+      .from('reports')
+      .upsert({
+        business_id: worker.business_id,
+        booking_id:  parsedInput.bookingId,
+        notes:       parsedInput.notes ?? null,
+      }, { onConflict: 'booking_id' })
+      .select('id')
+      .single()
+
+    if (reportError || !report) throw new Error('[APP] 보고서 저장에 실패했어요')
+
+    // 기존 사진 삭제 후 재입력
+    await db.from('report_photos').delete().eq('report_id', report.id)
+
+    const allPhotos = [
+      ...parsedInput.beforePhotoUrls.map((url, i) => ({
+        report_id:  report.id,
+        url,
+        type:       'before' as const,
+        sort_order: i,
+      })),
+      ...parsedInput.afterPhotoUrls.map((url, i) => ({
+        report_id:  report.id,
+        url,
+        type:       'after' as const,
+        sort_order: i,
+      })),
+    ]
+
+    if (allPhotos.length > 0) {
+      await db.from('report_photos').insert(allPhotos)
+    }
+
+    return { success: true, reportId: report.id }
+  })
+
+// 보고서 발송 (검토 후 승인 시 호출)
+export const fieldSendReportAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+    reportId:  z.string().uuid(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    if (!booking.customer_phone) throw new Error('[APP] 고객 연락처가 없어 발송할 수 없어요')
+
+    // 업체 정보
+    const { data: business } = await db
+      .from('businesses')
+      .select('name, phone')
+      .eq('id', worker.business_id)
+      .maybeSingle()
+
+    if (!business) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    // 서비스명
+    let cleaningType = '청소 서비스'
+    if (booking.quote_id) {
+      const { data: quote } = await db
+        .from('quotes')
+        .select('cleaning_type')
+        .eq('id', booking.quote_id)
+        .maybeSingle()
+      if (quote?.cleaning_type) cleaningType = quote.cleaning_type
+    }
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+
+    await sendWorkCompleteAlimtalk({
+      customerPhone: booking.customer_phone,
+      customerName:  booking.customer_name ?? '고객',
+      businessName:  business.name,
+      businessPhone: business.phone ?? null,
+      cleaningType,
+      scheduledAt:   booking.scheduled_at ?? '',
+      reportUrl:     `${appUrl}/q/${worker.business_id}/report/${parsedInput.reportId}`,
+    })
+
+    // 발송 시각 기록
+    await db
+      .from('reports')
+      .update({ kakao_sent_at: new Date().toISOString() })
+      .eq('id', parsedInput.reportId)
+
+    return { success: true }
+  })
+
+// AI 보고서 자동 작성 (직원 메모 → 전문가 보고서 + 서비스 추천)
+export const fieldGenerateAiReportAction = action
+  .schema(z.object({
+    workerId: z.string().uuid(),
+    memo:     z.string().min(5, '메모를 5자 이상 입력해주세요').max(2000),
+    serviceItems: z.array(z.object({
+      name: z.string(),
+      basePrice: z.number(),
+    })).optional(),
+  }))
+  .action(async ({ parsedInput }) => {
+    await verifyWorker(parsedInput.workerId)
+
+    const result = await generateAiReport(parsedInput.memo, parsedInput.serviceItems)
+    return { success: true, report: result }
+  })
