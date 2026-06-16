@@ -208,12 +208,14 @@ export default async function ClientsPage({
 
   // ── 데이터 분류 ──
 
-  const allCustomers = sortCustomers(customers ?? [])
+  // type 필드 기준으로 개인/법인 분리
+  const individualCustomers = sortCustomers((customers ?? []).filter(c => c.type !== 'recurring'))
+  const companyCustomers = sortCustomers((customers ?? []).filter(c => c.type === 'recurring'))
+
   const activeLeads = sortLeads(
     (leads ?? []).filter(l => l.customer_type === 'company' && l.status !== 'archived' && !registeredLeadIds.has(l.id))
   )
   const archivedLeads = (leads ?? []).filter(l => l.customer_type === 'company' && l.status === 'archived')
-  const convertedCustomers = allCustomers.filter(c => c.lead_id && registeredLeadIds.has(c.lead_id))
 
   const totalLtv = (completedBookings ?? []).reduce((s, b) => s + (b.final_price ?? 0), 0)
   const monthlyRecurring = (contracts ?? []).filter(c => c.status === 'active').reduce((s, c) => s + c.contract_price, 0)
@@ -234,7 +236,7 @@ export default async function ClientsPage({
         <div className="bg-white rounded-xl border p-4">
           <p className="text-xs text-muted-foreground">개인·일반 고객</p>
           <p className="text-2xl font-bold mt-1 tabular-nums text-blue-600">
-            {allCustomers.length}<span className="text-sm font-normal text-muted-foreground ml-0.5">명</span>
+            {individualCustomers.length}<span className="text-sm font-normal text-muted-foreground ml-0.5">명</span>
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">누적 {totalLtv > 0 ? `${Math.round(totalLtv / 10000)}만원` : '—'}</p>
         </div>
@@ -243,7 +245,7 @@ export default async function ClientsPage({
           <p className="text-2xl font-bold mt-1 tabular-nums text-violet-600">
             {activeLeads.length}<span className="text-sm font-normal text-muted-foreground ml-0.5">곳</span>
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">계약 중인 고객 {convertedCustomers.length}곳</p>
+          <p className="text-xs text-muted-foreground mt-0.5">계약 중인 고객 {companyCustomers.length}곳</p>
         </div>
         <div className="bg-white rounded-xl border p-4">
           <p className="text-xs text-muted-foreground">월 정기 매출</p>
@@ -300,17 +302,17 @@ export default async function ClientsPage({
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-blue-600" />
               <h2 className="text-sm font-semibold text-blue-600">개인·일반 고객</h2>
-              <span className="text-xs text-muted-foreground">({allCustomers.length}명)</span>
+              <span className="text-xs text-muted-foreground">({individualCustomers.length}명)</span>
             </div>
           )}
 
-          {allCustomers.length === 0 ? (
+          {individualCustomers.length === 0 ? (
             <div className="bg-white rounded-xl border border-dashed p-8 text-center space-y-2">
               <p className="text-sm text-muted-foreground">아직 개인 고객이 없어요</p>
               <p className="text-xs text-muted-foreground">일반 예약 메뉴에서 견적을 보내면 자동으로 등록돼요</p>
             </div>
           ) : (
-            allCustomers.map((customer) => {
+            individualCustomers.map((customer) => {
               const booking = customer.phone ? bookingMap[customer.phone] : undefined
               const customerContracts = contractMap[customer.id] ?? []
               const activeContract = customerContracts.find((c) => c.status === 'active') ?? null

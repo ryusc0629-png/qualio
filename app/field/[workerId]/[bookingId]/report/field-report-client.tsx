@@ -70,6 +70,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   const [savedReportId, setSavedReportId] = useState<string | null>(existingReport?.id ?? null)
   const [alreadySent, setAlreadySent] = useState(!!existingReport?.sentAt)
   const [aiReport, setAiReport] = useState<AiReportData | null>(null)
+  const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set())
 
   const beforeInputRef = useRef<HTMLInputElement>(null)
   const afterInputRef = useRef<HTMLInputElement>(null)
@@ -100,7 +101,9 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     onSuccess: ({ data }) => {
       if (data?.report) {
         setAiReport(data.report)
-        // AI 결과를 메모에 반영
+        // 추천 서비스 기본 전체 선택 (opt-out)
+        setSelectedServices(new Set(data.report.recommendedServices))
+        // AI 결과를 메모에 반영 (추천 서비스는 선택된 것만 포함)
         const recSection = data.report.recommendedServices.length > 0
           ? `\n\n💡 추천 서비스\n${data.report.recommendedServices.join(', ')}`
           : ''
@@ -255,6 +258,29 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   const getServicePrice = (serviceName: string) =>
     serviceItems.find((s) => s.name === serviceName)
 
+  // 추천 서비스 선택/해제 토글
+  const toggleService = (name: string) => {
+    setSelectedServices((prev) => {
+      const next = new Set(prev)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+    // notes 내 추천 서비스 섹션 업데이트
+    if (aiReport) {
+      setNotes((prev) => {
+        const idx = prev.indexOf('\n\n💡 추천 서비스\n')
+        const base = idx >= 0 ? prev.slice(0, idx) : prev
+        const newSelected = aiReport.recommendedServices.filter((s) => {
+          if (s === name) return !selectedServices.has(name)
+          return selectedServices.has(s)
+        })
+        if (newSelected.length === 0) return base
+        return `${base}\n\n💡 추천 서비스\n${newSelected.join(', ')}`
+      })
+    }
+  }
+
   // AI 보고서 표시 컴포넌트
   const AiReportView = ({ report }: { report: AiReportData }) => (
     <div className="space-y-3">
@@ -276,17 +302,41 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       </div>
       {report.recommendedServices.length > 0 && (
         <div className="rounded-lg bg-violet-50 border border-violet-100 p-3 space-y-2">
-          <p className="text-xs font-semibold text-violet-800">추천 서비스</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-violet-800">추천 서비스</p>
+            <p className="text-[10px] text-violet-500">체크 해제하면 보고서에서 빠져요</p>
+          </div>
           <div className="space-y-1.5">
             {report.recommendedServices.map((name) => {
               const svc = getServicePrice(name)
+              const isSelected = selectedServices.has(name)
               return (
-                <div key={name} className="flex items-center justify-between bg-white rounded-md px-3 py-2 border border-violet-100">
-                  <span className="text-sm font-medium text-violet-900">{name}</span>
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => toggleService(name)}
+                  className={`w-full flex items-center gap-3 rounded-md px-3 py-2.5 border transition-colors text-left ${
+                    isSelected
+                      ? 'bg-white border-violet-200'
+                      : 'bg-violet-50/50 border-violet-100 opacity-50'
+                  }`}
+                >
+                  <div className={`shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                    isSelected
+                      ? 'bg-violet-600 border-violet-600'
+                      : 'border-gray-300 bg-white'
+                  }`}>
+                    {isSelected && (
+                      <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </div>
+                  <span className={`text-sm font-medium flex-1 ${isSelected ? 'text-violet-900' : 'text-violet-400 line-through'}`}>{name}</span>
                   {svc && (
-                    <span className="text-xs text-violet-600">{svc.basePrice.toLocaleString()}원~</span>
+                    <span className={`text-xs ${isSelected ? 'text-violet-600' : 'text-violet-300'}`}>{svc.basePrice.toLocaleString()}원~</span>
                   )}
-                </div>
+                </button>
               )
             })}
           </div>
