@@ -54,13 +54,15 @@ interface Props {
   reportId: string | null
   reportSentAt: string | null
   existingBeforeUrls: string[]
+  existingCustomerRequest: string
+  existingNextVisitNote: string
 }
 
-export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, existingBeforeUrls }: Props) {
+export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, existingBeforeUrls, existingCustomerRequest, existingNextVisitNote }: Props) {
   const [currentStatus, setCurrentStatus] = useState(booking.status)
   const [siteMemo, setSiteMemo] = useState(booking.memo ?? '')
-  const [customerRequest, setCustomerRequest] = useState('')
-  const [nextVisitNote, setNextVisitNote] = useState('')
+  const [customerRequest, setCustomerRequest] = useState(existingCustomerRequest)
+  const [nextVisitNote, setNextVisitNote] = useState(existingNextVisitNote)
   const [memoOpen, setMemoOpen] = useState(false)
   const [memoSaved, setMemoSaved] = useState(false)
   const [receiptSent, setReceiptSent] = useState(false)

@@ -111,7 +111,18 @@ export const fieldSaveMemoAction = action
         .eq('id', parsedInput.bookingId)
     }
 
-    // 2. 다음 방문 참고사항 → customers.notes (전화번호로 고객 찾기)
+    // 2. 고객 추가 요청사항 → reports.notes
+    if (parsedInput.customerRequest !== undefined) {
+      await db
+        .from('reports')
+        .upsert({
+          business_id: worker.business_id,
+          booking_id:  parsedInput.bookingId,
+          notes:       parsedInput.customerRequest || null,
+        }, { onConflict: 'booking_id' })
+    }
+
+    // 3. 다음 방문 참고사항 → customers.notes (전화번호로 고객 찾기)
     if (parsedInput.nextVisitNote && booking.customer_phone) {
       const { data: customer } = await db
         .from('customers')

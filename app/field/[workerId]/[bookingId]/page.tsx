@@ -41,7 +41,7 @@ export default async function FieldBookingPage({ params }: Props) {
   // 보고서 + 작업 전 사진 조회
   const { data: report } = await db
     .from('reports')
-    .select('id, kakao_sent_at, report_photos(url, type, sort_order)')
+    .select('id, notes, kakao_sent_at, report_photos(url, type, sort_order)')
     .eq('booking_id', bookingId)
     .maybeSingle()
 
@@ -49,6 +49,27 @@ export default async function FieldBookingPage({ params }: Props) {
     .filter((p) => p.type === 'before')
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((p) => p.url)
+
+  // 다음 방문 참고사항 로드 (customers.notes에서 이 예약 날짜의 마지막 기록)
+  let savedNextVisitNote = ''
+  if (booking.customer_phone) {
+    const { data: customer } = await db
+      .from('customers')
+      .select('notes')
+      .eq('business_id', worker.business_id)
+      .eq('phone', booking.customer_phone)
+      .maybeSingle()
+
+    if (customer?.notes) {
+      // 오늘 날짜로 저장된 마지막 메모를 추출
+      const today = new Date().toLocaleDateString('ko-KR')
+      const entries = (customer.notes as string).split('\n\n')
+      const todayEntry = entries.filter((e: string) => e.startsWith(`[${today}]`)).pop()
+      if (todayEntry) {
+        savedNextVisitNote = todayEntry.replace(`[${today}] `, '')
+      }
+    }
+  }
 
   return (
     <FieldBookingClient
@@ -68,6 +89,8 @@ export default async function FieldBookingPage({ params }: Props) {
       reportId={report?.id ?? null}
       reportSentAt={report?.kakao_sent_at ?? null}
       existingBeforeUrls={beforeUrls}
+      existingCustomerRequest={(report?.notes as string) ?? ''}
+      existingNextVisitNote={savedNextVisitNote}
     />
   )
 }
