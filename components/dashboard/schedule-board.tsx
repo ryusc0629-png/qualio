@@ -500,7 +500,7 @@ export function ScheduleBoard({
             {VIEW_OPTIONS.map((opt) => (
               <button
                 key={opt.key}
-                onClick={() => window.location.replace(`/dashboard/schedule?view=${opt.key}&date=${format(new Date(weekStart), 'yyyy-MM-dd')}`)}
+                onClick={() => window.location.replace(`/dashboard/schedule?view=${opt.key}`)}
                 className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                   view === opt.key
                     ? 'bg-primary text-primary-foreground'
@@ -536,7 +536,10 @@ export function ScheduleBoard({
                 marginBottom: '4px',
               }}
             >
-              <div />
+              <div
+                className="bg-background"
+                style={view === 'month' ? { position: 'sticky', left: 0, zIndex: 10 } : undefined}
+              />
               {days.map((day) => (
                 <div
                   key={day.date}
@@ -564,7 +567,10 @@ export function ScheduleBoard({
                   }}
                 >
                   {/* 작업자 레이블 */}
-                  <div className="flex items-center gap-1.5 px-2 py-2 min-h-[72px]">
+                  <div
+                    className="flex items-center gap-1.5 px-2 py-2 min-h-[72px] bg-background"
+                    style={view === 'month' ? { position: 'sticky', left: 0, zIndex: 10 } : undefined}
+                  >
                     <div
                       className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: row.color }}
