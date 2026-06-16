@@ -295,37 +295,6 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     </div>
   )
 
-  // --- 이미 발송된 경우 ---
-  if (alreadySent) {
-    return (
-      <div className="min-h-dvh bg-gray-50">
-        <div className="bg-white border-b px-4 py-3 sticky top-0 z-10 flex items-center gap-3">
-          <Link href={`/field/${workerId}/${booking.id}`} className="p-1">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <h1 className="font-bold">작업 완료 보고서</h1>
-        </div>
-
-        <div className="px-4 py-8 text-center space-y-4">
-          <div className="mx-auto w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
-            <CheckCircle2 className="h-8 w-8 text-emerald-600" />
-          </div>
-          <div>
-            <p className="font-bold text-lg">보고서 발송 완료</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              {booking.customerName} 고객님에게 카카오 알림톡으로 보고서가 발송됐어요
-            </p>
-          </div>
-          <Link href={`/field/${workerId}/${booking.id}`}>
-            <Button variant="outline" className="h-12 mt-4">
-              작업 상세로 돌아가기
-            </Button>
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
   // --- 보고서 작성 화면 ---
   return (
     <div className="min-h-dvh bg-gray-50 pb-40">
@@ -340,6 +309,16 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       </div>
 
       <div className="px-4 py-4 space-y-5">
+        {/* 발송 완료 배너 */}
+        {alreadySent && (
+          <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-200 p-4">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-emerald-800">보고서 발송 완료</p>
+              <p className="text-xs text-emerald-600">수정 후 다시 저장하면 고객 보고서에 바로 반영돼요</p>
+            </div>
+          </div>
+        )}
         {/* Before 사진 */}
         <div className="rounded-xl bg-white border p-4">
           <PhotoSection
