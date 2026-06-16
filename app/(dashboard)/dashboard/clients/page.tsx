@@ -7,6 +7,7 @@ import { DeleteCustomerButton } from '@/components/dashboard/delete-customer-but
 import { ContractStatusSelect } from '@/components/dashboard/contract-status-select'
 import { ConfirmBookingButton } from '@/components/dashboard/confirm-booking-button'
 import { formatFrequency } from '@/lib/utils/frequency'
+import { ClientSearchInput } from '@/components/dashboard/client-search-input'
 import { Phone, MapPin, Calendar, TrendingUp, ChevronRight, Building2, User, Archive } from 'lucide-react'
 
 // ── 타입 ────────────────────────────────────────────────
@@ -98,11 +99,12 @@ const SORT_OPTIONS = [
 
 // ── URL 파라미터 헬퍼 ────────────────────────────────────
 
-function buildHref(params: { type?: string; sort?: string; show_archived?: string }) {
+function buildHref(params: { type?: string; sort?: string; show_archived?: string; q?: string }) {
   const p = new URLSearchParams()
   if (params.type && params.type !== 'all') p.set('type', params.type)
   if (params.sort && params.sort !== 'ltv_desc') p.set('sort', params.sort)
   if (params.show_archived === '1') p.set('show_archived', '1')
+  if (params.q) p.set('q', params.q)
   const qs = p.toString()
   return `/dashboard/clients${qs ? '?' + qs : ''}`
 }
@@ -112,9 +114,10 @@ function buildHref(params: { type?: string; sort?: string; show_archived?: strin
 export default async function ClientsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; sort?: string; show_archived?: string }>
+  searchParams: Promise<{ type?: string; sort?: string; show_archived?: string; q?: string }>
 }) {
-  const { type, sort = 'ltv_desc', show_archived } = await searchParams
+  const { type, sort = 'ltv_desc', show_archived, q } = await searchParams
+  const searchQuery = q?.trim().toLowerCase() ?? ''
   const activeTab = ['individual', 'company'].includes(type ?? '') ? type! : 'all'
   const showArchived = show_archived === '1'
 
@@ -230,14 +233,17 @@ export default async function ClientsPage({
 
   // ── 데이터 분류 ──
 
-  // type 필드 기준으로 개인/법인 분리
-  const individualCustomers = sortCustomers((customers ?? []).filter(c => c.type !== 'recurring'))
-  const companyCustomers = sortCustomers((customers ?? []).filter(c => c.type === 'recurring'))
+  // 이름 검색 필터
+  const matchesSearch = (name: string) => !searchQuery || name.toLowerCase().includes(searchQuery)
+
+  // type 필드 기준으로 개인/법인 분리 + 검색 필터
+  const individualCustomers = sortCustomers((customers ?? []).filter(c => c.type !== 'recurring' && matchesSearch(c.name)))
+  const companyCustomers = sortCustomers((customers ?? []).filter(c => c.type === 'recurring' && matchesSearch(c.name)))
 
   const activeLeads = sortLeads(
-    (leads ?? []).filter(l => l.customer_type === 'company' && l.status !== 'archived' && !registeredLeadIds.has(l.id))
+    (leads ?? []).filter(l => l.customer_type === 'company' && l.status !== 'archived' && !registeredLeadIds.has(l.id) && matchesSearch(l.company_name))
   )
-  const archivedLeads = (leads ?? []).filter(l => l.customer_type === 'company' && l.status === 'archived')
+  const archivedLeads = (leads ?? []).filter(l => l.customer_type === 'company' && l.status === 'archived' && matchesSearch(l.company_name))
 
   const totalLtv = (completedBookings ?? []).reduce((s, b) => s + (b.final_price ?? 0), 0)
   const monthlyRecurring = (contracts ?? []).filter(c => c.status === 'active').reduce((s, c) => s + c.contract_price, 0)
@@ -292,7 +298,7 @@ export default async function ClientsPage({
           {TABS.map((tab) => (
             <Link
               key={tab.key}
-              href={buildHref({ type: tab.key, sort, show_archived: showArchived ? '1' : undefined })}
+              href={buildHref({ type: tab.key, sort, show_archived: showArchived ? '1' : undefined, q: searchQuery || undefined })}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === tab.key
                   ? 'bg-primary text-primary-foreground'
@@ -307,7 +313,7 @@ export default async function ClientsPage({
           {SORT_OPTIONS.map((opt) => (
             <Link
               key={opt.key}
-              href={buildHref({ type: activeTab, sort: opt.key, show_archived: showArchived ? '1' : undefined })}
+              href={buildHref({ type: activeTab, sort: opt.key, show_archived: showArchived ? '1' : undefined, q: searchQuery || undefined })}
               className={`px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
                 sort === opt.key
                   ? 'bg-foreground text-background'
@@ -319,6 +325,9 @@ export default async function ClientsPage({
           ))}
         </div>
       </div>
+
+      {/* 검색 */}
+      <ClientSearchInput />
 
       {/* ── 개인·일반 고객 ── */}
       {(activeTab === 'all' || activeTab === 'individual') && (
@@ -618,7 +627,7 @@ export default async function ClientsPage({
             <div className="mt-4">
               {!showArchived ? (
                 <Link
-                  href={buildHref({ type: activeTab, sort, show_archived: '1' })}
+                  href={buildHref({ type: activeTab, sort, show_archived: '1', q: searchQuery || undefined })}
                   className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                 >
                   <Archive className="h-3.5 w-3.5" />
@@ -631,7 +640,7 @@ export default async function ClientsPage({
                       <Archive className="h-3.5 w-3.5 text-muted-foreground" />
                       <span className="text-xs text-muted-foreground font-medium">보관된 거래처 ({archivedLeads.length}곳)</span>
                     </div>
-                    <Link href={buildHref({ type: activeTab, sort })} className="text-xs text-muted-foreground hover:text-foreground underline">
+                    <Link href={buildHref({ type: activeTab, sort, q: searchQuery || undefined })} className="text-xs text-muted-foreground hover:text-foreground underline">
                       숨기기
                     </Link>
                   </div>
