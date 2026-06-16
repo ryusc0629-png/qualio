@@ -10,8 +10,8 @@ import { Label } from '@/components/ui/label'
 import {
   fieldStartWorkAction,
   fieldSaveMemoAction,
-  fieldRequestPaymentAction,
   fieldCompletePaymentAction,
+  fieldRequestPaymentAction,
 } from '@/lib/actions/field'
 import {
   ArrowLeft,
@@ -23,7 +23,7 @@ import {
   FileText,
   CheckCircle2,
   CircleDollarSign,
-  CreditCard,
+  Receipt,
   Play,
   ChevronDown,
   ChevronUp,
@@ -55,7 +55,7 @@ export function FieldBookingClient({ workerId, workerName, booking, reportId, re
   const [nextVisitNote, setNextVisitNote] = useState('')
   const [memoOpen, setMemoOpen] = useState(false)
   const [memoSaved, setMemoSaved] = useState(false)
-  const [paymentRequested, setPaymentRequested] = useState(false)
+  const [receiptSent, setReceiptSent] = useState(false)
 
   // 작업 시작
   const { execute: startWork, isPending: isStarting } = useAction(fieldStartWorkAction, {
@@ -75,20 +75,20 @@ export function FieldBookingClient({ workerId, workerName, booking, reportId, re
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
-  // 결제 요청
-  const { execute: requestPayment, isPending: isRequesting } = useAction(fieldRequestPaymentAction, {
-    onSuccess: () => {
-      setPaymentRequested(true)
-      toast.success('고객에게 결제 요청이 발송됐어요!')
-    },
-    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
-  })
-
   // 수금 완료
   const { execute: completePayment, isPending: isCompleting } = useAction(fieldCompletePaymentAction, {
     onSuccess: () => {
       setCurrentStatus('completed')
-      toast.success('수금 완료! 리뷰 요청이 자동 발송됐어요')
+      toast.success('수금 완료!')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 영수증 발송 (선택)
+  const { execute: sendReceipt, isPending: isSendingReceipt } = useAction(fieldRequestPaymentAction, {
+    onSuccess: () => {
+      setReceiptSent(true)
+      toast.success('영수증이 고객에게 발송됐어요!')
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -287,14 +287,41 @@ export function FieldBookingClient({ workerId, workerName, booking, reportId, re
 
         {/* 완료 상태 안내 */}
         {currentStatus === 'completed' && (
-          <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4 space-y-1.5">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              <p className="font-medium text-emerald-800">수금 완료</p>
+          <div className="space-y-3">
+            <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                <p className="font-medium text-emerald-800">수금 완료</p>
+              </div>
+              <p className="text-xs text-emerald-700 ml-7">
+                리뷰 요청이 고객에게 자동 발송됐어요
+              </p>
             </div>
-            <p className="text-xs text-emerald-700 ml-7">
-              영수증과 리뷰 요청이 고객에게 자동 발송됐어요
-            </p>
+
+            {/* 영수증 발송 (선택) */}
+            {booking.customerPhone && (
+              <div className="rounded-xl bg-white border p-4 space-y-2">
+                {receiptSent ? (
+                  <div className="flex items-center gap-2 text-sm text-emerald-600">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>영수증이 발송됐어요</span>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">고객에게 영수증을 보내시겠어요?</p>
+                    <Button
+                      variant="outline"
+                      className="w-full h-11 gap-2"
+                      disabled={isSendingReceipt}
+                      onClick={() => sendReceipt({ workerId, bookingId: booking.id })}
+                    >
+                      <Receipt className="h-4 w-4" />
+                      {isSendingReceipt ? '발송 중...' : '영수증 보내기'}
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -315,53 +342,19 @@ export function FieldBookingClient({ workerId, workerName, booking, reportId, re
           )}
 
           {currentStatus === 'in_progress' && (
-            <div className="space-y-2">
-              {!paymentRequested ? (
-                <>
-                  <Button
-                    size="lg"
-                    className="w-full h-14 text-base gap-2"
-                    disabled={isRequesting || !booking.customerPhone}
-                    onClick={() => requestPayment({ workerId, bookingId: booking.id })}
-                  >
-                    <CreditCard className="h-5 w-5" />
-                    {isRequesting ? '발송 중...' : `결제 요청하기 · ${booking.finalPrice.toLocaleString()}원`}
-                  </Button>
-                  {!booking.customerPhone && (
-                    <p className="text-xs text-muted-foreground text-center">고객 연락처가 없어 결제 요청을 보낼 수 없어요</p>
-                  )}
-                  <Button
-                    variant="ghost"
-                    className="w-full h-10 text-sm text-muted-foreground"
-                    disabled={isCompleting}
-                    onClick={() => {
-                      if (confirm(`${booking.finalPrice.toLocaleString()}원 수금 완료할까요?\n\n현금 수금 등 이미 결제가 완료된 경우 눌러주세요.`)) {
-                        completePayment({ workerId, bookingId: booking.id })
-                      }
-                    }}
-                  >
-                    {isCompleting ? '처리 중...' : '이미 수금했어요'}
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <p className="text-xs text-center text-emerald-600 font-medium">결제 요청이 고객에게 발송됐어요</p>
-                  <Button
-                    size="lg"
-                    className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700"
-                    disabled={isCompleting}
-                    onClick={() => {
-                      if (confirm(`${booking.finalPrice.toLocaleString()}원 수금 완료할까요?`)) {
-                        completePayment({ workerId, bookingId: booking.id })
-                      }
-                    }}
-                  >
-                    <CircleDollarSign className="h-5 w-5" />
-                    {isCompleting ? '처리 중...' : `수금 완료 · ${booking.finalPrice.toLocaleString()}원`}
-                  </Button>
-                </>
-              )}
-            </div>
+            <Button
+              size="lg"
+              className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700"
+              disabled={isCompleting}
+              onClick={() => {
+                if (confirm(`${booking.finalPrice.toLocaleString()}원 수금 완료할까요?`)) {
+                  completePayment({ workerId, bookingId: booking.id })
+                }
+              }}
+            >
+              <CircleDollarSign className="h-5 w-5" />
+              {isCompleting ? '처리 중...' : `수금 완료 · ${booking.finalPrice.toLocaleString()}원`}
+            </Button>
           )}
         </div>
       )}
