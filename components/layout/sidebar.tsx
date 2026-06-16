@@ -26,14 +26,14 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { href: '/dashboard',          label: '대시보드',   icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/work',     label: '견적·예약',  icon: ClipboardList },
-  { href: '/dashboard/schedule', label: '일정·배정',  icon: CalendarDays },
-  { href: '/dashboard/pipeline', label: '거래처 관리', icon: Handshake },
-  { href: '/dashboard/clients',  label: '고객',       icon: Users },
-  { href: '/dashboard/services', label: '서비스 설정', icon: Wrench },
-  { href: '/dashboard/marketing',label: '마케팅',     icon: Megaphone },
-  { href: '/dashboard/settings', label: '설정',       icon: Settings },
+  { href: '/dashboard',          label: '대시보드',    desc: undefined,      icon: LayoutDashboard, exact: true },
+  { href: '/dashboard/work',     label: '일반 예약',   desc: '개인·일회성',  icon: ClipboardList },
+  { href: '/dashboard/schedule', label: '일정·배정',   desc: undefined,      icon: CalendarDays },
+  { href: '/dashboard/pipeline', label: '정기계약',    desc: '법인·영업',    icon: Handshake },
+  { href: '/dashboard/clients',  label: '고객',        desc: undefined,      icon: Users },
+  { href: '/dashboard/services', label: '서비스 설정', desc: undefined,      icon: Wrench },
+  { href: '/dashboard/marketing',label: '마케팅',      desc: undefined,      icon: Megaphone },
+  { href: '/dashboard/settings', label: '설정',        desc: undefined,      icon: Settings },
 ]
 
 export function Sidebar({ businessName, isOpen = false, onClose }: SidebarProps) {
@@ -98,7 +98,14 @@ export function Sidebar({ businessName, isOpen = false, onClose }: SidebarProps)
               <item.icon
                 className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground')}
               />
-              {item.label}
+              <div className="flex-1 min-w-0">
+                <span className="block leading-tight">{item.label}</span>
+                {item.desc && (
+                  <span className={cn('block text-[10px] leading-tight mt-0.5', active ? 'text-primary/70' : 'text-muted-foreground/60')}>
+                    {item.desc}
+                  </span>
+                )}
+              </div>
             </Link>
           )
         })}
