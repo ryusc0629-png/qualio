@@ -1,7 +1,8 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, Phone, MapPin, Calendar, Receipt } from 'lucide-react'
+import { ChevronLeft, Phone, MapPin, Calendar, Receipt, ChevronRight, FileText, Pencil } from 'lucide-react'
+import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 
 interface Props {
   params: Promise<{ customerId: string }>
@@ -53,6 +54,19 @@ export default async function CustomerDetailPage({ params }: Props) {
 
   const bookingList = bookings ?? []
 
+  // 완료된 예약의 보고서 조회
+  const completedIds = bookingList.filter(b => b.status === 'completed').map(b => b.id)
+  const reportMap = new Map<string, string>()
+  if (completedIds.length > 0) {
+    const { data: reports } = await db
+      .from('reports' as never)
+      .select('id, booking_id' as never)
+      .in('booking_id' as never, completedIds) as unknown as { data: { id: string; booking_id: string }[] | null }
+    for (const r of reports ?? []) {
+      reportMap.set(r.booking_id, r.id)
+    }
+  }
+
   const totalLTV = bookingList
     .filter((b) => b.status === 'completed')
     .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
@@ -82,13 +96,18 @@ export default async function CustomerDetailPage({ params }: Props) {
               </span>
             )}
           </div>
-          <span className={`shrink-0 text-xs px-2 py-1 rounded-full font-medium ${
-            customer.type === 'recurring'
-              ? 'bg-emerald-100 text-emerald-700'
-              : 'bg-gray-100 text-gray-600'
-          }`}>
-            {customer.type === 'recurring' ? '정기 고객' : '일회성'}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+              customer.type === 'recurring'
+                ? 'bg-emerald-100 text-emerald-700'
+                : 'bg-gray-100 text-gray-600'
+            }`}>
+              {customer.type === 'recurring' ? '정기 고객' : '일회성'}
+            </span>
+            {customer.phone && (
+              <EditCustomerButton customer={{ ...customer, phone: customer.phone, notes: customer.notes }} />
+            )}
+          </div>
         </div>
 
         <div className="space-y-1.5">
@@ -148,9 +167,25 @@ export default async function CustomerDetailPage({ params }: Props) {
               const serviceName = quote?.cleaning_type ?? booking.memo ?? '직접 예약'
               const spaceLabel = quote?.space_size ? ` · ${quote.space_size}평` : ''
               const statusMeta = STATUS_META[booking.status] ?? { label: booking.status, className: 'bg-gray-100 text-gray-600' }
+              const hasReport = reportMap.has(booking.id)
+              const reportLink = hasReport
+                ? `/dashboard/bookings/${booking.id}/report`
+                : null
+
+              const CardWrapper = reportLink
+                ? ({ children }: { children: React.ReactNode }) => (
+                    <Link href={reportLink} className="block bg-white rounded-xl border border-border p-4 hover:border-primary/40 hover:shadow-sm transition-all">
+                      {children}
+                    </Link>
+                  )
+                : ({ children }: { children: React.ReactNode }) => (
+                    <div className="bg-white rounded-xl border border-border p-4">
+                      {children}
+                    </div>
+                  )
 
               return (
-                <div key={booking.id} className="bg-white rounded-xl border border-border p-4">
+                <CardWrapper key={booking.id}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -168,12 +203,21 @@ export default async function CustomerDetailPage({ params }: Props) {
                         })}
                       </p>
                     </div>
-                    <p className="shrink-0 font-bold tabular-nums flex items-center gap-1 text-sm">
-                      <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
-                      {(booking.final_price ?? 0).toLocaleString('ko-KR')}원
-                    </p>
+                    <div className="shrink-0 flex flex-col items-end gap-1.5">
+                      <p className="font-bold tabular-nums flex items-center gap-1 text-sm">
+                        <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
+                        {(booking.final_price ?? 0).toLocaleString('ko-KR')}원
+                      </p>
+                      {hasReport && (
+                        <span className="text-xs text-primary flex items-center gap-0.5">
+                          <FileText className="h-3 w-3" />
+                          보고서 보기
+                          <ChevronRight className="h-3 w-3" />
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </CardWrapper>
               )
             })}
           </div>
