@@ -185,7 +185,13 @@ export default async function ClientsPage({
   // ── 정렬 함수 ──
 
   function sortCustomers(list: CustomerRow[]): CustomerRow[] {
-    const withLtv = list.map(c => ({ c, ltv: c.phone ? (bookingMap[c.phone]?.ltv ?? 0) : 0 }))
+    const withLtv = list.map(c => {
+      const bookingLtv = c.phone ? (bookingMap[c.phone]?.ltv ?? 0) : 0
+      const activeContract = (contractMap[c.id] ?? []).find(ct => ct.status === 'active')
+      // 활성 계약이 있으면 연간 계약금을 LTV로 우선 사용 (예약 실적보다 높을 때)
+      const contractAnnual = activeContract ? activeContract.contract_price * 12 : 0
+      return { c, ltv: Math.max(bookingLtv, contractAnnual) }
+    })
     if (sort === 'ltv_asc') return withLtv.sort((a, b) => a.ltv - b.ltv).map(x => x.c)
     if (sort === 'newest')  return [...list].sort((a, b) => b.created_at.localeCompare(a.created_at))
     if (sort === 'oldest')  return [...list].sort((a, b) => a.created_at.localeCompare(b.created_at))
