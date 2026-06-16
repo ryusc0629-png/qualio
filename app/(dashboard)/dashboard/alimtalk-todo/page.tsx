@@ -48,14 +48,25 @@ export default async function AlimtalkTodoPage() {
 
   // 보고서 미발송 예약 필터링
   const sentSet = new Set((sentReportRows ?? []).map((r) => r.booking_id))
+  type CompletedBookingRow = {
+    id: string; customer_name: string; customer_phone: string | null
+    scheduled_at: string; final_price: number
+    quotes: { cleaning_type: string | null } | { cleaning_type: string | null }[] | null
+  }
   const unreportedBookings = (completedBookings ?? [])
     .filter((b) => !sentSet.has(b.id))
-    .map((b) => ({
-      bookingId:      b.id,
-      customer_name:  b.customer_name,
-      customer_phone: b.customer_phone,
-      scheduled_at:   b.scheduled_at,
-    }))
+    .map((b) => {
+      const row = b as unknown as CompletedBookingRow
+      const qt  = Array.isArray(row.quotes) ? row.quotes[0] : row.quotes
+      return {
+        bookingId:      row.id,
+        customer_name:  row.customer_name,
+        customer_phone: row.customer_phone,
+        scheduled_at:   row.scheduled_at,
+        final_price:    row.final_price,
+        cleaning_type:  qt?.cleaning_type ?? null,
+      }
+    })
 
   // 리뷰 미요청 목록 — 예약에서 고객명 조회
   type PendingReview = { id: string; booking_id: string }
