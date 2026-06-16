@@ -408,6 +408,7 @@ export type Database = {
           content: string
           summary: string | null
           image_url: string | null
+          image_urls: string[]
           ai_generated: boolean
           published: boolean
           published_at: string
@@ -428,6 +429,7 @@ export type Database = {
           content: string
           summary?: string | null
           image_url?: string | null
+          image_urls?: string[]
           ai_generated?: boolean
           published?: boolean
           published_at?: string
@@ -448,6 +450,7 @@ export type Database = {
           content?: string
           summary?: string | null
           image_url?: string | null
+          image_urls?: string[]
           ai_generated?: boolean
           published?: boolean
           published_at?: string

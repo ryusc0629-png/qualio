@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { generatePostImage, buildImagePrompt } from '@/lib/ai/image-gen'
+import { generatePostImage, generatePostImages, buildImagePrompt } from '@/lib/ai/image-gen'
 
 // 이미지 생성 테스트용 엔드포인트 (비용 발생 → CRON_SECRET으로 보호)
 // 사용 예:
@@ -21,8 +21,18 @@ export async function GET(request: NextRequest) {
   }
 
   const prompt = buildImagePrompt(seed)
-  const imageUrl = await generatePostImage(seed)
+  const count = Math.max(1, Math.min(Number(params.get('count') ?? '1') || 1, 5))
 
+  // count>1이면 다중 생성 함수 검증
+  if (count > 1) {
+    const imageUrls = await generatePostImages(seed, count)
+    if (imageUrls.length === 0) {
+      return NextResponse.json({ ok: false, seed, prompt, error: '이미지 생성 실패 (FAL_KEY/크레딧 확인)' }, { status: 502 })
+    }
+    return NextResponse.json({ ok: true, seed, prompt, count: imageUrls.length, imageUrls })
+  }
+
+  const imageUrl = await generatePostImage(seed)
   if (!imageUrl) {
     return NextResponse.json({ ok: false, seed, prompt, error: '이미지 생성 실패 (FAL_KEY/크레딧 확인)' }, { status: 502 })
   }

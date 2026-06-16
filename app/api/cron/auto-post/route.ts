@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
-import { generatePostImage } from '@/lib/ai/image-gen'
+import { generatePostImages, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
@@ -81,8 +81,8 @@ async function publishOnePost(
     ? `\`\`\`json\n${JSON.stringify({ keyPoints: postContent.keyPoints ?? [], faqs: postContent.faqs ?? [] })}\n\`\`\`\n`
     : ''
 
-  // 포스트 주제에 맞는 이미지 자동 생성 (실패해도 포스팅 진행) — 힌트 없으면 제목 기반
-  const imageUrl = await generatePostImage(postContent.imagePrompt || postContent.title)
+  // 포스트 주제에 맞는 이미지 자동 생성 (실패해도 포스팅 진행) — 게시물당 1회 N장
+  const imageUrls = await generatePostImages(postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
 
   const fullContent = metaBlock + postContent.content
   const { data: saved, error } = await db.from('biz_posts').insert({
@@ -91,7 +91,8 @@ async function publishOnePost(
     title: postContent.title,
     content: fullContent,
     summary: postContent.summary,
-    image_url: imageUrl,
+    image_url: imageUrls[0] ?? null,
+    image_urls: imageUrls,
     ai_generated: true,
     published: true,
   }).select('id').single()

@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
-import { generatePostImage } from '@/lib/ai/image-gen'
+import { generatePostImages, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
 import { revalidatePath } from 'next/cache'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
@@ -92,8 +92,8 @@ export const generatePostAction = action
       : ''
     const fullContent = metaBlock + postContent.content
 
-    // 이미지 자동 생성 (실패해도 포스팅 진행) — 힌트 없으면 제목 기반 맥락 생성
-    const imageUrl = await generatePostImage(postContent.imagePrompt || postContent.title)
+    // 이미지 자동 생성 (실패해도 포스팅 진행) — 힌트 없으면 제목 기반 맥락 생성, 게시물당 1회 N장
+    const imageUrls = await generatePostImages(postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
 
     // DB 저장
     const { data: post, error } = await db
@@ -104,7 +104,8 @@ export const generatePostAction = action
         title: postContent.title,
         content: fullContent,
         summary: postContent.summary,
-        image_url: imageUrl,
+        image_url: imageUrls[0] ?? null,
+        image_urls: imageUrls,
         ai_generated: true,
         published: true,
       })
@@ -354,8 +355,8 @@ export const publishTodayAction = action
 
       const fullContent = metaBlock + postContent.content
 
-      // 이미지 자동 생성 (실패해도 포스팅 진행) — 힌트 없으면 제목 기반 맥락 생성
-      const imageUrl = await generatePostImage(postContent.imagePrompt || postContent.title)
+      // 이미지 자동 생성 (실패해도 포스팅 진행) — 게시물당 1회 N장
+      const imageUrls = await generatePostImages(postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
 
       const { data: savedPost, error } = await db.from('biz_posts').insert({
         business_id: businessId,
@@ -363,7 +364,8 @@ export const publishTodayAction = action
         title: postContent.title,
         content: fullContent,
         summary: postContent.summary,
-        image_url: imageUrl,
+        image_url: imageUrls[0] ?? null,
+        image_urls: imageUrls,
         ai_generated: true,
         published: true,
       }).select('id').single()
@@ -386,6 +388,42 @@ export const publishTodayAction = action
 
     revalidatePath('/dashboard/marketing')
     return { success: true, published: needed, titles }
+  })
+
+// 포스트 이미지 생성 액션 — "이미지 생성" 버튼용
+// 게시물당 1회만: 이미 image_urls가 있으면 재생성 거부 (크레딧 중복 차단)
+export const generatePostImagesAction = action
+  .schema(z.object({ id: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { data: post } = await db
+      .from('biz_posts')
+      .select('title, image_urls')
+      .eq('id', parsedInput.id)
+      .eq('business_id', businessId)
+      .maybeSingle()
+
+    if (!post) throw new Error('[APP] 포스트를 찾을 수 없습니다')
+    if ((post.image_urls?.length ?? 0) > 0) {
+      throw new Error('[APP] 이미 이미지가 생성된 글이에요')
+    }
+
+    const imageUrls = await generatePostImages(post.title, POST_IMAGE_COUNT)
+    if (imageUrls.length === 0) {
+      throw new Error('[APP] 이미지를 만들지 못했어요. 잠시 후 다시 시도해주세요')
+    }
+
+    const { error } = await db
+      .from('biz_posts')
+      .update({ image_url: imageUrls[0], image_urls: imageUrls })
+      .eq('id', parsedInput.id)
+      .eq('business_id', businessId)
+
+    if (error) throw new Error('[APP] 이미지 저장에 실패했습니다')
+
+    revalidatePath('/dashboard/marketing')
+    return { success: true, imageUrls }
   })
 
 // 포스트 삭제 액션

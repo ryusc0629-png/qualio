@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
-import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, publishTodayAction } from '@/lib/actions/posts'
+import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, publishTodayAction, generatePostImagesAction } from '@/lib/actions/posts'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -57,6 +57,7 @@ interface Post {
   ai_generated: boolean
   published_at: string
   image_url: string | null
+  image_urls: string[] | null
   naver_title: string | null
   naver_content: string | null
   naver_tags: string[] | null
@@ -154,6 +155,8 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   const [naverPost, setNaverPost] = useState<Post | null>(null)
   const [daangnPost, setDaangnPost] = useState<Post | null>(null)
   const [instaPost, setInstaPost] = useState<Post | null>(null)
+  const [galleryPost, setGalleryPost] = useState<Post | null>(null)
+  const [genId, setGenId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
   const handleCopy = (content: string) => {
@@ -197,6 +200,14 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
 const { execute: deletePost, isPending: isDeleting } = useAction(deletePostAction, {
     onSuccess: () => { toast.success('삭제됐습니다'); window.location.reload() },
     onError: ({ error }) => { toast.error(error.serverError ?? '삭제에 실패했습니다') },
+  })
+
+  const { execute: generateImages } = useAction(generatePostImagesAction, {
+    onSuccess: () => {
+      toast.success('이미지가 만들어졌어요!')
+      setTimeout(() => window.location.replace(window.location.pathname), 1200)
+    },
+    onError: ({ error }) => { setGenId(null); toast.error(error.serverError ?? '이미지 생성에 실패했어요') },
   })
 
   const { execute: publishToday, isPending: isPublishing } = useAction(publishTodayAction, {
@@ -429,6 +440,29 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                         IG
                       </button>
                     )}
+                    {/* 이미지 생성 / 보기 (게시물당 1회) */}
+                    {(post.image_urls?.length ?? 0) > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setGalleryPost(post)}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-violet-700 bg-violet-100 hover:bg-violet-200 transition-colors"
+                        title="생성된 이미지 보기"
+                      >
+                        <ImageIcon className="h-3.5 w-3.5" />{post.image_urls!.length}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={genId === post.id}
+                        onClick={() => { setGenId(post.id); generateImages({ id: post.id }) }}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors disabled:opacity-60"
+                        title="이 글에 맞는 이미지 생성 (게시물당 1회)"
+                      >
+                        {genId === post.id
+                          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />생성 중</>
+                          : <><ImageIcon className="h-3.5 w-3.5" />이미지</>}
+                      </button>
+                    )}
                     {url && (
                       <a href={url} target="_blank" rel="noopener noreferrer">
                         <Button size="icon" variant="ghost" className="h-8 w-8"><ExternalLink className="h-3.5 w-3.5" /></Button>
@@ -649,6 +683,48 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                 <ExternalLink className="h-4 w-4" />
                 블로그 열기
               </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 이미지 갤러리 모달 */}
+      {galleryPost && (galleryPost.image_urls?.length ?? 0) > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-md bg-violet-100 flex items-center justify-center">
+                  <ImageIcon className="h-4 w-4 text-violet-700" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">생성된 이미지 ({galleryPost.image_urls!.length}장)</p>
+                  <p className="text-xs text-muted-foreground">저장 후 네이버 블로그 등에 올려주세요</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setGalleryPost(null)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {galleryPost.image_urls!.map((src, i) => (
+                <div key={i} className="rounded-xl border overflow-hidden bg-slate-50">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt={`이미지 ${i + 1}`} className="w-full aspect-[4/3] object-cover" />
+                  <a
+                    href={src}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download
+                    className="flex items-center justify-center gap-1.5 h-10 text-xs font-medium text-violet-700 hover:bg-violet-50 transition-colors"
+                  >
+                    <Download className="h-3.5 w-3.5" />저장하기
+                  </a>
+                </div>
+              ))}
+            </div>
+            <div className="px-5 py-3 border-t shrink-0 text-xs text-muted-foreground text-center">
+              이미지는 게시물당 한 번만 생성돼요 (크레딧 절약)
             </div>
           </div>
         </div>

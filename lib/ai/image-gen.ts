@@ -7,6 +7,9 @@ import { fal } from '@fal-ai/client'
 const IMAGE_MODEL = 'fal-ai/flux/dev'
 const STEPS = IMAGE_MODEL.includes('schnell') ? 4 : 28
 
+// 포스트당 생성할 이미지 수 (네이버 상위노출 균형점: 대표 1 + 본문용 2)
+export const POST_IMAGE_COUNT = 3
+
 interface FalImage {
   url: string
   width: number
@@ -54,18 +57,16 @@ export function buildImagePrompt(seed: string): string {
   return `${subject}, ${STYLE_SUFFIX}`
 }
 
-// seed(제목 또는 Claude imagePrompt) → 맥락 맞춤 이미지 1장 생성
-// 실패해도 throw하지 않고 null 반환 (포스팅은 정상 진행)
-export async function generatePostImage(seed: string): Promise<string | null> {
-  const apiKey = process.env.FAL_KEY
-  if (!apiKey) {
-    console.error('[Image] FAL_KEY 환경변수가 설정되지 않았습니다')
-    return null
-  }
+// 여러 장 생성 시 서로 다른 앵글로 다양성 확보 (네이버 본문 삽입용)
+const ANGLE_VARIANTS = [
+  '', // 0: 기본 (작업 손/뒷모습 컷)
+  ', wide establishing shot of the clean bright space, result focused',
+  ', extreme close-up detail of the spotless cleaned surface',
+  ', slightly different angle, soft depth of field',
+  ', overhead top-down view of the tidy clean area',
+]
 
-  fal.config({ credentials: apiKey })
-  const prompt = buildImagePrompt(seed)
-
+async function runFlux(prompt: string): Promise<string | null> {
   try {
     const result = await fal.subscribe(IMAGE_MODEL, {
       input: {
@@ -77,13 +78,39 @@ export async function generatePostImage(seed: string): Promise<string | null> {
         enable_safety_checker: true,
       },
     }) as { data: FalResult }
-
-    const url = result.data?.images?.[0]?.url
-    if (!url) return null
-    return url
+    return result.data?.images?.[0]?.url ?? null
   } catch (err) {
-    // 이미지 생성 실패 시 포스팅은 정상 진행 (이미지만 없음)
     console.error('[Image] 이미지 생성 실패:', err instanceof Error ? err.message : err)
     return null
   }
+}
+
+// seed(제목 또는 Claude imagePrompt) → 맥락 맞춤 이미지 1장 생성
+// 실패해도 throw하지 않고 null 반환 (포스팅은 정상 진행)
+export async function generatePostImage(seed: string): Promise<string | null> {
+  const apiKey = process.env.FAL_KEY
+  if (!apiKey) {
+    console.error('[Image] FAL_KEY 환경변수가 설정되지 않았습니다')
+    return null
+  }
+  fal.config({ credentials: apiKey })
+  return runFlux(buildImagePrompt(seed))
+}
+
+// seed → 맥락 맞춤 이미지 count장 생성 (앵글을 달리해 다양성 확보)
+// 네이버 상위노출용 다중 이미지. 실패한 장은 제외하고 성공한 URL 배열만 반환.
+export async function generatePostImages(seed: string, count: number): Promise<string[]> {
+  const apiKey = process.env.FAL_KEY
+  if (!apiKey) {
+    console.error('[Image] FAL_KEY 환경변수가 설정되지 않았습니다')
+    return []
+  }
+  fal.config({ credentials: apiKey })
+
+  const base = buildImagePrompt(seed)
+  const n = Math.max(1, Math.min(count, ANGLE_VARIANTS.length))
+  const prompts = Array.from({ length: n }, (_, i) => base + ANGLE_VARIANTS[i])
+
+  const results = await Promise.all(prompts.map((p) => runFlux(p)))
+  return results.filter((u): u is string => Boolean(u))
 }
