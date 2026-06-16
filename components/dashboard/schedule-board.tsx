@@ -17,7 +17,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { addDays, format } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
 import { assignBookingAction, addWorkerAction, deleteWorkerAction } from '@/lib/actions/workers'
@@ -110,19 +110,24 @@ function BookingCard({
 }) {
   const time = format(new Date(booking.scheduled_at), 'HH:mm')
   const serviceName = booking.cleaning_type ?? '직접 예약'
+  const isCompleted = booking.status === 'completed'
 
   return (
     <div
       className={[
-        'rounded-lg px-2.5 py-2 text-white text-xs shadow-sm select-none',
+        'rounded-lg px-2.5 py-2 text-xs shadow-sm select-none',
         isDragging ? 'opacity-50' : 'opacity-100',
+        isCompleted ? 'text-gray-500 border border-gray-200' : 'text-white',
       ].join(' ')}
-      style={{ backgroundColor: color }}
+      style={{ backgroundColor: isCompleted ? '#f3f4f6' : color }}
     >
-      <p className="font-bold truncate">{booking.customer_name}</p>
-      <p className="opacity-80 truncate">{time} · {serviceName}</p>
+      <div className="flex items-center gap-1">
+        {isCompleted && <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />}
+        <p className={`font-bold truncate ${isCompleted ? 'line-through' : ''}`}>{booking.customer_name}</p>
+      </div>
+      <p className={`truncate ${isCompleted ? 'opacity-60' : 'opacity-80'}`}>{time} · {serviceName}</p>
       {booking.service_address && (
-        <p className="opacity-70 truncate flex items-center gap-0.5 mt-0.5">
+        <p className={`truncate flex items-center gap-0.5 mt-0.5 ${isCompleted ? 'opacity-50' : 'opacity-70'}`}>
           <MapPin className="h-2.5 w-2.5 shrink-0" />
           {booking.service_address}
         </p>
@@ -142,18 +147,20 @@ function DraggableBookingCard({
   color: string
   onClick: () => void
 }) {
+  const isCompleted = booking.status === 'completed'
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: booking.id,
     data: { booking },
+    disabled: isCompleted,
   })
 
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform) }}
-      className="cursor-grab active:cursor-grabbing touch-none"
+      className={isCompleted ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing touch-none'}
       onClick={onClick}
-      {...listeners}
+      {...(isCompleted ? {} : listeners)}
       {...attributes}
     >
       <BookingCard booking={booking} color={color} isDragging={isDragging} />

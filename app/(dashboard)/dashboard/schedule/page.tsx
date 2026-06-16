@@ -46,7 +46,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       .from('bookings' as never)
       .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, worker_id, quotes!quote_id(cleaning_type)')
       .eq('business_id' as never, businessId)
-      .in('status' as never, ['confirmed', 'in_progress'])
+      .in('status' as never, ['confirmed', 'in_progress', 'completed'])
       .gte('scheduled_at' as never, weekStart.toISOString())
       .lte('scheduled_at' as never, weekEnd.toISOString())
       .is('deleted_at' as never, null)
