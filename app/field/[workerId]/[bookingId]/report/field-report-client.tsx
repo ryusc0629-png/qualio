@@ -313,25 +313,65 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     (s) => !aiReport?.recommendedServices.includes(s.name)
   )
 
+  // AI 보고서 섹션 수정
+  const updateAiField = (field: keyof Omit<AiReportData, 'recommendedServices'>, value: string) => {
+    if (!aiReport) return
+    const updated = { ...aiReport, [field]: value }
+    setAiReport(updated)
+    setNotes(formatAiNotes(updated, selectedServices))
+  }
+
+  // 편집 가능한 보고서 섹션
+  const EditableSection = ({
+    label,
+    value,
+    field,
+    bgClass,
+    borderClass,
+    labelClass,
+    textClass,
+  }: {
+    label: string
+    value: string
+    field: keyof Omit<AiReportData, 'recommendedServices'>
+    bgClass: string
+    borderClass: string
+    labelClass: string
+    textClass: string
+  }) => {
+    const [editing, setEditing] = useState(false)
+    return (
+      <div className={`rounded-lg ${bgClass} border ${borderClass} p-3 space-y-1`}>
+        <p className={`text-xs font-semibold ${labelClass}`}>{label}</p>
+        {editing ? (
+          <textarea
+            className={`w-full text-sm ${textClass} bg-transparent border-none outline-none resize-none`}
+            value={value}
+            rows={3}
+            autoFocus
+            onChange={(e) => updateAiField(field, e.target.value)}
+            onBlur={() => setEditing(false)}
+          />
+        ) : (
+          <p
+            className={`text-sm ${textClass} cursor-pointer hover:opacity-70`}
+            onClick={() => setEditing(true)}
+          >
+            {value}
+          </p>
+        )}
+      </div>
+    )
+  }
+
   // AI 보고서 표시 컴포넌트
   const AiReportView = ({ report }: { report: AiReportData }) => (
     <div className="space-y-3">
-      <div className="rounded-lg bg-amber-50 border border-amber-100 p-3 space-y-1">
-        <p className="text-xs font-semibold text-amber-800">작업 전 상태</p>
-        <p className="text-sm text-amber-900">{report.beforeStatus}</p>
-      </div>
-      <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 space-y-1">
-        <p className="text-xs font-semibold text-blue-800">작업 내용</p>
-        <p className="text-sm text-blue-900">{report.workDetails}</p>
-      </div>
-      <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-3 space-y-1">
-        <p className="text-xs font-semibold text-emerald-800">작업 결과</p>
-        <p className="text-sm text-emerald-900">{report.afterResult}</p>
-      </div>
-      <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-1">
-        <p className="text-xs font-semibold text-gray-700">참고사항</p>
-        <p className="text-sm text-gray-800">{report.additionalNotes}</p>
-      </div>
+      <p className="text-[10px] text-muted-foreground text-center">각 항목을 탭하면 수정할 수 있어요</p>
+      <EditableSection label="작업 전 상태" value={report.beforeStatus} field="beforeStatus" bgClass="bg-amber-50" borderClass="border-amber-100" labelClass="text-amber-800" textClass="text-amber-900" />
+      <EditableSection label="작업 내용" value={report.workDetails} field="workDetails" bgClass="bg-blue-50" borderClass="border-blue-100" labelClass="text-blue-800" textClass="text-blue-900" />
+      <EditableSection label="작업 결과" value={report.afterResult} field="afterResult" bgClass="bg-emerald-50" borderClass="border-emerald-100" labelClass="text-emerald-800" textClass="text-emerald-900" />
+      <EditableSection label="참고사항" value={report.additionalNotes} field="additionalNotes" bgClass="bg-gray-50" borderClass="border-gray-200" labelClass="text-gray-700" textClass="text-gray-800" />
       <div className="rounded-lg bg-violet-50 border border-violet-100 p-3 space-y-2">
         <div className="flex items-center justify-between">
           <p className="text-xs font-semibold text-violet-800">추천 서비스</p>
