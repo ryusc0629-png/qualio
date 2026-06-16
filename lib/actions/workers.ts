@@ -92,10 +92,13 @@ export const updateBookingTimeAction = action
 
     const current = new Date(booking.scheduled_at as string)
     const [hours, minutes] = parsedInput.newTime.split(':').map(Number)
-    const newScheduledAt = new Date(Date.UTC(
-      current.getUTCFullYear(), current.getUTCMonth(), current.getUTCDate(),
-      hours!, minutes!,
-    )).toISOString()
+    // KST(UTC+9) 기준 날짜를 보존하고 시간만 교체
+    const kstOffset = 9 * 60 * 60 * 1000
+    const kstDate = new Date(current.getTime() + kstOffset)
+    const dateStr = kstDate.toISOString().slice(0, 10)
+    const newScheduledAt = new Date(
+      `${dateStr}T${String(hours!).padStart(2, '0')}:${String(minutes!).padStart(2, '0')}:00+09:00`
+    ).toISOString()
 
     const { error } = await db
       .from('bookings')

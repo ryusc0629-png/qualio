@@ -271,7 +271,7 @@ export default async function DashboardPage() {
                 <ClipboardList className="h-4 w-4 text-orange-600 shrink-0" />
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-orange-800">
-                    작업완료 알림톡 안 보낸 고객이 {unreportedCount}명이에요
+                    작업 보고서를 안 보낸 고객이 {unreportedCount}명이에요
                   </p>
                   <p className="text-xs text-orange-600 mt-0.5">눌러서 바로 발송하세요</p>
                 </div>

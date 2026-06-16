@@ -48,7 +48,7 @@ function UnreportedRow({
 
   const { execute, isPending } = useAction(saveReportAction, {
     onSuccess: () => {
-      toast.success(`${booking.customer_name}님께 작업완료 알림톡을 발송했어요!`)
+      toast.success(`${booking.customer_name}님께 작업 보고서를 발송했어요!`)
       setOpen(false)
       onSent(booking.bookingId)
     },
@@ -79,12 +79,12 @@ function UnreportedRow({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>작업완료 알림톡 발송</DialogTitle>
+            <DialogTitle>작업 보고서 발송</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3 py-2">
             <p className="text-sm text-muted-foreground">
-              아래 고객에게 작업완료 알림톡을 발송할까요?
+              아래 고객에게 작업 보고서를 발송할까요?
             </p>
             <div className="rounded-xl bg-muted/50 p-4 space-y-2.5">
               <div className="flex items-center gap-2">
@@ -263,7 +263,7 @@ export function AlimtalkTodoList({ unreportedBookings, unreviewedItems }: Props)
           <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-border bg-orange-50">
             <ClipboardList className="h-4 w-4 text-orange-600 shrink-0" />
             <p className="text-sm font-semibold text-orange-800">
-              작업완료 알림톡 미발송 — {visibleUnreported.length}명
+              작업 보고서 미발송 — {visibleUnreported.length}명
             </p>
           </div>
           <div className="px-4">

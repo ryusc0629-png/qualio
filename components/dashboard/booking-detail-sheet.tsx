@@ -128,6 +128,7 @@ export function BookingDetailSheet({
   const [currentReviewSent, setCurrentReviewSent] = useState(false)
   const [reportDialogOpen, setReportDialogOpen]   = useState(false)
   const [reviewDialogOpen, setReviewDialogOpen]   = useState(false)
+  const [reportNotes, setReportNotes]             = useState('')
 
   // booking이 바뀔 때마다 보고서 상태 초기화
   useEffect(() => {
@@ -176,12 +177,12 @@ export function BookingDetailSheet({
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
-  // 작업완료 알림톡 발송 액션
+  // 작업 보고서 발송 액션
   const { execute: sendReport, isPending: reportPending } = useAction(saveReportAction, {
     onSuccess: ({ data }) => {
       if (data?.reportId) setCurrentReportId(data.reportId)
       setReportDialogOpen(false)
-      toast.success('작업완료 알림톡을 발송했어요!')
+      toast.success('작업 보고서를 발송했어요!')
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -496,7 +497,7 @@ export function BookingDetailSheet({
                     onClick={() => setReportDialogOpen(true)}
                   >
                     <Send className="h-4 w-4" />
-                    작업완료 알림톡 발송
+                    작업 보고서 발송
                   </Button>
                 )}
 
@@ -505,7 +506,7 @@ export function BookingDetailSheet({
                   <>
                     <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium px-1">
                       <CheckCircle2 className="h-3.5 w-3.5" />
-                      작업완료 알림톡 발송됨
+                      작업 보고서 발송됨
                     </div>
                     <Button
                       variant="outline"
@@ -522,7 +523,7 @@ export function BookingDetailSheet({
                 {currentReportId && currentReviewSent && (
                   <div className="flex items-center justify-center gap-1.5 text-sm text-emerald-600 font-medium py-3">
                     <CheckCircle2 className="h-4 w-4" />
-                    알림톡 · 리뷰 요청 모두 발송 완료
+                    작업 보고서 · 리뷰 요청 모두 발송 완료
                   </div>
                 )}
 
@@ -557,41 +558,70 @@ export function BookingDetailSheet({
       </SheetContent>
     </Sheet>
 
-    {/* 작업완료 알림톡 발송 확인 Dialog */}
+    {/* 작업 보고서 발송 확인 Dialog */}
 
-    <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
+    <Dialog open={reportDialogOpen} onOpenChange={(o) => { setReportDialogOpen(o); if (!o) setReportNotes('') }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>작업완료 알림톡 발송</DialogTitle>
+          <DialogTitle>작업 보고서 발송</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 py-2">
-          <p className="text-sm text-muted-foreground">
-            아래 고객에게 작업완료 알림톡을 발송할까요?
-          </p>
+        <div className="space-y-4 py-1">
+          {/* 보고서 내용 확인 */}
           <div className="rounded-xl bg-muted/50 p-4 space-y-2.5">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground w-16 shrink-0">받는 분</span>
+              <span className="text-xs text-muted-foreground w-14 shrink-0">받는 분</span>
               <span className="text-sm font-semibold">{booking?.customer_name}</span>
             </div>
             {booking?.customer_phone && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground w-16 shrink-0">연락처</span>
+                <span className="text-xs text-muted-foreground w-14 shrink-0">연락처</span>
                 <span className="text-sm flex items-center gap-1">
                   <Phone className="h-3 w-3 text-muted-foreground" />
                   {booking.customer_phone}
                 </span>
               </div>
             )}
-            <div className="flex items-start gap-2">
-              <span className="text-xs text-muted-foreground w-16 shrink-0 pt-0.5">내용</span>
-              <span className="text-sm text-muted-foreground leading-relaxed">
-                작업이 완료되었다는 안내와 함께 보고서 확인 링크가 전달돼요
-              </span>
-            </div>
+            {booking?.cleaning_type && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-14 shrink-0">서비스</span>
+                <span className="text-sm">{booking.cleaning_type}</span>
+              </div>
+            )}
+            {booking?.scheduled_at && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-14 shrink-0">작업일</span>
+                <span className="text-sm">
+                  {format(new Date(booking.scheduled_at), 'M월 d일 (EEE) HH:mm', { locale: ko })}
+                </span>
+              </div>
+            )}
+            {booking && booking.final_price > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-14 shrink-0">금액</span>
+                <span className="text-sm font-semibold">
+                  {new Intl.NumberFormat('ko-KR').format(booking.final_price)}원
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* 특이사항 메모 */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">
+              특이사항 메모 <span className="font-normal">(선택)</span>
+            </label>
+            <textarea
+              value={reportNotes}
+              onChange={(e) => setReportNotes(e.target.value)}
+              placeholder="고객에게 전달할 내용이 있으면 입력해주세요"
+              rows={3}
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50"
+            />
           </div>
         </div>
+
         <DialogFooter className="gap-2">
-          <Button variant="outline" className="flex-1" onClick={() => setReportDialogOpen(false)}>
+          <Button variant="outline" className="flex-1" onClick={() => { setReportDialogOpen(false); setReportNotes('') }}>
             취소
           </Button>
           <Button
@@ -601,6 +631,7 @@ export function BookingDetailSheet({
               if (!booking) return
               sendReport({
                 bookingId:       booking.id,
+                notes:           reportNotes.trim() || undefined,
                 beforePhotoUrls: [],
                 afterPhotoUrls:  [],
                 sendAlimtalk:    true,

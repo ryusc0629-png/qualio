@@ -26,7 +26,7 @@ export default async function AlimtalkTodoPage() {
   ] = await Promise.all([
     // 완료된 예약 전체
     db.from('bookings')
-      .select('id, customer_name, customer_phone, scheduled_at')
+      .select('id, customer_name, customer_phone, scheduled_at, final_price, quotes!quote_id(cleaning_type)')
       .eq('business_id', businessId)
       .eq('status', 'completed')
       .is('deleted_at', null)
