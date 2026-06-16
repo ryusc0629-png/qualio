@@ -63,7 +63,21 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     status: string; worker_id: string | null
     quotes: { cleaning_type: string | null } | null
   }
-  const bookings = ((bookingsResult as unknown as { data: RawBooking[] | null }).data)
+  const bookings = ((bookingsResult as unknown as { data: RawBooking[] | null }).data) ?? []
+
+  // 전화번호 → 고객 ID 매핑 (고객 상세 링크용)
+  const phones = [...new Set(bookings.map(b => b.customer_phone).filter(Boolean))] as string[]
+  const customerMap = new Map<string, string>()
+  if (phones.length > 0) {
+    const { data: customers } = await db
+      .from('customers')
+      .select('id, phone')
+      .eq('business_id', businessId)
+      .in('phone', phones)
+    for (const c of customers ?? []) {
+      if (c.phone) customerMap.set(c.phone, c.id)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -77,7 +91,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       <ScheduleBoard
         businessId={businessId}
         workers={workers ?? []}
-        bookings={(bookings ?? []).map((b) => ({
+        bookings={bookings.map((b) => ({
           id:              b.id,
           customer_name:   b.customer_name,
           customer_phone:  b.customer_phone,
@@ -87,6 +101,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           status:          b.status,
           worker_id:       b.worker_id,
           cleaning_type:   b.quotes?.cleaning_type ?? null,
+          customer_id:     b.customer_phone ? customerMap.get(b.customer_phone) ?? null : null,
         }))}
         weekStart={weekStart.toISOString()}
         weekLabel={weekLabel}

@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
+import Link from 'next/link'
 import {
-  Phone, MapPin, Clock, User,
+  Phone, MapPin, Clock, User, ChevronRight,
   Pencil, Check, X, CalendarDays,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -50,6 +51,7 @@ interface Booking {
   status: string
   worker_id: string | null
   cleaning_type: string | null
+  customer_id: string | null
 }
 
 interface Props {
@@ -203,7 +205,7 @@ export function BookingDetailSheet({
 
   return (
     <Sheet open={!!booking} onOpenChange={(isOpen: boolean) => { if (!isOpen) { setEditingTime(false); onClose() } }}>
-      <SheetContent side="left" className="w-full sm:max-w-md flex flex-col p-0" showCloseButton={false}>
+      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0" showCloseButton={false}>
 
         {/* 헤더 */}
         <SheetHeader className="px-5 pt-5 pb-4 border-b border-border">
@@ -363,6 +365,20 @@ export function BookingDetailSheet({
               </Row>
             )}
           </div>
+
+          {/* 고객 상세 정보 링크 */}
+          {booking?.customer_id && (
+            <Link
+              href={`/dashboard/clients/${booking.customer_id}`}
+              className="flex items-center justify-between px-4 py-3.5 rounded-xl border border-border hover:bg-muted transition-colors mb-4"
+            >
+              <div>
+                <span className="text-sm font-medium">고객 상세 정보 보기</span>
+                <p className="text-xs text-muted-foreground mt-0.5">이용 내역, 메모, 계약 등 전체 정보</p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+            </Link>
+          )}
 
         </div>
 

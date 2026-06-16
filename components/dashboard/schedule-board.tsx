@@ -53,6 +53,7 @@ interface Booking {
   status: string
   worker_id: string | null
   cleaning_type: string | null
+  customer_id: string | null
 }
 
 interface Props {
