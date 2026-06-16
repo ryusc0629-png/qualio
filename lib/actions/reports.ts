@@ -4,14 +4,24 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendWorkCompleteAlimtalk, sendReviewRequestAlimtalk } from '@/lib/kakao/alimtalk'
+import { generateAiReport } from '@/lib/ai/report-writer'
 import { revalidatePath } from 'next/cache'
+
+const aiReportDataSchema = z.object({
+  beforeStatus:        z.string(),
+  workDetails:         z.string(),
+  afterResult:         z.string(),
+  additionalNotes:     z.string(),
+  recommendedServices: z.array(z.string()),
+})
 
 const saveReportSchema = z.object({
   bookingId:       z.string().uuid(),
-  notes:           z.string().max(2000).optional(),
+  notes:           z.string().max(5000).optional(),
   beforePhotoUrls: z.array(z.string().min(1)).max(5),
   afterPhotoUrls:  z.array(z.string().min(1)).max(5),
   sendAlimtalk:    z.boolean(),
+  aiReportData:    aiReportDataSchema.optional(),
 })
 
 export const saveReportAction = action
@@ -31,7 +41,7 @@ export const saveReportAction = action
 
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
-    const { bookingId, notes, beforePhotoUrls, afterPhotoUrls, sendAlimtalk } = parsedInput
+    const { bookingId, notes, beforePhotoUrls, afterPhotoUrls, sendAlimtalk, aiReportData } = parsedInput
 
     // 예약이 이 업체 소속인지 확인
     const { data: booking } = await db
@@ -44,14 +54,17 @@ export const saveReportAction = action
     if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
 
     // 보고서 upsert (booking_id unique 제약)
+    const upsertData: Record<string, unknown> = {
+      business_id: profile.business_id,
+      booking_id:  bookingId,
+      notes:       notes ?? null,
+    }
+    if (aiReportData) upsertData.ai_report_data = aiReportData
+    if (sendAlimtalk) upsertData.kakao_sent_at = new Date().toISOString()
+
     const { data: report, error: reportError } = await db
       .from('reports')
-      .upsert({
-        business_id: profile.business_id,
-        booking_id:  bookingId,
-        notes:       notes ?? null,
-        ...(sendAlimtalk ? { kakao_sent_at: new Date().toISOString() } : {}),
-      }, { onConflict: 'booking_id' })
+      .upsert(upsertData as never, { onConflict: 'booking_id' })
       .select('id')
       .single()
 
@@ -109,6 +122,71 @@ export const saveReportAction = action
     revalidatePath('/dashboard/work')
     revalidatePath('/dashboard/schedule')
     return { reportId: report.id }
+  })
+
+// 저장된 보고서 발송 (사장님 전용 — 이미 저장된 보고서에 대한 알림톡 발송)
+export const ownerSendReportAction = action
+  .schema(z.object({ reportId: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+    const { data: profile } = await db.from('profiles').select('business_id').eq('id', user.id).single()
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const { data: report } = await db
+      .from('reports')
+      .select('id, booking_id')
+      .eq('id', parsedInput.reportId)
+      .eq('business_id', profile.business_id)
+      .single()
+    if (!report) throw new Error('[APP] 보고서를 찾을 수 없습니다')
+
+    const { data: booking } = await db
+      .from('bookings')
+      .select('customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), businesses!business_id(name, phone)')
+      .eq('id', report.booking_id)
+      .eq('business_id', profile.business_id)
+      .single()
+    if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
+    if (!booking.customer_phone) throw new Error('[APP] 고객 연락처가 없어 발송할 수 없어요')
+
+    const biz   = Array.isArray(booking.businesses) ? booking.businesses[0] : booking.businesses
+    const quote = Array.isArray(booking.quotes)     ? booking.quotes[0]     : booking.quotes
+    const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.kr'
+
+    await sendWorkCompleteAlimtalk({
+      customerPhone: booking.customer_phone,
+      customerName:  booking.customer_name ?? '고객',
+      businessName:  (biz as { name: string; phone: string | null } | null)?.name ?? '',
+      businessPhone: (biz as { name: string; phone: string | null } | null)?.phone ?? null,
+      cleaningType:  (quote as { cleaning_type: string | null } | null)?.cleaning_type ?? '청소 서비스',
+      scheduledAt:   booking.scheduled_at ?? '',
+      reportUrl:     `${appBaseUrl}/q/${profile.business_id}/report/${report.id}`,
+    })
+
+    await db.from('reports').update({ kakao_sent_at: new Date().toISOString() }).eq('id', parsedInput.reportId)
+
+    revalidatePath('/dashboard/schedule')
+    revalidatePath('/dashboard/alimtalk-todo')
+    return { success: true }
+  })
+
+// AI 보고서 자동 작성 (사장님 전용)
+export const ownerGenerateAiReportAction = action
+  .schema(z.object({
+    memo:         z.string().min(5, '메모를 5자 이상 입력해주세요').max(2000),
+    serviceItems: z.array(z.object({ name: z.string(), basePrice: z.number() })).optional(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const result = await generateAiReport(parsedInput.memo, parsedInput.serviceItems)
+    return { success: true, report: result }
   })
 
 const sendReviewSchema = z.object({

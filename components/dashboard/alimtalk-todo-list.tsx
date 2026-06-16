@@ -5,7 +5,8 @@ import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { Send, Star, CheckCircle2, ClipboardList, Phone } from 'lucide-react'
+import { Send, Star, CheckCircle2, ClipboardList, Phone, FileText } from 'lucide-react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,7 +15,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { saveReportAction, sendReviewRequestAction } from '@/lib/actions/reports'
+import { sendReviewRequestAction } from '@/lib/actions/reports'
 
 interface UnreportedBooking {
   bookingId: string
@@ -34,133 +35,29 @@ interface UnreviewedItem {
 
 interface Props {
   unreportedBookings: UnreportedBooking[]
-  unreviewedItems: UnreviewedItem[]
+  unreviewedItems:    UnreviewedItem[]
 }
 
 // ── 작업완료 알림톡 행 ───────────────────────────────────
 
-function UnreportedRow({
-  booking,
-  onSent,
-}: {
-  booking: UnreportedBooking
-  onSent: (id: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const [notes, setNotes] = useState('')
-
-  const { execute, isPending } = useAction(saveReportAction, {
-    onSuccess: () => {
-      toast.success(`${booking.customer_name}님께 작업 보고서를 발송했어요!`)
-      setOpen(false)
-      setNotes('')
-      onSent(booking.bookingId)
-    },
-    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
-  })
-
+function UnreportedRow({ booking }: { booking: UnreportedBooking }) {
   const dateLabel = booking.scheduled_at
-    ? format(new Date(booking.scheduled_at), 'M월 d일 (EEE) HH:mm', { locale: ko })
+    ? format(new Date(booking.scheduled_at), 'M월 d일 (EEE)', { locale: ko })
     : '—'
 
   return (
-    <>
-      <div className="flex items-center gap-3 py-3.5 border-b border-border last:border-0">
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm">{booking.customer_name}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {booking.scheduled_at
-              ? format(new Date(booking.scheduled_at), 'M월 d일 (EEE)', { locale: ko })
-              : '—'}
-          </p>
-        </div>
-        <Button size="sm" className="h-10 gap-1.5 shrink-0 px-4" onClick={() => setOpen(true)}>
-          <Send className="h-3.5 w-3.5" />
-          발송하기
-        </Button>
+    <div className="flex items-center gap-3 py-3.5 border-b border-border last:border-0">
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-sm">{booking.customer_name}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{dateLabel}</p>
       </div>
-
-      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setNotes('') }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>작업 보고서 발송</DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 py-1">
-            {/* 보고서 내용 확인 */}
-            <div className="rounded-xl bg-muted/50 p-4 space-y-2.5">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground w-14 shrink-0">받는 분</span>
-                <span className="text-sm font-semibold">{booking.customer_name}</span>
-              </div>
-              {booking.customer_phone && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground w-14 shrink-0">연락처</span>
-                  <span className="text-sm flex items-center gap-1">
-                    <Phone className="h-3 w-3 text-muted-foreground" />
-                    {booking.customer_phone}
-                  </span>
-                </div>
-              )}
-              {booking.cleaning_type && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground w-14 shrink-0">서비스</span>
-                  <span className="text-sm">{booking.cleaning_type}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground w-14 shrink-0">작업일</span>
-                <span className="text-sm">{dateLabel}</span>
-              </div>
-              {booking.final_price != null && booking.final_price > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground w-14 shrink-0">금액</span>
-                  <span className="text-sm font-semibold">
-                    {new Intl.NumberFormat('ko-KR').format(booking.final_price)}원
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* 특이사항 메모 */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">
-                특이사항 메모 <span className="font-normal">(선택)</span>
-              </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="고객에게 전달할 내용이 있으면 입력해주세요"
-                rows={3}
-                className="w-full rounded-lg border border-border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button variant="outline" className="flex-1" onClick={() => { setOpen(false); setNotes('') }}>
-              취소
-            </Button>
-            <Button
-              className="flex-1 gap-1.5"
-              disabled={isPending}
-              onClick={() =>
-                execute({
-                  bookingId:       booking.bookingId,
-                  notes:           notes.trim() || undefined,
-                  beforePhotoUrls: [],
-                  afterPhotoUrls:  [],
-                  sendAlimtalk:    true,
-                })
-              }
-            >
-              <Send className="h-3.5 w-3.5" />
-              {isPending ? '발송 중...' : '발송하기'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+      <Link href={`/dashboard/bookings/${booking.bookingId}/report`}>
+        <Button size="sm" className="h-10 gap-1.5 shrink-0 px-4">
+          <FileText className="h-3.5 w-3.5" />
+          보고서 작성
+        </Button>
+      </Link>
+    </div>
   )
 }
 
@@ -265,10 +162,9 @@ function UnreviewedRow({
 // ── 메인 컴포넌트 ────────────────────────────────────────
 
 export function AlimtalkTodoList({ unreportedBookings, unreviewedItems }: Props) {
-  const [sentBookingIds, setSentBookingIds] = useState(new Set<string>())
-  const [sentReportIds, setSentReportIds]   = useState(new Set<string>())
+  const [sentReportIds, setSentReportIds] = useState(new Set<string>())
 
-  const visibleUnreported = unreportedBookings.filter((b) => !sentBookingIds.has(b.bookingId))
+  const visibleUnreported = unreportedBookings
   const visibleUnreviewed = unreviewedItems.filter((i) => !sentReportIds.has(i.reportId))
 
   if (visibleUnreported.length === 0 && visibleUnreviewed.length === 0) {
@@ -296,7 +192,6 @@ export function AlimtalkTodoList({ unreportedBookings, unreviewedItems }: Props)
               <UnreportedRow
                 key={b.bookingId}
                 booking={b}
-                onSent={(id) => setSentBookingIds((prev) => new Set([...prev, id]))}
               />
             ))}
           </div>
