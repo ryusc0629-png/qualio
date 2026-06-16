@@ -1,7 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, Phone, MapPin, Calendar, Receipt, ChevronRight, FileText, Pencil } from 'lucide-react'
+import { ChevronLeft, Phone, MapPin, Calendar, Receipt, ChevronRight, FileText, User } from 'lucide-react'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 
 interface Props {
@@ -52,7 +52,22 @@ export default async function CustomerDetailPage({ params }: Props) {
         .order('scheduled_at', { ascending: false })
     : { data: null }
 
-  const bookingList = bookings ?? []
+  type BookingRow = typeof bookings extends (infer T)[] | null ? T : never
+  type BookingWithWorker = BookingRow & { worker_id?: string | null }
+  const bookingList = (bookings ?? []) as BookingWithWorker[]
+
+  // 담당자 조회
+  const workerIds = [...new Set(bookingList.map((b) => b.worker_id).filter(Boolean))] as string[]
+  const workerMap = new Map<string, string>()
+  if (workerIds.length > 0) {
+    const { data: workers } = await db
+      .from('workers' as never)
+      .select('id, name' as never)
+      .in('id' as never, workerIds) as unknown as { data: { id: string; name: string }[] | null }
+    for (const w of workers ?? []) {
+      workerMap.set(w.id, w.name)
+    }
+  }
 
   // 완료된 예약의 보고서 조회
   const completedIds = bookingList.filter(b => b.status === 'completed').map(b => b.id)
@@ -168,9 +183,8 @@ export default async function CustomerDetailPage({ params }: Props) {
               const spaceLabel = quote?.space_size ? ` · ${quote.space_size}평` : ''
               const statusMeta = STATUS_META[booking.status] ?? { label: booking.status, className: 'bg-gray-100 text-gray-600' }
               const hasReport = reportMap.has(booking.id)
-              const reportLink = hasReport
-                ? `/dashboard/bookings/${booking.id}/report`
-                : null
+              const reportLink = hasReport ? `/dashboard/bookings/${booking.id}/report` : null
+              const workerName = booking.worker_id ? workerMap.get(booking.worker_id) : null
 
               const CardWrapper = reportLink
                 ? ({ children }: { children: React.ReactNode }) => (
@@ -202,6 +216,12 @@ export default async function CustomerDetailPage({ params }: Props) {
                           day: 'numeric',
                         })}
                       </p>
+                      {workerName && (
+                        <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                          <User className="h-3 w-3 shrink-0" />
+                          {workerName}
+                        </p>
+                      )}
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-1.5">
                       <p className="font-bold tabular-nums flex items-center gap-1 text-sm">
