@@ -128,6 +128,7 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
   const [editLead, setEditLead] = useState<Lead | null>(null)
   const [form, setForm] = useState(emptyForm)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [quickFollowUp, setQuickFollowUp] = useState<{ leadId: string; date: string } | null>(null)
   const [, startTransition] = useTransition()
 
   const { execute: executeCreate, isPending: creating } = useAction(createLeadAction, {
@@ -144,6 +145,15 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
     onSuccess: () => {
       toast.success('수정했어요!')
       setEditLead(null)
+      startTransition(() => router.refresh())
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  const { execute: executeFollowUp, isPending: savingFollowUp } = useAction(updateLeadAction, {
+    onSuccess: () => {
+      toast.success('연락일을 저장했어요!')
+      setQuickFollowUp(null)
       startTransition(() => router.refresh())
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
@@ -348,19 +358,8 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
 
                 {/* 우측: 단계 + 버튼 */}
                 <div className="shrink-0 flex flex-col items-end gap-2">
-                  {live ? (
-                    // 일반 고객: 견적·예약에서 자동 계산된 실제 상태 (읽기 전용)
-                    <div className="text-right">
-                      <span className={`inline-block text-xs px-2 py-0.5 rounded font-medium ${live.className}`}>
-                        {live.label}
-                      </span>
-                      {live.date && (
-                        <p className="text-[11px] text-muted-foreground mt-0.5">
-                          {formatLiveDate(live.date)} 예정
-                        </p>
-                      )}
-                    </div>
-                  ) : (
+                  {isCompany ? (
+                    // 거래처: 수동 단계 선택
                     <Select value={lead.status} onValueChange={(v) => executeStatus({ leadId: lead.id, status: v })}>
                       <SelectTrigger className={`h-7 text-xs px-2 border-0 font-medium w-auto ${stage.color}`}>
                         <SelectValue />
@@ -373,6 +372,42 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
                         ))}
                       </SelectContent>
                     </Select>
+                  ) : live ? (
+                    // 일반 고객: 자동 계산 상태 + 상태별 빠른 액션
+                    <div className="text-right space-y-1">
+                      <span className={`inline-block text-xs px-2 py-0.5 rounded font-medium ${live.className}`}>
+                        {live.label}
+                      </span>
+                      {live.date && (
+                        <p className="text-[11px] text-muted-foreground">
+                          {formatLiveDate(live.date)} 예정
+                        </p>
+                      )}
+                      {live.key === 'quote' && (
+                        <button
+                          onClick={() => setQuickFollowUp({
+                            leadId: lead.id,
+                            date: lead.next_follow_up_date ?? new Date().toISOString().slice(0, 10),
+                          })}
+                          className="text-[11px] text-primary underline block"
+                        >
+                          연락일 설정
+                        </button>
+                      )}
+                      {(live.key === 'confirmed' || live.key === 'in_progress') && (
+                        <Link href="/dashboard/work" className="text-[11px] text-primary underline block">
+                          예약 보기 →
+                        </Link>
+                      )}
+                    </div>
+                  ) : (
+                    // 일반 고객: 견적·예약 없음 → 예약 만들기 유도
+                    <Link
+                      href="/dashboard/work"
+                      className="text-xs font-medium text-primary bg-primary/10 px-2 py-1 rounded-md whitespace-nowrap"
+                    >
+                      예약 만들기
+                    </Link>
                   )}
 
                   <div className="flex items-center gap-1">
@@ -397,6 +432,46 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
                   </div>
                 </div>
               </div>
+
+              {/* 일반 고객 빠른 연락일 설정 */}
+              {quickFollowUp?.leadId === lead.id && (
+                <div className="mt-3 pt-3 border-t flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={quickFollowUp.date}
+                    onChange={(e) => setQuickFollowUp((prev) => prev ? { ...prev, date: e.target.value } : null)}
+                    className="flex-1 h-9 text-sm border border-input rounded-md px-2 bg-background"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-9 shrink-0"
+                    disabled={savingFollowUp}
+                    onClick={() => executeFollowUp({
+                      leadId: lead.id,
+                      company_name: lead.company_name,
+                      customer_type: lead.customer_type,
+                      contact_name: lead.contact_name ?? undefined,
+                      contact_title: lead.contact_title ?? undefined,
+                      email: lead.email ?? undefined,
+                      phone: lead.phone ?? undefined,
+                      address: lead.address ?? undefined,
+                      monthly_budget: lead.monthly_budget ?? undefined,
+                      next_follow_up_date: quickFollowUp.date || undefined,
+                      notes: lead.notes ?? undefined,
+                    })}
+                  >
+                    {savingFollowUp ? '저장 중...' : '연락일 저장'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-9 px-2"
+                    onClick={() => setQuickFollowUp(null)}
+                  >
+                    취소
+                  </Button>
+                </div>
+              )}
 
               {/* 계약 완료 → 고객 전환 */}
               {isContracted && (
@@ -641,15 +716,18 @@ function LeadForm({
         />
       </div>
 
-      <div>
-        <Label>다음 연락 예정일</Label>
-        <Input
-          type="date"
-          value={form.next_follow_up_date}
-          onChange={(e) => onChange('next_follow_up_date', e.target.value)}
-          className="mt-1"
-        />
-      </div>
+      {/* 거래처만: 다음 연락 예정일 (일반 고객은 카드에서 빠른 설정 가능) */}
+      {isCompany && (
+        <div>
+          <Label>다음 연락 예정일</Label>
+          <Input
+            type="date"
+            value={form.next_follow_up_date}
+            onChange={(e) => onChange('next_follow_up_date', e.target.value)}
+            className="mt-1"
+          />
+        </div>
+      )}
 
       <div>
         <Label>메모</Label>
