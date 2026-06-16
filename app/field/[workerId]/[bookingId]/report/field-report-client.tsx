@@ -7,7 +7,6 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { PhotoGrid } from '@/components/ui/image-lightbox'
 import { createClient } from '@/lib/supabase/client'
 import { fieldSaveReportAction, fieldSendReportAction, fieldGenerateAiReportAction } from '@/lib/actions/field'
 import {
@@ -17,7 +16,6 @@ import {
   Upload,
   Send,
   CheckCircle2,
-  Eye,
   Save,
   Sparkles,
 } from 'lucide-react'
@@ -71,7 +69,6 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   )
   const [savedReportId, setSavedReportId] = useState<string | null>(existingReport?.id ?? null)
   const [alreadySent, setAlreadySent] = useState(!!existingReport?.sentAt)
-  const [showPreview, setShowPreview] = useState(false)
   const [aiReport, setAiReport] = useState<AiReportData | null>(null)
 
   const beforeInputRef = useRef<HTMLInputElement>(null)
@@ -168,6 +165,10 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
 
   const handleSend = () => {
     if (!savedReportId) return
+    const confirmed = window.confirm(
+      '보고서를 검토하셨나요?\n\n고객에게 카카오 알림톡으로 보고서가 발송됩니다.'
+    )
+    if (!confirmed) return
     sendReport({
       workerId,
       bookingId: booking.id,
@@ -294,88 +295,6 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     </div>
   )
 
-  // --- 검토 화면 (발송 전 미리보기) ---
-  if (showPreview) {
-    const beforePhotos = before.filter((p) => p.url).map((p) => ({ url: p.url, caption: '작업 전' }))
-    const afterPhotos = after.filter((p) => p.url).map((p) => ({ url: p.url, caption: '작업 후' }))
-
-    return (
-      <div className="min-h-dvh bg-gray-50 pb-32">
-        <div className="bg-white border-b px-4 py-3 sticky top-0 z-10 flex items-center gap-3">
-          <button onClick={() => setShowPreview(false)} className="p-1">
-            <ArrowLeft className="h-5 w-5" />
-          </button>
-          <h1 className="font-bold">보고서 미리보기</h1>
-        </div>
-
-        <div className="px-4 py-4 space-y-4">
-          <div className="rounded-xl bg-white border p-4">
-            <p className="text-sm text-muted-foreground">{date}</p>
-            <h2 className="font-bold text-lg">{booking.customerName}</h2>
-            {booking.serviceAddress && (
-              <p className="text-sm text-muted-foreground mt-0.5">{booking.serviceAddress}</p>
-            )}
-          </div>
-
-          {/* Before 사진 (클릭 → 전체화면) */}
-          {beforePhotos.length > 0 && (
-            <div className="rounded-xl bg-white border p-4 space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">작업 전</p>
-              <PhotoGrid photos={beforePhotos} />
-            </div>
-          )}
-
-          {/* After 사진 (클릭 → 전체화면) */}
-          {afterPhotos.length > 0 && (
-            <div className="rounded-xl bg-white border p-4 space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">작업 후</p>
-              <PhotoGrid photos={afterPhotos} />
-            </div>
-          )}
-
-          {/* AI 보고서 또는 일반 메모 */}
-          {aiReport ? (
-            <div className="rounded-xl bg-white border p-4 space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">작업 보고서</p>
-              <AiReportView report={aiReport} />
-            </div>
-          ) : notes.trim() ? (
-            <div className="rounded-xl bg-white border p-4 space-y-1">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">메모</p>
-              <p className="text-sm whitespace-pre-wrap">{notes}</p>
-            </div>
-          ) : null}
-
-          <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 text-sm text-blue-800">
-            <p className="font-medium">이 내용이 고객에게 카카오 알림톡으로 발송됩니다</p>
-            <p className="text-xs text-blue-600 mt-1">
-              고객이 알림톡의 링크를 통해 위 보고서를 확인할 수 있어요
-            </p>
-          </div>
-        </div>
-
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 pb-safe space-y-2">
-          <Button
-            size="lg"
-            className="w-full h-14 text-base gap-2"
-            disabled={isSending}
-            onClick={handleSend}
-          >
-            <Send className="h-5 w-5" />
-            {isSending ? '발송 중...' : '고객에게 보고서 발송하기'}
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full h-10 text-sm text-muted-foreground"
-            onClick={() => setShowPreview(false)}
-          >
-            수정하러 돌아가기
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
   // --- 이미 발송된 경우 ---
   if (alreadySent) {
     return (
@@ -498,11 +417,11 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             <Button
               size="lg"
               className="w-full h-14 text-base gap-2"
-              disabled={!booking.customerPhone}
-              onClick={() => setShowPreview(true)}
+              disabled={!booking.customerPhone || isSending}
+              onClick={handleSend}
             >
-              <Eye className="h-5 w-5" />
-              검토 후 고객에게 발송하기
+              <Send className="h-5 w-5" />
+              {isSending ? '발송 중...' : '고객에게 보고서 발송하기'}
             </Button>
             {!booking.customerPhone && (
               <p className="text-xs text-muted-foreground text-center">고객 연락처가 없어 알림톡을 보낼 수 없어요</p>
