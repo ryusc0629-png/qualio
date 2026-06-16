@@ -30,6 +30,8 @@ import {
 } from '@/lib/actions/crm'
 import { Phone, MapPin, Calendar, Pencil, Trash2, ChevronRight, Plus } from 'lucide-react'
 import Link from 'next/link'
+import { ConvertToCustomerButton } from './[leadId]/convert-to-customer-button'
+import type { LiveStatus } from '@/lib/utils/lead-live-status'
 
 // ── 상수 ──────────────────────────────────────────────────
 
@@ -84,10 +86,21 @@ type Lead = {
   created_at: string
 }
 
+type QuoteSummary = { total_amount: number; frequency: string | null; serviceName: string | null }
+
 interface Props {
   leads: Lead[]
   businessId: string
   filterStatus?: string
+  quoteByLead?: Record<string, QuoteSummary>
+  convertedLeadIds?: string[]
+  liveStatusByLeadId?: Record<string, LiveStatus>
+}
+
+// 예약 일시 → 짧은 한글 날짜
+function formatLiveDate(iso: string | null): string {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })
 }
 
 // ── 폼 초기값 ──────────────────────────────────────────────
@@ -107,8 +120,9 @@ const emptyForm = {
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────
 
-export function PipelineList({ leads, filterStatus }: Props) {
+export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedLeadIds = [], liveStatusByLeadId = {} }: Props) {
   const router = useRouter()
+  const convertedSet = new Set(convertedLeadIds)
   const [activeFilter, setActiveFilter] = useState(filterStatus ?? '')
   const [addOpen, setAddOpen] = useState(false)
   const [editLead, setEditLead] = useState<Lead | null>(null)
@@ -165,6 +179,7 @@ export function PipelineList({ leads, filterStatus }: Props) {
   const handleAdd = () => {
     executeCreate({
       company_name:        form.company_name,
+      customer_type:       form.customer_type,
       contact_name:        form.contact_name || undefined,
       contact_title:       form.contact_title || undefined,
       email:               form.email || undefined,
@@ -197,6 +212,7 @@ export function PipelineList({ leads, filterStatus }: Props) {
     executeUpdate({
       leadId:              editLead.id,
       company_name:        form.company_name,
+      customer_type:       form.customer_type,
       contact_name:        form.contact_name || undefined,
       contact_title:       form.contact_title || undefined,
       email:               form.email || undefined,
@@ -281,6 +297,10 @@ export function PipelineList({ leads, filterStatus }: Props) {
         {filtered.map((lead) => {
           const stage = STAGE_CONFIG[lead.status] ?? { text: lead.status, color: 'bg-gray-100 text-gray-600' }
           const isCompany = lead.customer_type === 'company'
+          const isContracted = lead.status === 'contracted'
+          const isConverted = convertedSet.has(lead.id)
+          const quote = quoteByLead[lead.id] ?? null
+          const live = liveStatusByLeadId[lead.id] ?? null
 
           return (
             <div key={lead.id} className="bg-white rounded-xl border border-border hover:border-primary/30 transition-colors p-4">
@@ -289,6 +309,9 @@ export function PipelineList({ leads, filterStatus }: Props) {
 
                   {/* 이름 */}
                   <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${isCompany ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'}`}>
+                      {isCompany ? '거래처' : '일반'}
+                    </span>
                     <p className="font-semibold">{lead.company_name}</p>
                     {lead.contact_name && (
                       <span className="text-xs text-muted-foreground">담당 {lead.contact_name}</span>
@@ -325,18 +348,32 @@ export function PipelineList({ leads, filterStatus }: Props) {
 
                 {/* 우측: 단계 + 버튼 */}
                 <div className="shrink-0 flex flex-col items-end gap-2">
-                  <Select value={lead.status} onValueChange={(v) => executeStatus({ leadId: lead.id, status: v })}>
-                    <SelectTrigger className={`h-7 text-xs px-2 border-0 font-medium w-auto ${stage.color}`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STAGE_ORDER.map((s) => (
-                        <SelectItem key={s} value={s} className="text-sm">
-                          {STAGE_CONFIG[s]?.text ?? s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {live ? (
+                    // 일반 고객: 견적·예약에서 자동 계산된 실제 상태 (읽기 전용)
+                    <div className="text-right">
+                      <span className={`inline-block text-xs px-2 py-0.5 rounded font-medium ${live.className}`}>
+                        {live.label}
+                      </span>
+                      {live.date && (
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {formatLiveDate(live.date)} 예정
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <Select value={lead.status} onValueChange={(v) => executeStatus({ leadId: lead.id, status: v })}>
+                      <SelectTrigger className={`h-7 text-xs px-2 border-0 font-medium w-auto ${stage.color}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STAGE_ORDER.map((s) => (
+                          <SelectItem key={s} value={s} className="text-sm">
+                            {STAGE_CONFIG[s]?.text ?? s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
 
                   <div className="flex items-center gap-1">
                     <button
@@ -360,6 +397,25 @@ export function PipelineList({ leads, filterStatus }: Props) {
                   </div>
                 </div>
               </div>
+
+              {/* 계약 완료 → 고객 전환 */}
+              {isContracted && (
+                <div className="mt-3 pt-3 border-t flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    {isConverted ? '계약 고객으로 등록됐어요' : '계약을 따냈어요! 고객으로 등록하세요'}
+                  </p>
+                  <ConvertToCustomerButton
+                    lead={{
+                      id: lead.id,
+                      company_name: lead.company_name,
+                      phone: lead.phone,
+                      address: lead.address,
+                    }}
+                    quote={quote}
+                    alreadyConverted={isConverted}
+                  />
+                </div>
+              )}
             </div>
           )
         })}
@@ -371,7 +427,11 @@ export function PipelineList({ leads, filterStatus }: Props) {
           <DialogHeader>
             <DialogTitle>거래처 수정</DialogTitle>
           </DialogHeader>
-          <LeadForm form={form} onChange={handleFormChange} />
+          <LeadForm
+            form={form}
+            onChange={handleFormChange}
+            liveStatus={editLead ? liveStatusByLeadId[editLead.id] : undefined}
+          />
           <Button onClick={handleUpdate} disabled={updating || !form.company_name} className="w-full h-12">
             {updating ? '저장 중...' : '저장하기'}
           </Button>
@@ -407,9 +467,11 @@ export function PipelineList({ leads, filterStatus }: Props) {
 function LeadForm({
   form,
   onChange,
+  liveStatus,
 }: {
   form: typeof emptyForm
   onChange: (key: keyof typeof emptyForm, value: string) => void
+  liveStatus?: LiveStatus
 }) {
   const handleAddressSearch = useCallback(() => {
     const run = () => {
@@ -434,37 +496,94 @@ function LeadForm({
     ? Number(form.monthly_budget).toLocaleString('ko-KR')
     : ''
 
+  const TYPE_OPTIONS = [
+    { value: 'company', title: '거래처', desc: '회사·정기계약' },
+    { value: 'individual', title: '일반', desc: '개인·일회성' },
+  ]
+
+  const isCompany = (form.customer_type || 'company') === 'company'
+
   return (
     <div className="space-y-3">
+      {/* 견적·예약에서 자동 계산된 현재 상태 (읽기 전용) */}
+      {liveStatus && (
+        <div className="rounded-lg bg-muted/40 border p-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">현재 상태</span>
+            <span className={`text-xs px-2 py-0.5 rounded font-medium ${liveStatus.className}`}>
+              {liveStatus.label}
+            </span>
+            {liveStatus.date && (
+              <span className="text-xs text-muted-foreground">
+                {new Date(liveStatus.date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} 예정
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-1">온라인 견적·예약에서 자동으로 표시돼요</p>
+        </div>
+      )}
+
+      {/* 거래처 / 일반 구분 */}
       <div>
-        <Label>업체명 (필수)</Label>
+        <Label>구분</Label>
+        <div className="grid grid-cols-2 gap-2 mt-1">
+          {TYPE_OPTIONS.map((opt) => {
+            const selected = (form.customer_type || 'company') === opt.value
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => onChange('customer_type', opt.value)}
+                className={`rounded-lg border p-3 text-left transition-colors ${
+                  selected
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-primary/30'
+                }`}
+              >
+                <p className={`text-sm font-medium ${selected ? 'text-primary' : 'text-foreground'}`}>
+                  {opt.title}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{opt.desc}</p>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div>
+        <Label>{isCompany ? '업체명 (필수)' : '고객명 (필수)'}</Label>
         <Input
           value={form.company_name}
           onChange={(e) => onChange('company_name', e.target.value)}
-          placeholder="예: (주)클린빌딩"
+          placeholder={isCompany ? '예: (주)클린빌딩' : '예: 김영희'}
           className="mt-1"
         />
       </div>
 
-      <div>
-        <Label>담당자 이름</Label>
-        <Input
-          value={form.contact_name}
-          onChange={(e) => onChange('contact_name', e.target.value)}
-          placeholder="예: 김민수"
-          className="mt-1"
-        />
-      </div>
+      {/* 거래처(회사)일 때만: 담당자·직함·이메일 */}
+      {isCompany && (
+        <>
+          <div>
+            <Label>담당자 이름 (선택)</Label>
+            <Input
+              value={form.contact_name}
+              onChange={(e) => onChange('contact_name', e.target.value)}
+              placeholder="예: 김민수"
+              className="mt-1"
+            />
+          </div>
 
-      <div>
-        <Label>직함 또는 직급</Label>
-        <Input
-          value={form.contact_title}
-          onChange={(e) => onChange('contact_title', e.target.value)}
-          placeholder="예: 총무팀장, 대표이사, 시설관리팀장"
-          className="mt-1"
-        />
-      </div>
+          <div>
+            <Label>직함 또는 직급 (선택)</Label>
+            <Input
+              value={form.contact_title}
+              onChange={(e) => onChange('contact_title', e.target.value)}
+              placeholder="예: 총무팀장, 대표이사, 시설관리팀장"
+              className="mt-1"
+            />
+          </div>
+        </>
+      )}
 
       <div>
         <Label>전화번호</Label>
@@ -477,17 +596,19 @@ function LeadForm({
         />
       </div>
 
-      <div>
-        <Label>이메일</Label>
-        <Input
-          value={form.email}
-          onChange={(e) => onChange('email', e.target.value)}
-          placeholder="예: manager@company.co.kr"
-          inputMode="email"
-          type="email"
-          className="mt-1"
-        />
-      </div>
+      {isCompany && (
+        <div>
+          <Label>이메일 (선택)</Label>
+          <Input
+            value={form.email}
+            onChange={(e) => onChange('email', e.target.value)}
+            placeholder="예: manager@company.co.kr"
+            inputMode="email"
+            type="email"
+            className="mt-1"
+          />
+        </div>
+      )}
 
       <div>
         <Label>주소</Label>

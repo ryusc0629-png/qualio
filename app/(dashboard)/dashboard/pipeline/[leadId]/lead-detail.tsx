@@ -18,6 +18,8 @@ import { toast } from 'sonner'
 import { createLeadActivityAction, updateLeadStatusAction } from '@/lib/actions/crm'
 import { STAGE_CONFIG } from '../pipeline-list'
 import { B2bQuoteForm } from './b2b-quote-form'
+import { ConvertToCustomerButton } from './convert-to-customer-button'
+import type { LiveStatus } from '@/lib/utils/lead-live-status'
 import { Phone, MapPin, Calendar, ArrowLeft, Plus, PhoneCall, MapPin as VisitIcon, FileText, StickyNote, Mail } from 'lucide-react'
 import Link from 'next/link'
 
@@ -81,7 +83,7 @@ const STAGE_ORDER = ['new', 'contacted', 'follow_up', 'quoted', 'negotiating', '
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────
 
-export function LeadDetail({ lead, activities, existingQuote }: { lead: Lead; activities: Activity[]; existingQuote: ExistingQuote | null }) {
+export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, liveStatus }: { lead: Lead; activities: Activity[]; existingQuote: ExistingQuote | null; alreadyConverted: boolean; liveStatus: LiveStatus | null }) {
   const router = useRouter()
   const [, startTransition] = useTransition()
   const [showAddForm, setShowAddForm] = useState(false)
@@ -179,18 +181,32 @@ export function LeadDetail({ lead, activities, existingQuote }: { lead: Lead; ac
 
           {/* 단계 변경 + 견적서 버튼 */}
           <div className="flex flex-col items-end gap-2 shrink-0">
-            <Select value={lead.status} onValueChange={(v) => executeStatus({ leadId: lead.id, status: v })}>
-              <SelectTrigger className={`h-8 text-xs px-2.5 border-0 font-medium w-auto ${stage.color}`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STAGE_ORDER.map((s) => (
-                  <SelectItem key={s} value={s} className="text-sm">
-                    {STAGE_CONFIG[s]?.text ?? s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {liveStatus ? (
+              // 일반 고객: 견적·예약에서 자동 계산된 실제 상태 (읽기 전용)
+              <div className="text-right">
+                <span className={`inline-block text-xs px-2.5 py-1 rounded font-medium ${liveStatus.className}`}>
+                  {liveStatus.label}
+                </span>
+                {liveStatus.date && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {new Date(liveStatus.date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} 예정
+                  </p>
+                )}
+              </div>
+            ) : (
+              <Select value={lead.status} onValueChange={(v) => executeStatus({ leadId: lead.id, status: v })}>
+                <SelectTrigger className={`h-8 text-xs px-2.5 border-0 font-medium w-auto ${stage.color}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STAGE_ORDER.map((s) => (
+                    <SelectItem key={s} value={s} className="text-sm">
+                      {STAGE_CONFIG[s]?.text ?? s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             {isCompany && (
               <B2bQuoteForm
                 leadId={lead.id}
@@ -226,6 +242,58 @@ export function LeadDetail({ lead, activities, existingQuote }: { lead: Lead; ac
           </div>
         )}
       </div>
+
+      {/* 계약 고객 전환 CTA */}
+      {alreadyConverted ? (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-green-700">
+            이 거래처는 계약 고객으로 등록됐어요
+          </p>
+          <Link
+            href="/dashboard/clients"
+            className="text-sm font-medium text-green-700 underline shrink-0"
+          >
+            고객 관리에서 보기
+          </Link>
+        </div>
+      ) : (
+        <div
+          className={`rounded-xl p-4 flex items-center justify-between gap-3 border ${
+            lead.status === 'contracted'
+              ? 'bg-green-50 border-green-200'
+              : 'bg-muted/40 border-border'
+          }`}
+        >
+          <div>
+            <p className="text-sm font-medium">
+              {lead.status === 'contracted'
+                ? '계약을 따내셨네요! 계약 고객으로 등록하세요'
+                : '계약이 확정되면 고객으로 전환하세요'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              견적 금액·연락처가 자동으로 채워져요
+            </p>
+          </div>
+          <ConvertToCustomerButton
+            lead={{
+              id: lead.id,
+              company_name: lead.company_name,
+              phone: lead.phone,
+              address: lead.address,
+            }}
+            quote={
+              existingQuote
+                ? {
+                    total_amount: existingQuote.total_amount,
+                    frequency: existingQuote.frequency,
+                    serviceName: existingQuote.items[0]?.name ?? null,
+                  }
+                : null
+            }
+            alreadyConverted={alreadyConverted}
+          />
+        </div>
+      )}
 
       {/* 상담 기록 */}
       <div className="space-y-3">
