@@ -7,7 +7,7 @@ import {
   AlertCircle, Calendar, ChevronRight, RefreshCw,
   Wallet, ClipboardList, Star, Phone,
   Users, UserPlus, AlertTriangle, TrendingUp, CheckCircle2,
-  Handshake, PhoneCall,
+  Handshake, PhoneCall, ShieldAlert,
 } from 'lucide-react'
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
@@ -254,19 +254,19 @@ export default async function DashboardPage() {
             </Link>
           )}
           {(pendingQuoteCount ?? 0) > 0 && (
-            <Link href="/dashboard/work">
+            <Link href="/dashboard/clients?type=individual">
               <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 hover:bg-amber-100 transition-colors">
                 <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-amber-800">확인 안 된 견적이 {pendingQuoteCount}건 있어요</p>
-                  <p className="text-xs text-amber-600 mt-0.5">48시간 안에 예약으로 전환하지 않으면 자동 만료돼요</p>
+                  <p className="text-xs text-amber-600 mt-0.5">고객 관리에서 예약으로 확정해주세요</p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-amber-500 shrink-0" />
               </div>
             </Link>
           )}
           {unreportedCount > 0 && (
-            <Link href="/dashboard/work?tab=bookings">
+            <Link href="/dashboard/schedule">
               <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 hover:bg-orange-100 transition-colors">
                 <ClipboardList className="h-4 w-4 text-orange-600 shrink-0" />
                 <p className="flex-1 text-sm font-semibold text-orange-800">
@@ -277,7 +277,7 @@ export default async function DashboardPage() {
             </Link>
           )}
           {(unreviewedCount ?? 0) > 0 && (
-            <Link href="/dashboard/work?tab=bookings">
+            <Link href="/dashboard/schedule">
               <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 hover:bg-yellow-100 transition-colors">
                 <Star className="h-4 w-4 text-yellow-600 shrink-0" />
                 <p className="flex-1 text-sm font-semibold text-yellow-800">
@@ -296,7 +296,7 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
 
           {/* 이번 달 매출 */}
-          <Link href="/dashboard/work?tab=bookings">
+          <Link href="/dashboard/schedule">
             <div className="bg-white rounded-xl border border-border p-4 hover:border-primary/40 hover:shadow-sm transition-all h-full">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-9 h-9 bg-primary/10 rounded-xl flex items-center justify-center">
@@ -321,7 +321,7 @@ export default async function DashboardPage() {
           </Link>
 
           {/* 완료 건수 */}
-          <Link href="/dashboard/work?tab=bookings">
+          <Link href="/dashboard/schedule">
             <div className="bg-white rounded-xl border border-border p-4 hover:border-primary/40 hover:shadow-sm transition-all h-full">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center">
@@ -374,6 +374,34 @@ export default async function DashboardPage() {
               </p>
             </div>
           </Link>
+        </div>
+      </div>
+
+      {/* 오늘 할 일 KPI */}
+      <div className="grid grid-cols-2 gap-3">
+        <Link href="/dashboard/clients?type=individual">
+          <div className={`rounded-xl border p-4 hover:shadow-sm transition-all h-full ${(pendingQuoteCount ?? 0) > 0 ? 'bg-amber-50 border-amber-200 hover:border-amber-300' : 'bg-white border-border hover:border-primary/40'}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <AlertCircle className={`h-4 w-4 ${(pendingQuoteCount ?? 0) > 0 ? 'text-amber-500' : 'text-muted-foreground'}`} />
+              <span className="text-xs font-medium text-muted-foreground">견적 대기</span>
+            </div>
+            <p className={`text-2xl font-bold tabular-nums ${(pendingQuoteCount ?? 0) > 0 ? 'text-amber-700' : 'text-foreground'}`}>
+              {pendingQuoteCount ?? 0}<span className="text-sm font-normal text-muted-foreground ml-0.5">건</span>
+            </p>
+            <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+              {(pendingQuoteCount ?? 0) > 0 ? '예약 확정이 필요해요' : '대기 중인 견적 없음'}
+            </p>
+          </div>
+        </Link>
+
+        <div className="bg-white rounded-xl border border-dashed border-border p-4 h-full opacity-60">
+          <div className="flex items-center gap-2 mb-2">
+            <ShieldAlert className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground">미해결 클레임</span>
+            <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">준비 중</span>
+          </div>
+          <p className="text-2xl font-bold tabular-nums text-muted-foreground">—</p>
+          <p className="text-[11px] text-muted-foreground/70 mt-0.5">클레임 관리 기능 개발 예정</p>
         </div>
       </div>
 
@@ -510,7 +538,7 @@ export default async function DashboardPage() {
             )}
           </div>
           <Link
-            href="/dashboard/work?tab=bookings"
+            href="/dashboard/schedule"
             className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-0.5"
           >
             전체 보기 <ChevronRight className="h-3 w-3" />

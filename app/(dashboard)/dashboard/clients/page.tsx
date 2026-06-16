@@ -10,6 +10,17 @@ import { Phone, MapPin, Calendar, TrendingUp, ChevronRight, Building2, User, Arc
 
 // ── 타입 ────────────────────────────────────────────────
 
+type PendingQuoteRow = {
+  id: string
+  customer_name: string
+  customer_phone: string | null
+  cleaning_type: string | null
+  space_size: number | null
+  preferred_date: string | null
+  good_price: number | null
+  created_at: string
+}
+
 type CustomerRow = {
   id: string
   name: string
@@ -125,6 +136,7 @@ export default async function ClientsPage({
     { data: leads },
     { data: registeredLeadRows },
     { data: b2bQuotes },
+    { data: pendingQuotes },
   ] = await Promise.all([
     db.from('customers')
       .select('id, name, phone, address, category, type, notes, lead_id, created_at')
@@ -152,6 +164,13 @@ export default async function ClientsPage({
     db.from('b2b_quotes')
       .select('lead_id, total_amount, frequency')
       .eq('business_id', businessId),
+
+    // 예약 미확정 견적 요청 (공개 폼으로 들어온)
+    db.from('quotes')
+      .select('id, customer_name, customer_phone, cleaning_type, space_size, preferred_date, good_price, created_at')
+      .eq('business_id', businessId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false }),
   ])
 
   // 전화번호 → 예약 실적 맵
@@ -238,7 +257,10 @@ export default async function ClientsPage({
           <p className="text-2xl font-bold mt-1 tabular-nums text-blue-600">
             {individualCustomers.length}<span className="text-sm font-normal text-muted-foreground ml-0.5">명</span>
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">누적 {totalLtv > 0 ? `${Math.round(totalLtv / 10000)}만원` : '—'}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {(pendingQuotes ?? []).length > 0 ? <span className="text-amber-600 font-medium">견적 대기 {(pendingQuotes ?? []).length}건 ·</span> : null}
+            {' '}누적 {totalLtv > 0 ? `${Math.round(totalLtv / 10000)}만원` : '—'}
+          </p>
         </div>
         <div className="bg-white rounded-xl border p-4">
           <p className="text-xs text-muted-foreground">정기계약·법인 고객</p>
@@ -306,10 +328,54 @@ export default async function ClientsPage({
             </div>
           )}
 
-          {individualCustomers.length === 0 ? (
+          {/* 예약 미확정 견적 요청 */}
+          {(pendingQuotes ?? []).length > 0 && (
+            <div className="space-y-2 mb-1">
+              <p className="text-xs font-semibold text-amber-600 px-0.5 flex items-center gap-1.5">
+                견적 요청 중 — 예약 확정 대기
+                <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">{(pendingQuotes ?? []).length}건</span>
+              </p>
+              {(pendingQuotes as PendingQuoteRow[]).map((quote) => (
+                <div key={`quote-${quote.id}`} className="bg-amber-50 rounded-xl border border-amber-200 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-amber-100 text-amber-700">견적 요청</span>
+                        <p className="font-semibold">{quote.customer_name}</p>
+                      </div>
+                      <div className="mt-1 space-y-0.5">
+                        {quote.customer_phone && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Phone className="h-3 w-3 shrink-0" />{quote.customer_phone}
+                          </p>
+                        )}
+                        {quote.cleaning_type && (
+                          <p className="text-xs text-muted-foreground">
+                            {quote.cleaning_type}{quote.space_size ? ` · ${quote.space_size}평` : ''}
+                            {quote.preferred_date ? ` · ${new Date(quote.preferred_date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })} 희망` : ''}
+                          </p>
+                        )}
+                        {quote.good_price && (
+                          <p className="text-xs text-amber-700 font-medium">견적가 {quote.good_price.toLocaleString('ko-KR')}원~</p>
+                        )}
+                      </div>
+                    </div>
+                    <Link
+                      href="/dashboard/work"
+                      className="shrink-0 text-xs font-medium text-amber-800 border border-amber-300 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                    >
+                      예약 확정하기 →
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {individualCustomers.length === 0 && (pendingQuotes ?? []).length === 0 ? (
             <div className="bg-white rounded-xl border border-dashed p-8 text-center space-y-2">
               <p className="text-sm text-muted-foreground">아직 개인 고객이 없어요</p>
-              <p className="text-xs text-muted-foreground">일반 예약 메뉴에서 견적을 보내면 자동으로 등록돼요</p>
+              <p className="text-xs text-muted-foreground">고객 링크를 공유하면 견적 요청이 자동으로 들어와요</p>
             </div>
           ) : (
             individualCustomers.map((customer) => {
