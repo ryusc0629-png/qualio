@@ -402,7 +402,7 @@ export default async function ClientsPage({
             </div>
           )}
 
-          {activeLeads.length === 0 && convertedCustomers.length === 0 ? (
+          {activeLeads.length === 0 && companyCustomers.length === 0 ? (
             <div className="bg-white rounded-xl border border-dashed p-8 text-center space-y-2">
               <p className="text-sm text-muted-foreground">영업 중인 법인 거래처가 없어요</p>
               <Link href="/dashboard/pipeline" className="inline-block text-xs text-primary underline">
@@ -476,33 +476,64 @@ export default async function ClientsPage({
             })
           )}
 
-          {/* 계약 전환된 법인 고객 */}
-          {convertedCustomers.length > 0 && (
+          {/* 계약 중인 법인 고객 (type='recurring') */}
+          {companyCustomers.length > 0 && (
             <div className="mt-3 space-y-2">
-              <p className="text-xs text-muted-foreground px-1">계약 고객으로 전환됨</p>
-              {convertedCustomers.map((customer) => {
+              <p className="text-xs text-muted-foreground px-1">계약 중인 고객</p>
+              {companyCustomers.map((customer) => {
                 const customerContracts = contractMap[customer.id] ?? []
                 const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
+                const hasAnyContract = customerContracts.length > 0
+                const bookingLtv = customer.phone ? (bookingMap[customer.phone]?.ltv ?? 0) : 0
                 return (
-                  <div key={`converted-${customer.id}`} className="bg-emerald-50 rounded-xl border border-emerald-100 p-4 hover:border-emerald-300 transition-colors">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-emerald-100 text-emerald-700">계약 고객</span>
+                  <div key={`company-${customer.id}`} className="bg-emerald-50 rounded-xl border border-emerald-100 p-4 hover:border-emerald-300 transition-colors">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-violet-100 text-violet-700">법인</span>
                           <Link href={`/dashboard/clients/${customer.id}`} className="font-semibold hover:text-primary hover:underline">
                             {customer.name}
                           </Link>
+                          {customer.category && (
+                            <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">{customer.category}</span>
+                          )}
                         </div>
-                        {activeContract && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
-                            <span className="text-emerald-600 font-medium ml-2">{activeContract.contract_price.toLocaleString('ko-KR')}원/월</span>
-                          </p>
-                        )}
+                        <div className="mt-1.5 space-y-0.5">
+                          {customer.phone && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Phone className="h-3 w-3 shrink-0" />{customer.phone}
+                            </p>
+                          )}
+                          {customer.address && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                              <MapPin className="h-3 w-3 shrink-0" />{customer.address}
+                            </p>
+                          )}
+                          {activeContract && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
+                              <span className="text-emerald-600 font-medium ml-2">{activeContract.contract_price.toLocaleString('ko-KR')}원/월</span>
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <Link href={`/dashboard/clients/${customer.id}`} className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-emerald-200 hover:border-emerald-400">
-                        이력<ChevronRight className="h-3 w-3" />
-                      </Link>
+                      <div className="shrink-0 flex flex-col items-end gap-2">
+                        <div className="text-right">
+                          {bookingLtv > 0 && <p className="text-base font-bold tabular-nums">{bookingLtv.toLocaleString('ko-KR')}원</p>}
+                          {activeContract && (
+                            <p className="text-xs text-emerald-600 font-medium tabular-nums">
+                              {activeContract.contract_price.toLocaleString('ko-KR')}원/월
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Link href={`/dashboard/clients/${customer.id}`} className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-emerald-200 hover:border-emerald-400">
+                            이력<ChevronRight className="h-3 w-3" />
+                          </Link>
+                          {customer.phone && <EditCustomerButton customer={{ ...customer, phone: customer.phone }} />}
+                          <DeleteCustomerButton customerId={customer.id} customerName={customer.name} hasContract={hasAnyContract} />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )
