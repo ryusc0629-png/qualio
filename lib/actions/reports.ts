@@ -107,6 +107,7 @@ export const saveReportAction = action
     }
 
     revalidatePath('/dashboard/work')
+    revalidatePath('/dashboard/schedule')
     return { reportId: report.id }
   })
 

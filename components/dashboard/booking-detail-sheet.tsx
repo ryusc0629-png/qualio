@@ -1,12 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import Link from 'next/link'
 import {
   Phone, MapPin, Clock, User, ChevronRight,
-  Pencil, Check, X, CalendarDays,
+  Pencil, Check, X, CalendarDays, CheckCircle2, Send, Star,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
@@ -30,6 +30,7 @@ import {
   cancelBookingFromScheduleAction,
   updateBookingStatusAction,
 } from '@/lib/actions/workers'
+import { saveReportAction, sendReviewRequestAction } from '@/lib/actions/reports'
 
 // ── 타입 ──────────────────────────────────────────────────
 
@@ -52,6 +53,8 @@ interface Booking {
   worker_id: string | null
   cleaning_type: string | null
   customer_id: string | null
+  reportId?: string | null
+  reviewSent?: boolean
 }
 
 interface Props {
@@ -114,6 +117,14 @@ export function BookingDetailSheet({
 }: Props) {
   const [editingTime, setEditingTime] = useState(false)
   const [timeValue, setTimeValue]     = useState('')
+  const [currentReportId, setCurrentReportId]     = useState<string | null>(null)
+  const [currentReviewSent, setCurrentReviewSent] = useState(false)
+
+  // booking이 바뀔 때마다 보고서 상태 초기화
+  useEffect(() => {
+    setCurrentReportId(booking?.reportId ?? null)
+    setCurrentReviewSent(booking?.reviewSent ?? false)
+  }, [booking?.id])
 
   const isCancelled = !booking ||
     ['cancelled', 'no_show'].includes(booking.status)
@@ -152,6 +163,24 @@ export function BookingDetailSheet({
       if (!booking || !data?.newStatus) return
       onStatusChange?.(booking.id, data.newStatus)
       toast.success('상태가 변경됐어요!')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 작업완료 알림톡 발송 액션
+  const { execute: sendReport, isPending: reportPending } = useAction(saveReportAction, {
+    onSuccess: ({ data }) => {
+      if (data?.reportId) setCurrentReportId(data.reportId)
+      toast.success('작업완료 알림톡을 발송했어요!')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 리뷰 요청 알림톡 발송 액션
+  const { execute: sendReview, isPending: reviewPending } = useAction(sendReviewRequestAction, {
+    onSuccess: () => {
+      setCurrentReviewSent(true)
+      toast.success('리뷰 요청 알림톡을 발송했어요!')
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -408,17 +437,63 @@ export function BookingDetailSheet({
               </Button>
             )}
             {booking?.status === 'completed' && (
-              <Button
-                variant="outline"
-                className="w-full h-12 font-semibold gap-2"
-                disabled={statusPending}
-                onClick={() => {
-                  if (!confirm('진행 중 상태로 되돌릴까요?')) return
-                  updateStatus({ bookingId: booking.id, status: 'in_progress' })
-                }}
-              >
-                {statusPending ? '처리 중...' : '진행 중으로 되돌리기'}
-              </Button>
+              <>
+                {/* 작업완료 알림톡 미발송 → 발송 버튼 */}
+                {!currentReportId && (
+                  <Button
+                    className="w-full h-12 font-semibold gap-2 bg-blue-600 hover:bg-blue-700"
+                    disabled={reportPending}
+                    onClick={() => sendReport({
+                      bookingId: booking.id,
+                      beforePhotoUrls: [],
+                      afterPhotoUrls: [],
+                      sendAlimtalk: true,
+                    })}
+                  >
+                    <Send className="h-4 w-4" />
+                    {reportPending ? '발송 중...' : '작업완료 알림톡 발송'}
+                  </Button>
+                )}
+
+                {/* 알림톡 발송 완료 → 리뷰 요청 */}
+                {currentReportId && !currentReviewSent && (
+                  <>
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium px-1">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      작업완료 알림톡 발송됨
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="w-full h-12 font-semibold gap-2"
+                      disabled={reviewPending}
+                      onClick={() => sendReview({ reportId: currentReportId })}
+                    >
+                      <Star className="h-4 w-4" />
+                      {reviewPending ? '발송 중...' : '리뷰 요청 발송'}
+                    </Button>
+                  </>
+                )}
+
+                {/* 리뷰 요청까지 완료 */}
+                {currentReportId && currentReviewSent && (
+                  <div className="flex items-center justify-center gap-1.5 text-sm text-emerald-600 font-medium py-3">
+                    <CheckCircle2 className="h-4 w-4" />
+                    알림톡 · 리뷰 요청 모두 발송 완료
+                  </div>
+                )}
+
+                <Button
+                  variant="outline"
+                  className="w-full h-12 font-semibold gap-2"
+                  disabled={statusPending}
+                  onClick={() => {
+                    if (!confirm('진행 중 상태로 되돌릴까요?')) return
+                    updateStatus({ bookingId: booking.id, status: 'in_progress' })
+                  }}
+                >
+                  {statusPending ? '처리 중...' : '진행 중으로 되돌리기'}
+                </Button>
+              </>
             )}
 
             {/* 취소 버튼 */}

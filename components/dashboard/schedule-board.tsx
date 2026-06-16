@@ -54,6 +54,8 @@ interface Booking {
   worker_id: string | null
   cleaning_type: string | null
   customer_id: string | null
+  reportId?: string | null
+  reviewSent?: boolean
 }
 
 interface Props {

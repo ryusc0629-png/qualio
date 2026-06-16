@@ -266,23 +266,29 @@ export default async function DashboardPage() {
             </Link>
           )}
           {unreportedCount > 0 && (
-            <Link href="/dashboard/schedule">
+            <Link href="/dashboard/alimtalk-todo">
               <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 hover:bg-orange-100 transition-colors">
                 <ClipboardList className="h-4 w-4 text-orange-600 shrink-0" />
-                <p className="flex-1 text-sm font-semibold text-orange-800">
-                  작업 보고서를 안 보낸 고객이 {unreportedCount}명이에요
-                </p>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-orange-800">
+                    작업완료 알림톡 안 보낸 고객이 {unreportedCount}명이에요
+                  </p>
+                  <p className="text-xs text-orange-600 mt-0.5">눌러서 바로 발송하세요</p>
+                </div>
                 <ChevronRight className="h-4 w-4 text-orange-500 shrink-0" />
               </div>
             </Link>
           )}
           {(unreviewedCount ?? 0) > 0 && (
-            <Link href="/dashboard/schedule">
+            <Link href="/dashboard/alimtalk-todo">
               <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 hover:bg-yellow-100 transition-colors">
                 <Star className="h-4 w-4 text-yellow-600 shrink-0" />
-                <p className="flex-1 text-sm font-semibold text-yellow-800">
-                  리뷰 요청을 아직 안 보낸 고객이 {unreviewedCount}명이에요
-                </p>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-yellow-800">
+                    리뷰 요청 안 보낸 고객이 {unreviewedCount}명이에요
+                  </p>
+                  <p className="text-xs text-yellow-600 mt-0.5">눌러서 바로 발송하세요</p>
+                </div>
                 <ChevronRight className="h-4 w-4 text-yellow-500 shrink-0" />
               </div>
             </Link>

@@ -79,6 +79,22 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     }
   }
 
+  // 완료된 예약의 보고서 상태 조회 (알림톡 발송 여부 표시용)
+  const completedIds = bookings.filter(b => b.status === 'completed').map(b => b.id)
+  type ReportRow = { id: string; booking_id: string; review_request_sent_at: string | null }
+  const reportMap = new Map<string, { id: string; reviewSent: boolean }>()
+
+  if (completedIds.length > 0) {
+    const { data: reportRows } = await db
+      .from('reports' as never)
+      .select('id, booking_id, review_request_sent_at' as never)
+      .in('booking_id' as never, completedIds) as unknown as { data: ReportRow[] | null }
+
+    for (const r of reportRows ?? []) {
+      reportMap.set(r.booking_id, { id: r.id, reviewSent: !!r.review_request_sent_at })
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -102,6 +118,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           worker_id:       b.worker_id,
           cleaning_type:   b.quotes?.cleaning_type ?? null,
           customer_id:     b.customer_phone ? customerMap.get(b.customer_phone) ?? null : null,
+          reportId:        reportMap.get(b.id)?.id ?? null,
+          reviewSent:      reportMap.get(b.id)?.reviewSent ?? false,
         }))}
         weekStart={weekStart.toISOString()}
         weekLabel={weekLabel}
