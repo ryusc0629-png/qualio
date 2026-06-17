@@ -52,8 +52,8 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
         font_weight: '700',
         fill_color: '#ffffff',
         background_color: 'rgba(0,0,0,0.55)',
-        x_padding: '6%',
-        y_padding: '2.5%',
+        x_padding: '6 vmin',
+        y_padding: '2.5 vmin',
       },
       {
         type: 'text',
@@ -69,8 +69,8 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
         font_size: '5 vmin',
         fill_color: '#ffffff',
         background_color: 'rgba(0,0,0,0.6)',
-        x_padding: '4%',
-        y_padding: '2%',
+        x_padding: '4 vmin',
+        y_padding: '2 vmin',
       },
 
       // ── 작업 중 영상 클립 1 (3~13초) ──────────────────
@@ -150,8 +150,8 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
         font_weight: '700',
         fill_color: '#ffffff',
         background_color: 'rgba(0,0,0,0.55)',
-        x_padding: '6%',
-        y_padding: '3%',
+        x_padding: '6 vmin',
+        y_padding: '3 vmin',
       },
 
       // ── 업체명 아웃트로 (36~38초) ─────────────────────
