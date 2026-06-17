@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 // 실패 시 원문을 그대로 반환(요약만 못 하고 기록 자체는 살림)
 
 export async function summarizeMeeting(transcript: string): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
+  const apiKey = process.env.ANTHROPIC_API_KEY?.replace(/\s/g, '')
   if (!apiKey || !transcript.trim()) return transcript
 
   const client = new Anthropic({ apiKey })
