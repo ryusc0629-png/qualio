@@ -6,7 +6,7 @@ import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, pu
 import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/portfolio'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -78,6 +78,14 @@ interface PendingPortfolio {
   after_image_urls: string[]
 }
 
+interface DoneReel {
+  reportId: string
+  reelUrl: string
+  bookingId: string
+  customerName: string
+  scheduledAt: string
+}
+
 interface PostListProps {
   posts: Post[]
   businessSlug: string | null
@@ -87,6 +95,7 @@ interface PostListProps {
   planId: string
   isTodayComplete: boolean
   pendingPortfolios?: PendingPortfolio[]
+  doneReels?: DoneReel[]
 }
 
 interface ScheduleSlot {
@@ -156,7 +165,7 @@ function buildSchedule(target: number, posts: Post[], suggestions: TopicSuggesti
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
-export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [] }: PostListProps) {
+export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [] }: PostListProps) {
   const [posts] = useState(initialPosts)
   const [showEditor, setShowEditor] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
@@ -284,6 +293,46 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${progressPct}%` }} />
         </div>
       </div>
+
+      {/* ── 완성된 릴스 ── */}
+      {doneReels.length > 0 && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-rose-200 flex items-center gap-2">
+            <Film className="h-4 w-4 text-rose-500" />
+            <p className="font-semibold text-sm text-rose-900">
+              완성된 릴스 {doneReels.length}개 — 다운로드하고 SNS에 올려보세요
+            </p>
+          </div>
+          <div className="divide-y divide-rose-100">
+            {doneReels.map((reel) => {
+              const date = reel.scheduledAt
+                ? new Date(reel.scheduledAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' })
+                : ''
+              return (
+                <div key={reel.reportId} className="px-5 py-3 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center shrink-0">
+                    <Film className="h-5 w-5 text-rose-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{reel.customerName}</p>
+                    {date && <p className="text-xs text-muted-foreground">{date} 작업</p>}
+                  </div>
+                  <a
+                    href={reel.reelUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-rose-500 hover:bg-rose-600 transition-colors shrink-0"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    다운로드
+                  </a>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── 포트폴리오 승인 대기 ── */}
       {pendingPortfolios.length > 0 && (

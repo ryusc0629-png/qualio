@@ -449,24 +449,42 @@ export const fieldSendReportAction = action
   })
 
 // 작업 중 영상 클립 저장 (릴스 제작용)
+// reportId가 없어도 booking_id 기반 upsert로 보고서 자동 생성
 export const fieldSaveWorkClipsAction = action
   .schema(z.object({
     workerId:  z.string().uuid(),
     bookingId: z.string().uuid(),
-    reportId:  z.string().uuid(),
     clipUrls:  z.array(z.string().min(1)).min(1).max(3),
   }))
   .action(async ({ parsedInput }) => {
     const { db, worker } = await verifyWorker(parsedInput.workerId)
     await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
 
-    const { error } = await db
+    // 보고서가 없으면 생성, 있으면 work_clip_urls만 업데이트
+    const { data: existing } = await db
       .from('reports')
-      .update({ work_clip_urls: parsedInput.clipUrls } as never)
-      .eq('id', parsedInput.reportId)
+      .select('id')
+      .eq('booking_id', parsedInput.bookingId)
       .eq('business_id', worker.business_id)
+      .maybeSingle()
 
-    if (error) throw new Error('[APP] 영상 저장에 실패했어요')
+    if (existing) {
+      const { error } = await db
+        .from('reports')
+        .update({ work_clip_urls: parsedInput.clipUrls } as never)
+        .eq('id', existing.id)
+      if (error) throw new Error('[APP] 영상 저장에 실패했어요')
+    } else {
+      const { error } = await db
+        .from('reports')
+        .insert({
+          business_id: worker.business_id,
+          booking_id: parsedInput.bookingId,
+          work_clip_urls: parsedInput.clipUrls,
+        } as never)
+      if (error) throw new Error('[APP] 영상 저장에 실패했어요')
+    }
+
     return { success: true }
   })
 

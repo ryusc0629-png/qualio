@@ -156,7 +156,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   // 작업 중 영상 클립 저장 (업로드 완료 시 자동 호출)
   const { execute: saveClips } = useAction(fieldSaveWorkClipsAction, {
     onSuccess: () => setClipsSaved(true),
-    onError: () => { /* 자동 저장 실패 시 조용히 처리 — 재시도는 릴스 요청 시 검증 */ },
+    onError: () => toast.error('영상 저장에 실패했어요. 페이지를 나가기 전에 다시 시도해주세요'),
   })
 
   // 릴스 편집 요청
@@ -242,17 +242,14 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
         const next = [...prev]
         next[index] = { url: publicUrl, uploading: false, thumbnailUrl }
 
-        // 업로드 완료 즉시 DB 자동 저장
-        if (savedReportId) {
-          const urls = next.filter((c) => c.url && !c.uploading).map((c) => c.url)
-          if (urls.length >= 1) {
-            saveClips({
-              workerId,
-              bookingId: booking.id,
-              reportId: savedReportId,
-              clipUrls: urls as [string, ...string[]],
-            })
-          }
+        // 업로드 완료 즉시 DB 자동 저장 (보고서 미저장 상태에서도 동작)
+        const urls = next.filter((c) => c.url && !c.uploading).map((c) => c.url)
+        if (urls.length >= 1) {
+          saveClips({
+            workerId,
+            bookingId: booking.id,
+            clipUrls: urls as [string, ...string[]],
+          })
         }
 
         return next

@@ -20,8 +20,8 @@ export default async function MarketingPage() {
 
   if (!profile?.business_id) redirect('/onboarding')
 
-  // 업체 slug + 포스트 목록 + 구독 플랜 + 포트폴리오 초안 병렬 조회
-  const [businessResult, postsResult, subResult, pendingPortfolioResult] = await Promise.all([
+  // 업체 slug + 포스트 목록 + 구독 플랜 + 포트폴리오 초안 + 완성된 릴스 병렬 조회
+  const [businessResult, postsResult, subResult, pendingPortfolioResult, doneReelsResult] = await Promise.all([
     db
       .from('businesses')
       .select('slug, name, monthly_post_target')
@@ -47,9 +47,32 @@ export default async function MarketingPage() {
       .order('created_at' as never, { ascending: false }) as unknown as {
         data: { id: string; title: string; summary: string | null; before_image_urls: string[]; after_image_urls: string[] }[] | null
       },
+
+    // 완성된 릴스 (reel_status = 'done')
+    db
+      .from('reports' as never)
+      .select('id, reel_url, booking_id, bookings!booking_id(customer_name, scheduled_at)' as never)
+      .eq('business_id' as never, profile.business_id)
+      .eq('reel_status' as never, 'done')
+      .order('updated_at' as never, { ascending: false }) as unknown as {
+        data: {
+          id: string
+          reel_url: string
+          booking_id: string
+          bookings: { customer_name: string; scheduled_at: string } | null
+        }[] | null
+      },
   ])
 
   const business = businessResult.data
+  const doneReels = (doneReelsResult.data ?? []).map((r) => ({
+    reportId: r.id,
+    reelUrl: r.reel_url,
+    bookingId: r.booking_id,
+    customerName: r.bookings?.customer_name ?? '고객',
+    scheduledAt: r.bookings?.scheduled_at ?? '',
+  }))
+
   const posts = (postsResult.data ?? []) as unknown as {
     id: string; slug: string; title: string; summary: string | null
     published: boolean; ai_generated: boolean; published_at: string
@@ -91,6 +114,7 @@ export default async function MarketingPage() {
         planId={planId}
         isTodayComplete={isTodayComplete}
         pendingPortfolios={pendingPortfolios}
+        doneReels={doneReels}
       />
 
       <div className="border-t pt-6">

@@ -7,7 +7,7 @@ import {
   AlertCircle, Calendar, ChevronRight, RefreshCw,
   Wallet, ClipboardList, Star, Phone,
   Users, UserPlus, AlertTriangle, TrendingUp, CheckCircle2,
-  Handshake, PhoneCall, ShieldAlert,
+  Handshake, PhoneCall, ShieldAlert, Film, ImageIcon,
 } from 'lucide-react'
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
@@ -71,6 +71,8 @@ export default async function DashboardPage() {
     { count: unassignedCount },
     { data: allLeads },
     { data: todayFollowUps },
+    { count: doneReelCount },
+    { count: pendingPortfolioCount },
   ] = await Promise.all([
     // 이번 달 완료 예약
     db.from('bookings').select('final_price')
@@ -159,6 +161,17 @@ export default async function DashboardPage() {
       .eq('business_id', businessId)
       .eq('next_follow_up_date', todayKSTStr)
       .not('status', 'in', '("contracted","rejected")'),
+
+    // 완성된 릴스 (다운로드 대기)
+    db.from('reports' as never).select('id', { count: 'exact', head: true })
+      .eq('business_id' as never, businessId)
+      .eq('reel_status' as never, 'done'),
+
+    // 미발행 포트폴리오 초안
+    db.from('biz_posts' as never).select('id', { count: 'exact', head: true })
+      .eq('business_id' as never, businessId)
+      .eq('post_type' as never, 'portfolio')
+      .eq('published' as never, false),
   ])
 
   // ── 계산 ──────────────────────────────────────────────
@@ -213,7 +226,8 @@ export default async function DashboardPage() {
 
   // 알림 배너 여부
   const hasAlerts = (pendingQuoteCount ?? 0) > 0 || unreportedCount > 0 ||
-    (unreviewedCount ?? 0) > 0 || (unassignedCount ?? 0) > 0 || todayFollowUpCount > 0
+    (unreviewedCount ?? 0) > 0 || (unassignedCount ?? 0) > 0 || todayFollowUpCount > 0 ||
+    (doneReelCount ?? 0) > 0 || (pendingPortfolioCount ?? 0) > 0
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
@@ -230,6 +244,34 @@ export default async function DashboardPage() {
       {/* 액션 알림 */}
       {hasAlerts && (
         <div className="space-y-2">
+          {(doneReelCount ?? 0) > 0 && (
+            <Link href="/dashboard/marketing">
+              <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 hover:bg-rose-100 transition-colors">
+                <Film className="h-4 w-4 text-rose-500 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-rose-800">
+                    완성된 릴스 {doneReelCount}개가 기다리고 있어요
+                  </p>
+                  <p className="text-xs text-rose-600 mt-0.5">마케팅에서 다운로드하고 SNS에 올려보세요</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-rose-400 shrink-0" />
+              </div>
+            </Link>
+          )}
+          {(pendingPortfolioCount ?? 0) > 0 && (
+            <Link href="/dashboard/marketing">
+              <div className="flex items-center gap-3 bg-sky-50 border border-sky-200 rounded-xl px-4 py-3 hover:bg-sky-100 transition-colors">
+                <ImageIcon className="h-4 w-4 text-sky-500 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-sky-800">
+                    웹사이트에 올릴 포트폴리오 초안 {pendingPortfolioCount}개가 있어요
+                  </p>
+                  <p className="text-xs text-sky-600 mt-0.5">마케팅에서 확인하고 발행해보세요</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-sky-400 shrink-0" />
+              </div>
+            </Link>
+          )}
           {todayFollowUpCount > 0 && (
             <Link href="/dashboard/pipeline">
               <div className="flex items-center gap-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 hover:bg-violet-100 transition-colors">
