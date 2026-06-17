@@ -350,7 +350,6 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
         type="file"
         accept="image/*"
         multiple
-        capture="environment"
         className="hidden"
         onChange={(e) => {
           if (e.target.files) {
@@ -662,7 +661,6 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
                       ref={clipRefs[idx]}
                       type="file"
                       accept="video/*"
-                      capture="environment"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0]

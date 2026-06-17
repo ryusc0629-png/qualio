@@ -322,7 +322,6 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                       type="file"
                       accept="image/*"
                       multiple
-                      capture="environment"
                       className="hidden"
                       onChange={(e) => {
                         if (e.target.files?.length) handleBeforePhotoUpload(e.target.files)
