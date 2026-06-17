@@ -101,7 +101,7 @@ export default function PrivacyPage() {
           <h2 className="text-lg font-semibold mb-3">제6조 (정보주체의 권리·의무)</h2>
           <p className="text-muted-foreground leading-relaxed">
             이용자는 회사에 대해 언제든지 개인정보 열람, 정정, 삭제, 처리정지 요구 등의 권리를
-            행사할 수 있습니다. 위 권리 행사는 help@qualio.kr 로 연락하시기 바랍니다.
+            행사할 수 있습니다. 위 권리 행사는 help@qualio.co.kr 로 연락하시기 바랍니다.
           </p>
         </section>
 
@@ -109,13 +109,13 @@ export default function PrivacyPage() {
           <h2 className="text-lg font-semibold mb-3">제7조 (개인정보 보호책임자)</h2>
           <ul className="list-none space-y-1 text-muted-foreground">
             <li>성명: 퀄리오 개인정보보호팀</li>
-            <li>이메일: privacy@qualio.kr</li>
+            <li>이메일: privacy@qualio.co.kr</li>
           </ul>
         </section>
 
         <section className="border-t pt-6">
           <p className="text-sm text-muted-foreground">
-            상호: 다트챌린지 | 서비스명: 퀄리오 | 문의: help@qualio.kr
+            상호: 다트챌린지 | 서비스명: 퀄리오 | 문의: help@qualio.co.kr
           </p>
         </section>
 

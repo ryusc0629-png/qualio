@@ -92,7 +92,7 @@ export default function TermsPage() {
           <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
             <li>구독 결제 후 7일 이내 미사용 시 전액 환불이 가능합니다.</li>
             <li>구독 기간 중 서비스 이용 내역이 있는 경우, 남은 기간에 대한 일할 계산 환불이 가능합니다.</li>
-            <li>환불 요청은 고객센터(help@qualio.kr) 또는 서비스 내 문의를 통해 접수하시기 바랍니다.</li>
+            <li>환불 요청은 고객센터(help@qualio.co.kr) 또는 서비스 내 문의를 통해 접수하시기 바랍니다.</li>
             <li>환불은 결제 수단으로 영업일 기준 3~5일 이내 처리됩니다.</li>
           </ul>
         </section>
@@ -124,7 +124,7 @@ export default function TermsPage() {
 
         <section className="border-t pt-6">
           <p className="text-sm text-muted-foreground">
-            상호: 다트챌린지 | 서비스명: 퀄리오 | 문의: help@qualio.kr
+            상호: 다트챌린지 | 서비스명: 퀄리오 | 문의: help@qualio.co.kr
           </p>
         </section>
 

@@ -365,7 +365,7 @@ export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): 
   const priceFormatted  = params.finalPrice.toLocaleString('ko-KR')
   const contactInfo     = params.businessPhone ?? '업체에 문의해 주세요'
 
-  const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.kr'
+  const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
   const rescheduleUrl = useV2
     ? `${appBaseUrl}/q/${params.businessId}/reschedule/${params.bookingId}`
     : undefined

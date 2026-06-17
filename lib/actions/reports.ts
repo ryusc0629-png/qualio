@@ -102,7 +102,7 @@ export const saveReportAction = action
     if (sendAlimtalk && booking.customer_phone) {
       const biz   = Array.isArray(booking.businesses) ? booking.businesses[0] : booking.businesses
       const quote = Array.isArray(booking.quotes)     ? booking.quotes[0]     : booking.quotes
-      const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.kr'
+      const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
       try {
         await sendWorkCompleteAlimtalk({
@@ -155,7 +155,7 @@ export const ownerSendReportAction = action
 
     const biz   = Array.isArray(booking.businesses) ? booking.businesses[0] : booking.businesses
     const quote = Array.isArray(booking.quotes)     ? booking.quotes[0]     : booking.quotes
-    const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.kr'
+    const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
     await sendWorkCompleteAlimtalk({
       customerPhone: booking.customer_phone,
