@@ -576,6 +576,150 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           />
         </div>
 
+        {/* 릴스용 작업 중 영상 — 항상 표시, 저장 버튼은 보고서 저장 후 활성화 */}
+        <div className="rounded-xl bg-white border p-4 space-y-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Film className="h-4 w-4 text-rose-500" />
+              <Label className="text-sm font-medium">작업 중 촬영한 영상 (선택)</Label>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              찍어둔 영상 3컷을 올려두세요 — 나중에 버튼 하나로 릴스가 완성돼요
+            </p>
+          </div>
+
+          {/* 3개 영상 슬롯 */}
+          <div className="grid grid-cols-3 gap-2">
+            {([0, 1, 2] as const).map((idx) => {
+              const slot = clips[idx]
+              const isClipUploading = slot?.uploading ?? false
+              const hasVideo = !isClipUploading && !!slot?.url
+              return (
+                <div key={idx} className="flex flex-col items-center gap-1.5">
+                  <p className="text-[10px] text-muted-foreground font-medium">장면 {idx + 1}</p>
+                  <div className="relative w-full">
+                    <button
+                      type="button"
+                      onClick={() => clipRefs[idx].current?.click()}
+                      className={`w-full aspect-square rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-colors ${
+                        hasVideo
+                          ? 'border-emerald-400 bg-emerald-50'
+                          : 'border-dashed border-gray-300 hover:border-rose-300 hover:bg-rose-50/30'
+                      }`}
+                    >
+                      {isClipUploading ? (
+                        <>
+                          <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+                          <span className="text-[10px] text-muted-foreground">올리는 중</span>
+                        </>
+                      ) : hasVideo ? (
+                        <>
+                          <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                          <span className="text-[10px] text-emerald-700 font-medium">완료</span>
+                          <span className="text-[9px] text-emerald-500">탭해서 교체</span>
+                        </>
+                      ) : (
+                        <>
+                          <Video className="h-5 w-5 text-muted-foreground" />
+                          <span className="text-[10px] text-muted-foreground">영상 올리기</span>
+                        </>
+                      )}
+                    </button>
+                    {hasVideo && (
+                      <button
+                        type="button"
+                        onClick={() => removeClip(idx)}
+                        className="absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5"
+                      >
+                        <X className="h-3 w-3 text-white" />
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    ref={clipRefs[idx]}
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) uploadClip(file, idx)
+                      e.target.value = ''
+                    }}
+                  />
+                </div>
+              )
+            })}
+          </div>
+
+          {/* 클립 저장 + 릴스 요청 버튼 */}
+          {!savedReportId ? (
+            <p className="text-xs text-muted-foreground text-center">
+              아래에서 보고서를 먼저 저장하면 릴스를 만들 수 있어요
+            </p>
+          ) : reelStatus === 'idle' || reelStatus === 'failed' ? (
+            <div className="space-y-2">
+              {!clipsSaved && clips.filter((c) => c.url && !c.uploading).length === 3 && (
+                <Button
+                  variant="outline"
+                  className="w-full h-11 gap-2 border-rose-200 text-rose-700 hover:bg-rose-50"
+                  disabled={isSavingClips}
+                  onClick={() =>
+                    saveClips({
+                      workerId,
+                      bookingId: booking.id,
+                      reportId: savedReportId,
+                      clipUrls: clips.map((c) => c.url) as [string, string, string],
+                    })
+                  }
+                >
+                  <Upload className="h-4 w-4" />
+                  {isSavingClips ? '저장 중...' : '영상 3개 저장하기'}
+                </Button>
+              )}
+              {clipsSaved && (
+                <Button
+                  className="w-full h-12 gap-2 bg-rose-500 hover:bg-rose-600 text-white"
+                  disabled={isRequestingReel}
+                  onClick={() =>
+                    requestReel({ workerId, bookingId: booking.id, reportId: savedReportId })
+                  }
+                >
+                  <Film className="h-4 w-4" />
+                  {isRequestingReel ? '요청 중...' : '릴스 자동 편집 신청하기'}
+                </Button>
+              )}
+              {reelStatus === 'failed' && (
+                <p className="text-xs text-rose-600 text-center">편집에 실패했어요. 다시 신청해주세요</p>
+              )}
+              {clips.filter((c) => c.url && !c.uploading).length < 3 && (
+                <p className="text-xs text-muted-foreground text-center">
+                  영상 3개를 모두 올리면 릴스를 만들 수 있어요
+                </p>
+              )}
+            </div>
+          ) : reelStatus === 'processing' ? (
+            <div className="flex items-center justify-center gap-2 rounded-lg bg-amber-50 border border-amber-100 p-3">
+              <Loader2 className="h-4 w-4 text-amber-600 animate-spin" />
+              <p className="text-sm text-amber-800 font-medium">편집 중이에요 — 완성되면 사장님께 알려드려요</p>
+            </div>
+          ) : reelStatus === 'done' && reelUrl ? (
+            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                <p className="text-sm font-semibold text-emerald-800">릴스 완성됐어요!</p>
+              </div>
+              <a
+                href={reelUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full text-center text-sm text-emerald-700 underline"
+              >
+                영상 보기 / 다운로드
+              </a>
+            </div>
+          ) : null}
+        </div>
+
         {/* After 사진 */}
         <div className="rounded-xl bg-white border p-4">
           <PhotoSection
@@ -587,157 +731,6 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             type="after"
           />
         </div>
-
-        {/* 릴스용 작업 중 영상 — 보고서 저장 후 표시 */}
-        {savedReportId && (
-          <div className="rounded-xl bg-white border p-4 space-y-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <Film className="h-4 w-4 text-rose-500" />
-                <Label className="text-sm font-medium">릴스용 작업 영상 (선택)</Label>
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                작업 중인 모습 3컷을 올리면 릴스를 자동으로 만들어드려요
-              </p>
-            </div>
-
-            {/* 촬영 가이드 */}
-            <div className="rounded-lg bg-rose-50 border border-rose-100 p-3 space-y-1">
-              <p className="text-xs font-semibold text-rose-800">촬영 가이드</p>
-              <p className="text-xs text-rose-700">🎬 장면 1 — 청소 시작하는 모습</p>
-              <p className="text-xs text-rose-700">🧹 장면 2 — 열심히 청소 중인 모습</p>
-              <p className="text-xs text-rose-700">✨ 장면 3 — 마무리하는 모습</p>
-              <p className="text-xs text-rose-400 mt-1">각 영상은 10초 이내로 찍어주세요</p>
-            </div>
-
-            {/* 3개 영상 슬롯 */}
-            <div className="grid grid-cols-3 gap-2">
-              {([0, 1, 2] as const).map((idx) => {
-                const slot = clips[idx]
-                const isUploading = slot?.uploading ?? false
-                const hasVideo = !isUploading && !!slot?.url
-                return (
-                  <div key={idx} className="flex flex-col items-center gap-1.5">
-                    <p className="text-[10px] text-muted-foreground font-medium">장면 {idx + 1}</p>
-                    <div className="relative w-full">
-                      <button
-                        type="button"
-                        onClick={() => clipRefs[idx].current?.click()}
-                        className={`w-full aspect-square rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-colors ${
-                          hasVideo
-                            ? 'border-emerald-400 bg-emerald-50'
-                            : 'border-dashed border-gray-300 hover:border-rose-300 hover:bg-rose-50/30'
-                        }`}
-                      >
-                        {isUploading ? (
-                          <>
-                            <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
-                            <span className="text-[10px] text-muted-foreground">올리는 중</span>
-                          </>
-                        ) : hasVideo ? (
-                          <>
-                            <CheckCircle2 className="h-6 w-6 text-emerald-500" />
-                            <span className="text-[10px] text-emerald-700 font-medium">완료</span>
-                            <span className="text-[9px] text-emerald-500">탭해서 교체</span>
-                          </>
-                        ) : (
-                          <>
-                            <Video className="h-5 w-5 text-muted-foreground" />
-                            <span className="text-[10px] text-muted-foreground">촬영 후 올리기</span>
-                          </>
-                        )}
-                      </button>
-                      {hasVideo && (
-                        <button
-                          type="button"
-                          onClick={() => removeClip(idx)}
-                          className="absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5"
-                        >
-                          <X className="h-3 w-3 text-white" />
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      ref={clipRefs[idx]}
-                      type="file"
-                      accept="video/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file) uploadClip(file, idx)
-                        e.target.value = ''
-                      }}
-                    />
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* 클립 저장 + 릴스 요청 버튼 */}
-            {reelStatus === 'idle' || reelStatus === 'failed' ? (
-              <div className="space-y-2">
-                {!clipsSaved && clips.filter((c) => c.url && !c.uploading).length === 3 && (
-                  <Button
-                    variant="outline"
-                    className="w-full h-11 gap-2 border-rose-200 text-rose-700 hover:bg-rose-50"
-                    disabled={isSavingClips}
-                    onClick={() =>
-                      saveClips({
-                        workerId,
-                        bookingId: booking.id,
-                        reportId: savedReportId,
-                        clipUrls: clips.map((c) => c.url) as [string, string, string],
-                      })
-                    }
-                  >
-                    <Upload className="h-4 w-4" />
-                    {isSavingClips ? '저장 중...' : '영상 3개 저장하기'}
-                  </Button>
-                )}
-                {clipsSaved && (
-                  <Button
-                    className="w-full h-12 gap-2 bg-rose-500 hover:bg-rose-600 text-white"
-                    disabled={isRequestingReel}
-                    onClick={() =>
-                      requestReel({ workerId, bookingId: booking.id, reportId: savedReportId })
-                    }
-                  >
-                    <Film className="h-4 w-4" />
-                    {isRequestingReel ? '요청 중...' : '릴스 만들기 신청하기'}
-                  </Button>
-                )}
-                {reelStatus === 'failed' && (
-                  <p className="text-xs text-rose-600 text-center">편집에 실패했어요. 다시 신청해주세요</p>
-                )}
-                {clips.filter((c) => c.url && !c.uploading).length < 3 && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    영상 3개를 모두 올리면 릴스를 만들 수 있어요
-                  </p>
-                )}
-              </div>
-            ) : reelStatus === 'processing' ? (
-              <div className="flex items-center justify-center gap-2 rounded-lg bg-amber-50 border border-amber-100 p-3">
-                <Loader2 className="h-4 w-4 text-amber-600 animate-spin" />
-                <p className="text-sm text-amber-800 font-medium">편집 중이에요 — 완성되면 사장님께 알려드려요</p>
-              </div>
-            ) : reelStatus === 'done' && reelUrl ? (
-              <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 space-y-2">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  <p className="text-sm font-semibold text-emerald-800">릴스 완성됐어요!</p>
-                </div>
-                <a
-                  href={reelUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block w-full text-center text-sm text-emerald-700 underline"
-                >
-                  영상 보기 / 다운로드
-                </a>
-              </div>
-            ) : null}
-          </div>
-        )}
 
         {/* 메모 + AI 작성 */}
         <div className="rounded-xl bg-white border p-4 space-y-3">
