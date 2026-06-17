@@ -17,7 +17,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { addDays, format, getDaysInMonth } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2, Link2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2, Smartphone } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
 import { assignBookingAction, addWorkerAction, deleteWorkerAction } from '@/lib/actions/workers'
@@ -295,10 +295,15 @@ function CopyFieldLinkButton({ workerId, workerName }: { workerId: string; worke
     <button
       type="button"
       onClick={handleCopy}
-      title="현장 앱 링크 복사"
-      className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+      className={[
+        'w-full flex items-center justify-center gap-1 text-[10px] px-1.5 py-1 rounded border transition-colors',
+        copied
+          ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+          : 'border-border bg-muted/50 text-muted-foreground hover:border-primary hover:bg-primary/10 hover:text-primary',
+      ].join(' ')}
     >
-      <Link2 className={`h-3 w-3 ${copied ? 'text-emerald-600' : ''}`} />
+      <Smartphone className="h-2.5 w-2.5 shrink-0" />
+      {copied ? '복사됐어요!' : '앱 링크 복사'}
     </button>
   )
 }
@@ -570,31 +575,33 @@ export function ScheduleBoard({
                 >
                   {/* 작업자 레이블 */}
                   <div
-                    className="flex items-center gap-1.5 px-2 py-2 min-h-[72px] bg-background"
+                    className="flex flex-col gap-1.5 px-2 py-2 min-h-[72px] bg-background"
                     style={view === 'month' ? { position: 'sticky', left: 0, zIndex: 10 } : undefined}
                   >
-                    <div
-                      className="w-2.5 h-2.5 rounded-full shrink-0"
-                      style={{ backgroundColor: row.color }}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold truncate">{row.label}</p>
-                      {row.type && (
-                        <p className="text-[10px] text-muted-foreground">
-                          {row.type === 'employee' ? '직원' : '도급사'}
-                        </p>
-                      )}
-                      {row.phone && (
-                        <p className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                          <Phone className="h-2.5 w-2.5" />{row.phone}
-                        </p>
+                    <div className="flex items-center gap-1.5">
+                      <div
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: row.color }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold truncate">{row.label}</p>
+                        {row.type && (
+                          <p className="text-[10px] text-muted-foreground">
+                            {row.type === 'employee' ? '직원' : '도급사'}
+                          </p>
+                        )}
+                        {row.phone && (
+                          <p className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                            <Phone className="h-2.5 w-2.5" />{row.phone}
+                          </p>
+                        )}
+                      </div>
+                      {row.id && (
+                        <DeleteWorkerButton workerId={row.id} workerName={row.label} />
                       )}
                     </div>
                     {row.id && (
-                      <div className="flex flex-col gap-0.5 shrink-0">
-                        <CopyFieldLinkButton workerId={row.id} workerName={row.label} />
-                        <DeleteWorkerButton workerId={row.id} workerName={row.label} />
-                      </div>
+                      <CopyFieldLinkButton workerId={row.id} workerName={row.label} />
                     )}
                   </div>
 
