@@ -20,28 +20,45 @@ export default async function MarketingPage() {
 
   if (!profile?.business_id) redirect('/onboarding')
 
-  // 업체 slug + 포스트 목록 + 구독 플랜 병렬 조회
-  const [businessResult, postsResult, subResult] = await Promise.all([
+  // 업체 slug + 포스트 목록 + 구독 플랜 + 포트폴리오 초안 병렬 조회
+  const [businessResult, postsResult, subResult, pendingPortfolioResult] = await Promise.all([
     db
       .from('businesses')
       .select('slug, name, monthly_post_target')
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
-      .from('biz_posts')
-      .select('id, slug, title, summary, published, ai_generated, published_at, image_url, image_urls, naver_title, naver_content, naver_tags, daangn_content, instagram_content, instagram_hashtags')
-      .eq('business_id', profile.business_id)
-      .order('published_at', { ascending: false }),
+      .from('biz_posts' as never)
+      .select('id, slug, title, summary, published, ai_generated, published_at, image_url, image_urls, naver_title, naver_content, naver_tags, daangn_content, instagram_content, instagram_hashtags, post_type, before_image_urls, after_image_urls' as never)
+      .eq('business_id' as never, profile.business_id)
+      .order('published_at' as never, { ascending: false }) as unknown as { data: Record<string, unknown>[] | null },
     db
       .from('subscriptions')
       .select('plan')
       .eq('business_id', profile.business_id)
       .eq('status', 'active')
       .maybeSingle(),
+    db
+      .from('biz_posts' as never)
+      .select('id, title, summary, before_image_urls, after_image_urls' as never)
+      .eq('business_id' as never, profile.business_id)
+      .eq('post_type' as never, 'portfolio')
+      .eq('published' as never, false)
+      .order('created_at' as never, { ascending: false }) as unknown as {
+        data: { id: string; title: string; summary: string | null; before_image_urls: string[]; after_image_urls: string[] }[] | null
+      },
   ])
 
   const business = businessResult.data
-  const posts = postsResult.data ?? []
+  const posts = (postsResult.data ?? []) as unknown as {
+    id: string; slug: string; title: string; summary: string | null
+    published: boolean; ai_generated: boolean; published_at: string
+    image_url: string | null; image_urls: string[] | null
+    naver_title: string | null; naver_content: string | null; naver_tags: string[] | null
+    daangn_content: string | null; instagram_content: string | null; instagram_hashtags: string[] | null
+    post_type: string | null; before_image_urls: string[] | null; after_image_urls: string[] | null
+  }[]
+  const pendingPortfolios = pendingPortfolioResult.data ?? []
   const planId = ((subResult.data?.plan as PlanId) ?? 'beta')
   const autoPostLimit = getAutoPostLimit(planId)
   const autoDailyPostLimit = getAutoDailyPostLimit(planId)
@@ -73,6 +90,7 @@ export default async function MarketingPage() {
         autoPostLimit={autoPostLimit}
         planId={planId}
         isTodayComplete={isTodayComplete}
+        pendingPortfolios={pendingPortfolios}
       />
 
       <div className="border-t pt-6">

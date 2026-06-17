@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, publishTodayAction, generatePostImagesAction } from '@/lib/actions/posts'
+import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/portfolio'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -64,6 +65,17 @@ interface Post {
   daangn_content: string | null
   instagram_content: string | null
   instagram_hashtags: string[] | null
+  post_type?: string | null
+  before_image_urls?: string[] | null
+  after_image_urls?: string[] | null
+}
+
+interface PendingPortfolio {
+  id: string
+  title: string
+  summary: string | null
+  before_image_urls: string[]
+  after_image_urls: string[]
 }
 
 interface PostListProps {
@@ -74,6 +86,7 @@ interface PostListProps {
   autoPostLimit: number
   planId: string
   isTodayComplete: boolean
+  pendingPortfolios?: PendingPortfolio[]
 }
 
 interface ScheduleSlot {
@@ -143,7 +156,7 @@ function buildSchedule(target: number, posts: Post[], suggestions: TopicSuggesti
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
-export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete }: PostListProps) {
+export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [] }: PostListProps) {
   const [posts] = useState(initialPosts)
   const [showEditor, setShowEditor] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
@@ -210,6 +223,16 @@ const { execute: deletePost, isPending: isDeleting } = useAction(deletePostActio
     onError: ({ error }) => { setGenId(null); toast.error(error.serverError ?? '이미지 생성에 실패했어요') },
   })
 
+  const { execute: approvePortfolio, isPending: isApproving } = useAction(approvePortfolioAction, {
+    onSuccess: () => { toast.success('시공 사례가 공개됐어요!'); setTimeout(() => window.location.replace(window.location.pathname), 1200) },
+    onError: ({ error }) => { toast.error(error.serverError ?? '승인에 실패했어요') },
+  })
+
+  const { execute: rejectPortfolio, isPending: isRejecting } = useAction(rejectPortfolioAction, {
+    onSuccess: () => { toast.success('삭제됐어요'); setTimeout(() => window.location.replace(window.location.pathname), 1200) },
+    onError: ({ error }) => { toast.error(error.serverError ?? '삭제에 실패했어요') },
+  })
+
   const { execute: publishToday, isPending: isPublishing } = useAction(publishTodayAction, {
     onSuccess: ({ data }) => {
       if (!data) return
@@ -261,6 +284,62 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${progressPct}%` }} />
         </div>
       </div>
+
+      {/* ── 포트폴리오 승인 대기 ── */}
+      {pendingPortfolios.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-amber-200 flex items-center gap-2">
+            <Camera className="h-4 w-4 text-amber-600" />
+            <p className="font-semibold text-sm text-amber-900">
+              시공 사례 {pendingPortfolios.length}건 승인 대기 중
+            </p>
+          </div>
+          <div className="divide-y divide-amber-100">
+            {pendingPortfolios.map((p) => (
+              <div key={p.id} className="px-5 py-3 flex items-center gap-3">
+                {/* Before/After 미니 썸네일 */}
+                <div className="flex items-center gap-1 shrink-0">
+                  {p.before_image_urls?.[0] && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.before_image_urls[0]} alt="Before" className="w-10 h-10 rounded-lg object-cover border" />
+                  )}
+                  <span className="text-xs text-amber-500">→</span>
+                  {p.after_image_urls?.[0] && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.after_image_urls[0]} alt="After" className="w-10 h-10 rounded-lg object-cover border" />
+                  )}
+                </div>
+
+                {/* 제목 */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{p.title}</p>
+                  {p.summary && <p className="text-xs text-muted-foreground truncate">{p.summary}</p>}
+                </div>
+
+                {/* 승인/삭제 버튼 */}
+                <div className="flex gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    disabled={isApproving || isRejecting}
+                    onClick={() => approvePortfolio({ postId: p.id })}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors"
+                  >
+                    <Check className="h-3.5 w-3.5" />공개
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isApproving || isRejecting}
+                    onClick={() => { if (confirm('이 시공 사례를 삭제할까요?')) rejectPortfolio({ postId: p.id }) }}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-60 transition-colors"
+                  >
+                    <XIcon className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── 월간 발행 일정표 ── */}
       <div className="rounded-xl border bg-white overflow-hidden">
@@ -397,7 +476,12 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-sm truncate">{post.title}</p>
-                      {post.ai_generated && (
+                      {post.post_type === 'portfolio' && (
+                        <Badge variant="secondary" className="text-xs shrink-0 bg-amber-100 text-amber-700">
+                          <Camera className="h-3 w-3 mr-1" />시공사례
+                        </Badge>
+                      )}
+                      {post.ai_generated && post.post_type !== 'portfolio' && (
                         <Badge variant="secondary" className="text-xs shrink-0">
                           <Sparkles className="h-3 w-3 mr-1" />AI
                         </Badge>

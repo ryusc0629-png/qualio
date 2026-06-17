@@ -7,6 +7,7 @@ import type { QuotePitch } from '@/lib/ai/quote-pitch'
 import { FALLBACK_PITCH } from '@/lib/ai/quote-pitch'
 import type { Json } from '@/lib/types/database'
 import { Phone, ShieldCheck, Star, ChevronRight } from 'lucide-react'
+import { PortfolioCaseCard } from '@/components/quote/portfolio-case-card'
 
 interface PageProps {
   params: Promise<{ businessId: string; quoteId: string }>
@@ -31,7 +32,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
   const { businessId, quoteId } = await params
   const db = createServiceClient()
 
-  const [{ data: quote }, { data: business }] = await Promise.all([
+  const [{ data: quote }, { data: business }, portfolioResult] = await Promise.all([
     db
       .from('quotes')
       .select('id, cleaning_type, space_size, good_price, better_price, best_price, status, customer_name, customer_phone, ai_pitch, created_at')
@@ -43,6 +44,14 @@ export default async function QuoteLandingPage({ params }: PageProps) {
       .select('name, phone, description, slug, naver_place_url, youtube_url')
       .eq('id', businessId)
       .maybeSingle(),
+    db
+      .from('biz_posts' as never)
+      .select('title, summary, before_image_urls, after_image_urls, reel_url' as never)
+      .eq('business_id' as never, businessId)
+      .eq('post_type' as never, 'portfolio')
+      .eq('published' as never, true)
+      .order('published_at' as never, { ascending: false })
+      .limit(4) as unknown as { data: { title: string; summary: string | null; before_image_urls: string[]; after_image_urls: string[]; reel_url: string | null }[] | null },
   ])
 
   if (!quote || !business) notFound()
@@ -116,6 +125,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
   const isUrgent  = !isBooked && hoursLeft > 0 && hoursLeft <= 12
 
   const youtubeEmbedUrl = business.youtube_url ? getYouTubeEmbedUrl(business.youtube_url) : null
+  const portfolioPosts = portfolioResult.data ?? []
 
   const trustCards = [
     { emoji: '✅', title: '만족 보장',     desc: '불만족 시 3일 이내\n전면 재시공 보증' },
@@ -239,6 +249,23 @@ export default async function QuoteLandingPage({ params }: PageProps) {
                 className="w-full h-full border-0"
               />
             </div>
+          </div>
+        )}
+
+        {/* 시공 사례 */}
+        {portfolioPosts.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-xs font-bold text-zinc-500 px-1">시공 사례</p>
+            {portfolioPosts.map((post, i) => (
+              <PortfolioCaseCard
+                key={i}
+                title={post.title}
+                summary={post.summary}
+                beforeImageUrl={post.before_image_urls?.[0] ?? null}
+                afterImageUrl={post.after_image_urls?.[0] ?? null}
+                reelUrl={post.reel_url}
+              />
+            ))}
           </div>
         )}
 

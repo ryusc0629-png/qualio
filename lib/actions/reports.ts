@@ -5,6 +5,7 @@ import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendWorkCompleteAlimtalk, sendReviewRequestAlimtalk } from '@/lib/kakao/alimtalk'
 import { generateAiReport } from '@/lib/ai/report-writer'
+import { createPortfolioDraft } from '@/lib/actions/portfolio'
 import { revalidatePath } from 'next/cache'
 
 const aiReportDataSchema = z.object({
@@ -119,8 +120,17 @@ export const saveReportAction = action
       }
     }
 
+    // 포트폴리오 초안 자동 생성 (비동기 — 실패해도 보고서 저장에 영향 없음)
+    // Before/After 사진 + AI 보고서 데이터가 모두 있을 때만 생성
+    if (aiReportData && beforePhotoUrls.length > 0 && afterPhotoUrls.length > 0) {
+      createPortfolioDraft(db, report.id).catch((err) => {
+        console.error('[Portfolio] 초안 생성 실패:', err)
+      })
+    }
+
     revalidatePath('/dashboard/work')
     revalidatePath('/dashboard/schedule')
+    revalidatePath('/dashboard/marketing')
     return { reportId: report.id }
   })
 
