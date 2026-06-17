@@ -56,6 +56,7 @@ interface Booking {
   customer_id: string | null
   reportId?: string | null
   reviewSent?: boolean
+  hasReviewHistory?: boolean
 }
 
 interface Props {
@@ -127,6 +128,7 @@ function BookingCard({
     >
       <div className="flex items-center gap-1">
         {isCompleted && <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />}
+        {booking.hasReviewHistory && !isCompleted && <span className="shrink-0" title="리뷰 작성 고객">⭐</span>}
         <p className={`font-bold truncate ${isCompleted ? 'line-through' : ''}`}>{booking.customer_name}</p>
       </div>
       <p className={`truncate ${isCompleted ? 'opacity-60' : 'opacity-80'}`}>{time} · {serviceName}</p>

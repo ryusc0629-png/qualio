@@ -117,6 +117,21 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     }
   }
 
+  // 리뷰 작성 이력이 있는 고객 전화번호 조회
+  const reviewedPhones = new Set<string>()
+  if (phones.length > 0) {
+    const { data: claimedRows } = await db
+      .from('review_claims' as never)
+      .select('customer_phone' as never)
+      .eq('business_id' as never, businessId)
+      .in('customer_phone' as never, phones)
+      .not('claimed_at' as never, 'is', null) as unknown as { data: { customer_phone: string }[] | null }
+
+    for (const c of claimedRows ?? []) {
+      reviewedPhones.add(c.customer_phone)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -142,6 +157,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           customer_id:     b.customer_phone ? customerMap.get(b.customer_phone) ?? null : null,
           reportId:        reportMap.get(b.id)?.id ?? null,
           reviewSent:      reportMap.get(b.id)?.reviewSent ?? false,
+          hasReviewHistory: b.customer_phone ? reviewedPhones.has(b.customer_phone) : false,
         }))}
         weekStart={rangeStart.toISOString()}
         weekLabel={rangeLabel}

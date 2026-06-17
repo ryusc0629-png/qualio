@@ -1,7 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, Phone, MapPin, Calendar, Receipt, ChevronRight, FileText, User } from 'lucide-react'
+import { ChevronLeft, Phone, MapPin, Calendar, Receipt, ChevronRight, FileText, User, Star } from 'lucide-react'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 
 interface Props {
@@ -82,6 +82,18 @@ export default async function CustomerDetailPage({ params }: Props) {
     }
   }
 
+  // 리뷰 작성 이력 조회
+  let reviewCount = 0
+  if (customer.phone) {
+    const { count } = await db
+      .from('review_claims' as never)
+      .select('id' as never, { count: 'exact', head: true })
+      .eq('business_id' as never, profile.business_id)
+      .eq('customer_phone' as never, customer.phone)
+      .not('claimed_at' as never, 'is', null) as unknown as { count: number | null }
+    reviewCount = count ?? 0
+  }
+
   const totalLTV = bookingList
     .filter((b) => b.status === 'completed')
     .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
@@ -119,6 +131,12 @@ export default async function CustomerDetailPage({ params }: Props) {
             }`}>
               {customer.type === 'recurring' ? '정기 고객' : '일회성'}
             </span>
+            {reviewCount > 0 && (
+              <span className="text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-700 flex items-center gap-0.5">
+                <Star className="h-3 w-3" />
+                리뷰 {reviewCount}회
+              </span>
+            )}
             {customer.phone && (
               <EditCustomerButton customer={{ ...customer, phone: customer.phone, notes: customer.notes }} />
             )}
@@ -148,7 +166,7 @@ export default async function CustomerDetailPage({ params }: Props) {
       </div>
 
       {/* 실적 요약 */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <div className="bg-white rounded-xl border border-border p-4">
           <p className="text-xs text-muted-foreground">누적 매출</p>
           <p className="text-2xl font-bold mt-1 tabular-nums">
@@ -162,6 +180,13 @@ export default async function CustomerDetailPage({ params }: Props) {
           <p className="text-xs text-muted-foreground">완료 방문</p>
           <p className="text-2xl font-bold mt-1 tabular-nums">
             {completedCount}
+            <span className="text-sm font-normal text-muted-foreground ml-0.5">회</span>
+          </p>
+        </div>
+        <div className="bg-white rounded-xl border border-border p-4">
+          <p className="text-xs text-muted-foreground">리뷰 작성</p>
+          <p className="text-2xl font-bold mt-1 tabular-nums text-amber-600">
+            {reviewCount}
             <span className="text-sm font-normal text-muted-foreground ml-0.5">회</span>
           </p>
         </div>

@@ -8,7 +8,7 @@ import { ContractStatusSelect } from '@/components/dashboard/contract-status-sel
 import { ConfirmBookingButton } from '@/components/dashboard/confirm-booking-button'
 import { formatFrequency } from '@/lib/utils/frequency'
 import { ClientSearchInput } from '@/components/dashboard/client-search-input'
-import { Phone, MapPin, Calendar, TrendingUp, ChevronRight, Building2, User, Archive } from 'lucide-react'
+import { Phone, MapPin, Calendar, TrendingUp, ChevronRight, Building2, User, Archive, Star } from 'lucide-react'
 
 // ── 타입 ────────────────────────────────────────────────
 
@@ -142,6 +142,7 @@ export default async function ClientsPage({
     { data: leads },
     { data: registeredLeadRows },
     { data: b2bQuotes },
+    reviewClaimsResult,
     { data: pendingQuotes },
   ] = await Promise.all([
     db.from('customers')
@@ -170,6 +171,12 @@ export default async function ClientsPage({
     db.from('b2b_quotes')
       .select('lead_id, total_amount, frequency')
       .eq('business_id', businessId),
+
+    // 리뷰 작성 이력이 있는 고객 전화번호
+    db.from('review_claims' as never)
+      .select('customer_phone' as never)
+      .eq('business_id' as never, businessId)
+      .not('claimed_at' as never, 'is', null),
 
     // 예약 미확정 견적 요청 (공개 폼으로 들어온)
     db.from('quotes')
@@ -205,6 +212,10 @@ export default async function ClientsPage({
   }
 
   const registeredLeadIds = new Set((registeredLeadRows ?? []).map((r) => r.lead_id))
+  const reviewedPhones = new Set(
+    ((reviewClaimsResult as unknown as { data: { customer_phone: string }[] | null }).data ?? [])
+      .map((r) => r.customer_phone)
+  )
   const today = new Date().toISOString().slice(0, 10)
 
   // ── 정렬 함수 ──
@@ -417,6 +428,12 @@ export default async function ClientsPage({
                           <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">{customer.category}</span>
                         )}
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusMeta.className}`}>{statusMeta.label}</span>
+                        {customer.phone && reviewedPhones.has(customer.phone) && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 flex items-center gap-0.5">
+                            <Star className="h-3 w-3" />
+                            리뷰 작성
+                          </span>
+                        )}
                       </div>
                       <div className="mt-1.5 space-y-0.5">
                         {customer.phone && (

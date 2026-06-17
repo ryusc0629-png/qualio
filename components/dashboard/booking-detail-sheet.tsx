@@ -62,6 +62,7 @@ interface Booking {
   customer_id: string | null
   reportId?: string | null
   reviewSent?: boolean
+  hasReviewHistory?: boolean
 }
 
 interface Props {
@@ -268,8 +269,14 @@ export function BookingDetailSheet({
               <SheetTitle className="text-xl leading-tight">
                 {booking?.customer_name}
               </SheetTitle>
-              <div className="mt-1.5">
+              <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
                 <StatusBadge status={booking?.status ?? 'confirmed'} />
+                {booking?.hasReviewHistory && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex items-center gap-0.5">
+                    <Star className="h-3 w-3" />
+                    리뷰 작성 고객
+                  </span>
+                )}
               </div>
             </div>
           </div>
