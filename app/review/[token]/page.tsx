@@ -13,7 +13,7 @@ export default async function ReviewClaimPage({ params }: Props) {
   // 토큰 조회 + 업체/예약 정보
   const { data: claim } = await db
     .from('review_claims')
-    .select('id, claimed_at, businesses!business_id(name, google_place_url, naver_place_url, review_reward_type, review_reward_description), bookings!booking_id(customer_name)')
+    .select('id, claimed_at, businesses!business_id(name, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description), bookings!booking_id(customer_name)')
     .eq('token', token)
     .maybeSingle()
 
@@ -26,13 +26,23 @@ export default async function ReviewClaimPage({ params }: Props) {
     name: string
     google_place_url: string | null
     naver_place_url: string | null
+    danggeun_review_url: string | null
+    kakao_place_url: string | null
+    active_review_platform: string
     review_reward_type: string
     review_reward_description: string | null
   } | null
 
   if (!bizInfo) notFound()
 
-  const reviewUrl = bizInfo.google_place_url ?? bizInfo.naver_place_url ?? null
+  // 활성 채널 기준 리뷰 URL 결정
+  const platformUrlMap: Record<string, string | null> = {
+    naver: bizInfo.naver_place_url,
+    google: bizInfo.google_place_url,
+    danggeun: bizInfo.danggeun_review_url,
+    kakao: bizInfo.kakao_place_url,
+  }
+  const reviewUrl = platformUrlMap[bizInfo.active_review_platform] ?? bizInfo.google_place_url ?? bizInfo.naver_place_url ?? null
   const customerName = (booking as { customer_name: string | null } | null)?.customer_name ?? '고객'
   const alreadyClaimed = !!claim.claimed_at
 

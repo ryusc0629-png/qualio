@@ -9,8 +9,15 @@ import { randomBytes } from 'crypto'
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
-function resolveReviewUrl(googleUrl: string | null, naverUrl: string | null): string | null {
-  return googleUrl || naverUrl || null
+function resolveReviewUrl(biz: BizInfo): string | null {
+  const urlMap: Record<string, string | null> = {
+    naver: biz.naver_place_url,
+    google: biz.google_place_url,
+    danggeun: biz.danggeun_review_url,
+    kakao: biz.kakao_place_url,
+  }
+  // 활성 채널 URL 우선, 없으면 아무 URL이라도 사용
+  return urlMap[biz.active_review_platform] ?? biz.google_place_url ?? biz.naver_place_url ?? null
 }
 
 function generateToken(): string {
@@ -39,7 +46,7 @@ export async function GET(request: NextRequest) {
   const [d1Result, d3Result] = await Promise.all([
     db
       .from('bookings')
-      .select('id, business_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), businesses!business_id(name, phone, google_place_url, naver_place_url, review_reward_type, review_reward_description)')
+      .select('id, business_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), businesses!business_id(name, phone, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)')
       .eq('status', 'completed')
       .gte('scheduled_at', d1Start.toISOString())
       .lt('scheduled_at', d1End.toISOString())
@@ -47,7 +54,7 @@ export async function GET(request: NextRequest) {
 
     db
       .from('bookings')
-      .select('id, business_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), businesses!business_id(name, phone, google_place_url, naver_place_url, review_reward_type, review_reward_description)')
+      .select('id, business_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), businesses!business_id(name, phone, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)')
       .eq('status', 'completed')
       .gte('scheduled_at', d3Start.toISOString())
       .lt('scheduled_at', d3End.toISOString())
@@ -60,6 +67,9 @@ export async function GET(request: NextRequest) {
     phone: string | null
     google_place_url: string | null
     naver_place_url: string | null
+    danggeun_review_url: string | null
+    kakao_place_url: string | null
+    active_review_platform: string
     review_reward_type: string
     review_reward_description: string | null
   }
@@ -80,7 +90,7 @@ export async function GET(request: NextRequest) {
 
     if (!booking.customer_phone || !biz) return false
 
-    const directReviewUrl = resolveReviewUrl(biz.google_place_url, biz.naver_place_url)
+    const directReviewUrl = resolveReviewUrl(biz)
     if (!directReviewUrl) return false  // 후기 링크 미설정 스킵
 
     try {

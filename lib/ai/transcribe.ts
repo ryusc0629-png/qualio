@@ -2,7 +2,8 @@
 // gpt-4o-transcribe 모델 사용, 한 번에 최대 25MB
 
 export async function transcribeAudio(file: File): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY
+  // 키 끝에 줄바꿈/공백이 섞여 들어오면 Authorization 헤더 생성 시 TypeError가 나므로 정리
+  const apiKey = process.env.OPENAI_API_KEY?.trim()
   if (!apiKey) {
     throw new Error('[APP] 음성인식 설정이 아직 안 됐어요. 관리자에게 문의해주세요')
   }

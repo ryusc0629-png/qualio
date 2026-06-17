@@ -29,7 +29,7 @@ export default async function SettingsPage() {
   const [businessResult, subscriptionResult] = await Promise.all([
     db
       .from('businesses')
-      .select('id, name, phone, address, description, naver_place_url, google_place_url, youtube_url, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at')
+      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at' as never)
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
@@ -41,7 +41,14 @@ export default async function SettingsPage() {
 
   if (!businessResult.data) redirect('/onboarding')
 
-  const business = businessResult.data
+  const business = businessResult.data as unknown as {
+    id: string; name: string; phone: string | null; address: string | null; description: string | null
+    naver_place_url: string | null; google_place_url: string | null; danggeun_review_url: string | null
+    kakao_place_url: string | null; active_review_platform: string; youtube_url: string | null
+    review_reward_type: string; review_reward_description: string | null
+    slug: string | null; seo_title: string | null; seo_description: string | null
+    seo_keywords: string | null; seo_faqs: unknown; seo_generated_at: string | null
+  }
   const subscription = subscriptionResult.data ?? {
     plan: 'beta',
     status: 'active',

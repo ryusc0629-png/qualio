@@ -213,7 +213,7 @@ export const sendReviewRequestAction = action
     // 보고서 + 예약 + 업체 정보 조회
     const { data: report } = await db
       .from('reports')
-      .select('id, bookings!booking_id(customer_name, customer_phone, quotes!quote_id(cleaning_type)), businesses!business_id(name, naver_place_url)')
+      .select('id, bookings!booking_id(customer_name, customer_phone, quotes!quote_id(cleaning_type)), businesses!business_id(name, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform)')
       .eq('id', parsedInput.reportId)
       .eq('business_id', profile.business_id)
       .single()
@@ -222,19 +222,27 @@ export const sendReviewRequestAction = action
 
     const booking = Array.isArray(report.bookings) ? report.bookings[0] : report.bookings
     const biz     = Array.isArray(report.businesses) ? report.businesses[0] : report.businesses
-    const bizInfo = biz as { name: string; naver_place_url: string | null } | null
+    const bizInfo = biz as { name: string; naver_place_url: string | null; google_place_url: string | null; danggeun_review_url: string | null; kakao_place_url: string | null; active_review_platform: string } | null
     const bookingInfo = booking as { customer_name: string | null; customer_phone: string | null; quotes: { cleaning_type: string | null } | { cleaning_type: string | null }[] | null } | null
     const quote   = Array.isArray(bookingInfo?.quotes) ? bookingInfo?.quotes[0] : bookingInfo?.quotes
 
-    if (!bizInfo?.naver_place_url) throw new Error('[APP] 설정에서 네이버 플레이스 URL을 먼저 등록해주세요')
+    // 활성 채널 기준 리뷰 URL 결정
+    const platformUrlMap: Record<string, string | null> = {
+      naver: bizInfo?.naver_place_url ?? null,
+      google: bizInfo?.google_place_url ?? null,
+      danggeun: bizInfo?.danggeun_review_url ?? null,
+      kakao: bizInfo?.kakao_place_url ?? null,
+    }
+    const activeUrl = platformUrlMap[bizInfo?.active_review_platform ?? 'naver'] ?? bizInfo?.naver_place_url ?? bizInfo?.google_place_url
+    if (!activeUrl) throw new Error('[APP] 설정에서 리뷰 수집 채널 URL을 먼저 등록해주세요')
     if (!bookingInfo?.customer_phone) throw new Error('[APP] 고객 연락처가 없습니다')
 
     await sendReviewRequestAlimtalk({
       customerPhone: bookingInfo.customer_phone,
       customerName:  bookingInfo.customer_name ?? '고객',
-      businessName:  bizInfo.name,
+      businessName:  bizInfo?.name ?? '',
       cleaningType:  (quote as { cleaning_type: string | null } | null)?.cleaning_type ?? '청소 서비스',
-      reviewUrl:     bizInfo.naver_place_url,
+      reviewUrl:     activeUrl,
     })
 
     // 리뷰 요청 발송 시각 기록

@@ -17,6 +17,15 @@ function toRewardCategory(type: string): 'none' | 'discount' | 'gifticon' {
   return 'none'
 }
 
+const REVIEW_PLATFORMS = [
+  { key: 'naver',    label: '네이버 플레이스', urlField: 'naver_place_url' },
+  { key: 'google',   label: '구글 플레이스',   urlField: 'google_place_url' },
+  { key: 'danggeun', label: '당근마켓',        urlField: 'danggeun_review_url' },
+  { key: 'kakao',    label: '카카오맵',        urlField: 'kakao_place_url' },
+] as const
+
+type ReviewPlatform = typeof REVIEW_PLATFORMS[number]['key']
+
 interface Business {
   name: string
   phone: string | null
@@ -24,6 +33,9 @@ interface Business {
   description: string | null
   naver_place_url: string | null
   google_place_url: string | null
+  danggeun_review_url: string | null
+  kakao_place_url: string | null
+  active_review_platform: string
   youtube_url: string | null
   review_reward_type: string
   review_reward_description: string | null
@@ -36,6 +48,11 @@ interface Props {
 export function SettingsForm({ business }: Props) {
   // 할인 세부 타입 (discount_amount | discount_rate) 초기값
   const initialType = business.review_reward_type as RewardType
+  const [activePlatform, setActivePlatform] = useState<ReviewPlatform>(
+    (REVIEW_PLATFORMS.some(p => p.key === business.active_review_platform)
+      ? business.active_review_platform
+      : 'naver') as ReviewPlatform
+  )
   const [rewardCategory, setRewardCategory] = useState<'none' | 'discount' | 'gifticon'>(
     toRewardCategory(initialType)
   )
@@ -66,6 +83,9 @@ export function SettingsForm({ business }: Props) {
       description:               data.get('description') as string,
       naver_place_url:           data.get('naver_place_url') as string,
       google_place_url:          data.get('google_place_url') as string,
+      danggeun_review_url:       data.get('danggeun_review_url') as string,
+      kakao_place_url:           data.get('kakao_place_url') as string,
+      active_review_platform:    activePlatform,
       youtube_url:               data.get('youtube_url') as string,
       review_reward_type:        rewardType,
       review_reward_description: rewardCategory === 'none' ? '' : rewardValue,
@@ -121,34 +141,97 @@ export function SettingsForm({ business }: Props) {
         </div>
       </div>
 
-      {/* 외부 채널 연동 */}
+      {/* 리뷰 수집 채널 */}
       <div className="rounded-lg border bg-card p-5 space-y-4">
-        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">채널 연동</h2>
-
-        <div className="space-y-2">
-          <Label htmlFor="google_place_url">구글 플레이스 후기 URL</Label>
-          <Input
-            id="google_place_url"
-            name="google_place_url"
-            defaultValue={business.google_place_url ?? ''}
-            placeholder="https://g.page/r/..."
-          />
-          <p className="text-xs text-muted-foreground">구글 지도 업체 페이지 → 리뷰 작성 링크 (우선 사용)</p>
+        <div>
+          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">리뷰 수집 채널</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            리뷰 요청 알림톡에 연결할 채널을 선택하세요. 한 채널에 리뷰가 모이면 다른 채널로 전환할 수 있어요.
+          </p>
         </div>
 
+        {/* 활성 채널 선택 */}
         <div className="space-y-2">
-          <Label htmlFor="naver_place_url">네이버 플레이스 후기 URL</Label>
-          <Input
-            id="naver_place_url"
-            name="naver_place_url"
-            defaultValue={business.naver_place_url ?? ''}
-            placeholder="https://naver.me/..."
-          />
-          <p className="text-xs text-muted-foreground">구글 링크가 없을 때 대신 사용됩니다</p>
+          <Label>현재 리뷰 수집 중인 채널</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {REVIEW_PLATFORMS.map((platform) => (
+              <button
+                key={platform.key}
+                type="button"
+                onClick={() => setActivePlatform(platform.key)}
+                className={`h-11 flex items-center justify-center rounded-lg border text-sm transition-colors ${
+                  activePlatform === platform.key
+                    ? 'border-primary bg-primary/5 text-primary font-semibold ring-1 ring-primary/30'
+                    : 'hover:bg-muted text-muted-foreground'
+                }`}
+              >
+                {platform.label}
+              </button>
+            ))}
+          </div>
         </div>
 
+        {/* 채널별 URL 입력 */}
+        <div className="space-y-3 pt-2 border-t">
+          <div className="space-y-2">
+            <Label htmlFor="naver_place_url">
+              네이버 플레이스 후기 URL
+              {activePlatform === 'naver' && <span className="text-primary ml-1.5 text-xs font-semibold">(수집 중)</span>}
+            </Label>
+            <Input
+              id="naver_place_url"
+              name="naver_place_url"
+              defaultValue={business.naver_place_url ?? ''}
+              placeholder="https://naver.me/..."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="google_place_url">
+              구글 플레이스 후기 URL
+              {activePlatform === 'google' && <span className="text-primary ml-1.5 text-xs font-semibold">(수집 중)</span>}
+            </Label>
+            <Input
+              id="google_place_url"
+              name="google_place_url"
+              defaultValue={business.google_place_url ?? ''}
+              placeholder="https://g.page/r/..."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="danggeun_review_url">
+              당근마켓 비즈프로필 URL
+              {activePlatform === 'danggeun' && <span className="text-primary ml-1.5 text-xs font-semibold">(수집 중)</span>}
+            </Label>
+            <Input
+              id="danggeun_review_url"
+              name="danggeun_review_url"
+              defaultValue={business.danggeun_review_url ?? ''}
+              placeholder="https://www.daangn.com/..."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="kakao_place_url">
+              카카오맵 후기 URL
+              {activePlatform === 'kakao' && <span className="text-primary ml-1.5 text-xs font-semibold">(수집 중)</span>}
+            </Label>
+            <Input
+              id="kakao_place_url"
+              name="kakao_place_url"
+              defaultValue={business.kakao_place_url ?? ''}
+              placeholder="https://place.map.kakao.com/..."
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 유튜브 연동 */}
+      <div className="rounded-lg border bg-card p-5 space-y-4">
+        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">유튜브 연동</h2>
         <div className="space-y-2">
-          <Label htmlFor="youtube_url">유튜브 시공 영상 URL</Label>
+          <Label htmlFor="youtube_url">시공 영상 URL</Label>
           <Input
             id="youtube_url"
             name="youtube_url"
