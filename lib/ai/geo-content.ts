@@ -246,7 +246,7 @@ imagePrompt: 이 포스트 주제에 정확히 맞는 AI 이미지 생성용 영
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 3500,
+    max_tokens: 2000,
     messages: [{ role: 'user', content: userContent }],
   })
 
