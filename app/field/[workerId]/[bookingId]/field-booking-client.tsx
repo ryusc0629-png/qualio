@@ -30,6 +30,7 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  Film,
 } from 'lucide-react'
 
 interface BookingData {
@@ -381,6 +382,38 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                 </Button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* 릴스 촬영 유도 — 작업 중일 때만 */}
+        {currentStatus === 'in_progress' && (
+          <div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-full bg-amber-400 flex items-center justify-center shrink-0">
+                <Film className="h-5 w-5 text-white" />
+              </div>
+              <div>
+                <p className="font-bold text-amber-900">지금 영상을 찍어두세요!</p>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  작업 중 3컷만 찍으면 — 나중에 버튼 하나로 릴스가 완성돼요
+                </p>
+              </div>
+            </div>
+            <div className="space-y-1.5 pl-1">
+              <div className="flex items-center gap-2 text-xs text-amber-900">
+                <span className="w-5 h-5 rounded-full bg-amber-400 text-white flex items-center justify-center font-bold shrink-0 text-[10px]">1</span>
+                오염된 부분 클로즈업 (작업 전 상태)
+              </div>
+              <div className="flex items-center gap-2 text-xs text-amber-900">
+                <span className="w-5 h-5 rounded-full bg-amber-400 text-white flex items-center justify-center font-bold shrink-0 text-[10px]">2</span>
+                열심히 작업하는 모습
+              </div>
+              <div className="flex items-center gap-2 text-xs text-amber-900">
+                <span className="w-5 h-5 rounded-full bg-amber-400 text-white flex items-center justify-center font-bold shrink-0 text-[10px]">3</span>
+                깨끗해진 결과물 클로즈업
+              </div>
+            </div>
+            <p className="text-[11px] text-amber-700 pl-1">각 영상 10초 이내 · 세로로 찍어야 릴스에 딱 맞아요</p>
           </div>
         )}
 
