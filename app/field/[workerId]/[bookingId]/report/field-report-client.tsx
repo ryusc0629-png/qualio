@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 
 type PhotoSlot = { url: string; uploading: boolean }
-type VideoSlot = { url: string; uploading: boolean }
+type VideoSlot = { url: string; uploading: boolean; thumbnailUrl?: string }
 
 interface BookingInfo {
   id: string
@@ -171,6 +171,32 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
+  // 로컬 파일에서 첫 프레임 썸네일 추출
+  const extractThumbnail = (file: File): Promise<string> =>
+    new Promise((resolve) => {
+      const objectUrl = URL.createObjectURL(file)
+      const video = document.createElement('video')
+      video.src = objectUrl
+      video.muted = true
+      video.playsInline = true
+      video.currentTime = 0.5
+      const capture = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = 320
+        canvas.height = 320
+        const ctx = canvas.getContext('2d')
+        if (ctx) ctx.drawImage(video, 0, 0, 320, 320)
+        URL.revokeObjectURL(objectUrl)
+        resolve(canvas.toDataURL('image/jpeg', 0.8))
+      }
+      video.addEventListener('seeked', capture, { once: true })
+      video.addEventListener('error', () => {
+        URL.revokeObjectURL(objectUrl)
+        resolve('')
+      }, { once: true })
+      video.load()
+    })
+
   // 영상 클립 업로드 (한 번에 하나씩, 슬롯 인덱스 지정)
   const uploadClip = async (file: File, index: number) => {
     // 파일 크기 사전 체크 (200MB 초과 시 거부)
@@ -180,10 +206,13 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       return
     }
 
+    // 업로드 전 로컬에서 썸네일 추출
+    const thumbnailUrl = await extractThumbnail(file)
+
     const resetSlot = () =>
       setClips((prev) => {
         const next = [...prev]
-        next[index] = { url: '', uploading: false }
+        next[index] = { url: '', uploading: false, thumbnailUrl: undefined }
         return next
       })
 
@@ -192,7 +221,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
 
     setClips((prev) => {
       const next = [...prev]
-      next[index] = { url: '', uploading: true }
+      next[index] = { url: '', uploading: true, thumbnailUrl }
       return next
     })
 
@@ -213,7 +242,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       const { data: { publicUrl } } = supabase.storage.from('report-photos').getPublicUrl(path)
       setClips((prev) => {
         const next = [...prev]
-        next[index] = { url: publicUrl, uploading: false }
+        next[index] = { url: publicUrl, uploading: false, thumbnailUrl }
         return next
       })
       setClipsSaved(false)
@@ -617,27 +646,52 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
               return (
                 <div key={idx} className="flex flex-col items-center gap-1.5">
                   <p className="text-[10px] text-muted-foreground font-medium">장면 {idx + 1}</p>
-                  <div className="relative w-full">
+                  <div className="relative w-full aspect-square">
                     <button
                       type="button"
                       onClick={() => clipRefs[idx].current?.click()}
-                      className={`w-full aspect-square rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-colors ${
+                      className={`w-full h-full rounded-xl border-2 overflow-hidden flex flex-col items-center justify-center gap-1 transition-colors ${
                         hasVideo
-                          ? 'border-emerald-400 bg-emerald-50'
+                          ? 'border-emerald-400'
                           : 'border-dashed border-gray-300 hover:border-rose-300 hover:bg-rose-50/30'
                       }`}
                     >
                       {isClipUploading ? (
-                        <>
-                          <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
-                          <span className="text-[10px] text-muted-foreground">올리는 중</span>
-                        </>
+                        slot?.thumbnailUrl ? (
+                          // 업로드 중에도 썸네일 미리보기 + 스피너 오버레이
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={slot.thumbnailUrl} alt="" className="w-full h-full object-cover opacity-50" />
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/30 rounded-xl">
+                              <Loader2 className="h-5 w-5 text-white animate-spin" />
+                              <span className="text-[10px] text-white font-medium">올리는 중</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+                            <span className="text-[10px] text-muted-foreground">올리는 중</span>
+                          </>
+                        )
                       ) : hasVideo ? (
-                        <>
-                          <CheckCircle2 className="h-6 w-6 text-emerald-500" />
-                          <span className="text-[10px] text-emerald-700 font-medium">완료</span>
-                          <span className="text-[9px] text-emerald-500">탭해서 교체</span>
-                        </>
+                        slot?.thumbnailUrl ? (
+                          // 썸네일 + 완료 배지
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={slot.thumbnailUrl} alt="" className="w-full h-full object-cover" />
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 flex items-center justify-center py-1 rounded-b-xl">
+                              <span className="text-[10px] text-white font-medium">탭해서 교체</span>
+                            </div>
+                          </>
+                        ) : (
+                          // 기존 저장된 영상 (썸네일 없음) → video 태그 폴백
+                          <>
+                            <video src={slot.url} className="w-full h-full object-cover" preload="metadata" />
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 flex items-center justify-center py-1 rounded-b-xl">
+                              <span className="text-[10px] text-white font-medium">탭해서 교체</span>
+                            </div>
+                          </>
+                        )
                       ) : (
                         <>
                           <Video className="h-5 w-5 text-muted-foreground" />
@@ -649,7 +703,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
                       <button
                         type="button"
                         onClick={() => removeClip(idx)}
-                        className="absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5"
+                        className="absolute top-1 right-1 bg-black/60 rounded-full p-0.5 z-10"
                       >
                         <X className="h-3 w-3 text-white" />
                       </button>
