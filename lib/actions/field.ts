@@ -454,7 +454,7 @@ export const fieldSaveWorkClipsAction = action
     workerId:  z.string().uuid(),
     bookingId: z.string().uuid(),
     reportId:  z.string().uuid(),
-    clipUrls:  z.array(z.string().min(1)).min(3).max(3),
+    clipUrls:  z.array(z.string().min(1)).min(1).max(3),
   }))
   .action(async ({ parsedInput }) => {
     const { db, worker } = await verifyWorker(parsedInput.workerId)

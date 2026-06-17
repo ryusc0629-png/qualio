@@ -153,13 +153,10 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     onError: ({ error }) => toast.error(error.serverError ?? 'AI 작성에 실패했어요. 다시 시도해주세요'),
   })
 
-  // 작업 중 영상 클립 저장
-  const { execute: saveClips, isPending: isSavingClips } = useAction(fieldSaveWorkClipsAction, {
-    onSuccess: () => {
-      setClipsSaved(true)
-      toast.success('영상이 저장됐어요!')
-    },
-    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  // 작업 중 영상 클립 저장 (업로드 완료 시 자동 호출)
+  const { execute: saveClips } = useAction(fieldSaveWorkClipsAction, {
+    onSuccess: () => setClipsSaved(true),
+    onError: () => { /* 자동 저장 실패 시 조용히 처리 — 재시도는 릴스 요청 시 검증 */ },
   })
 
   // 릴스 편집 요청
@@ -240,9 +237,24 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       }
 
       const { data: { publicUrl } } = supabase.storage.from('report-photos').getPublicUrl(path)
+
       setClips((prev) => {
         const next = [...prev]
         next[index] = { url: publicUrl, uploading: false, thumbnailUrl }
+
+        // 업로드 완료 즉시 DB 자동 저장
+        if (savedReportId) {
+          const urls = next.filter((c) => c.url && !c.uploading).map((c) => c.url)
+          if (urls.length >= 1) {
+            saveClips({
+              workerId,
+              bookingId: booking.id,
+              reportId: savedReportId,
+              clipUrls: urls as [string, ...string[]],
+            })
+          }
+        }
+
         return next
       })
       setClipsSaved(false)
@@ -725,32 +737,14 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             })}
           </div>
 
-          {/* 클립 저장 + 릴스 요청 버튼 */}
+          {/* 릴스 요청 버튼 */}
           {!savedReportId ? (
             <p className="text-xs text-muted-foreground text-center">
               아래에서 보고서를 먼저 저장하면 릴스를 만들 수 있어요
             </p>
           ) : reelStatus === 'idle' || reelStatus === 'failed' ? (
             <div className="space-y-2">
-              {!clipsSaved && clips.filter((c) => c.url && !c.uploading).length === 3 && (
-                <Button
-                  variant="outline"
-                  className="w-full h-11 gap-2 border-rose-200 text-rose-700 hover:bg-rose-50"
-                  disabled={isSavingClips}
-                  onClick={() =>
-                    saveClips({
-                      workerId,
-                      bookingId: booking.id,
-                      reportId: savedReportId,
-                      clipUrls: clips.map((c) => c.url) as [string, string, string],
-                    })
-                  }
-                >
-                  <Upload className="h-4 w-4" />
-                  {isSavingClips ? '저장 중...' : '영상 3개 저장하기'}
-                </Button>
-              )}
-              {clipsSaved && (
+              {clipsSaved ? (
                 <Button
                   className="w-full h-12 gap-2 bg-rose-500 hover:bg-rose-600 text-white"
                   disabled={isRequestingReel}
@@ -761,14 +755,15 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
                   <Film className="h-4 w-4" />
                   {isRequestingReel ? '요청 중...' : '릴스 자동 편집 신청하기'}
                 </Button>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center">
+                  {clips.filter((c) => c.url && !c.uploading).length > 0
+                    ? `영상 ${clips.filter((c) => c.url && !c.uploading).length}개 저장됨 — 3개를 모두 올리면 릴스를 만들 수 있어요`
+                    : '영상 3개를 모두 올리면 릴스를 만들 수 있어요'}
+                </p>
               )}
               {reelStatus === 'failed' && (
                 <p className="text-xs text-rose-600 text-center">편집에 실패했어요. 다시 신청해주세요</p>
-              )}
-              {clips.filter((c) => c.url && !c.uploading).length < 3 && (
-                <p className="text-xs text-muted-foreground text-center">
-                  영상 3개를 모두 올리면 릴스를 만들 수 있어요
-                </p>
               )}
             </div>
           ) : reelStatus === 'processing' ? (
