@@ -888,6 +888,35 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             <Save className="h-5 w-5" />
             {isSaving ? '저장 중...' : '보고서 저장하기'}
           </Button>
+        ) : alreadySent ? (
+          <>
+            <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 h-14">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+              <span className="text-sm font-semibold text-emerald-800">보고서 발송 완료</span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 h-10 text-sm"
+                disabled={isSaving || isUploading}
+                onClick={handleSave}
+              >
+                {isSaving ? '저장 중...' : '수정 후 다시 저장'}
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1 h-10 text-sm gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                disabled={!booking.customerPhone || isSending}
+                onClick={handleSend}
+              >
+                <Send className="h-3.5 w-3.5" />
+                {isSending ? '발송 중...' : '다시 발송하기'}
+              </Button>
+            </div>
+            {!booking.customerPhone && (
+              <p className="text-xs text-muted-foreground text-center">고객 연락처가 없어 알림톡을 보낼 수 없어요</p>
+            )}
+          </>
         ) : (
           <>
             <Button
