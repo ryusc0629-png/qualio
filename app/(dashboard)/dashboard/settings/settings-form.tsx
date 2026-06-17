@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { updateBusinessAction } from '@/lib/actions/settings'
+import { BrandDesignSection } from './brand-design-section'
+import { normalizeHex, type HeroStyle } from '@/lib/brand'
 
 type RewardType = 'none' | 'discount_amount' | 'discount_rate' | 'gifticon'
 
@@ -39,6 +41,10 @@ interface Business {
   youtube_url: string | null
   review_reward_type: string
   review_reward_description: string | null
+  logo_url: string | null
+  brand_color: string | null
+  brand_color_secondary: string | null
+  hero_style: string | null
 }
 
 interface Props {
@@ -60,6 +66,14 @@ export function SettingsForm({ business }: Props) {
     initialType === 'discount_rate' ? 'discount_rate' : 'discount_amount'
   )
   const [rewardValue, setRewardValue] = useState(business.review_reward_description ?? '')
+
+  // 웹사이트 디자인 상태
+  const [brandColor, setBrandColor] = useState(business.brand_color ?? '')
+  const [brandSecondary, setBrandSecondary] = useState(business.brand_color_secondary ?? '')
+  const [heroStyle, setHeroStyle] = useState<HeroStyle>(
+    business.hero_style === 'light' ? 'light' : 'dark',
+  )
+  const [logoUrl, setLogoUrl] = useState(business.logo_url ?? '')
 
   const { execute, isPending } = useAction(updateBusinessAction, {
     onSuccess: () => toast.success('설정이 저장됐어요!'),
@@ -89,6 +103,10 @@ export function SettingsForm({ business }: Props) {
       youtube_url:               data.get('youtube_url') as string,
       review_reward_type:        rewardType,
       review_reward_description: rewardCategory === 'none' ? '' : rewardValue,
+      brand_color:               normalizeHex(brandColor) ?? '',
+      brand_color_secondary:     normalizeHex(brandSecondary) ?? '',
+      hero_style:                heroStyle,
+      logo_url:                  logoUrl.trim(),
     })
   }
 
@@ -140,6 +158,21 @@ export function SettingsForm({ business }: Props) {
           <p className="text-xs text-muted-foreground">고객 견적 폼 상단에 표시됩니다</p>
         </div>
       </div>
+
+      {/* 웹사이트 디자인 (브랜드 커스터마이징) */}
+      <BrandDesignSection
+        businessName={business.name}
+        brandColor={brandColor}
+        brandSecondary={brandSecondary}
+        heroStyle={heroStyle}
+        logoUrl={logoUrl}
+        onChange={(next) => {
+          if (next.brandColor !== undefined) setBrandColor(next.brandColor)
+          if (next.brandSecondary !== undefined) setBrandSecondary(next.brandSecondary)
+          if (next.heroStyle !== undefined) setHeroStyle(next.heroStyle)
+          if (next.logoUrl !== undefined) setLogoUrl(next.logoUrl)
+        }}
+      />
 
       {/* 리뷰 수집 채널 */}
       <div className="rounded-lg border bg-card p-5 space-y-4">

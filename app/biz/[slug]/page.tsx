@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { isAcService } from '@/lib/utils'
+import { buildBrandStyle, toBrandSettings } from '@/lib/brand'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -84,11 +85,34 @@ export default async function BizLandingPage({ params }: Props) {
 
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url')
+    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, logo_url, brand_color, brand_color_secondary, hero_style')
     .eq('slug', slug)
     .maybeSingle()
 
   if (!business) notFound()
+
+  // ── 브랜드 테마 ── (CSS 변수 주입, AI 토큰과 무관)
+  const brand = toBrandSettings(business)
+  const themeStyle = buildBrandStyle(brand)
+  const isLightHero = brand.heroStyle === 'light'
+  // 히어로 dark/light 변형별 클래스
+  const hero = {
+    section: isLightHero
+      ? 'relative overflow-hidden bg-gradient-to-br from-primary/10 via-white to-white'
+      : 'relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900',
+    title: isLightHero ? 'text-slate-900' : 'text-white',
+    desc: isLightHero ? 'text-slate-600' : 'text-slate-300',
+    muted: isLightHero ? 'text-slate-500' : 'text-slate-400',
+    mutedHover: isLightHero ? 'hover:text-slate-900' : 'hover:text-white',
+    statCard: isLightHero
+      ? 'bg-white border border-slate-200 shadow-sm'
+      : 'bg-white/8 backdrop-blur border border-white/10',
+    statValue: isLightHero ? 'text-slate-900' : 'text-white',
+    statSub: isLightHero ? 'text-slate-400' : 'text-slate-500',
+    outlineBtn: isLightHero
+      ? 'border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+      : 'border-white/50 text-white hover:bg-white/10 hover:text-white',
+  }
 
   const [{ data: services }, { data: recentPosts }] = await Promise.all([
     db
@@ -204,12 +228,17 @@ export default async function BizLandingPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-white" style={themeStyle}>
 
         {/* ── 헤더 ── */}
         <header className="border-b bg-white/95 backdrop-blur sticky top-0 z-20">
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-            <span className="font-bold text-sm">{business.name}</span>
+            {business.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={business.logo_url} alt={business.name} className="h-7 w-auto object-contain" />
+            ) : (
+              <span className="font-bold text-sm">{business.name}</span>
+            )}
 
             {/* 네비게이션 */}
             <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
@@ -247,20 +276,26 @@ export default async function BizLandingPage({ params }: Props) {
         </header>
 
         {/* ── 히어로 ── */}
-        <section className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        <section className={hero.section}>
           {/* 배경 장식 — 라이트 블러 효과 */}
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/25 via-transparent to-transparent" />
           <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-primary/10 rounded-full blur-3xl -translate-y-1/3 translate-x-1/3" />
-          <div className="absolute bottom-0 left-0 w-80 h-80 bg-blue-500/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4" />
-
-          {/* 격자 패턴 */}
+          {/* 서브 색상 글로우 */}
           <div
-            className="absolute inset-0 opacity-[0.03]"
-            style={{
-              backgroundImage: 'linear-gradient(rgba(255,255,255,.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.3) 1px, transparent 1px)',
-              backgroundSize: '40px 40px',
-            }}
+            className="absolute bottom-0 left-0 w-80 h-80 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4 opacity-10"
+            style={{ backgroundColor: 'var(--brand-secondary)' }}
           />
+
+          {/* 격자 패턴 (어두운 배경에서만) */}
+          {!isLightHero && (
+            <div
+              className="absolute inset-0 opacity-[0.03]"
+              style={{
+                backgroundImage: 'linear-gradient(rgba(255,255,255,.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.3) 1px, transparent 1px)',
+                backgroundSize: '40px 40px',
+              }}
+            />
+          )}
 
           <div className="relative max-w-5xl mx-auto px-4 py-20 sm:py-28">
             <div className="flex flex-col lg:flex-row items-start gap-12">
@@ -274,19 +309,19 @@ export default async function BizLandingPage({ params }: Props) {
                   </div>
                 )}
 
-                <h1 className="text-4xl sm:text-5xl font-extrabold text-white leading-tight tracking-tight">
+                <h1 className={`text-4xl sm:text-5xl font-extrabold leading-tight tracking-tight ${hero.title}`}>
                   {business.seo_title ?? business.name}
                 </h1>
 
                 {business.seo_description && (
-                  <p className="text-lg text-slate-300 leading-relaxed">
+                  <p className={`text-lg leading-relaxed ${hero.desc}`}>
                     {business.seo_description}
                   </p>
                 )}
 
                 <div className="flex flex-wrap gap-3">
                   {business.address && (
-                    <span className="flex items-center gap-1.5 text-sm text-slate-400">
+                    <span className={`flex items-center gap-1.5 text-sm ${hero.muted}`}>
                       <MapPin className="h-4 w-4 text-primary" />
                       {business.address}
                     </span>
@@ -294,7 +329,7 @@ export default async function BizLandingPage({ params }: Props) {
                   {business.phone && (
                     <a
                       href={`tel:${business.phone}`}
-                      className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors"
+                      className={`flex items-center gap-1.5 text-sm transition-colors ${hero.muted} ${hero.mutedHover}`}
                     >
                       <Phone className="h-4 w-4 text-primary" />
                       {business.phone}
@@ -311,14 +346,14 @@ export default async function BizLandingPage({ params }: Props) {
                   </Link>
                   {business.naver_place_url && (
                     <a href={business.naver_place_url} target="_blank" rel="noopener noreferrer">
-                      <Button size="lg" variant="outline" className="h-12 px-5 text-base bg-transparent border-white/50 text-white hover:bg-white/10 hover:text-white">
+                      <Button size="lg" variant="outline" className={`h-12 px-5 text-base bg-transparent ${hero.outlineBtn}`}>
                         네이버 플레이스
                       </Button>
                     </a>
                   )}
                   {business.phone && (
                     <a href={`tel:${business.phone}`}>
-                      <Button size="lg" variant="outline" className="h-12 px-5 text-base bg-transparent border-white/50 text-white hover:bg-white/10 hover:text-white gap-2">
+                      <Button size="lg" variant="outline" className={`h-12 px-5 text-base bg-transparent gap-2 ${hero.outlineBtn}`}>
                         <Phone className="h-4 w-4" />
                         전화 문의
                       </Button>
@@ -336,14 +371,14 @@ export default async function BizLandingPage({ params }: Props) {
                 ].map((item) => (
                   <div
                     key={item.label}
-                    className="bg-white/8 backdrop-blur border border-white/10 rounded-2xl p-4 space-y-1"
+                    className={`rounded-2xl p-4 space-y-1 ${hero.statCard}`}
                   >
                     <div className="flex items-center gap-2 mb-2">
                       <item.icon className="h-4 w-4 text-primary" />
-                      <span className="text-xs text-slate-400">{item.label}</span>
+                      <span className={`text-xs ${hero.muted}`}>{item.label}</span>
                     </div>
-                    <p className="text-white font-bold text-lg leading-none">{item.value}</p>
-                    <p className="text-xs text-slate-500">{item.sub}</p>
+                    <p className={`font-bold text-lg leading-none ${hero.statValue}`}>{item.value}</p>
+                    <p className={`text-xs ${hero.statSub}`}>{item.sub}</p>
                   </div>
                 ))}
               </div>

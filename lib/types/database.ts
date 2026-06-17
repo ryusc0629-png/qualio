@@ -336,6 +336,9 @@ export type Database = {
           monthly_post_target: number
           review_reward_type: string
           review_reward_description: string | null
+          brand_color: string | null
+          brand_color_secondary: string | null
+          hero_style: string
         }
         Insert: {
           address?: string | null
@@ -362,6 +365,9 @@ export type Database = {
           monthly_post_target?: number
           review_reward_type?: string
           review_reward_description?: string | null
+          brand_color?: string | null
+          brand_color_secondary?: string | null
+          hero_style?: string
         }
         Update: {
           address?: string | null
@@ -388,6 +394,9 @@ export type Database = {
           monthly_post_target?: number
           review_reward_type?: string
           review_reward_description?: string | null
+          brand_color?: string | null
+          brand_color_secondary?: string | null
+          hero_style?: string
         }
         Relationships: [
           {

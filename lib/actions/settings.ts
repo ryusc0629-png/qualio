@@ -25,6 +25,20 @@ const updateBusinessSchema = z.object({
   youtube_url:               z.string().max(300).optional(),
   review_reward_type:        z.string().max(20).optional(),
   review_reward_description: z.string().max(200).optional(),
+  // 웹사이트 브랜드 커스터마이징 — 빈 문자열은 "미설정"으로 처리
+  brand_color: z
+    .string()
+    .refine((v) => v === '' || /^#[0-9a-fA-F]{6}$/.test(v), '색상은 #RRGGBB 형식이어야 합니다')
+    .optional(),
+  brand_color_secondary: z
+    .string()
+    .refine((v) => v === '' || /^#[0-9a-fA-F]{6}$/.test(v), '색상은 #RRGGBB 형식이어야 합니다')
+    .optional(),
+  hero_style: z
+    .string()
+    .refine((v) => ['dark', 'light'].includes(v), '유효하지 않은 히어로 스타일입니다')
+    .optional(),
+  logo_url: z.string().max(500).optional(),
 })
 
 export const updateBusinessAction = action
@@ -58,6 +72,10 @@ export const updateBusinessAction = action
         youtube_url:               parsedInput.youtube_url               || null,
         review_reward_type:        parsedInput.review_reward_type        || 'none',
         review_reward_description: parsedInput.review_reward_description || null,
+        brand_color:               parsedInput.brand_color           || null,
+        brand_color_secondary:     parsedInput.brand_color_secondary || null,
+        hero_style:                parsedInput.hero_style            || 'dark',
+        logo_url:                  parsedInput.logo_url              || null,
       })
       .eq('id', profile.business_id)
 
