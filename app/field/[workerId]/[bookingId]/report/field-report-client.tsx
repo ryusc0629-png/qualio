@@ -173,6 +173,20 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
 
   // 영상 클립 업로드 (한 번에 하나씩, 슬롯 인덱스 지정)
   const uploadClip = async (file: File, index: number) => {
+    // 파일 크기 사전 체크 (200MB 초과 시 거부)
+    const MAX_MB = 200
+    if (file.size > MAX_MB * 1024 * 1024) {
+      toast.error(`영상 파일이 너무 커요 (최대 ${MAX_MB}MB). 짧게 찍거나 해상도를 낮춰서 다시 올려주세요`)
+      return
+    }
+
+    const resetSlot = () =>
+      setClips((prev) => {
+        const next = [...prev]
+        next[index] = { url: '', uploading: false }
+        return next
+      })
+
     const ext = file.name.split('.').pop() ?? 'mp4'
     const path = `${businessId}/${booking.id}/clips/clip${index + 1}-${Date.now()}.${ext}`
 
@@ -182,26 +196,32 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       return next
     })
 
-    const supabase = createClient()
-    const { error } = await supabase.storage.from('report-photos').upload(path, file, { upsert: true })
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.storage.from('report-photos').upload(path, file, { upsert: true })
 
-    if (error) {
-      toast.error('영상 업로드에 실패했어요')
+      if (error) {
+        console.error('[FieldReport] 영상 업로드 오류:', error)
+        const msg = error.message?.includes('exceeded')
+          ? '영상이 너무 커요. 더 짧게 찍어서 올려주세요'
+          : '영상 업로드에 실패했어요. 다시 시도해주세요'
+        toast.error(msg)
+        resetSlot()
+        return
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from('report-photos').getPublicUrl(path)
       setClips((prev) => {
         const next = [...prev]
-        next[index] = { url: '', uploading: false }
+        next[index] = { url: publicUrl, uploading: false }
         return next
       })
-      return
+      setClipsSaved(false)
+    } catch (err) {
+      console.error('[FieldReport] 영상 업로드 예외:', err)
+      toast.error('영상 업로드에 실패했어요. 다시 시도해주세요')
+      resetSlot()
     }
-
-    const { data: { publicUrl } } = supabase.storage.from('report-photos').getPublicUrl(path)
-    setClips((prev) => {
-      const next = [...prev]
-      next[index] = { url: publicUrl, uploading: false }
-      return next
-    })
-    setClipsSaved(false)
   }
 
   // 영상 클립 삭제
