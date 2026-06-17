@@ -6,7 +6,7 @@ import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, pu
 import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/portfolio'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -316,8 +316,15 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                   {p.summary && <p className="text-xs text-muted-foreground truncate">{p.summary}</p>}
                 </div>
 
-                {/* 승인/삭제 버튼 */}
+                {/* 수정/승인/삭제 버튼 */}
                 <div className="flex gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setEditingPost({ id: p.id, slug: '', title: p.title, summary: p.summary, published: false, ai_generated: true, published_at: '', image_url: null, image_urls: null, naver_title: null, naver_content: null, naver_tags: null, daangn_content: null, instagram_content: null, instagram_hashtags: null, post_type: 'portfolio', before_image_urls: p.before_image_urls, after_image_urls: p.after_image_urls })}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 transition-colors"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />수정
+                  </button>
                   <button
                     type="button"
                     disabled={isApproving || isRejecting}
