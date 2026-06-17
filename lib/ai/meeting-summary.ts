@@ -9,13 +9,15 @@ export async function summarizeMeeting(transcript: string): Promise<string> {
 
   const client = new Anthropic({ apiKey })
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 2048,
-    messages: [
-      {
-        role: 'user',
-        content: `당신은 청소/홈케어 업체 사장님의 영업 미팅 회의록을 정리하는 비서입니다.
+  // 요약(Claude) 호출 — 실패해도 받아쓴 원문은 살린다(크레딧 부족/장애 대비)
+  try {
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2048,
+      messages: [
+        {
+          role: 'user',
+          content: `당신은 청소/홈케어 업체 사장님의 영업 미팅 회의록을 정리하는 비서입니다.
 아래는 미팅을 녹음해서 받아쓴 원문입니다. 말이 끊기거나 어색한 부분이 있어도 맥락을 파악해 깔끔하게 정리해주세요.
 
 ## 정리 규칙
@@ -40,10 +42,15 @@ export async function summarizeMeeting(transcript: string): Promise<string> {
 
 ## 미팅 원문
 ${transcript}`,
-      },
-    ],
-  })
+        },
+      ],
+    })
 
-  const text = response.content[0]?.type === 'text' ? response.content[0].text : ''
-  return text.trim() || transcript
+    const text = response.content[0]?.type === 'text' ? response.content[0].text : ''
+    return text.trim() || transcript
+  } catch (error) {
+    // 요약 실패(크레딧 부족 등) 시 받아쓴 원문이라도 반환해 기록을 살린다
+    console.error('[MeetingSummary] 요약 실패, 원문으로 대체:', error instanceof Error ? error.message : error)
+    return transcript
+  }
 }
