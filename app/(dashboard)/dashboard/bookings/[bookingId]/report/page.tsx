@@ -33,10 +33,10 @@ export default async function OwnerReportPage({ params }: Props) {
 
   if (!booking) notFound()
 
-  // 기존 보고서 + 사진 조회
+  // 기존 보고서 + 사진 + 릴스 정보 조회
   const { data: report } = await db
     .from('reports')
-    .select('id, notes, kakao_sent_at, ai_report_data, report_photos(url, type, sort_order)' as never)
+    .select('id, notes, kakao_sent_at, ai_report_data, reel_status, reel_url, report_photos(url, type, sort_order)' as never)
     .eq('booking_id', bookingId)
     .maybeSingle() as {
       data: {
@@ -50,6 +50,8 @@ export default async function OwnerReportPage({ params }: Props) {
           additionalNotes: string
           recommendedServices: string[]
         } | null
+        reel_status: string | null
+        reel_url: string | null
         report_photos: { url: string; type: string; sort_order: number }[]
       } | null
     }
@@ -90,6 +92,8 @@ export default async function OwnerReportPage({ params }: Props) {
         beforeUrls: existingBefore,
         afterUrls: existingAfter,
         aiReportData: report.ai_report_data ?? null,
+        reelStatus: report.reel_status ?? 'idle',
+        reelUrl: report.reel_url ?? null,
       } : null}
       serviceItems={(services ?? []).map((s) => ({
         name: s.name,

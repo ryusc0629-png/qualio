@@ -41,11 +41,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ transcript, summary })
   } catch (error) {
+    // 에러 상세를 한 줄 문자열로 남겨 로그 검색이 가능하도록 함
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+    console.error(`[MeetingTranscribe] 처리 실패 상세: ${detail}`)
     const message =
       error instanceof Error && error.message.startsWith('[APP]')
         ? error.message.replace('[APP] ', '')
         : '정리하지 못했어요. 잠시 후 다시 시도해주세요'
-    console.error('[MeetingTranscribe] 처리 실패:', error)
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

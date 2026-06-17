@@ -19,6 +19,8 @@ import {
   Save,
   Sparkles,
   Plus,
+  Film,
+  Loader2,
 } from 'lucide-react'
 
 type PhotoSlot = { url: string; uploading: boolean }
@@ -46,6 +48,8 @@ interface ExistingReport {
   beforeUrls: string[]
   afterUrls: string[]
   aiReportData: AiReportData | null
+  reelStatus: string
+  reelUrl: string | null
 }
 
 interface ServiceItem {
@@ -61,6 +65,8 @@ interface Props {
 }
 
 export function OwnerReportClient({ businessId, booking, existingReport, serviceItems }: Props) {
+  const [reelStatus] = useState(existingReport?.reelStatus ?? 'idle')
+  const [reelUrl] = useState<string | null>(existingReport?.reelUrl ?? null)
   const [notes, setNotes] = useState(existingReport?.notes ?? '')
   const [before, setBefore] = useState<PhotoSlot[]>(
     existingReport?.beforeUrls.map((url) => ({ url, uploading: false })) ?? []
@@ -490,6 +496,57 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
             type="after"
           />
         </div>
+
+        {/* 릴스 영상 현황 — 현장 직원이 신청한 경우만 표시 */}
+        {reelStatus !== 'idle' && (
+          <div className="rounded-xl bg-white border p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Film className="h-4 w-4 text-rose-500" />
+              <Label className="text-sm font-medium">릴스 영상</Label>
+              <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${
+                reelStatus === 'done'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : reelStatus === 'processing'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-red-100 text-red-700'
+              }`}>
+                {reelStatus === 'done' ? '완성' : reelStatus === 'processing' ? '편집 중' : '실패'}
+              </span>
+            </div>
+
+            {reelStatus === 'processing' && (
+              <div className="flex items-center gap-2 rounded-lg bg-amber-50 p-3">
+                <Loader2 className="h-4 w-4 text-amber-600 animate-spin shrink-0" />
+                <p className="text-sm text-amber-800">현장 직원이 신청한 릴스를 편집 중이에요</p>
+              </div>
+            )}
+
+            {reelStatus === 'done' && reelUrl && (
+              <div className="space-y-3">
+                <video
+                  src={reelUrl}
+                  controls
+                  playsInline
+                  className="w-full rounded-xl aspect-[9/16] bg-black object-contain max-h-80"
+                />
+                <a
+                  href={reelUrl}
+                  download
+                  className="flex items-center justify-center gap-2 w-full h-11 rounded-lg border border-rose-200 text-rose-700 text-sm font-medium hover:bg-rose-50 transition-colors"
+                >
+                  <Upload className="h-4 w-4" />
+                  다운로드 / 공유하기
+                </a>
+              </div>
+            )}
+
+            {reelStatus === 'failed' && (
+              <p className="text-sm text-red-600 text-center">
+                영상 편집에 실패했어요. 현장 직원에게 다시 신청을 요청해주세요.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="rounded-xl bg-white border p-4 space-y-3">
           <div>

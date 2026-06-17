@@ -443,6 +443,98 @@ export const fieldSendReportAction = action
     return { success: true }
   })
 
+// 작업 중 영상 클립 저장 (릴스 제작용)
+export const fieldSaveWorkClipsAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+    reportId:  z.string().uuid(),
+    clipUrls:  z.array(z.string().min(1)).min(3).max(3),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    const { error } = await db
+      .from('reports')
+      .update({ work_clip_urls: parsedInput.clipUrls } as never)
+      .eq('id', parsedInput.reportId)
+      .eq('business_id', worker.business_id)
+
+    if (error) throw new Error('[APP] 영상 저장에 실패했어요')
+    return { success: true }
+  })
+
+// 릴스 편집 요청 (Creatomate API 호출)
+export const fieldRequestReelAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+    reportId:  z.string().uuid(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    // 보고서 + 사진 + 클립 조회
+    const { data: report } = await db
+      .from('reports')
+      .select('id, work_clip_urls, notes, report_photos(url, type, sort_order)' as never)
+      .eq('id', parsedInput.reportId)
+      .eq('business_id', worker.business_id)
+      .maybeSingle() as {
+        data: {
+          id: string
+          work_clip_urls: string[]
+          notes: string | null
+          report_photos: { url: string; type: string; sort_order: number }[]
+        } | null
+      }
+
+    if (!report) throw new Error('[APP] 보고서를 찾을 수 없어요')
+
+    const clips = report.work_clip_urls ?? []
+    if (clips.length < 3) throw new Error('[APP] 작업 중 영상 3개를 모두 올려주세요')
+
+    const beforePhotos = report.report_photos
+      .filter((p) => p.type === 'before')
+      .sort((a, b) => a.sort_order - b.sort_order)
+    const afterPhotos = report.report_photos
+      .filter((p) => p.type === 'after')
+      .sort((a, b) => a.sort_order - b.sort_order)
+
+    if (!beforePhotos[0]) throw new Error('[APP] 작업 전 사진이 필요해요')
+    if (!afterPhotos[0]) throw new Error('[APP] 작업 후 사진이 필요해요')
+
+    const { data: business } = await db
+      .from('businesses')
+      .select('name')
+      .eq('id', worker.business_id)
+      .maybeSingle()
+
+    if (!business) throw new Error('[APP] 업체 정보를 찾을 수 없어요')
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+    const { requestReelRender } = await import('@/lib/creatomate/client')
+
+    const renderId = await requestReelRender({
+      beforePhotoUrl: beforePhotos[0].url,
+      clipUrls: [clips[0], clips[1], clips[2]],
+      afterPhotoUrl: afterPhotos[0].url,
+      businessName: business.name,
+      beforeText: booking.memo ?? '작업 전 현장',
+      webhookUrl: `${appUrl}/api/creatomate/webhook`,
+    })
+
+    const { error } = await db
+      .from('reports')
+      .update({ reel_status: 'processing', reel_render_id: renderId } as never)
+      .eq('id', parsedInput.reportId)
+
+    if (error) throw new Error('[APP] 릴스 요청 저장에 실패했어요')
+    return { success: true }
+  })
+
 // AI 보고서 자동 작성 (직원 메모 → 전문가 보고서 + 서비스 추천)
 export const fieldGenerateAiReportAction = action
   .schema(z.object({

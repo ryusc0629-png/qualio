@@ -7,8 +7,14 @@ export async function transcribeAudio(file: File): Promise<string> {
     throw new Error('[APP] 음성인식 설정이 아직 안 됐어요. 관리자에게 문의해주세요')
   }
 
+  // 업로드된 File을 그대로 재전송하면 서버리스(undici) 환경에서 스트림이 깨질 수 있어,
+  // 새 Blob으로 다시 만들어 파일명과 함께 전송한다
+  const arrayBuffer = await file.arrayBuffer()
+  const ext = file.name?.split('.').pop()?.toLowerCase() || 'webm'
+  const blob = new Blob([arrayBuffer], { type: file.type || 'audio/webm' })
+
   const form = new FormData()
-  form.append('file', file)
+  form.append('file', blob, `meeting.${ext}`)
   form.append('model', 'gpt-4o-transcribe')
   form.append('language', 'ko')
   form.append('response_format', 'text')

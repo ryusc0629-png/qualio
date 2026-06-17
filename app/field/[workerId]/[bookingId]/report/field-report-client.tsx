@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { createClient } from '@/lib/supabase/client'
-import { fieldSaveReportAction, fieldSendReportAction, fieldGenerateAiReportAction } from '@/lib/actions/field'
+import { fieldSaveReportAction, fieldSendReportAction, fieldGenerateAiReportAction, fieldSaveWorkClipsAction, fieldRequestReelAction } from '@/lib/actions/field'
 import {
   ArrowLeft,
   Camera,
@@ -19,9 +19,13 @@ import {
   Save,
   Sparkles,
   Plus,
+  Video,
+  Film,
+  Loader2,
 } from 'lucide-react'
 
 type PhotoSlot = { url: string; uploading: boolean }
+type VideoSlot = { url: string; uploading: boolean }
 
 interface BookingInfo {
   id: string
@@ -38,6 +42,9 @@ interface ExistingReport {
   beforeUrls: string[]
   afterUrls: string[]
   aiReportData: AiReportData | null
+  workClipUrls: string[]
+  reelStatus: string
+  reelUrl: string | null
 }
 
 interface AiReportData {
@@ -72,6 +79,14 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   const [savedReportId, setSavedReportId] = useState<string | null>(existingReport?.id ?? null)
   const [alreadySent, setAlreadySent] = useState(!!existingReport?.sentAt)
   const [aiReport, setAiReport] = useState<AiReportData | null>(existingReport?.aiReportData ?? null)
+  const [clips, setClips] = useState<VideoSlot[]>(
+    existingReport?.workClipUrls.map((url) => ({ url, uploading: false })) ?? []
+  )
+  const [clipsSaved, setClipsSaved] = useState(
+    (existingReport?.workClipUrls.length ?? 0) >= 3
+  )
+  const [reelStatus, setReelStatus] = useState(existingReport?.reelStatus ?? 'idle')
+  const [reelUrl, setReelUrl] = useState<string | null>(existingReport?.reelUrl ?? null)
   const [selectedServices, setSelectedServices] = useState<Set<string>>(
     new Set(existingReport?.aiReportData?.recommendedServices ?? [])
   )
@@ -79,6 +94,10 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
 
   const beforeInputRef = useRef<HTMLInputElement>(null)
   const afterInputRef = useRef<HTMLInputElement>(null)
+  const clipRef0 = useRef<HTMLInputElement>(null)
+  const clipRef1 = useRef<HTMLInputElement>(null)
+  const clipRef2 = useRef<HTMLInputElement>(null)
+  const clipRefs = [clipRef0, clipRef1, clipRef2] as const
 
   const isUploading = before.some((p) => p.uploading) || after.some((p) => p.uploading)
   const hasPhotos = before.some((p) => !p.uploading && p.url) || after.some((p) => !p.uploading && p.url)
@@ -133,6 +152,67 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     },
     onError: ({ error }) => toast.error(error.serverError ?? 'AI 작성에 실패했어요. 다시 시도해주세요'),
   })
+
+  // 작업 중 영상 클립 저장
+  const { execute: saveClips, isPending: isSavingClips } = useAction(fieldSaveWorkClipsAction, {
+    onSuccess: () => {
+      setClipsSaved(true)
+      toast.success('영상이 저장됐어요!')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 릴스 편집 요청
+  const { execute: requestReel, isPending: isRequestingReel } = useAction(fieldRequestReelAction, {
+    onSuccess: () => {
+      setReelStatus('processing')
+      toast.success('릴스 편집을 요청했어요! 완성되면 사장님께 알려드려요.')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 영상 클립 업로드 (한 번에 하나씩, 슬롯 인덱스 지정)
+  const uploadClip = async (file: File, index: number) => {
+    const ext = file.name.split('.').pop() ?? 'mp4'
+    const path = `${businessId}/${booking.id}/clips/clip${index + 1}-${Date.now()}.${ext}`
+
+    setClips((prev) => {
+      const next = [...prev]
+      next[index] = { url: '', uploading: true }
+      return next
+    })
+
+    const supabase = createClient()
+    const { error } = await supabase.storage.from('report-photos').upload(path, file, { upsert: true })
+
+    if (error) {
+      toast.error('영상 업로드에 실패했어요')
+      setClips((prev) => {
+        const next = [...prev]
+        next[index] = { url: '', uploading: false }
+        return next
+      })
+      return
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from('report-photos').getPublicUrl(path)
+    setClips((prev) => {
+      const next = [...prev]
+      next[index] = { url: publicUrl, uploading: false }
+      return next
+    })
+    setClipsSaved(false)
+  }
+
+  // 영상 클립 삭제
+  const removeClip = (index: number) => {
+    setClips((prev) => {
+      const next = [...prev]
+      next[index] = { url: '', uploading: false }
+      return next
+    })
+    setClipsSaved(false)
+  }
 
   // 사진 업로드
   const uploadPhotos = async (
@@ -508,6 +588,158 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             type="after"
           />
         </div>
+
+        {/* 릴스용 작업 중 영상 — 보고서 저장 후 표시 */}
+        {savedReportId && (
+          <div className="rounded-xl bg-white border p-4 space-y-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Film className="h-4 w-4 text-rose-500" />
+                <Label className="text-sm font-medium">릴스용 작업 영상 (선택)</Label>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                작업 중인 모습 3컷을 올리면 릴스를 자동으로 만들어드려요
+              </p>
+            </div>
+
+            {/* 촬영 가이드 */}
+            <div className="rounded-lg bg-rose-50 border border-rose-100 p-3 space-y-1">
+              <p className="text-xs font-semibold text-rose-800">촬영 가이드</p>
+              <p className="text-xs text-rose-700">🎬 장면 1 — 청소 시작하는 모습</p>
+              <p className="text-xs text-rose-700">🧹 장면 2 — 열심히 청소 중인 모습</p>
+              <p className="text-xs text-rose-700">✨ 장면 3 — 마무리하는 모습</p>
+              <p className="text-xs text-rose-400 mt-1">각 영상은 10초 이내로 찍어주세요</p>
+            </div>
+
+            {/* 3개 영상 슬롯 */}
+            <div className="grid grid-cols-3 gap-2">
+              {([0, 1, 2] as const).map((idx) => {
+                const slot = clips[idx]
+                const isUploading = slot?.uploading ?? false
+                const hasVideo = !isUploading && !!slot?.url
+                return (
+                  <div key={idx} className="flex flex-col items-center gap-1.5">
+                    <p className="text-[10px] text-muted-foreground font-medium">장면 {idx + 1}</p>
+                    <div className="relative w-full">
+                      <button
+                        type="button"
+                        onClick={() => clipRefs[idx].current?.click()}
+                        className={`w-full aspect-square rounded-xl border-2 flex flex-col items-center justify-center gap-1 transition-colors ${
+                          hasVideo
+                            ? 'border-emerald-400 bg-emerald-50'
+                            : 'border-dashed border-gray-300 hover:border-rose-300 hover:bg-rose-50/30'
+                        }`}
+                      >
+                        {isUploading ? (
+                          <>
+                            <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+                            <span className="text-[10px] text-muted-foreground">올리는 중</span>
+                          </>
+                        ) : hasVideo ? (
+                          <>
+                            <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                            <span className="text-[10px] text-emerald-700 font-medium">완료</span>
+                            <span className="text-[9px] text-emerald-500">탭해서 교체</span>
+                          </>
+                        ) : (
+                          <>
+                            <Video className="h-5 w-5 text-muted-foreground" />
+                            <span className="text-[10px] text-muted-foreground">촬영 후 올리기</span>
+                          </>
+                        )}
+                      </button>
+                      {hasVideo && (
+                        <button
+                          type="button"
+                          onClick={() => removeClip(idx)}
+                          className="absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5"
+                        >
+                          <X className="h-3 w-3 text-white" />
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      ref={clipRefs[idx]}
+                      type="file"
+                      accept="video/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) uploadClip(file, idx)
+                        e.target.value = ''
+                      }}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* 클립 저장 + 릴스 요청 버튼 */}
+            {reelStatus === 'idle' || reelStatus === 'failed' ? (
+              <div className="space-y-2">
+                {!clipsSaved && clips.filter((c) => c.url && !c.uploading).length === 3 && (
+                  <Button
+                    variant="outline"
+                    className="w-full h-11 gap-2 border-rose-200 text-rose-700 hover:bg-rose-50"
+                    disabled={isSavingClips}
+                    onClick={() =>
+                      saveClips({
+                        workerId,
+                        bookingId: booking.id,
+                        reportId: savedReportId,
+                        clipUrls: clips.map((c) => c.url) as [string, string, string],
+                      })
+                    }
+                  >
+                    <Upload className="h-4 w-4" />
+                    {isSavingClips ? '저장 중...' : '영상 3개 저장하기'}
+                  </Button>
+                )}
+                {clipsSaved && (
+                  <Button
+                    className="w-full h-12 gap-2 bg-rose-500 hover:bg-rose-600 text-white"
+                    disabled={isRequestingReel}
+                    onClick={() =>
+                      requestReel({ workerId, bookingId: booking.id, reportId: savedReportId })
+                    }
+                  >
+                    <Film className="h-4 w-4" />
+                    {isRequestingReel ? '요청 중...' : '릴스 만들기 신청하기'}
+                  </Button>
+                )}
+                {reelStatus === 'failed' && (
+                  <p className="text-xs text-rose-600 text-center">편집에 실패했어요. 다시 신청해주세요</p>
+                )}
+                {clips.filter((c) => c.url && !c.uploading).length < 3 && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    영상 3개를 모두 올리면 릴스를 만들 수 있어요
+                  </p>
+                )}
+              </div>
+            ) : reelStatus === 'processing' ? (
+              <div className="flex items-center justify-center gap-2 rounded-lg bg-amber-50 border border-amber-100 p-3">
+                <Loader2 className="h-4 w-4 text-amber-600 animate-spin" />
+                <p className="text-sm text-amber-800 font-medium">편집 중이에요 — 완성되면 사장님께 알려드려요</p>
+              </div>
+            ) : reelStatus === 'done' && reelUrl ? (
+              <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <p className="text-sm font-semibold text-emerald-800">릴스 완성됐어요!</p>
+                </div>
+                <a
+                  href={reelUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full text-center text-sm text-emerald-700 underline"
+                >
+                  영상 보기 / 다운로드
+                </a>
+              </div>
+            ) : null}
+          </div>
+        )}
 
         {/* 메모 + AI 작성 */}
         <div className="rounded-xl bg-white border p-4 space-y-3">
