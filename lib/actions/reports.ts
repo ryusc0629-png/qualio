@@ -212,11 +212,11 @@ export const sendReviewRequestAction = action
 
     // 보고서 + 예약 + 업체 정보 조회
     const { data: report } = await db
-      .from('reports')
-      .select('id, bookings!booking_id(customer_name, customer_phone, quotes!quote_id(cleaning_type)), businesses!business_id(name, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform)')
-      .eq('id', parsedInput.reportId)
-      .eq('business_id', profile.business_id)
-      .single()
+      .from('reports' as never)
+      .select('id, bookings!booking_id(customer_name, customer_phone, quotes!quote_id(cleaning_type)), businesses!business_id(name, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform)' as never)
+      .eq('id' as never, parsedInput.reportId)
+      .eq('business_id' as never, profile.business_id)
+      .single() as unknown as { data: { id: string; bookings: unknown; businesses: unknown } | null }
 
     if (!report) throw new Error('[APP] 보고서 정보를 찾을 수 없습니다')
 

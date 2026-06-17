@@ -9,6 +9,18 @@ import { randomBytes } from 'crypto'
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
+interface BizInfo {
+  name: string
+  phone: string | null
+  google_place_url: string | null
+  naver_place_url: string | null
+  danggeun_review_url: string | null
+  kakao_place_url: string | null
+  active_review_platform: string
+  review_reward_type: string
+  review_reward_description: string | null
+}
+
 function resolveReviewUrl(biz: BizInfo): string | null {
   const urlMap: Record<string, string | null> = {
     naver: biz.naver_place_url,
@@ -61,18 +73,6 @@ export async function GET(request: NextRequest) {
       .not('auto_review_sent_at', 'is', null)
       .is('auto_review_followup_sent_at', null),
   ])
-
-  interface BizInfo {
-    name: string
-    phone: string | null
-    google_place_url: string | null
-    naver_place_url: string | null
-    danggeun_review_url: string | null
-    kakao_place_url: string | null
-    active_review_platform: string
-    review_reward_type: string
-    review_reward_description: string | null
-  }
 
   interface BookingRow {
     id: string
@@ -129,13 +129,13 @@ export async function GET(request: NextRequest) {
 
   let d1Sent = 0, d1Skipped = 0
   for (const booking of (d1Result.data ?? [])) {
-    const ok = await sendReview(booking as BookingRow, false)
+    const ok = await sendReview(booking as unknown as BookingRow, false)
     ok ? d1Sent++ : d1Skipped++
   }
 
   let d3Sent = 0, d3Skipped = 0
   for (const booking of (d3Result.data ?? [])) {
-    const ok = await sendReview(booking as BookingRow, true)
+    const ok = await sendReview(booking as unknown as BookingRow, true)
     ok ? d3Sent++ : d3Skipped++
   }
 

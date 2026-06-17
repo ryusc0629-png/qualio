@@ -12,10 +12,10 @@ export default async function ReviewClaimPage({ params }: Props) {
 
   // 토큰 조회 + 업체/예약 정보
   const { data: claim } = await db
-    .from('review_claims')
-    .select('id, claimed_at, businesses!business_id(name, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description), bookings!booking_id(customer_name)')
-    .eq('token', token)
-    .maybeSingle()
+    .from('review_claims' as never)
+    .select('id, claimed_at, businesses!business_id(name, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description), bookings!booking_id(customer_name)' as never)
+    .eq('token' as never, token)
+    .maybeSingle() as unknown as { data: { id: string; claimed_at: string | null; businesses: unknown; bookings: unknown } | null }
 
   if (!claim) notFound()
 
