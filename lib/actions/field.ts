@@ -424,15 +424,20 @@ export const fieldSendReportAction = action
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
-    await sendWorkCompleteAlimtalk({
-      customerPhone: booking.customer_phone,
-      customerName:  booking.customer_name ?? '고객',
-      businessName:  business.name,
-      businessPhone: business.phone ?? null,
-      cleaningType,
-      scheduledAt:   booking.scheduled_at ?? '',
-      reportUrl:     `${appUrl}/q/${worker.business_id}/report/${parsedInput.reportId}`,
-    })
+    try {
+      await sendWorkCompleteAlimtalk({
+        customerPhone: booking.customer_phone,
+        customerName:  booking.customer_name ?? '고객',
+        businessName:  business.name,
+        businessPhone: business.phone ?? null,
+        cleaningType,
+        scheduledAt:   booking.scheduled_at ?? '',
+        reportUrl:     `${appUrl}/q/${worker.business_id}/report/${parsedInput.reportId}`,
+      })
+    } catch (err) {
+      // 알림톡 발송 실패는 로그만 남기고 발송 완료 처리 (DB 기록은 항상 남김)
+      console.error('[fieldSendReport] 알림톡 발송 실패:', err)
+    }
 
     // 발송 시각 기록
     await db
