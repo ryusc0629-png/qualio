@@ -573,6 +573,7 @@ export type Database = {
           business_id: string
           type: string
           content: string | null
+          transcript: string | null
           activity_at: string
           created_at: string
         }
@@ -582,6 +583,7 @@ export type Database = {
           business_id: string
           type?: string
           content?: string | null
+          transcript?: string | null
           activity_at?: string
           created_at?: string
         }
@@ -591,6 +593,7 @@ export type Database = {
           business_id?: string
           type?: string
           content?: string | null
+          transcript?: string | null
           activity_at?: string
           created_at?: string
         }

@@ -20,8 +20,9 @@ import { STAGE_CONFIG } from '../pipeline-list'
 import { B2bQuoteForm } from './b2b-quote-form'
 import { ConvertToCustomerButton } from './convert-to-customer-button'
 import type { LiveStatus } from '@/lib/utils/lead-live-status'
-import { Phone, MapPin, Calendar, ArrowLeft, Plus, PhoneCall, MapPin as VisitIcon, FileText, StickyNote, Mail } from 'lucide-react'
+import { Phone, MapPin, Calendar, ArrowLeft, Plus, PhoneCall, MapPin as VisitIcon, FileText, StickyNote, Mail, Mic } from 'lucide-react'
 import Link from 'next/link'
+import { MeetingRecorder } from '@/components/dashboard/meeting-recorder'
 
 // ── 타입 ──────────────────────────────────────────────────
 
@@ -73,10 +74,11 @@ type Activity = {
 }
 
 const ACTIVITY_CONFIG: Record<string, { text: string; icon: typeof PhoneCall; color: string }> = {
-  call:  { text: '전화',    icon: PhoneCall, color: 'bg-blue-100 text-blue-700' },
-  visit: { text: '방문',    icon: VisitIcon, color: 'bg-indigo-100 text-indigo-700' },
-  quote: { text: '견적 발송', icon: FileText, color: 'bg-amber-100 text-amber-700' },
-  note:  { text: '메모',    icon: StickyNote, color: 'bg-gray-100 text-gray-700' },
+  call:    { text: '전화',    icon: PhoneCall, color: 'bg-blue-100 text-blue-700' },
+  visit:   { text: '방문',    icon: VisitIcon, color: 'bg-indigo-100 text-indigo-700' },
+  quote:   { text: '견적 발송', icon: FileText, color: 'bg-amber-100 text-amber-700' },
+  note:    { text: '메모',    icon: StickyNote, color: 'bg-gray-100 text-gray-700' },
+  meeting: { text: '미팅',    icon: Mic, color: 'bg-rose-100 text-rose-700' },
 }
 
 const STAGE_ORDER = ['new', 'contacted', 'follow_up', 'quoted', 'negotiating', 'contracted', 'rejected']
@@ -346,11 +348,14 @@ export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, 
           </Button>
         </div>
 
+        {/* 미팅 녹음 정리 — 녹음/처리 중에는 전체 너비 카드로 펼쳐짐 */}
+        <MeetingRecorder leadId={lead.id} />
+
         {/* 기록 추가 폼 */}
         {showAddForm && (
           <div className="bg-white rounded-xl border p-4 space-y-3">
             <div className="grid grid-cols-4 gap-1.5">
-              {Object.entries(ACTIVITY_CONFIG).map(([key, cfg]) => (
+              {Object.entries(ACTIVITY_CONFIG).filter(([key]) => key !== 'meeting').map(([key, cfg]) => (
                 <button
                   key={key}
                   type="button"

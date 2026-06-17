@@ -6,7 +6,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
 const LEAD_STATUSES = ['new', 'contacted', 'follow_up', 'quoted', 'negotiating', 'contracted', 'rejected', 'archived'] as const
-const ACTIVITY_TYPES = ['call', 'visit', 'quote', 'note'] as const
+const ACTIVITY_TYPES = ['call', 'visit', 'quote', 'note', 'meeting'] as const
 
 // 고객 구분 값 (company=거래처, individual=일반)
 const CUSTOMER_TYPES = ['company', 'individual'] as const
@@ -51,6 +51,7 @@ const createActivitySchema = z.object({
   leadId: z.string().uuid(),
   type: z.string().refine((v) => ACTIVITY_TYPES.includes(v as typeof ACTIVITY_TYPES[number]), '유효하지 않은 유형입니다'),
   content: z.string().min(1, '내용을 입력해주세요'),
+  transcript: z.string().optional(), // 미팅 녹음 받아쓴 원문
   activity_at: z.string().optional(),
 })
 
@@ -190,6 +191,7 @@ export const createLeadActivityAction = action
       business_id: businessId,
       type:        parsedInput.type,
       content:     parsedInput.content,
+      transcript:  parsedInput.transcript ?? null,
       activity_at: parsedInput.activity_at ?? new Date().toISOString(),
     })
 
