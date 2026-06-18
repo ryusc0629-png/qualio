@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { PLANS, formatPrice } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { CalendarClock } from 'lucide-react'
+import { CancelPlanChangeButton } from './cancel-plan-change-button'
 
 interface CurrentPlanCardProps {
   planId: PlanId
@@ -74,11 +75,14 @@ export function CurrentPlanCard({ planId, currentPeriodEnd, status, nextPlan }: 
 
       {/* 예약된 플랜 변경 안내 */}
       {hasScheduledChange && nextPlanLabel && (
-        <div className="flex items-center gap-2 bg-blue-50 text-blue-700 rounded-md px-3 py-2 text-sm">
-          <CalendarClock className="h-4 w-4 shrink-0" />
-          <span>
-            다음 결제부터 <strong>{nextPlanLabel} 플랜</strong>({formatPrice(PLANS[nextPlan as PlanId]?.price ?? 0)})으로 변경됩니다
-          </span>
+        <div className="flex items-center justify-between bg-blue-50 text-blue-700 rounded-md px-3 py-2 text-sm">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="h-4 w-4 shrink-0" />
+            <span>
+              다음 결제부터 <strong>{nextPlanLabel} 플랜</strong>({formatPrice(PLANS[nextPlan as PlanId]?.price ?? 0)})으로 변경됩니다
+            </span>
+          </div>
+          <CancelPlanChangeButton />
         </div>
       )}
     </div>

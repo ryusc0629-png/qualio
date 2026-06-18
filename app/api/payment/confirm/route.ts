@@ -106,20 +106,24 @@ export async function POST(req: NextRequest) {
     // 기존 구독이 있으면 업데이트, 없으면 생성
     const { data: existing } = await db
       .from('subscriptions')
-      .select('id')
+      .select('id, next_plan' as never)
       .eq('business_id', businessId)
-      .maybeSingle()
+      .maybeSingle() as unknown as { data: { id: string; next_plan: string | null } | null }
+
+    // next_plan이 예약되어 있으면 해당 플랜으로 적용, 아니면 결제한 플랜 사용
+    const effectivePlan = existing?.next_plan ?? planId
 
     // 새 컬럼(toss_order_id, toss_payment_key)은 마이그레이션 후 Supabase 타입이 자동 갱신됨
     // 그 전까지는 타입 단언으로 처리
     const paymentFields = {
-      plan: planId,
+      plan: effectivePlan,
       status: 'active',
       payment_id: paymentKey,
       toss_order_id: orderId,
       toss_payment_key: paymentKey,
       current_period_start: now.toISOString(),
       current_period_end: nextMonth.toISOString(),
+      next_plan: null, // 예약 초기화
     }
 
     if (existing) {
