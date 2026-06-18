@@ -528,17 +528,21 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
                                   inputMode="numeric"
                                   value={it.qty}
                                   onChange={(e) => updateJobItem(idx, 'qty', digitsOnly(e.target.value))}
-                                  className="w-12 h-9 rounded-lg border border-border px-2 text-sm text-center"
+                                  className="w-12 h-9 rounded-lg border border-border px-2 text-sm text-center shrink-0"
                                 />
-                                <span className="text-xs text-muted-foreground">개 ×</span>
+                                <span className="text-xs text-muted-foreground shrink-0">개 ×</span>
                                 <input
                                   inputMode="numeric"
                                   value={formatThousands(it.unitPrice)}
                                   onChange={(e) => updateJobItem(idx, 'unitPrice', digitsOnly(e.target.value))}
                                   placeholder="단가"
-                                  className="flex-1 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
+                                  className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
                                 />
-                                <span className="text-sm font-semibold tabular-nums w-24 text-right">
+                                <span className="text-xs text-muted-foreground shrink-0">원</span>
+                              </div>
+                              <div className="flex items-center justify-between border-t border-dashed border-border pt-1.5">
+                                <span className="text-xs text-muted-foreground">금액</span>
+                                <span className="text-sm font-semibold tabular-nums">
                                   {formatThousands(String((parseInt(it.qty, 10) || 0) * (parseInt(it.unitPrice, 10) || 0)))}원
                                 </span>
                               </div>

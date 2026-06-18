@@ -143,23 +143,25 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <input
-                    inputMode="numeric"
-                    value={String(it.quantity)}
-                    onChange={(e) => handleRowChange(it.id, 'quantity', e.target.value)}
-                    className="w-12 h-9 rounded-lg border border-border px-2 text-sm text-center"
-                  />
-                  <span className="text-xs text-muted-foreground">개 ×</span>
-                </div>
+                <input
+                  inputMode="numeric"
+                  value={String(it.quantity)}
+                  onChange={(e) => handleRowChange(it.id, 'quantity', e.target.value)}
+                  className="w-12 h-9 rounded-lg border border-border px-2 text-sm text-center shrink-0"
+                />
+                <span className="text-xs text-muted-foreground shrink-0">개 ×</span>
                 <input
                   inputMode="numeric"
                   value={formatThousands(String(it.unit_price))}
                   onChange={(e) => handleRowChange(it.id, 'unit_price', digitsOnly(e.target.value))}
                   placeholder="단가"
-                  className="flex-1 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
+                  className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
                 />
-                <span className="text-sm font-semibold tabular-nums w-24 text-right">{won(it.amount)}</span>
+                <span className="text-xs text-muted-foreground shrink-0">원</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-dashed border-border pt-1.5">
+                <span className="text-xs text-muted-foreground">금액</span>
+                <span className="text-sm font-semibold tabular-nums">{won(it.amount)}</span>
               </div>
               <button
                 type="button"
@@ -208,15 +210,15 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
             inputMode="numeric"
             value={newQty}
             onChange={(e) => setNewQty(e.target.value)}
-            className="w-12 h-9 rounded-lg border border-border px-2 text-sm text-center"
+            className="w-12 h-9 rounded-lg border border-border px-2 text-sm text-center shrink-0"
           />
-          <span className="text-xs text-muted-foreground">개 ×</span>
+          <span className="text-xs text-muted-foreground shrink-0">개 ×</span>
           <input
             inputMode="numeric"
             value={formatThousands(newPrice)}
             onChange={(e) => setNewPrice(digitsOnly(e.target.value))}
             placeholder="단가"
-            className="flex-1 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
+            className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
           />
           <button
             type="button"
