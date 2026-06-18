@@ -652,8 +652,8 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
         <PostEditor businessId={businessId} onClose={() => setShowEditor(false)} onSaved={() => { setShowEditor(false); window.location.reload() }} />
       )}
 
-      {/* 수정 패널 */}
-      {editingPost && (
+      {/* 수정 패널 — 목록에 없는 글(시공 사례 초안 등)은 여기서 편집 */}
+      {editingPost && !posts.some((p) => p.id === editingPost.id) && (
         <PostEditor businessId={businessId} post={editingPost} onClose={() => setEditingPost(null)} onSaved={() => { setEditingPost(null); window.location.reload() }} />
       )}
 
@@ -663,11 +663,12 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           <div className="px-5 py-3.5 border-b bg-slate-50">
             <p className="font-semibold text-sm">전체 발행 포스트 ({posts.length}건)</p>
           </div>
-          <div className="divide-y">
+          <div className="divide-y max-h-[480px] overflow-y-auto">
             {posts.map((post) => {
               const url = postUrl(post.slug)
               return (
-                <div key={post.id} className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50">
+                <div key={post.id}>
+                  <div className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-medium text-sm truncate">{post.title}</p>
@@ -705,6 +706,17 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
+                  </div>
+                  {editingPost?.id === post.id && (
+                    <div className="px-5 py-4 bg-slate-50/70 border-t">
+                      <PostEditor
+                        businessId={businessId}
+                        post={editingPost}
+                        onClose={() => setEditingPost(null)}
+                        onSaved={() => { setEditingPost(null); window.location.reload() }}
+                      />
+                    </div>
+                  )}
                 </div>
               )
             })}
