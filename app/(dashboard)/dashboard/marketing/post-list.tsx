@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, publishTodayAction, generatePostImagesAction, markChannelsPostedAction, toggleAutoImageAction } from '@/lib/actions/posts'
 import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/portfolio'
@@ -382,6 +382,40 @@ function ReelCard({
 
 export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], autoImageGeneration = true }: PostListProps) {
   const [posts] = useState(initialPosts)
+  // 오름차순 정렬 (오래된 글 위 → 최신 글 아래) + 오늘 위치로 자동 스크롤
+  const sortedPosts = [...posts].sort((a, b) => new Date(a.published_at).getTime() - new Date(b.published_at).getTime())
+  const postListRef = useRef<HTMLDivElement>(null)
+
+  const scrollToToday = useCallback(() => {
+    // URL 해시가 있으면 해당 게시물로, 없으면 오늘 첫 글로 스크롤
+    const hash = window.location.hash.slice(1)
+    if (hash) {
+      const target = document.getElementById(hash)
+      if (target && postListRef.current) {
+        requestAnimationFrame(() => target.scrollIntoView({ block: 'center' }))
+        window.history.replaceState(null, '', window.location.pathname)
+        return
+      }
+    }
+    // 오늘 KST 기준 첫 글 찾기
+    const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const todayFirst = sortedPosts.find((p) => {
+      const pKST = new Date(new Date(p.published_at).getTime() + 9 * 60 * 60 * 1000)
+      return pKST.toISOString().slice(0, 10) >= todayStr
+    })
+    if (todayFirst) {
+      const el = document.getElementById(`post-${todayFirst.id}`)
+      if (el) requestAnimationFrame(() => el.scrollIntoView({ block: 'start' }))
+    } else if (postListRef.current) {
+      // 오늘 글이 없으면 맨 아래(최신)로 스크롤
+      requestAnimationFrame(() => {
+        if (postListRef.current) postListRef.current.scrollTop = postListRef.current.scrollHeight
+      })
+    }
+  }, [sortedPosts])
+
+  useEffect(() => { scrollToToday() }, [scrollToToday])
+
   const [showEditor, setShowEditor] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
   const [suggestions, setSuggestions] = useState<TopicSuggestion[] | null>(null)
@@ -984,8 +1018,8 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           <div className="px-5 py-3.5 border-b bg-slate-50">
             <p className="font-semibold text-sm">전체 발행 포스트 ({posts.length}건)</p>
           </div>
-          <div className="divide-y max-h-[480px] overflow-y-auto">
-            {posts.map((post) => {
+          <div ref={postListRef} className="divide-y max-h-[480px] overflow-y-auto">
+            {sortedPosts.map((post) => {
               const url = postUrl(post.slug)
               return (
                 <div key={post.id} id={`post-${post.id}`}>
