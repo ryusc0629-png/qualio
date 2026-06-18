@@ -6,7 +6,7 @@ import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, pu
 import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/portfolio'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -197,6 +197,19 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   const currentMonth = now.getMonth() + 1
   const schedule = buildSchedule(autoPostLimit, posts, suggestions)
 
+  // 최근 3일 내 자동 발행된 글 중 아직 채널에 올릴 거리 (포트폴리오 제외)
+  const channelTodos = posts
+    .filter((p) => {
+      if (p.post_type === 'portfolio' || !p.published) return false
+      if (!(p.naver_content || p.daangn_content || p.instagram_content)) return false
+      const days = (Date.now() - new Date(p.published_at).getTime()) / 86400000
+      return days <= 3
+    })
+    .slice(0, 5)
+
+  // 사장님이 처리해야 할 작업물 총합 (릴스 + 시공 사례 + 새 글)
+  const totalTodos = doneReels.length + pendingPortfolios.length + channelTodos.length
+
   const { execute: fetchSuggestions, isPending: isLoadingSuggestions } = useAction(
     getTopicSuggestionsAction,
     {
@@ -261,8 +274,219 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
   const publishedCount = schedule.filter((s) => s.status === 'published').length
   const upcomingCount = schedule.filter((s) => s.status === 'upcoming' || s.status === 'today').length
 
+  // 채널별 복사 버튼 (네이버/당근/인스타/이미지) — 작업물 허브와 전체 목록에서 공용
+  const renderChannelButtons = (post: Post) => (
+    <>
+      {post.naver_content && (
+        <button
+          type="button"
+          onClick={() => setNaverPost(post)}
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold text-white bg-[#03C75A] hover:bg-[#02b050] transition-colors"
+          title="네이버 블로그용 글 복사"
+        >
+          N
+        </button>
+      )}
+      {post.daangn_content && (
+        <button
+          type="button"
+          onClick={() => setDaangnPost(post)}
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold text-white bg-[#FF6F0F] hover:bg-[#e5620d] transition-colors"
+          title="당근마켓용 글 복사"
+        >
+          🥕
+        </button>
+      )}
+      {post.instagram_content && (
+        <button
+          type="button"
+          onClick={() => setInstaPost(post)}
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold text-white bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] hover:opacity-90 transition-opacity"
+          title="인스타그램용 글 복사"
+        >
+          IG
+        </button>
+      )}
+      {(post.image_urls?.length ?? 0) > 0 ? (
+        <button
+          type="button"
+          onClick={() => setGalleryPost(post)}
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-violet-700 bg-violet-100 hover:bg-violet-200 transition-colors"
+          title="생성된 이미지 보기"
+        >
+          <ImageIcon className="h-3.5 w-3.5" />{post.image_urls!.length}
+        </button>
+      ) : (
+        <button
+          type="button"
+          disabled={genId === post.id}
+          onClick={() => { setGenId(post.id); generateImages({ id: post.id }) }}
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors disabled:opacity-60"
+          title="이 글에 맞는 이미지 생성 (게시물당 1회)"
+        >
+          {genId === post.id
+            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />생성 중</>
+            : <><ImageIcon className="h-3.5 w-3.5" />이미지</>}
+        </button>
+      )}
+    </>
+  )
+
   return (
     <div className="space-y-5">
+
+      {/* ── 올려야 할 작업물 허브 (한눈에 보기) ── */}
+      <div className="rounded-2xl border-2 border-primary/15 bg-white overflow-hidden shadow-sm">
+        <div className="px-4 sm:px-5 py-3.5 border-b bg-primary/5 flex items-center gap-2">
+          <ListChecks className="h-4 w-4 text-primary" />
+          <p className="font-bold text-sm">올려야 할 작업물</p>
+          {totalTodos > 0 && (
+            <span className="ml-auto inline-flex items-center justify-center h-6 px-2 rounded-full bg-primary text-white text-xs font-bold">
+              {totalTodos}
+            </span>
+          )}
+        </div>
+
+        {totalTodos === 0 ? (
+          <div className="px-5 py-8 text-center space-y-1.5">
+            <CheckCircle2 className="h-8 w-8 text-emerald-400 mx-auto" />
+            <p className="text-sm font-medium">올릴 작업물을 다 처리했어요!</p>
+            <p className="text-xs text-muted-foreground">새 릴스·시공 사례·포스트가 생기면 여기에 모아둘게요</p>
+          </div>
+        ) : (
+          <div className="divide-y">
+
+            {/* 🎬 완성된 릴스 */}
+            {doneReels.length > 0 && (
+              <div className="px-4 sm:px-5 py-3.5">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <Film className="h-4 w-4 text-rose-500" />
+                  <p className="text-sm font-semibold text-rose-900">완성된 릴스 {doneReels.length}개</p>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">— 다운로드해서 SNS에 올려보세요</span>
+                </div>
+                <div className="space-y-2">
+                  {doneReels.map((reel) => {
+                    const date = reel.scheduledAt
+                      ? new Date(reel.scheduledAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' })
+                      : ''
+                    return (
+                      <div key={reel.reportId} className="flex items-center gap-3 rounded-xl border border-rose-100 bg-rose-50/60 px-3 py-2.5">
+                        <div className="w-9 h-9 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
+                          <Film className="h-4 w-4 text-rose-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{reel.customerName}</p>
+                          {date && <p className="text-xs text-muted-foreground">{date} 작업</p>}
+                        </div>
+                        <a
+                          href={reel.reelUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white bg-rose-500 hover:bg-rose-600 transition-colors shrink-0"
+                        >
+                          <Download className="h-3.5 w-3.5" />다운로드
+                        </a>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 📸 시공 사례 승인 대기 */}
+            {pendingPortfolios.length > 0 && (
+              <div className="px-4 sm:px-5 py-3.5">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <Camera className="h-4 w-4 text-amber-600" />
+                  <p className="text-sm font-semibold text-amber-900">시공 사례 {pendingPortfolios.length}건</p>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">— 공개하면 견적 페이지에 노출돼요</span>
+                </div>
+                <div className="space-y-2">
+                  {pendingPortfolios.map((p) => (
+                    <div key={p.id} className="flex items-center gap-3 rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2.5">
+                      {/* Before/After 미니 썸네일 */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {p.before_image_urls?.[0] && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={p.before_image_urls[0]} alt="Before" className="w-9 h-9 rounded-lg object-cover border" />
+                        )}
+                        <span className="text-xs text-amber-500">→</span>
+                        {p.after_image_urls?.[0] && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={p.after_image_urls[0]} alt="After" className="w-9 h-9 rounded-lg object-cover border" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{p.title}</p>
+                        {p.summary && <p className="text-xs text-muted-foreground truncate">{p.summary}</p>}
+                      </div>
+                      <div className="flex gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setEditingPost({ id: p.id, slug: '', title: p.title, summary: p.summary, published: false, ai_generated: true, published_at: '', image_url: null, image_urls: null, naver_title: null, naver_content: null, naver_tags: null, daangn_content: null, instagram_content: null, instagram_hashtags: null, post_type: 'portfolio', before_image_urls: p.before_image_urls, after_image_urls: p.after_image_urls })}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 transition-colors"
+                        >
+                          <Pencil className="h-3.5 w-3.5" /><span className="hidden sm:inline">수정</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isApproving || isRejecting}
+                          onClick={() => approvePortfolio({ postId: p.id })}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors"
+                        >
+                          <Check className="h-3.5 w-3.5" />공개
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isApproving || isRejecting}
+                          onClick={() => { if (confirm('이 시공 사례를 삭제할까요?')) rejectPortfolio({ postId: p.id }) }}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-60 transition-colors"
+                        >
+                          <XIcon className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 📝 새로 올라온 글 — 채널에 올리기 */}
+            {channelTodos.length > 0 && (
+              <div className="px-4 sm:px-5 py-3.5">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <Send className="h-4 w-4 text-primary" />
+                  <p className="text-sm font-semibold">새로 올라온 글 {channelTodos.length}개</p>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">— 네이버·당근·인스타에 올려보세요</span>
+                </div>
+                <div className="space-y-2">
+                  {channelTodos.map((post) => (
+                    <div key={post.id} className="flex items-center gap-3 rounded-xl border bg-slate-50/60 px-3 py-2.5">
+                      {post.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={post.image_url} alt="" className="w-9 h-9 rounded-lg object-cover border shrink-0" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <Sparkles className="h-4 w-4 text-primary" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{post.title}</p>
+                        <p className="text-xs text-muted-foreground">{new Date(post.published_at).toLocaleDateString('ko-KR')} 발행</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {renderChannelButtons(post)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+        )}
+      </div>
 
       {/* ── 상단 통계 카드 ── */}
       <div className="grid grid-cols-3 gap-3">
@@ -293,109 +517,6 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${progressPct}%` }} />
         </div>
       </div>
-
-      {/* ── 완성된 릴스 ── */}
-      {doneReels.length > 0 && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-rose-200 flex items-center gap-2">
-            <Film className="h-4 w-4 text-rose-500" />
-            <p className="font-semibold text-sm text-rose-900">
-              완성된 릴스 {doneReels.length}개 — 다운로드하고 SNS에 올려보세요
-            </p>
-          </div>
-          <div className="divide-y divide-rose-100">
-            {doneReels.map((reel) => {
-              const date = reel.scheduledAt
-                ? new Date(reel.scheduledAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' })
-                : ''
-              return (
-                <div key={reel.reportId} className="px-5 py-3 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center shrink-0">
-                    <Film className="h-5 w-5 text-rose-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{reel.customerName}</p>
-                    {date && <p className="text-xs text-muted-foreground">{date} 작업</p>}
-                  </div>
-                  <a
-                    href={reel.reelUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-rose-500 hover:bg-rose-600 transition-colors shrink-0"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    다운로드
-                  </a>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── 포트폴리오 승인 대기 ── */}
-      {pendingPortfolios.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-amber-200 flex items-center gap-2">
-            <Camera className="h-4 w-4 text-amber-600" />
-            <p className="font-semibold text-sm text-amber-900">
-              시공 사례 {pendingPortfolios.length}건 승인 대기 중
-            </p>
-          </div>
-          <div className="divide-y divide-amber-100">
-            {pendingPortfolios.map((p) => (
-              <div key={p.id} className="px-5 py-3 flex items-center gap-3">
-                {/* Before/After 미니 썸네일 */}
-                <div className="flex items-center gap-1 shrink-0">
-                  {p.before_image_urls?.[0] && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.before_image_urls[0]} alt="Before" className="w-10 h-10 rounded-lg object-cover border" />
-                  )}
-                  <span className="text-xs text-amber-500">→</span>
-                  {p.after_image_urls?.[0] && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.after_image_urls[0]} alt="After" className="w-10 h-10 rounded-lg object-cover border" />
-                  )}
-                </div>
-
-                {/* 제목 */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{p.title}</p>
-                  {p.summary && <p className="text-xs text-muted-foreground truncate">{p.summary}</p>}
-                </div>
-
-                {/* 수정/승인/삭제 버튼 */}
-                <div className="flex gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setEditingPost({ id: p.id, slug: '', title: p.title, summary: p.summary, published: false, ai_generated: true, published_at: '', image_url: null, image_urls: null, naver_title: null, naver_content: null, naver_tags: null, daangn_content: null, instagram_content: null, instagram_hashtags: null, post_type: 'portfolio', before_image_urls: p.before_image_urls, after_image_urls: p.after_image_urls })}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 transition-colors"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />수정
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isApproving || isRejecting}
-                    onClick={() => approvePortfolio({ postId: p.id })}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors"
-                  >
-                    <Check className="h-3.5 w-3.5" />공개
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isApproving || isRejecting}
-                    onClick={() => { if (confirm('이 시공 사례를 삭제할까요?')) rejectPortfolio({ postId: p.id }) }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-60 transition-colors"
-                  >
-                    <XIcon className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── 월간 발행 일정표 ── */}
       <div className="rounded-xl border bg-white overflow-hidden">
@@ -547,62 +668,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                     <p className="text-xs text-muted-foreground mt-0.5">{new Date(post.published_at).toLocaleDateString('ko-KR')}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    {/* 네이버 블로그용 */}
-                    {post.naver_content && (
-                      <button
-                        type="button"
-                        onClick={() => setNaverPost(post)}
-                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold text-white bg-[#03C75A] hover:bg-[#02b050] transition-colors"
-                        title="네이버 블로그용 글 복사"
-                      >
-                        N
-                      </button>
-                    )}
-                    {/* 당근마켓용 */}
-                    {post.daangn_content && (
-                      <button
-                        type="button"
-                        onClick={() => setDaangnPost(post)}
-                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold text-white bg-[#FF6F0F] hover:bg-[#e5620d] transition-colors"
-                        title="당근마켓용 글 복사"
-                      >
-                        🥕
-                      </button>
-                    )}
-                    {/* 인스타그램용 */}
-                    {post.instagram_content && (
-                      <button
-                        type="button"
-                        onClick={() => setInstaPost(post)}
-                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold text-white bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] hover:opacity-90 transition-opacity"
-                        title="인스타그램용 글 복사"
-                      >
-                        IG
-                      </button>
-                    )}
-                    {/* 이미지 생성 / 보기 (게시물당 1회) */}
-                    {(post.image_urls?.length ?? 0) > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => setGalleryPost(post)}
-                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-violet-700 bg-violet-100 hover:bg-violet-200 transition-colors"
-                        title="생성된 이미지 보기"
-                      >
-                        <ImageIcon className="h-3.5 w-3.5" />{post.image_urls!.length}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={genId === post.id}
-                        onClick={() => { setGenId(post.id); generateImages({ id: post.id }) }}
-                        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors disabled:opacity-60"
-                        title="이 글에 맞는 이미지 생성 (게시물당 1회)"
-                      >
-                        {genId === post.id
-                          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />생성 중</>
-                          : <><ImageIcon className="h-3.5 w-3.5" />이미지</>}
-                      </button>
-                    )}
+                    {renderChannelButtons(post)}
                     {url && (
                       <a href={url} target="_blank" rel="noopener noreferrer">
                         <Button size="icon" variant="ghost" className="h-8 w-8"><ExternalLink className="h-3.5 w-3.5" /></Button>
