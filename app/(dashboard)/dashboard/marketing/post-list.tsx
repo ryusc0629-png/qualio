@@ -230,7 +230,7 @@ function ReelCard({
           <button
             type="button"
             disabled={isDismissing}
-            onClick={onDismiss}
+            onClick={() => { if (confirm('이 릴스를 건너뛸까요?\n\n목록에서 사라져요.')) onDismiss() }}
             className="flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <SkipForward className="h-3 w-3" />건너뛰기
@@ -591,7 +591,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                         <button
                           type="button"
                           disabled={postingId === post.id}
-                          onClick={() => { setPostingId(post.id); markChannelsPosted({ id: post.id }) }}
+                          onClick={() => { if (confirm('이 글을 채널에 올리지 않고 건너뛸까요?')) { setPostingId(post.id); markChannelsPosted({ id: post.id }) } }}
                           className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-60 transition-colors"
                           title="채널에 올리지 않고 완료 처리"
                         >
