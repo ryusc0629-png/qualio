@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, publishTodayAction, generatePostImagesAction, markChannelsPostedAction } from '@/lib/actions/posts'
 import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/portfolio'
+import { dismissReelAction } from '@/lib/actions/reports'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sparkles, Plus, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send, SkipForward } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -53,6 +54,7 @@ interface Post {
   id: string
   slug: string
   title: string
+  content?: string | null
   summary: string | null
   published: boolean
   ai_generated: boolean
@@ -259,6 +261,11 @@ const { execute: deletePost, isPending: isDeleting } = useAction(deletePostActio
     onError: ({ error }) => { toast.error(error.serverError ?? '삭제에 실패했어요') },
   })
 
+  const { execute: dismissReel, isPending: isDismissing } = useAction(dismissReelAction, {
+    onSuccess: () => { toast.success('건너뛰었어요'); setTimeout(() => window.location.replace(window.location.pathname), 800) },
+    onError: ({ error }) => { toast.error(error.serverError ?? '처리에 실패했어요') },
+  })
+
   const { execute: publishToday, isPending: isPublishing } = useAction(publishTodayAction, {
     onSuccess: ({ data }) => {
       if (!data) return
@@ -382,15 +389,25 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                           <p className="text-sm font-medium truncate">{reel.customerName}</p>
                           {date && <p className="text-xs text-muted-foreground">{date} 작업</p>}
                         </div>
-                        <a
-                          href={reel.reelUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white bg-rose-500 hover:bg-rose-600 transition-colors shrink-0"
-                        >
-                          <Download className="h-3.5 w-3.5" />다운로드
-                        </a>
+                        <div className="flex flex-col gap-1 shrink-0">
+                          <a
+                            href={reel.reelUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white bg-rose-500 hover:bg-rose-600 transition-colors"
+                          >
+                            <Download className="h-3.5 w-3.5" />다운로드
+                          </a>
+                          <button
+                            type="button"
+                            disabled={isDismissing}
+                            onClick={() => dismissReel({ reportId: reel.reportId })}
+                            className="flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          >
+                            <SkipForward className="h-3 w-3" />건너뛰기
+                          </button>
+                        </div>
                       </div>
                     )
                   })}
@@ -494,6 +511,15 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                             ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             : <Check className="h-3.5 w-3.5" />}
                           올렸어요
+                        </button>
+                        <button
+                          type="button"
+                          disabled={postingId === post.id}
+                          onClick={() => { setPostingId(post.id); markChannelsPosted({ id: post.id }) }}
+                          className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-60 transition-colors"
+                          title="채널에 올리지 않고 완료 처리"
+                        >
+                          <SkipForward className="h-3 w-3" />건너뛰기
                         </button>
                       </div>
                     </div>

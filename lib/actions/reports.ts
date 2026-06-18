@@ -295,3 +295,27 @@ export const skipReportSendAction = action
     revalidatePath('/dashboard/schedule')
     return { success: true }
   })
+
+// 완성된 릴스 건너뛰기 (작업물 목록에서 제거)
+export const dismissReelAction = action
+  .schema(z.object({ reportId: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+    const { data: profile } = await db.from('profiles').select('business_id').eq('id', user.id).single()
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    // reel_status를 dismissed로 변경하여 작업물 목록에서 제거
+    await db
+      .from('reports' as never)
+      .update({ reel_status: 'dismissed' } as never)
+      .eq('id' as never, parsedInput.reportId)
+      .eq('business_id' as never, profile.business_id)
+
+    revalidatePath('/dashboard/marketing')
+    revalidatePath('/dashboard')
+    return { success: true }
+  })
