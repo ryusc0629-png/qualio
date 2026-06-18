@@ -55,14 +55,33 @@ export default async function FieldDashboard({ params }: Props) {
   const todayStart = new Date(`${todayStr}T00:00:00+09:00`).toISOString()
   const todayEnd = new Date(`${todayStr}T23:59:59+09:00`).toISOString()
 
-  const { data: bookings } = await db
-    .from('bookings')
-    .select('id, customer_name, service_address, scheduled_at, final_price, status, memo')
-    .eq('business_id', worker.business_id)
-    .eq('worker_id' as never, workerId)
-    .gte('scheduled_at', todayStart)
-    .lte('scheduled_at', todayEnd)
-    .order('scheduled_at', { ascending: true }) as { data: BookingRow[] | null }
+  // booking_workers에서 이 직원이 배정된 booking_id 목록 조회 (팀원 포함)
+  type BwRow = { booking_id: string }
+  const { data: bwRows } = await db
+    .from('booking_workers' as never)
+    .select('booking_id' as never)
+    .eq('worker_id' as never, workerId) as { data: BwRow[] | null }
+
+  const assignedIds = (bwRows ?? []).map((r) => r.booking_id)
+
+  // worker_id 직접 배정 OR booking_workers 팀원 배정 모두 포함
+  const { data: bookings } = assignedIds.length > 0
+    ? await (db
+        .from('bookings')
+        .select('id, customer_name, service_address, scheduled_at, final_price, status, memo')
+        .eq('business_id', worker.business_id)
+        .or(`worker_id.eq.${workerId},id.in.(${assignedIds.join(',')})`)
+        .gte('scheduled_at', todayStart)
+        .lte('scheduled_at', todayEnd)
+        .order('scheduled_at', { ascending: true }) as unknown as Promise<{ data: BookingRow[] | null }>)
+    : await (db
+        .from('bookings')
+        .select('id, customer_name, service_address, scheduled_at, final_price, status, memo')
+        .eq('business_id', worker.business_id)
+        .eq('worker_id' as never, workerId)
+        .gte('scheduled_at', todayStart)
+        .lte('scheduled_at', todayEnd)
+        .order('scheduled_at', { ascending: true }) as unknown as Promise<{ data: BookingRow[] | null }>)
 
   const jobs = bookings ?? []
 
