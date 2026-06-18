@@ -169,6 +169,120 @@ function buildSchedule(target: number, posts: Post[], suggestions: TopicSuggesti
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
+// ── 이미지 갤러리 모달 ──
+function ImageGalleryModal({
+  images,
+  title,
+  onClose,
+}: {
+  images: string[]
+  title: string
+  onClose: () => void
+}) {
+  const [viewingIdx, setViewingIdx] = useState<number | null>(null)
+  const [savingIdx, setSavingIdx] = useState<number | null>(null)
+
+  const handleSave = async (src: string, idx: number) => {
+    setSavingIdx(idx)
+    try {
+      const res = await fetch(src)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${title}_${idx + 1}.jpg`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      toast.success('저장됐어요!')
+    } catch {
+      toast.error('저장에 실패했어요. 다시 시도해주세요')
+    } finally {
+      setSavingIdx(null)
+    }
+  }
+
+  // 확대 보기
+  if (viewingIdx !== null) {
+    const src = images[viewingIdx]
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setViewingIdx(null)}>
+        <div className="relative max-w-4xl max-h-[90vh] w-full" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => setViewingIdx(null)}
+            className="absolute -top-10 right-0 text-white/80 hover:text-white p-1"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt="" className="w-full h-auto max-h-[80vh] object-contain rounded-lg" />
+          <button
+            type="button"
+            disabled={savingIdx === viewingIdx}
+            onClick={() => handleSave(src, viewingIdx)}
+            className="mt-3 mx-auto flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-60 transition-colors"
+          >
+            {savingIdx === viewingIdx
+              ? <><Loader2 className="h-4 w-4 animate-spin" />저장 중...</>
+              : <><Save className="h-4 w-4" />이 이미지 저장하기</>}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-md bg-violet-100 flex items-center justify-center">
+              <ImageIcon className="h-4 w-4 text-violet-700" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm">생성된 이미지 ({images.length}장)</p>
+              <p className="text-xs text-muted-foreground">이미지를 눌러 크게 보고 저장할 수 있어요</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {images.map((src, i) => (
+            <div key={i} className="rounded-xl border overflow-hidden bg-slate-50 group">
+              <button
+                type="button"
+                onClick={() => setViewingIdx(i)}
+                className="w-full"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt={`이미지 ${i + 1}`}
+                  className="w-full aspect-[4/3] object-cover cursor-pointer group-hover:opacity-90 transition-opacity"
+                />
+              </button>
+              <button
+                type="button"
+                disabled={savingIdx === i}
+                onClick={() => handleSave(src, i)}
+                className="flex items-center justify-center gap-1.5 w-full h-10 text-xs font-medium text-violet-700 hover:bg-violet-50 transition-colors"
+              >
+                {savingIdx === i
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />저장 중...</>
+                  : <><Download className="h-3.5 w-3.5" />저장하기</>}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── 릴스 미리보기 + 저장 카드 ──
 function ReelCard({
   reel,
@@ -1033,44 +1147,11 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
 
       {/* 이미지 갤러리 모달 */}
       {galleryPost && (galleryPost.image_urls?.length ?? 0) > 0 && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-md bg-violet-100 flex items-center justify-center">
-                  <ImageIcon className="h-4 w-4 text-violet-700" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">생성된 이미지 ({galleryPost.image_urls!.length}장)</p>
-                  <p className="text-xs text-muted-foreground">저장 후 네이버 블로그 등에 올려주세요</p>
-                </div>
-              </div>
-              <button type="button" onClick={() => setGalleryPost(null)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {galleryPost.image_urls!.map((src, i) => (
-                <div key={i} className="rounded-xl border overflow-hidden bg-slate-50">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt={`이미지 ${i + 1}`} className="w-full aspect-[4/3] object-cover" />
-                  <a
-                    href={src}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download
-                    className="flex items-center justify-center gap-1.5 h-10 text-xs font-medium text-violet-700 hover:bg-violet-50 transition-colors"
-                  >
-                    <Download className="h-3.5 w-3.5" />저장하기
-                  </a>
-                </div>
-              ))}
-            </div>
-            <div className="px-5 py-3 border-t shrink-0 text-xs text-muted-foreground text-center">
-              이미지는 게시물당 한 번만 생성돼요 (크레딧 절약)
-            </div>
-          </div>
-        </div>
+        <ImageGalleryModal
+          images={galleryPost.image_urls!}
+          title={galleryPost.title}
+          onClose={() => setGalleryPost(null)}
+        />
       )}
     </div>
   )
