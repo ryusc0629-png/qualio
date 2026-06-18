@@ -29,6 +29,7 @@ const REVIEW_PLATFORMS = [
 type ReviewPlatform = typeof REVIEW_PLATFORMS[number]['key']
 
 interface Business {
+  id: string
   name: string
   phone: string | null
   address: string | null
@@ -45,6 +46,7 @@ interface Business {
   brand_color: string | null
   brand_color_secondary: string | null
   hero_style: string | null
+  slug: string | null
 }
 
 interface Props {
@@ -161,7 +163,9 @@ export function SettingsForm({ business }: Props) {
 
       {/* 웹사이트 디자인 (브랜드 커스터마이징) */}
       <BrandDesignSection
+        businessId={business.id}
         businessName={business.name}
+        slug={business.slug}
         brandColor={brandColor}
         brandSecondary={brandSecondary}
         heroStyle={heroStyle}
