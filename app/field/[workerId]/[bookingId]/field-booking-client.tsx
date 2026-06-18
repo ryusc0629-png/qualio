@@ -523,7 +523,11 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
               <button
                 type="button"
                 className="w-full text-xs text-muted-foreground underline py-1"
-                onClick={() => setPaymentRequested(true)}
+                onClick={() => {
+                  if (confirm(`현금으로 ${booking.finalPrice.toLocaleString()}원을 받으셨나요?\n\n입금을 확인하신 경우에만 눌러주세요.`)) {
+                    setPaymentRequested(true)
+                  }
+                }}
               >
                 현금 수금 등 직접 결제한 경우 →
               </button>

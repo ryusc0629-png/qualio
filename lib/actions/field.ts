@@ -91,6 +91,11 @@ export const fieldStartWorkAction = action
     const { db, worker } = await verifyWorker(parsedInput.workerId)
     const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
 
+    // 팀 작업: 다른 팀원이 이미 시작한 경우 그냥 성공 처리
+    if (booking.status === 'in_progress') {
+      return { success: true }
+    }
+
     if (booking.status !== 'confirmed') {
       throw new Error('[APP] 확정된 예약만 작업을 시작할 수 있어요')
     }
