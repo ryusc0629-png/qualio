@@ -521,18 +521,23 @@ export default async function BizLandingPage({ params }: Props) {
             <div className="max-w-5xl mx-auto px-6">
               <div className="text-center mb-12">
                 <p className="text-primary font-semibold text-xs mb-3 tracking-widest uppercase">제공 서비스</p>
-                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">합리적인 가격, 전문 청소</h2>
-                <p className="text-muted-foreground mt-3 text-base">숨겨진 추가 비용 없이 투명하게 안내해드려요</p>
+                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">
+                  내 상황에 딱 맞는<br className="sm:hidden" /> 가격을 알려드려요
+                </h2>
+                <p className="text-muted-foreground mt-3 text-base">
+                  평수와 상태를 입력하면 3가지 맞춤 견적을 바로 비교할 수 있어요
+                </p>
               </div>
 
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {services.map((service) => (
-                  <div
+                  <Link
                     key={service.id}
-                    className="group flex items-center justify-between gap-4 rounded-2xl bg-slate-50 hover:bg-primary/5 p-5 transition-colors cursor-default"
+                    href={`/q/${business.id}`}
+                    className="group flex items-center justify-between gap-4 rounded-2xl bg-slate-50 hover:bg-primary/5 border border-transparent hover:border-primary/20 p-5 transition-all"
                   >
                     <div className="flex items-center gap-4 min-w-0">
-                      <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-xl shrink-0">
+                      <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-xl shrink-0 group-hover:shadow-md transition-shadow">
                         {serviceEmoji(service.category, service.name)}
                       </div>
                       <div className="min-w-0">
@@ -542,23 +547,25 @@ export default async function BizLandingPage({ params }: Props) {
                         )}
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="font-black text-primary text-base">
-                        {service.base_price.toLocaleString()}원
-                      </p>
-                      <p className="text-xs text-muted-foreground">/{service.unit}</p>
+                    <div className="shrink-0 flex items-center gap-1 text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-xs font-semibold">견적 받기</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
 
-              <div className="text-center mt-10">
+              {/* 하단 CTA — 견적의 가치 강조 */}
+              <div className="mt-10 rounded-2xl bg-primary/5 border border-primary/10 p-6 sm:p-8 text-center">
+                <p className="text-sm text-muted-foreground mb-1">같은 서비스도 집 상태에 따라 가격이 달라요</p>
+                <p className="font-bold text-base mb-4">평수와 상태를 입력하면 <span className="text-primary">3가지 맞춤 가격</span>을 바로 비교할 수 있어요</p>
                 <Link href={`/q/${business.id}`}>
-                  <Button size="lg" className="gap-2 h-12 px-8 rounded-xl font-bold">
-                    지금 바로 견적 받기
+                  <Button size="lg" className="gap-2 h-12 px-8 rounded-xl font-bold shadow-md shadow-primary/20">
+                    내 집 맞춤 견적 받기
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
+                <p className="text-xs text-muted-foreground mt-3">무료 · 3분 · 즉시 확인</p>
               </div>
             </div>
             </FadeIn>
