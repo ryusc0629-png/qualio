@@ -101,6 +101,15 @@ export default async function FieldDashboard({ params }: Props) {
     no_show:     'bg-red-100 text-red-700',
   }
 
+  // 작업 카드 좌측 색상 띠 + 배경 — 상태가 한눈에 구분되도록
+  const cardAccent: Record<string, string> = {
+    confirmed:   'border-l-4 border-l-blue-400 hover:border-primary/30',
+    in_progress: 'border-l-4 border-l-amber-400 bg-amber-50/40',
+    completed:   'border-l-4 border-l-emerald-400 bg-emerald-50/40',
+    cancelled:   'border-l-4 border-l-gray-300 bg-gray-50 opacity-70',
+    no_show:     'border-l-4 border-l-red-300 bg-red-50/40',
+  }
+
   function formatTime(dateStr: string) {
     const d = new Date(dateStr)
     return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' })
@@ -123,16 +132,16 @@ export default async function FieldDashboard({ params }: Props) {
         <p className="text-sm text-muted-foreground mt-0.5">{dateDisplay}</p>
       </div>
 
-      {/* 요약 */}
+      {/* 요약 — 남은 작업(파랑) vs 완료(초록) 색상 구분 */}
       {jobs.length > 0 && (
         <div className="flex gap-3 px-4 py-3">
-          <div className="flex-1 rounded-xl bg-white border px-4 py-3 text-center">
-            <p className="text-2xl font-bold text-primary">{pendingCount}</p>
-            <p className="text-xs text-muted-foreground">남은 작업</p>
+          <div className={`flex-1 rounded-xl border px-4 py-3 text-center ${pendingCount > 0 ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+            <p className={`text-2xl font-bold ${pendingCount > 0 ? 'text-blue-600' : 'text-gray-400'}`}>{pendingCount}</p>
+            <p className={`text-xs font-medium ${pendingCount > 0 ? 'text-blue-700' : 'text-muted-foreground'}`}>남은 작업</p>
           </div>
-          <div className="flex-1 rounded-xl bg-white border px-4 py-3 text-center">
-            <p className="text-2xl font-bold text-emerald-600">{completedCount}</p>
-            <p className="text-xs text-muted-foreground">완료</p>
+          <div className={`flex-1 rounded-xl border px-4 py-3 text-center ${completedCount > 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-gray-50 border-gray-200'}`}>
+            <p className={`text-2xl font-bold ${completedCount > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>{completedCount}</p>
+            <p className={`text-xs font-medium ${completedCount > 0 ? 'text-emerald-700' : 'text-muted-foreground'}`}>완료</p>
           </div>
         </div>
       )}
@@ -150,7 +159,7 @@ export default async function FieldDashboard({ params }: Props) {
             <Link
               key={job.id}
               href={`/field/${workerId}/${job.id}`}
-              className="block rounded-xl bg-white border hover:border-primary/30 transition-colors"
+              className={`block rounded-xl bg-white border transition-colors ${cardAccent[job.status] ?? 'hover:border-primary/30'}`}
             >
               <div className="p-4">
                 <div className="flex items-center justify-between mb-2">
