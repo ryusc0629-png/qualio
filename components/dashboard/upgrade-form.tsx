@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { loadTossPayments, ANONYMOUS } from '@tosspayments/tosspayments-sdk'
-import { Check, Star, Loader2 } from 'lucide-react'
+import { Check, Star, Loader2, ArrowUp, ArrowDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { PAID_PLANS, formatPrice } from '@/lib/config/plans'
+import { PAID_PLANS, PLANS, formatPrice } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { toast } from 'sonner'
 
@@ -14,10 +14,27 @@ interface UpgradeFormProps {
   businessName: string
 }
 
+// 플랜 순서 (업그레이드/다운그레이드 판별용)
+const PLAN_ORDER: Record<string, number> = { beta: 0, starter: 1, pro: 2, scale: 3 }
+
 // 결제 위젯 클라이언트 컴포넌트
 export function UpgradeForm({ businessId, currentPlan, businessName }: UpgradeFormProps) {
   const [selectedPlanId, setSelectedPlanId] = useState<PlanId | null>(null)
   const [isPaying, setIsPaying] = useState(false)
+
+  const isBeta = currentPlan === 'beta'
+  const currentPlanLabel = PLANS[currentPlan as PlanId]?.label ?? '베타'
+
+  // 선택한 플랜이 업그레이드인지 다운그레이드인지
+  const getChangeDirection = (targetPlan: string) => {
+    const current = PLAN_ORDER[currentPlan] ?? 0
+    const target = PLAN_ORDER[targetPlan] ?? 0
+    if (target > current) return 'upgrade'
+    if (target < current) return 'downgrade'
+    return 'same'
+  }
+
+  const selectedDirection = selectedPlanId ? getChangeDirection(selectedPlanId) : null
 
   const handlePayment = async () => {
     if (!selectedPlanId) {
@@ -42,6 +59,10 @@ export function UpgradeForm({ businessId, currentPlan, businessName }: UpgradeFo
       // orderId: {businessId}_{planId}_{timestamp}
       const orderId = `${businessId}_${selectedPlanId}_${Date.now()}`
 
+      const orderName = isBeta
+        ? `퀄리오 ${plan.label} 플랜 1개월`
+        : `퀄리오 ${currentPlanLabel} → ${plan.label} 플랜 변경`
+
       await payment.requestPayment({
         method: 'CARD',
         amount: {
@@ -49,7 +70,7 @@ export function UpgradeForm({ businessId, currentPlan, businessName }: UpgradeFo
           value: plan.price,
         },
         orderId,
-        orderName: `퀄리오 ${plan.label} 플랜 1개월`,
+        orderName,
         successUrl: `${window.location.origin}/upgrade/success`,
         failUrl: `${window.location.origin}/upgrade`,
         customerName: businessName,
@@ -66,11 +87,25 @@ export function UpgradeForm({ businessId, currentPlan, businessName }: UpgradeFo
 
   return (
     <div className="space-y-6">
+      {/* 현재 플랜 안내 (유료 사용자만) */}
+      {!isBeta && (
+        <div className="rounded-lg border bg-muted/30 p-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">현재 플랜</p>
+            <p className="font-semibold text-lg">{currentPlanLabel} 플랜</p>
+          </div>
+          <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-green-100 text-green-700">
+            사용 중
+          </span>
+        </div>
+      )}
+
       {/* 플랜 선택 */}
       <div className="grid md:grid-cols-3 gap-4">
         {PAID_PLANS.map((plan) => {
           const isCurrentPlan = plan.id === currentPlan
           const isSelected = plan.id === selectedPlanId
+          const direction = getChangeDirection(plan.id)
 
           return (
             <button
@@ -80,7 +115,7 @@ export function UpgradeForm({ businessId, currentPlan, businessName }: UpgradeFo
               onClick={() => setSelectedPlanId(plan.id as PlanId)}
               className={`relative text-left rounded-xl border p-5 transition-all focus:outline-none ${
                 isCurrentPlan
-                  ? 'opacity-50 cursor-not-allowed bg-muted'
+                  ? 'border-primary/30 bg-primary/5 cursor-not-allowed'
                   : isSelected
                     ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
                     : 'border-border hover:border-primary/50 bg-card'
@@ -99,8 +134,23 @@ export function UpgradeForm({ businessId, currentPlan, businessName }: UpgradeFo
               {/* 현재 플랜 배지 */}
               {isCurrentPlan && (
                 <div className="absolute -top-2.5 left-4">
-                  <span className="bg-muted-foreground text-background text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                  <span className="bg-primary text-primary-foreground text-xs font-semibold px-2.5 py-0.5 rounded-full">
                     현재 플랜
+                  </span>
+                </div>
+              )}
+
+              {/* 업그레이드/다운그레이드 배지 (유료 사용자, 현재 플랜 아닌 경우) */}
+              {!isBeta && !isCurrentPlan && (
+                <div className="absolute -top-2.5 right-4">
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-0.5 ${
+                    direction === 'upgrade'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-orange-100 text-orange-700'
+                  }`}>
+                    {direction === 'upgrade'
+                      ? <><ArrowUp className="h-3 w-3" />업그레이드</>
+                      : <><ArrowDown className="h-3 w-3" />다운그레이드</>}
                   </span>
                 </div>
               )}
@@ -147,15 +197,28 @@ export function UpgradeForm({ businessId, currentPlan, businessName }: UpgradeFo
               결제 페이지 이동 중...
             </>
           ) : selectedPlanId ? (
-            `${PAID_PLANS.find((p) => p.id === selectedPlanId)?.label} 플랜 결제하기`
+            isBeta
+              ? `${PAID_PLANS.find((p) => p.id === selectedPlanId)?.label} 플랜 결제하기`
+              : selectedDirection === 'upgrade'
+                ? `${PAID_PLANS.find((p) => p.id === selectedPlanId)?.label} 플랜으로 업그레이드`
+                : `${PAID_PLANS.find((p) => p.id === selectedPlanId)?.label} 플랜으로 변경하기`
           ) : (
             '플랜을 선택해주세요'
           )}
         </Button>
         <p className="text-xs text-muted-foreground text-center">
-          결제 1건당 <strong>1개월(30일)</strong> 이용권이 제공됩니다. 자동 갱신 없음.<br />
-          토스페이먼츠를 통해 안전하게 처리됩니다.
-          결제 후 7일 이내 미사용 시 전액 환불 가능합니다.
+          {!isBeta && selectedDirection === 'downgrade' ? (
+            <>
+              다운그레이드 시 새 플랜 금액으로 <strong>1개월(30일)</strong> 이용권이 제공됩니다.<br />
+              기존 결제 건의 환불은 별도로 요청해주세요.
+            </>
+          ) : (
+            <>
+              결제 1건당 <strong>1개월(30일)</strong> 이용권이 제공됩니다. 자동 갱신 없음.<br />
+              토스페이먼츠를 통해 안전하게 처리됩니다.
+              결제 후 7일 이내 미사용 시 전액 환불 가능합니다.
+            </>
+          )}
         </p>
       </div>
     </div>

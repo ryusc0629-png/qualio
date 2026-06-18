@@ -75,7 +75,7 @@ export default async function PaymentSuccessPage({ searchParams }: SuccessPagePr
               <p>결제 금액: {numericAmount.toLocaleString('ko-KR')}원</p>
             </div>
             <Link href="/dashboard">
-              <Button className="w-full" size="lg">대시보드 시작하기</Button>
+              <Button className="w-full" size="lg">대시보드로 이동하기</Button>
             </Link>
           </>
         ) : (

@@ -2,6 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { UpgradeForm } from '@/components/dashboard/upgrade-form'
 import { LogoutButton } from '@/components/dashboard/logout-button'
+import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
 // 플랜 결제 페이지 — 대시보드 밖에 위치해야 페이월 무한루프 방지
@@ -30,7 +31,7 @@ export default async function UpgradePage() {
     .maybeSingle()
 
   const currentPlan = subscription?.plan ?? 'beta'
-  if (currentPlan !== 'beta') redirect('/dashboard')
+  const isBeta = currentPlan === 'beta'
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -40,6 +41,11 @@ export default async function UpgradePage() {
           <Link href="/" className="font-bold text-xl">퀄리오</Link>
           <div className="flex items-center gap-3">
             <p className="text-sm text-muted-foreground">{businessName}</p>
+            {!isBeta && (
+              <Link href="/dashboard/settings">
+                <Button variant="ghost" size="sm">설정으로 돌아가기</Button>
+              </Link>
+            )}
             <LogoutButton />
           </div>
         </div>
@@ -47,9 +53,13 @@ export default async function UpgradePage() {
 
       <main className="flex-1 max-w-5xl mx-auto px-6 py-12 w-full">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold">플랜을 선택해주세요</h1>
+          <h1 className="text-2xl font-bold">
+            {isBeta ? '플랜을 선택해주세요' : '플랜 변경'}
+          </h1>
           <p className="text-muted-foreground mt-1">
-            업체 규모에 맞는 플랜을 선택하고 결제하면 바로 시작할 수 있습니다.
+            {isBeta
+              ? '업체 규모에 맞는 플랜을 선택하고 결제하면 바로 시작할 수 있습니다.'
+              : '현재 사용 중인 플랜을 변경할 수 있습니다. 새 플랜은 결제 즉시 적용됩니다.'}
           </p>
         </div>
 
