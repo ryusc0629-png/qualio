@@ -175,3 +175,6 @@
   margin: 0.5rem 0;
   color: var(--muted-foreground);
 }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
