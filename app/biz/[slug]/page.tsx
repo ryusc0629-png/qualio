@@ -85,9 +85,15 @@ export default async function BizLandingPage({ params }: Props) {
 
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, logo_url, brand_color, brand_color_secondary, hero_style')
+    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, logo_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle' as never)
     .eq('slug', slug)
-    .maybeSingle()
+    .maybeSingle() as { data: {
+      id: string; name: string; phone: string | null; address: string | null
+      description: string | null; seo_title: string | null; seo_description: string | null
+      seo_keywords: string | null; seo_faqs: unknown; naver_place_url: string | null
+      logo_url: string | null; brand_color: string | null; brand_color_secondary: string | null
+      hero_style: string | null; hero_title: string | null; hero_subtitle: string | null
+    } | null }
 
   if (!business) notFound()
 
@@ -310,12 +316,12 @@ export default async function BizLandingPage({ params }: Props) {
                 )}
 
                 <h1 className={`text-4xl sm:text-5xl font-extrabold leading-tight tracking-tight ${hero.title}`}>
-                  {business.seo_title ?? business.name}
+                  {business.hero_title ?? business.seo_title ?? business.name}
                 </h1>
 
-                {business.seo_description && (
+                {(business.hero_subtitle ?? business.seo_description) && (
                   <p className={`text-lg leading-relaxed ${hero.desc}`}>
-                    {business.seo_description}
+                    {business.hero_subtitle ?? business.seo_description}
                   </p>
                 )}
 

@@ -47,6 +47,8 @@ interface Business {
   brand_color_secondary: string | null
   hero_style: string | null
   slug: string | null
+  hero_title: string | null
+  hero_subtitle: string | null
 }
 
 interface Props {
@@ -76,6 +78,8 @@ export function SettingsForm({ business }: Props) {
     business.hero_style === 'light' ? 'light' : 'dark',
   )
   const [logoUrl, setLogoUrl] = useState(business.logo_url ?? '')
+  const [heroTitle, setHeroTitle] = useState(business.hero_title ?? '')
+  const [heroSubtitle, setHeroSubtitle] = useState(business.hero_subtitle ?? '')
 
   const { execute, isPending } = useAction(updateBusinessAction, {
     onSuccess: () => toast.success('설정이 저장됐어요!'),
@@ -109,6 +113,8 @@ export function SettingsForm({ business }: Props) {
       brand_color_secondary:     normalizeHex(brandSecondary) ?? '',
       hero_style:                heroStyle,
       logo_url:                  logoUrl.trim(),
+      hero_title:                heroTitle.trim(),
+      hero_subtitle:             heroSubtitle.trim(),
     })
   }
 
@@ -170,11 +176,15 @@ export function SettingsForm({ business }: Props) {
         brandSecondary={brandSecondary}
         heroStyle={heroStyle}
         logoUrl={logoUrl}
+        heroTitle={heroTitle}
+        heroSubtitle={heroSubtitle}
         onChange={(next) => {
           if (next.brandColor !== undefined) setBrandColor(next.brandColor)
           if (next.brandSecondary !== undefined) setBrandSecondary(next.brandSecondary)
           if (next.heroStyle !== undefined) setHeroStyle(next.heroStyle)
           if (next.logoUrl !== undefined) setLogoUrl(next.logoUrl)
+          if (next.heroTitle !== undefined) setHeroTitle(next.heroTitle)
+          if (next.heroSubtitle !== undefined) setHeroSubtitle(next.heroSubtitle)
         }}
       />
 

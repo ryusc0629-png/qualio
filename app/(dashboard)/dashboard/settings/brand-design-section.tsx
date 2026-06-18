@@ -22,11 +22,15 @@ interface Props {
   brandSecondary: string
   heroStyle: HeroStyle
   logoUrl: string
+  heroTitle: string
+  heroSubtitle: string
   onChange: (next: {
     brandColor?: string
     brandSecondary?: string
     heroStyle?: HeroStyle
     logoUrl?: string
+    heroTitle?: string
+    heroSubtitle?: string
   }) => void
 }
 
@@ -38,6 +42,8 @@ export function BrandDesignSection({
   brandSecondary,
   heroStyle,
   logoUrl,
+  heroTitle,
+  heroSubtitle,
   onChange,
 }: Props) {
   const primary = normalizeHex(brandColor) ?? DEFAULT_BRAND_COLOR
@@ -83,6 +89,32 @@ export function BrandDesignSection({
         </p>
       </div>
 
+      {/* ── 히어로 문구 직접 입력 ── */}
+      <div className="space-y-3">
+        <div>
+          <Label className="text-xs">페이지 제목</Label>
+          <p className="text-[11px] text-muted-foreground mt-0.5">고객이 처음 보는 가장 큰 글자예요</p>
+        </div>
+        <Input
+          value={heroTitle}
+          onChange={(e) => onChange({ heroTitle: e.target.value })}
+          placeholder={`예: ${businessName || '다트클린'} | 입주청소 전문`}
+          maxLength={100}
+        />
+        <div>
+          <Label className="text-xs">페이지 소개글</Label>
+          <p className="text-[11px] text-muted-foreground mt-0.5">제목 아래 한두 줄 설명이에요</p>
+        </div>
+        <textarea
+          value={heroSubtitle}
+          onChange={(e) => onChange({ heroSubtitle: e.target.value })}
+          placeholder="예: 10년 경력 전문 청소팀이 꼼꼼하게 작업해드려요. 당일 견적, 빠른 방문!"
+          maxLength={300}
+          rows={2}
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+        />
+      </div>
+
       {/* ── 실시간 미리보기 ── */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -116,8 +148,13 @@ export function BrandDesignSection({
                 className="text-lg font-extrabold leading-tight"
                 style={{ color: isDark ? '#ffffff' : '#0f172a' }}
               >
-                {businessName || '내 업체 이름'}
+                {heroTitle || businessName || '내 업체 이름'}
               </p>
+              {heroSubtitle && (
+                <p className="text-xs leading-relaxed" style={{ color: isDark ? '#94a3b8' : '#64748b' }}>
+                  {heroSubtitle}
+                </p>
+              )}
               <div className="flex items-center gap-2">
                 <span
                   className="inline-flex h-9 items-center rounded-lg px-4 text-sm font-bold"
