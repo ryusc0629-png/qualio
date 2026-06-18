@@ -186,21 +186,21 @@ export default async function ClientsPage({
       .eq('status', 'pending')
       .order('created_at', { ascending: false }),
 
-    // 사이드바 '서비스 항목'에 등록된 서비스 (활성만) — 이름 + 기본 가격
+    // 사이드바 '서비스 항목'에 등록된 서비스 (활성만) — 이름 + 기본 가격 + 단위
     db.from('service_items')
-      .select('name, base_price')
+      .select('name, base_price, unit')
       .eq('business_id', businessId)
       .eq('is_active', true)
       .order('name', { ascending: true }),
   ])
 
-  // 폼 서비스 선택용 — 이름+가격, 이름 기준 중복 제거 (첫 가격 유지)
-  const serviceMap = new Map<string, number>()
+  // 폼 서비스 선택용 — 이름+가격+단위, 이름 기준 중복 제거 (첫 항목 유지)
+  const serviceMap = new Map<string, { base_price: number; unit: string }>()
   for (const s of serviceItems ?? []) {
     const name = (s.name ?? '').trim()
-    if (name && !serviceMap.has(name)) serviceMap.set(name, s.base_price ?? 0)
+    if (name && !serviceMap.has(name)) serviceMap.set(name, { base_price: s.base_price ?? 0, unit: s.unit ?? '개' })
   }
-  const services = [...serviceMap].map(([name, base_price]) => ({ name, base_price }))
+  const services = [...serviceMap].map(([name, v]) => ({ name, base_price: v.base_price, unit: v.unit }))
 
   // 전화번호 → 예약 실적 맵
   const bookingMap: Record<string, { ltv: number; count: number; lastDate: string }> = {}
