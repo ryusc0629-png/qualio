@@ -7,7 +7,7 @@ import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/por
 import { dismissReelAction } from '@/lib/actions/reports'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sparkles, Plus, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send, SkipForward, Save } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send, SkipForward, Save, ChevronUp } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -219,10 +219,13 @@ function ReelCard({
           <button
             type="button"
             onClick={() => setExpanded(!expanded)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white bg-rose-500 hover:bg-rose-600 transition-colors"
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+              expanded
+                ? 'text-rose-600 bg-white border border-rose-200 hover:bg-rose-50'
+                : 'text-white bg-rose-500 hover:bg-rose-600'
+            }`}
           >
-            <Play className="h-3.5 w-3.5" />
-            {expanded ? '접기' : '미리보기'}
+            {expanded ? <><ChevronUp className="h-3.5 w-3.5" />접기</> : <><Play className="h-3.5 w-3.5" />미리보기</>}
           </button>
           <button
             type="button"
