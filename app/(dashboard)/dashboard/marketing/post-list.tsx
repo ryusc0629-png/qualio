@@ -7,7 +7,7 @@ import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/por
 import { dismissReelAction } from '@/lib/actions/reports'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sparkles, Plus, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send, SkipForward } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send, SkipForward, Save } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -168,6 +168,99 @@ function buildSchedule(target: number, posts: Post[], suggestions: TopicSuggesti
 }
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+
+// ── 릴스 미리보기 + 저장 카드 ──
+function ReelCard({
+  reel,
+  dateLabel,
+  isDismissing,
+  onDismiss,
+}: {
+  reel: DoneReel
+  dateLabel: string
+  isDismissing: boolean
+  onDismiss: () => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      const res = await fetch(reel.reelUrl)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `릴스_${reel.customerName}_${dateLabel || '영상'}.mp4`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('저장에 실패했어요. 다시 시도해주세요')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-rose-100 bg-rose-50/60 overflow-hidden">
+      {/* 헤더 — 고객명 + 날짜 + 미리보기 토글 */}
+      <div className="flex items-center gap-3 px-3 py-2.5">
+        <div className="w-9 h-9 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
+          <Film className="h-4 w-4 text-rose-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{reel.customerName}</p>
+          {dateLabel && <p className="text-xs text-muted-foreground">{dateLabel} 작업</p>}
+        </div>
+        <div className="flex flex-col gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white bg-rose-500 hover:bg-rose-600 transition-colors"
+          >
+            <Play className="h-3.5 w-3.5" />
+            {expanded ? '접기' : '미리보기'}
+          </button>
+          <button
+            type="button"
+            disabled={isDismissing}
+            onClick={onDismiss}
+            className="flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <SkipForward className="h-3 w-3" />건너뛰기
+          </button>
+        </div>
+      </div>
+
+      {/* 미리보기 + 저장 버튼 */}
+      {expanded && (
+        <div className="px-3 pb-3 space-y-2.5">
+          <video
+            src={reel.reelUrl}
+            controls
+            playsInline
+            className="w-full rounded-lg aspect-[9/16] bg-black object-contain max-h-[360px]"
+          />
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={handleSave}
+            className="w-full flex items-center justify-center gap-2 h-11 rounded-lg text-sm font-semibold text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 disabled:opacity-60 transition-colors"
+          >
+            {isSaving ? (
+              <><Loader2 className="h-4 w-4 animate-spin" />저장 중...</>
+            ) : (
+              <><Save className="h-4 w-4" />내 기기에 저장하기</>
+            )}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [] }: PostListProps) {
   const [posts] = useState(initialPosts)
@@ -374,42 +467,21 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                 <div className="flex items-center gap-1.5 mb-2.5">
                   <Film className="h-4 w-4 text-rose-500" />
                   <p className="text-sm font-semibold text-rose-900">완성된 릴스 {doneReels.length}개</p>
-                  <span className="text-xs text-muted-foreground hidden sm:inline">— 다운로드해서 SNS에 올려보세요</span>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">— 저장해서 SNS에 올려보세요</span>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {doneReels.map((reel) => {
                     const date = reel.scheduledAt
                       ? new Date(reel.scheduledAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' })
                       : ''
                     return (
-                      <div key={reel.reportId} className="flex items-center gap-3 rounded-xl border border-rose-100 bg-rose-50/60 px-3 py-2.5">
-                        <div className="w-9 h-9 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
-                          <Film className="h-4 w-4 text-rose-500" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{reel.customerName}</p>
-                          {date && <p className="text-xs text-muted-foreground">{date} 작업</p>}
-                        </div>
-                        <div className="flex flex-col gap-1 shrink-0">
-                          <a
-                            href={reel.reelUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            download
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white bg-rose-500 hover:bg-rose-600 transition-colors"
-                          >
-                            <Download className="h-3.5 w-3.5" />다운로드
-                          </a>
-                          <button
-                            type="button"
-                            disabled={isDismissing}
-                            onClick={() => dismissReel({ reportId: reel.reportId })}
-                            className="flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          >
-                            <SkipForward className="h-3 w-3" />건너뛰기
-                          </button>
-                        </div>
-                      </div>
+                      <ReelCard
+                        key={reel.reportId}
+                        reel={reel}
+                        dateLabel={date}
+                        isDismissing={isDismissing}
+                        onDismiss={() => dismissReel({ reportId: reel.reportId })}
+                      />
                     )
                   })}
                 </div>
