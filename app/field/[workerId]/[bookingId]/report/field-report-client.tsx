@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { createClient } from '@/lib/supabase/client'
-import { fieldSaveReportAction, fieldSendReportAction, fieldGenerateAiReportAction, fieldSaveWorkClipsAction, fieldRequestReelAction } from '@/lib/actions/field'
+import { fieldSaveReportAction, fieldSendReportAction, fieldGenerateAiReportAction, fieldSaveWorkClipsAction, fieldRequestReelAction, fieldGetReelStatusAction } from '@/lib/actions/field'
 import {
   ArrowLeft,
   Camera,
@@ -167,6 +167,30 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
+
+  // 릴스 상태 조회 (처리 중일 때 폴링) — 완성되면 자동으로 '완료'로 전환
+  const { execute: checkReelStatus } = useAction(fieldGetReelStatusAction, {
+    onSuccess: ({ data }) => {
+      if (!data) return
+      if (data.reelStatus === 'done' && data.reelUrl) {
+        setReelStatus('done')
+        setReelUrl(data.reelUrl)
+      } else if (data.reelStatus === 'failed') {
+        setReelStatus('failed')
+      }
+    },
+  })
+
+  // '처리 중' 상태면 5초마다 완성 여부 확인 (웹훅이 DB를 갱신하면 감지)
+  useEffect(() => {
+    if (reelStatus !== 'processing' || !savedReportId) return
+    checkReelStatus({ workerId, reportId: savedReportId })  // 진입 즉시 1회
+    const interval = setInterval(() => {
+      checkReelStatus({ workerId, reportId: savedReportId })
+    }, 5000)
+    return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reelStatus, savedReportId])
 
   // 로컬 파일에서 첫 프레임 썸네일 추출
   const extractThumbnail = (file: File): Promise<string> =>

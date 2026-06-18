@@ -582,6 +582,30 @@ export const fieldRequestReelAction = action
     return { success: true }
   })
 
+// 릴스 편집 상태 조회 — 현장 앱에서 '처리 중'일 때 폴링용
+export const fieldGetReelStatusAction = action
+  .schema(z.object({
+    workerId: z.string().uuid(),
+    reportId: z.string().uuid(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+
+    const { data: report } = await db
+      .from('reports')
+      .select('reel_status, reel_url' as never)
+      .eq('id', parsedInput.reportId)
+      .eq('business_id', worker.business_id)
+      .maybeSingle() as { data: { reel_status: string | null; reel_url: string | null } | null }
+
+    if (!report) throw new Error('[APP] 보고서를 찾을 수 없어요')
+
+    return {
+      reelStatus: report.reel_status ?? 'idle',
+      reelUrl: report.reel_url ?? null,
+    }
+  })
+
 // AI 보고서 자동 작성 (직원 메모 → 전문가 보고서 + 서비스 추천)
 export const fieldGenerateAiReportAction = action
   .schema(z.object({
