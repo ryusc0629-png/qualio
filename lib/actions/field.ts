@@ -526,10 +526,10 @@ export const fieldRequestReelAction = action
     const { db, worker } = await verifyWorker(parsedInput.workerId)
     const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
 
-    // 보고서 + 사진 + 클립 조회
+    // 보고서 + 사진 + 클립 + AI 보고서 데이터(자막 생성용) 조회
     const { data: report } = await db
       .from('reports')
-      .select('id, work_clip_urls, notes, report_photos(url, type, sort_order)' as never)
+      .select('id, work_clip_urls, notes, ai_report_data, report_photos(url, type, sort_order)' as never)
       .eq('id', parsedInput.reportId)
       .eq('business_id', worker.business_id)
       .maybeSingle() as {
@@ -537,6 +537,11 @@ export const fieldRequestReelAction = action
           id: string
           work_clip_urls: string[]
           notes: string | null
+          ai_report_data: {
+            beforeStatus?: string
+            workDetails?: string
+            afterResult?: string
+          } | null
           report_photos: { url: string; type: string; sort_order: number }[]
         } | null
       }
@@ -564,6 +569,26 @@ export const fieldRequestReelAction = action
 
     if (!business) throw new Error('[APP] 업체 정보를 찾을 수 없어요')
 
+    // 서비스명 (자막 맥락용)
+    let cleaningType = '청소 서비스'
+    if (booking.quote_id) {
+      const { data: quote } = await db
+        .from('quotes')
+        .select('cleaning_type')
+        .eq('id', booking.quote_id)
+        .maybeSingle()
+      if (quote?.cleaning_type) cleaningType = quote.cleaning_type
+    }
+
+    // 작업 보고서 기반으로 짧은 후킹 자막 생성 (시청 지속 ↑)
+    const { generateReelCaptions } = await import('@/lib/ai/reel-captions')
+    const captions = await generateReelCaptions({
+      cleaningType,
+      beforeStatus: report.ai_report_data?.beforeStatus ?? booking.memo ?? '',
+      workDetails: report.ai_report_data?.workDetails ?? '',
+      afterResult: report.ai_report_data?.afterResult ?? '',
+    })
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
     const { requestReelRender } = await import('@/lib/creatomate/client')
 
@@ -573,6 +598,7 @@ export const fieldRequestReelAction = action
       afterPhotoUrl: afterPhotos[0].url,
       businessName: business.name,
       beforeText: booking.memo ?? '작업 전 현장',
+      captions,
       webhookUrl: `${appUrl}/api/creatomate/webhook`,
     })
 
