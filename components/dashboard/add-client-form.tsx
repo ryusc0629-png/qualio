@@ -204,17 +204,17 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
               <Label>고객 구분</Label>
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
-                  <input type="radio" value="company" {...leadForm.register('customer_type')} className="accent-primary" />
-                  <div className="flex items-center gap-1.5">
-                    <Building2 className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">법인</span>
-                  </div>
-                </label>
-                <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                   <input type="radio" value="individual" {...leadForm.register('customer_type')} className="accent-primary" />
                   <div className="flex items-center gap-1.5">
                     <User className="h-4 w-4 text-muted-foreground" />
                     <span className="text-sm font-medium">개인</span>
+                  </div>
+                </label>
+                <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                  <input type="radio" value="company" {...leadForm.register('customer_type')} className="accent-primary" />
+                  <div className="flex items-center gap-1.5">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">법인</span>
                   </div>
                 </label>
               </div>
