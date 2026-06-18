@@ -523,9 +523,10 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
               <button
                 type="button"
                 className="w-full text-xs text-muted-foreground underline py-1"
+                disabled={isCompleting}
                 onClick={() => {
-                  if (confirm(`현금으로 ${booking.finalPrice.toLocaleString()}원을 받으셨나요?\n\n입금을 확인하신 경우에만 눌러주세요.`)) {
-                    setPaymentRequested(true)
+                  if (confirm(`현금으로 ${booking.finalPrice.toLocaleString()}원을 받으셨나요?\n\n확인하면 수금 완료 처리됩니다.`)) {
+                    completePayment({ workerId, bookingId: booking.id })
                   }
                 }}
               >
