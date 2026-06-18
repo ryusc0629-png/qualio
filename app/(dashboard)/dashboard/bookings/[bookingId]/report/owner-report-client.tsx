@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { createClient } from '@/lib/supabase/client'
-import { saveReportAction, ownerSendReportAction, ownerGenerateAiReportAction } from '@/lib/actions/reports'
+import { saveReportAction, ownerSendReportAction, ownerGenerateAiReportAction, skipReportSendAction } from '@/lib/actions/reports'
 import {
   ArrowLeft,
   Camera,
@@ -102,6 +102,15 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
     onSuccess: () => {
       setAlreadySent(true)
       toast.success('고객에게 보고서가 발송됐어요!')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 발송 건너뛰기
+  const { execute: skipSend, isPending: isSkipping } = useAction(skipReportSendAction, {
+    onSuccess: () => {
+      setAlreadySent(true)
+      toast.success('발송을 건너뛰었어요. 완료 처리됐어요!')
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -643,6 +652,22 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
             >
               {isSaving ? '저장 중...' : '사진/메모 수정 후 다시 저장'}
             </Button>
+            {!alreadySent && (
+              <button
+                type="button"
+                className="w-full text-xs text-muted-foreground underline underline-offset-2 py-1 hover:text-foreground transition-colors"
+                disabled={isSkipping}
+                onClick={() => {
+                  const confirmed = window.confirm(
+                    '이 고객에게 보고서를 발송하지 않을까요?\n\n발송 목록에서 사라지고, 나중에 다시 보낼 수 있어요.'
+                  )
+                  if (!confirmed) return
+                  skipSend({ reportId: savedReportId! })
+                }}
+              >
+                {isSkipping ? '처리 중...' : '이 고객은 발송 안 할래요'}
+              </button>
+            )}
           </>
         )}
       </div>

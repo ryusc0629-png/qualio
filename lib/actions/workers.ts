@@ -141,7 +141,8 @@ export const cancelBookingFromScheduleAction = action
     return { success: true }
   })
 
-// 예약 드래그앤드롭 — 날짜 + 작업자 동시 변경
+// 예약 드래그앤드롭 — 날짜 + 담당자(단일) 동시 변경
+// 드래그로 배정하면 해당 담당자 1명으로 교체됨 (다중 배정은 상세 시트에서)
 export const assignBookingAction = action
   .schema(z.object({
     bookingId: z.string().uuid(),
@@ -151,7 +152,6 @@ export const assignBookingAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getBusinessId()
 
-    // 현재 예약 조회 (시간 보존용)
     const { data: booking } = await db
       .from('bookings')
       .select('scheduled_at')
@@ -161,7 +161,6 @@ export const assignBookingAction = action
 
     if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
 
-    // 기존 시간(HH:MM) 보존 + 날짜만 교체
     const prevTime = new Date(booking.scheduled_at)
     const [year, month, day] = parsedInput.newDate.split('-').map(Number)
     const newScheduledAt = new Date(Date.UTC(
@@ -180,6 +179,59 @@ export const assignBookingAction = action
       .eq('business_id', businessId)
 
     if (error) throw new Error('[APP] 저장에 실패했습니다')
+
+    // booking_workers 동기화 — 드래그 배정은 단일 담당자로 교체
+    await db.from('booking_workers' as never).delete().eq('booking_id' as never, parsedInput.bookingId)
+    if (parsedInput.workerId) {
+      await db.from('booking_workers' as never).insert({
+        booking_id: parsedInput.bookingId,
+        worker_id:  parsedInput.workerId,
+        is_lead:    true,
+      } as never)
+    }
+
+    revalidatePath('/dashboard/schedule')
+    return { success: true }
+  })
+
+// 다중 팀원 배정 — 상세 시트에서 여러 직원을 한 예약에 배정
+export const updateBookingWorkersAction = action
+  .schema(z.object({
+    bookingId: z.string().uuid(),
+    workerIds: z.array(z.string().uuid()), // 순서 유지 — 첫 번째가 팀장
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { data: booking } = await db
+      .from('bookings')
+      .select('id')
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+      .maybeSingle()
+
+    if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
+
+    // 기존 배정 전체 삭제 후 새 배정 삽입
+    await db.from('booking_workers' as never).delete().eq('booking_id' as never, parsedInput.bookingId)
+
+    if (parsedInput.workerIds.length > 0) {
+      await db.from('booking_workers' as never).insert(
+        parsedInput.workerIds.map((wId, idx) => ({
+          booking_id: parsedInput.bookingId,
+          worker_id:  wId,
+          is_lead:    idx === 0,
+        })) as never
+      )
+    }
+
+    // bookings.worker_id = 팀장(첫 번째) 유지 (현장 앱 호환)
+    await db
+      .from('bookings')
+      .update({ worker_id: parsedInput.workerIds[0] ?? null } as never)
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+
     revalidatePath('/dashboard/schedule')
     return { success: true }
   })

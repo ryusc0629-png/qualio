@@ -24,6 +24,7 @@ export default async function AlimtalkTodoPage() {
     { data: sentReportRows },
     { data: pendingReviewRaw },
     workersResult,
+    { data: unsendReportRows },
   ] = await Promise.all([
     // 완료된 예약 전체 (worker_id, customer_id 포함)
     db.from('bookings')
@@ -33,7 +34,7 @@ export default async function AlimtalkTodoPage() {
       .is('deleted_at', null)
       .order('scheduled_at', { ascending: false }),
 
-    // 알림톡 발송된 보고서의 booking_id
+    // 알림톡 발송(또는 발송 건너뛰기) 완료된 보고서의 booking_id
     db.from('reports')
       .select('booking_id')
       .eq('business_id', businessId)
@@ -51,6 +52,12 @@ export default async function AlimtalkTodoPage() {
       .select('id, name' as never)
       .eq('business_id' as never, businessId)
       .eq('is_active' as never, true) as unknown as Promise<{ data: { id: string; name: string }[] | null }>,
+
+    // 보고서 작성됐지만 미발송 (건너뛰기 버튼용)
+    db.from('reports')
+      .select('id, booking_id')
+      .eq('business_id', businessId)
+      .is('kakao_sent_at', null),
   ])
 
   // worker id → name 맵
@@ -60,6 +67,11 @@ export default async function AlimtalkTodoPage() {
 
   // 보고서 미발송 예약 필터링
   const sentSet = new Set((sentReportRows ?? []).map((r) => r.booking_id))
+
+  // 보고서 작성됐지만 미발송인 booking → reportId 매핑
+  const unsendReportMap = new Map<string, string>(
+    (unsendReportRows ?? []).map((r) => [r.booking_id, r.id])
+  )
 
   type CompletedBookingRow = {
     id: string; customer_name: string; customer_phone: string | null
@@ -99,6 +111,7 @@ export default async function AlimtalkTodoPage() {
       customer_id:     row.customer_phone ? (customerMap.get(row.customer_phone) ?? null) : null,
       cleaning_type:   qt?.cleaning_type ?? null,
       worker_name:     row.worker_id ? (workerMap.get(row.worker_id) ?? null) : null,
+      reportId:        unsendReportMap.get(row.id) ?? null,
     }
   })
 

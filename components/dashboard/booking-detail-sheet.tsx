@@ -6,7 +6,7 @@ import { ko } from 'date-fns/locale'
 import Link from 'next/link'
 import {
   Phone, MapPin, Clock, User, ChevronRight,
-  Pencil, Check, X, CalendarDays, CheckCircle2, Send, Star,
+  Pencil, Check, X, CalendarDays, CheckCircle2, Send, Star, Users,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
@@ -25,14 +25,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
   assignBookingAction,
+  updateBookingWorkersAction,
   updateBookingTimeAction,
   cancelBookingFromScheduleAction,
   updateBookingStatusAction,
@@ -58,6 +52,7 @@ interface Booking {
   final_price: number
   status: string
   worker_id: string | null
+  workerIds: string[]
   cleaning_type: string | null
   customer_id: string | null
   reportId?: string | null
@@ -69,9 +64,9 @@ interface Props {
   booking: Booking | null
   workers: Worker[]
   onClose: () => void
-  onWorkerChange: (bookingId: string, newWorkerId: string | null) => void
-  onTimeChange:   (bookingId: string, newScheduledAt: string) => void
-  onCancel:       (bookingId: string) => void
+  onWorkersChange: (bookingId: string, newWorkerIds: string[]) => void
+  onTimeChange:    (bookingId: string, newScheduledAt: string) => void
+  onCancel:        (bookingId: string) => void
   onStatusChange?: (bookingId: string, newStatus: string) => void
 }
 
@@ -118,7 +113,7 @@ export function BookingDetailSheet({
   booking,
   workers,
   onClose,
-  onWorkerChange,
+  onWorkersChange,
   onTimeChange,
   onCancel,
   onStatusChange,
@@ -130,11 +125,13 @@ export function BookingDetailSheet({
   const [currentReportId, setCurrentReportId]     = useState<string | null>(null)
   const [currentReviewSent, setCurrentReviewSent] = useState(false)
   const [reviewDialogOpen, setReviewDialogOpen]   = useState(false)
+  const [localWorkerIds, setLocalWorkerIds]       = useState<string[]>([])
 
-  // booking이 바뀔 때마다 보고서 상태 초기화
+  // booking이 바뀔 때마다 상태 초기화
   useEffect(() => {
     setCurrentReportId(booking?.reportId ?? null)
     setCurrentReviewSent(booking?.reviewSent ?? false)
+    setLocalWorkerIds(booking?.workerIds ?? [])
   }, [booking?.id])
 
   const isCancelled = !booking ||
@@ -151,9 +148,14 @@ export function BookingDetailSheet({
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
-  // 담당자 변경 액션
-  const { execute: assignWorker, isPending: assignPending } = useAction(assignBookingAction, {
-    onSuccess: () => toast.success('담당자를 변경했어요!'),
+  // 날짜 변경 액션 (날짜만, 팀원 유지)
+  const { execute: changeDate, isPending: datePending } = useAction(assignBookingAction, {
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 팀원 배정 액션
+  const { execute: updateWorkers, isPending: workersPending } = useAction(updateBookingWorkersAction, {
+    onSuccess: () => toast.success('팀원을 변경했어요!'),
     onError:   ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
@@ -188,19 +190,23 @@ export function BookingDetailSheet({
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
-  const handleWorkerChange = (value: string) => {
+  const toggleWorker = (workerId: string) => {
     if (!booking) return
-    const newWorkerId = value === 'null' ? null : value
-    const currentDate = format(new Date(booking.scheduled_at), 'yyyy-MM-dd')
+    const isSelected = localWorkerIds.includes(workerId)
+    const newIds = isSelected
+      ? localWorkerIds.filter((id) => id !== workerId)
+      : [...localWorkerIds, workerId]
 
-    // 낙관적 업데이트
-    onWorkerChange(booking.id, newWorkerId)
+    setLocalWorkerIds(newIds)
+    onWorkersChange(booking.id, newIds)
+    updateWorkers({ bookingId: booking.id, workerIds: newIds })
+  }
 
-    assignWorker({
-      bookingId: booking.id,
-      workerId:  newWorkerId,
-      newDate:   currentDate,
-    })
+  const clearAllWorkers = () => {
+    if (!booking) return
+    setLocalWorkerIds([])
+    onWorkersChange(booking.id, [])
+    updateWorkers({ bookingId: booking.id, workerIds: [] })
   }
 
   const handleSaveTime = () => {
@@ -214,15 +220,14 @@ export function BookingDetailSheet({
     cancelBooking({ bookingId: booking.id })
   }
 
-  // 날짜 변경 저장
+  // 날짜 변경 저장 (팀원은 유지)
   const handleSaveDate = () => {
     if (!booking || !dateValue) return
-    assignWorker({
+    changeDate({
       bookingId: booking.id,
       workerId:  booking.worker_id,
       newDate:   dateValue,
     })
-    // 낙관적 업데이트: scheduled_at의 날짜 부분만 교체
     const currentTime = format(new Date(booking.scheduled_at), 'HH:mm:ssXXX')
     onTimeChange(booking.id, new Date(`${dateValue}T${currentTime}`).toISOString())
     setEditingDate(false)
@@ -249,7 +254,6 @@ export function BookingDetailSheet({
   const scheduledTime = booking
     ? format(new Date(booking.scheduled_at), 'HH:mm')
     : ''
-  const currentWorker = workers.find((w) => w.id === booking?.worker_id)
   const formattedPrice = booking
     ? new Intl.NumberFormat('ko-KR').format(booking.final_price) + '원'
     : ''
@@ -313,7 +317,7 @@ export function BookingDetailSheet({
                     </span>
                     <button
                       onClick={handleSaveDate}
-                      disabled={assignPending || !dateValue}
+                      disabled={datePending || !dateValue}
                       className="p-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
                       aria-label="저장"
                     >
@@ -428,48 +432,67 @@ export function BookingDetailSheet({
               )}
             </Row>
 
-            {/* 담당자 */}
-            <Row icon={<User className="h-4 w-4" />} label="담당자">
+            {/* 담당 팀원 — 다중 선택 */}
+            <Row icon={<Users className="h-4 w-4" />} label="담당 팀원">
               {isCancelled ? (
                 <span className="font-medium">
-                  {currentWorker ? currentWorker.name : '미배정'}
+                  {localWorkerIds.length === 0
+                    ? '미배정'
+                    : workers.filter((w) => localWorkerIds.includes(w.id)).map((w) => w.name).join(', ')
+                  }
                 </span>
               ) : (
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={booking?.worker_id ?? 'null'}
-                    onValueChange={handleWorkerChange}
-                    disabled={assignPending}
-                  >
-                    <SelectTrigger className="h-8 text-sm w-40 border-border">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="null">
-                        <span className="flex items-center gap-1.5">
-                          <span className="inline-block w-2 h-2 rounded-full bg-slate-400" />
-                          미배정
-                        </span>
-                      </SelectItem>
-                      {workers.map((w) => (
-                        <SelectItem key={w.id} value={w.id}>
-                          <span className="flex items-center gap-1.5">
+                <div className="space-y-2">
+                  {workers.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">등록된 직원이 없어요. 일정 탭에서 직원을 추가해주세요.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {workers.map((w) => {
+                        const isSelected = localWorkerIds.includes(w.id)
+                        return (
+                          <button
+                            key={w.id}
+                            type="button"
+                            disabled={workersPending}
+                            onClick={() => toggleWorker(w.id)}
+                            className={[
+                              'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
+                              isSelected
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-border text-muted-foreground hover:border-primary/40',
+                            ].join(' ')}
+                          >
                             <span
-                              className="inline-block w-2 h-2 rounded-full shrink-0"
+                              className="w-2 h-2 rounded-full shrink-0"
                               style={{ backgroundColor: w.color }}
                             />
                             {w.name}
-                            <span className="text-muted-foreground text-xs">
+                            <span className="opacity-60">
                               {w.type === 'employee' ? '직원' : '도급사'}
                             </span>
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {assignPending && (
-                    <span className="text-xs text-muted-foreground">저장 중...</span>
+                            {isSelected && localWorkerIds[0] === w.id && (
+                              <span className="text-[9px] bg-primary/20 px-1 py-0.5 rounded">팀장</span>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
                   )}
+                  <div className="flex items-center gap-2 pt-0.5">
+                    {localWorkerIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={clearAllWorkers}
+                        disabled={workersPending}
+                        className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        배정 취소
+                      </button>
+                    )}
+                    {workersPending && (
+                      <span className="text-xs text-muted-foreground">저장 중...</span>
+                    )}
+                  </div>
                 </div>
               )}
             </Row>

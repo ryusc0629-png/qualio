@@ -20,7 +20,7 @@ import { ko } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2, Smartphone } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
-import { assignBookingAction, addWorkerAction, deleteWorkerAction } from '@/lib/actions/workers'
+import { assignBookingAction, addWorkerAction, deleteWorkerAction, updateBookingWorkersAction } from '@/lib/actions/workers'
 import { BookingDetailSheet } from '@/components/dashboard/booking-detail-sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,6 +52,7 @@ interface Booking {
   final_price: number
   status: string
   worker_id: string | null
+  workerIds: string[] // 배정된 모든 팀원 ID (팀장 포함)
   cleaning_type: string | null
   customer_id: string | null
   reportId?: string | null
@@ -107,15 +108,18 @@ function DroppableCell({
 function BookingCard({
   booking,
   color,
+  workers,
   isDragging = false,
 }: {
   booking: Booking
   color: string
+  workers: Worker[]
   isDragging?: boolean
 }) {
   const time = format(new Date(booking.scheduled_at), 'HH:mm')
   const serviceName = booking.cleaning_type ?? '직접 예약'
   const isCompleted = booking.status === 'completed'
+  const isTeam = booking.workerIds.length > 1
 
   return (
     <div
@@ -138,6 +142,24 @@ function BookingCard({
           {booking.service_address}
         </p>
       )}
+      {isTeam && (
+        <div className={`flex items-center gap-0.5 mt-1 ${isCompleted ? 'opacity-60' : 'opacity-90'}`}>
+          {booking.workerIds.map((wId) => {
+            const w = workers.find((x) => x.id === wId)
+            return w ? (
+              <span
+                key={wId}
+                title={w.name}
+                className="inline-block w-2 h-2 rounded-full border border-white/50 shrink-0"
+                style={{ backgroundColor: w.color }}
+              />
+            ) : null
+          })}
+          <span className={`text-[9px] ml-0.5 font-medium ${isCompleted ? '' : 'opacity-80'}`}>
+            팀 {booking.workerIds.length}명
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -147,10 +169,12 @@ function BookingCard({
 function DraggableBookingCard({
   booking,
   color,
+  workers,
   onClick,
 }: {
   booking: Booking
   color: string
+  workers: Worker[]
   onClick: () => void
 }) {
   const isCompleted = booking.status === 'completed'
@@ -169,7 +193,7 @@ function DraggableBookingCard({
       {...(isCompleted ? {} : listeners)}
       {...attributes}
     >
-      <BookingCard booking={booking} color={color} isDragging={isDragging} />
+      <BookingCard booking={booking} color={color} workers={workers} isDragging={isDragging} />
     </div>
   )
 }
@@ -393,10 +417,13 @@ export function ScheduleBoard({
     ...workers.map((w) => ({ id: w.id, label: w.name, color: w.color, phone: w.phone, type: w.type })),
   ]
 
+  // 다중 배정: 해당 직원이 workerIds에 포함된 예약을 모두 반환
   const getBookingsForCell = useCallback((workerId: string | null, date: string) => {
     return bookings.filter((b) => {
       const bDate = format(new Date(b.scheduled_at), 'yyyy-MM-dd')
-      return b.worker_id === workerId && bDate === date
+      if (bDate !== date) return false
+      if (workerId === null) return b.workerIds.length === 0
+      return b.workerIds.includes(workerId)
     })
   }, [bookings])
 
@@ -405,10 +432,14 @@ export function ScheduleBoard({
     return workers.find((w) => w.id === workerId)?.color ?? '#94a3b8'
   }, [workers])
 
-  // Sheet 콜백 — 낙관적 업데이트
-  const handleSheetWorkerChange = (bookingId: string, newWorkerId: string | null) => {
+  // Sheet 콜백 — 다중 배정 낙관적 업데이트
+  const handleSheetWorkersChange = (bookingId: string, newWorkerIds: string[]) => {
     setBookings((prev) =>
-      prev.map((b) => b.id === bookingId ? { ...b, worker_id: newWorkerId } : b)
+      prev.map((b) =>
+        b.id === bookingId
+          ? { ...b, worker_id: newWorkerIds[0] ?? null, workerIds: newWorkerIds }
+          : b
+      )
     )
   }
 
@@ -456,13 +487,14 @@ export function ScheduleBoard({
     const prevDate = format(new Date(booking.scheduled_at), 'yyyy-MM-dd')
     if (booking.worker_id === newWorker && prevDate === newDate) return
 
-    // 낙관적 업데이트
+    // 낙관적 업데이트 — 드래그로 배정 시 단일 담당자로 교체
     setBookings((prev) =>
       prev.map((b) =>
         b.id === booking.id
           ? {
               ...b,
               worker_id: newWorker,
+              workerIds: newWorker ? [newWorker] : [],
               scheduled_at: b.scheduled_at.replace(/^\d{4}-\d{2}-\d{2}/, newDate),
             }
           : b
@@ -621,6 +653,7 @@ export function ScheduleBoard({
                             key={b.id}
                             booking={b}
                             color={getWorkerColor(b.worker_id)}
+                            workers={workers}
                             onClick={() => setSelectedBookingId(b.id)}
                           />
                         ))}
@@ -641,6 +674,7 @@ export function ScheduleBoard({
               <BookingCard
                 booking={activeBooking}
                 color={getWorkerColor(activeBooking.worker_id)}
+                workers={workers}
               />
             </div>
           )}
@@ -660,7 +694,7 @@ export function ScheduleBoard({
         booking={selectedBooking}
         workers={workers}
         onClose={() => setSelectedBookingId(null)}
-        onWorkerChange={handleSheetWorkerChange}
+        onWorkersChange={handleSheetWorkersChange}
         onTimeChange={handleSheetTimeChange}
         onCancel={handleSheetCancel}
         onStatusChange={handleSheetStatusChange}

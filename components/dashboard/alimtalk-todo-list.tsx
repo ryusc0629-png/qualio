@@ -5,7 +5,7 @@ import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { Send, Star, CheckCircle2, ClipboardList, Phone, FileText, User, ChevronRight } from 'lucide-react'
+import { Send, Star, CheckCircle2, ClipboardList, Phone, FileText, User, ChevronRight, SkipForward } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,7 +15,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { sendReviewRequestAction } from '@/lib/actions/reports'
+import { sendReviewRequestAction, skipReportSendAction } from '@/lib/actions/reports'
 
 interface UnreportedBooking {
   bookingId: string
@@ -27,6 +27,7 @@ interface UnreportedBooking {
   cleaning_type?: string | null
   customer_id?: string | null
   worker_name?: string | null
+  reportId?: string | null
 }
 
 interface UnreviewedItem {
@@ -45,10 +46,35 @@ interface Props {
 
 // ── 작업완료 알림톡 행 ───────────────────────────────────
 
-function UnreportedRow({ booking }: { booking: UnreportedBooking }) {
+function UnreportedRow({
+  booking,
+  onSkipped,
+}: {
+  booking: UnreportedBooking
+  onSkipped: (bookingId: string) => void
+}) {
   const dateLabel = booking.scheduled_at
     ? format(new Date(booking.scheduled_at), 'M월 d일 (EEE) HH:mm', { locale: ko })
     : '—'
+
+  const hasReport = !!booking.reportId
+
+  const { execute: skipSend, isPending: isSkipping } = useAction(skipReportSendAction, {
+    onSuccess: () => {
+      toast.success(`${booking.customer_name}님 보고서 발송을 건너뛰었어요`)
+      onSkipped(booking.bookingId)
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  const handleSkip = () => {
+    if (!booking.reportId) return
+    const confirmed = window.confirm(
+      `${booking.customer_name}님에게 보고서를 발송하지 않을까요?\n\n발송 목록에서 사라져요.`
+    )
+    if (!confirmed) return
+    skipSend({ reportId: booking.reportId })
+  }
 
   return (
     <div className="py-3.5 border-b border-border last:border-0">
@@ -100,12 +126,26 @@ function UnreportedRow({ booking }: { booking: UnreportedBooking }) {
           </div>
         </div>
 
-        <Link href={`/dashboard/bookings/${booking.bookingId}/report`} className="shrink-0 mt-0.5">
-          <Button size="sm" className="h-10 gap-1.5 px-4">
-            <FileText className="h-3.5 w-3.5" />
-            보고서 작성
-          </Button>
-        </Link>
+        <div className="shrink-0 mt-0.5 flex flex-col gap-1.5">
+          <Link href={`/dashboard/bookings/${booking.bookingId}/report`}>
+            <Button size="sm" className="h-10 gap-1.5 px-4 w-full">
+              <FileText className="h-3.5 w-3.5" />
+              {hasReport ? '발송하기' : '보고서 작성'}
+            </Button>
+          </Link>
+          {hasReport && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1 px-3 text-xs text-muted-foreground"
+              disabled={isSkipping}
+              onClick={handleSkip}
+            >
+              <SkipForward className="h-3 w-3" />
+              {isSkipping ? '처리 중...' : '건너뛰기'}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -243,8 +283,9 @@ function UnreviewedRow({
 
 export function AlimtalkTodoList({ unreportedBookings, unreviewedItems }: Props) {
   const [sentReportIds, setSentReportIds] = useState(new Set<string>())
+  const [skippedBookingIds, setSkippedBookingIds] = useState(new Set<string>())
 
-  const visibleUnreported = unreportedBookings
+  const visibleUnreported = unreportedBookings.filter((b) => !skippedBookingIds.has(b.bookingId))
   const visibleUnreviewed = unreviewedItems.filter((i) => !sentReportIds.has(i.reportId))
 
   if (visibleUnreported.length === 0 && visibleUnreviewed.length === 0) {
@@ -269,7 +310,11 @@ export function AlimtalkTodoList({ unreportedBookings, unreviewedItems }: Props)
           </div>
           <div className="px-4">
             {visibleUnreported.map((b) => (
-              <UnreportedRow key={b.bookingId} booking={b} />
+              <UnreportedRow
+                key={b.bookingId}
+                booking={b}
+                onSkipped={(id) => setSkippedBookingIds((prev) => new Set([...prev, id]))}
+              />
             ))}
           </div>
         </div>

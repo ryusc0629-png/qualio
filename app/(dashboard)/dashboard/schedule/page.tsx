@@ -75,6 +75,24 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       .order('scheduled_at' as never),
   ])
 
+  // 예약별 배정된 팀원 목록 조회
+  const bookingIds = ((bookingsResult as unknown as { data: { id: string }[] | null }).data ?? []).map(b => b.id)
+  type BookingWorkerRow = { booking_id: string; worker_id: string; is_lead: boolean }
+  const bookingWorkersMap = new Map<string, string[]>()
+
+  if (bookingIds.length > 0) {
+    const { data: bwRows } = await db
+      .from('booking_workers' as never)
+      .select('booking_id, worker_id, is_lead')
+      .in('booking_id' as never, bookingIds)
+      .order('is_lead' as never, { ascending: false }) as unknown as { data: BookingWorkerRow[] | null }
+
+    for (const row of bwRows ?? []) {
+      const existing = bookingWorkersMap.get(row.booking_id) ?? []
+      bookingWorkersMap.set(row.booking_id, [...existing, row.worker_id])
+    }
+  }
+
   const workers = (workersResult.data ?? []) as Array<{
     id: string; name: string; type: string; color: string; phone: string | null
   }>
@@ -153,6 +171,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           final_price:     b.final_price,
           status:          b.status,
           worker_id:       b.worker_id,
+          workerIds:       bookingWorkersMap.get(b.id) ?? (b.worker_id ? [b.worker_id] : []),
           cleaning_type:   b.quotes?.cleaning_type ?? null,
           customer_id:     b.customer_phone ? customerMap.get(b.customer_phone) ?? null : null,
           reportId:        reportMap.get(b.id)?.id ?? null,

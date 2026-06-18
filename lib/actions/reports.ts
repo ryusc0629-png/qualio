@@ -263,3 +263,35 @@ export const sendReviewRequestAction = action
 
     return { success: true }
   })
+
+// 보고서 발송 건너뛰기 (발송 안 하고 완료 처리)
+export const skipReportSendAction = action
+  .schema(z.object({ reportId: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+    const { data: profile } = await db.from('profiles').select('business_id').eq('id', user.id).single()
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const { data: report } = await db
+      .from('reports')
+      .select('id')
+      .eq('id', parsedInput.reportId)
+      .eq('business_id', profile.business_id)
+      .single()
+    if (!report) throw new Error('[APP] 보고서를 찾을 수 없습니다')
+
+    // 발송·리뷰 요청 모두 완료 처리 (미발송 목록에서 제거)
+    const now = new Date().toISOString()
+    await db
+      .from('reports')
+      .update({ kakao_sent_at: now, review_request_sent_at: now })
+      .eq('id', parsedInput.reportId)
+
+    revalidatePath('/dashboard/alimtalk-todo')
+    revalidatePath('/dashboard/schedule')
+    return { success: true }
+  })
