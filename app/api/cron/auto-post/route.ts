@@ -37,7 +37,7 @@ function getDaysInMonth(year: number, month: number): number {
 // 포스트 1건 생성 및 저장
 async function publishOnePost(
   db: ReturnType<typeof createServiceClient>,
-  business: { id: string; name: string; address: string | null; description: string | null },
+  business: { id: string; name: string; address: string | null; description: string | null; autoImageGeneration: boolean },
   services: { name: string; base_price: number; unit: string }[],
   publishedTitles: string[],
   month: number,
@@ -81,8 +81,10 @@ async function publishOnePost(
     ? `\`\`\`json\n${JSON.stringify({ keyPoints: postContent.keyPoints ?? [], faqs: postContent.faqs ?? [] })}\n\`\`\`\n`
     : ''
 
-  // 포스트 주제에 맞는 이미지 자동 생성 (실패해도 포스팅 진행) — 게시물당 1회 N장
-  const imageUrls = await generatePostImages(postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
+  // 포스트 주제에 맞는 이미지 자동 생성 (토글 ON일 때만, 실패해도 포스팅 진행)
+  const imageUrls = business.autoImageGeneration
+    ? await generatePostImages(postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
+    : []
 
   const fullContent = metaBlock + postContent.content
   const { data: saved, error } = await db.from('biz_posts').insert({
@@ -129,9 +131,12 @@ export async function GET(request: NextRequest) {
   const daysInMonth = getDaysInMonth(year, month)
 
   const { data: businesses, error: bizError } = await db
-    .from('businesses')
-    .select('id, name, address, description, monthly_post_target')
-    .gt('monthly_post_target', 0)
+    .from('businesses' as never)
+    .select('id, name, address, description, monthly_post_target, auto_image_generation' as never)
+    .gt('monthly_post_target' as never, 0) as unknown as {
+      data: { id: string; name: string; address: string | null; description: string | null; monthly_post_target: number; auto_image_generation: boolean }[] | null
+      error: { message: string } | null
+    }
 
   if (bizError) {
     console.error('[Cron] 업체 조회 실패:', bizError)
@@ -198,7 +203,7 @@ export async function GET(request: NextRequest) {
       // 포트폴리오(시공 사례)는 자동 발행에서 제외 — 사장님이 직접 승인해 게시
       const publishedTitlesThisRun: string[] = []
       for (let i = 0; i < needed; i++) {
-        const title = await publishOnePost(db, business, services ?? [], publishedTitles, month)
+        const title = await publishOnePost(db, { ...business, autoImageGeneration: business.auto_image_generation ?? true }, services ?? [], publishedTitles, month)
         publishedTitlesThisRun.push(title)
         console.log(`[Cron] 자동 발행 완료 (${i + 1}/${needed}): ${business.name} — "${title}"`)
       }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
-import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, publishTodayAction, generatePostImagesAction, markChannelsPostedAction } from '@/lib/actions/posts'
+import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, publishTodayAction, generatePostImagesAction, markChannelsPostedAction, toggleAutoImageAction } from '@/lib/actions/posts'
 import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/portfolio'
 import { dismissReelAction } from '@/lib/actions/reports'
 import { Button } from '@/components/ui/button'
@@ -100,6 +100,7 @@ interface PostListProps {
   isTodayComplete: boolean
   pendingPortfolios?: PendingPortfolio[]
   doneReels?: DoneReel[]
+  autoImageGeneration?: boolean
 }
 
 interface ScheduleSlot {
@@ -379,7 +380,7 @@ function ReelCard({
   )
 }
 
-export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [] }: PostListProps) {
+export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], autoImageGeneration = true }: PostListProps) {
   const [posts] = useState(initialPosts)
   const [showEditor, setShowEditor] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
@@ -419,8 +420,19 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
     return !p.channel_posted_at
   })
 
-  // 사장님이 처리해야 할 작업물 총합 (릴스 + 시공 사례 + 새 글)
-  const totalTodos = doneReels.length + pendingPortfolios.length + channelTodos.length
+  // 이미지 미등록 포스트 (AI 이미지 OFF일 때만 표시)
+  const [dismissedImagePosts, setDismissedImagePosts] = useState(new Set<string>())
+  const noImagePosts = !autoImageGeneration
+    ? posts.filter((p) =>
+        p.published
+        && p.post_type !== 'portfolio'
+        && (!p.image_urls || p.image_urls.length === 0)
+        && !dismissedImagePosts.has(p.id)
+      )
+    : []
+
+  // 사장님이 처리해야 할 작업물 총합
+  const totalTodos = doneReels.length + pendingPortfolios.length + channelTodos.length + noImagePosts.length
 
   const { execute: fetchSuggestions, isPending: isLoadingSuggestions } = useAction(
     getTopicSuggestionsAction,
@@ -461,6 +473,14 @@ const { execute: deletePost, isPending: isDeleting } = useAction(deletePostActio
     onSuccess: () => { toast.success('올림 완료로 표시했어요!'); setTimeout(() => window.location.replace(window.location.pathname), 800) },
     onError: ({ error }) => { setPostingId(null); toast.error(error.serverError ?? '처리에 실패했어요') },
   })
+
+  const [imageToggle, setImageToggle] = useState(autoImageGeneration)
+  const { execute: toggleAutoImage } = useAction(toggleAutoImageAction, {
+    onSuccess: () => { toast.success(imageToggle ? 'AI 이미지 자동 생성이 켜졌어요' : 'AI 이미지 자동 생성이 꺼졌어요') },
+    onError: ({ error }) => { setImageToggle(!imageToggle); toast.error(error.serverError ?? '설정 변경에 실패했어요') },
+  })
+
+  const [generatingImagePostId, setGeneratingImagePostId] = useState<string | null>(null)
 
   const { execute: approvePortfolio, isPending: isApproving } = useAction(approvePortfolioAction, {
     onSuccess: () => { toast.success('시공 사례가 공개됐어요!'); setTimeout(() => window.location.replace(window.location.pathname), 1200) },
@@ -663,6 +683,61 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
               </div>
             )}
 
+            {/* 📷 이미지 미등록 포스트 */}
+            {noImagePosts.length > 0 && (
+              <div className="px-4 sm:px-5 py-3.5">
+                <div className="flex items-center gap-1.5 mb-2.5">
+                  <ImageIcon className="h-4 w-4 text-violet-600" />
+                  <p className="text-sm font-semibold text-violet-900">이미지 미등록 {noImagePosts.length}건</p>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">— 직접 촬영한 사진을 올리거나 AI로 생성하세요</span>
+                </div>
+                <div className="space-y-2">
+                  {noImagePosts.map((post) => (
+                    <div key={post.id} className="rounded-xl border border-violet-100 bg-violet-50/60 px-3 py-2.5 space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
+                      <div className="flex items-center gap-3 min-w-0 sm:flex-1">
+                        <div className="w-9 h-9 rounded-lg bg-violet-100 flex items-center justify-center shrink-0">
+                          <ImageIcon className="h-4 w-4 text-violet-600" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{post.title}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(post.published_at).toLocaleDateString('ko-KR')} 발행</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap sm:shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setEditingPost(post)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-violet-700 bg-white border border-violet-200 hover:bg-violet-50 transition-colors"
+                        >
+                          <Camera className="h-3.5 w-3.5" />사진 추가
+                        </button>
+                        <button
+                          type="button"
+                          disabled={generatingImagePostId === post.id}
+                          onClick={() => {
+                            setGeneratingImagePostId(post.id)
+                            generateImages({ id: post.id })
+                          }}
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-60 transition-colors"
+                        >
+                          {generatingImagePostId === post.id
+                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />생성 중...</>
+                            : <><Sparkles className="h-3.5 w-3.5" />AI로 생성</>}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { if (confirm('이미지 없이 유지할까요?')) setDismissedImagePosts((prev) => new Set([...prev, post.id])) }}
+                          className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                        >
+                          <SkipForward className="h-3 w-3" />건너뛰기
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* 📝 새로 올라온 글 — 채널에 올리기 */}
             {channelTodos.length > 0 && (
               <div className="px-4 sm:px-5 py-3.5">
@@ -750,6 +825,36 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
         <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
           <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${progressPct}%` }} />
         </div>
+      </div>
+
+      {/* AI 이미지 자동 생성 토글 */}
+      <div className="flex items-center justify-between rounded-xl border bg-white px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <ImageIcon className="h-4 w-4 text-violet-600 shrink-0" />
+          <div>
+            <p className="text-sm font-medium">AI 이미지 자동 생성</p>
+            <p className="text-xs text-muted-foreground">
+              {imageToggle ? '포스트 발행 시 AI 이미지 3장이 함께 생성돼요' : '직접 촬영한 사진을 올릴 수 있어요'}
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const next = !imageToggle
+            setImageToggle(next)
+            toggleAutoImage({ enabled: next })
+          }}
+          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+            imageToggle ? 'bg-violet-600' : 'bg-gray-200'
+          }`}
+        >
+          <span
+            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+              imageToggle ? 'translate-x-5' : 'translate-x-0'
+            }`}
+          />
+        </button>
       </div>
 
       {/* ── 월간 발행 일정표 ── */}

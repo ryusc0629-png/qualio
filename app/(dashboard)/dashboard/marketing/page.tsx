@@ -24,9 +24,9 @@ export default async function MarketingPage() {
   const [businessResult, postsResult, subResult, pendingPortfolioResult, doneReelsResult] = await Promise.all([
     db
       .from('businesses')
-      .select('slug, name, monthly_post_target')
+      .select('slug, name, monthly_post_target, auto_image_generation')
       .eq('id', profile.business_id)
-      .maybeSingle(),
+      .maybeSingle() as unknown as { data: { slug: string | null; name: string | null; monthly_post_target: number; auto_image_generation: boolean } | null },
     db
       .from('biz_posts' as never)
       .select('id, slug, title, content, summary, published, ai_generated, published_at, image_url, image_urls, naver_title, naver_content, naver_tags, daangn_content, instagram_content, instagram_hashtags, post_type, before_image_urls, after_image_urls, channel_posted_at' as never)
@@ -116,6 +116,7 @@ export default async function MarketingPage() {
         isTodayComplete={isTodayComplete}
         pendingPortfolios={pendingPortfolios}
         doneReels={doneReels}
+        autoImageGeneration={business?.auto_image_generation ?? true}
       />
 
       <div className="border-t pt-6">

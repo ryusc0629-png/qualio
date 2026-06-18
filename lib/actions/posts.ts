@@ -257,6 +257,23 @@ export const setMonthlyTargetAction = action
     return { success: true, limit }
   })
 
+// AI 이미지 자동 생성 토글
+export const toggleAutoImageAction = action
+  .schema(z.object({ enabled: z.boolean() }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { error } = await db
+      .from('businesses' as never)
+      .update({ auto_image_generation: parsedInput.enabled } as never)
+      .eq('id' as never, businessId)
+
+    if (error) throw new Error('[APP] 설정 저장에 실패했어요')
+
+    revalidatePath('/dashboard/marketing')
+    return { success: true }
+  })
+
 // 오늘 자동 발행 수동 트리거 — "지금 발행" 버튼용
 // Cron과 동일한 로직, 세션 인증으로 현재 업체만 실행
 export const publishTodayAction = action
