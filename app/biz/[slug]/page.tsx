@@ -85,7 +85,7 @@ export default async function BizLandingPage({ params }: Props) {
 
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, youtube_url, logo_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle' as never)
+    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, youtube_url, logo_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials' as never)
     .eq('slug', slug)
     .maybeSingle() as { data: {
       id: string; name: string; phone: string | null; address: string | null
