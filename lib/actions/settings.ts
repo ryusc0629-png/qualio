@@ -41,6 +41,7 @@ const updateBusinessSchema = z.object({
   logo_url:       z.string().max(500).optional(),
   hero_title:     z.string().max(100).optional(),
   hero_subtitle:  z.string().max(300).optional(),
+  testimonials:   z.string().optional(), // JSON string: [{quote, author}]
 })
 
 export const updateBusinessAction = action
@@ -80,6 +81,9 @@ export const updateBusinessAction = action
         logo_url:                  parsedInput.logo_url              || null,
         hero_title:                (parsedInput.hero_title            || null) as never,
         hero_subtitle:             (parsedInput.hero_subtitle         || null) as never,
+        testimonials:              (parsedInput.testimonials
+          ? JSON.parse(parsedInput.testimonials)
+          : []) as never,
       })
       .eq('id', profile.business_id)
 

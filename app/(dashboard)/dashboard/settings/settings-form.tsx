@@ -6,9 +6,15 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Plus, Trash2, Quote } from 'lucide-react'
 import { updateBusinessAction } from '@/lib/actions/settings'
 import { BrandDesignSection } from './brand-design-section'
 import { normalizeHex, type HeroStyle } from '@/lib/brand'
+
+interface Testimonial {
+  quote: string
+  author: string
+}
 
 type RewardType = 'none' | 'discount_amount' | 'discount_rate' | 'gifticon'
 
@@ -49,6 +55,7 @@ interface Business {
   slug: string | null
   hero_title: string | null
   hero_subtitle: string | null
+  testimonials: Testimonial[] | null
 }
 
 interface Props {
@@ -80,6 +87,9 @@ export function SettingsForm({ business }: Props) {
   const [logoUrl, setLogoUrl] = useState(business.logo_url ?? '')
   const [heroTitle, setHeroTitle] = useState(business.hero_title ?? '')
   const [heroSubtitle, setHeroSubtitle] = useState(business.hero_subtitle ?? '')
+  const [testimonials, setTestimonials] = useState<Testimonial[]>(
+    business.testimonials ?? []
+  )
 
   const { execute, isPending } = useAction(updateBusinessAction, {
     onSuccess: () => toast.success('설정이 저장됐어요!'),
@@ -115,6 +125,9 @@ export function SettingsForm({ business }: Props) {
       logo_url:                  logoUrl.trim(),
       hero_title:                heroTitle.trim(),
       hero_subtitle:             heroSubtitle.trim(),
+      testimonials:              JSON.stringify(
+        testimonials.filter((t) => t.quote.trim())
+      ),
     })
   }
 
@@ -411,6 +424,66 @@ export function SettingsForm({ business }: Props) {
               <p className="text-xs text-primary">→ 고객에게 표시: 후기 작성 시 {rewardValue} 기프티콘을 드려요</p>
             )}
           </div>
+        )}
+      </div>
+
+      {/* 고객 추천사 */}
+      <div className="rounded-lg border bg-card p-5 space-y-4">
+        <div>
+          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">고객 추천사</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            실제 고객 후기를 직접 입력하면 홍보 페이지에 카드로 표시됩니다. 최대 3개까지 등록할 수 있어요.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          {testimonials.map((t, idx) => (
+            <div key={idx} className="rounded-xl border bg-muted/30 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+                  <Quote className="h-3.5 w-3.5" />
+                  추천사 {idx + 1}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTestimonials((prev) => prev.filter((_, i) => i !== idx))}
+                  className="text-muted-foreground hover:text-destructive transition-colors"
+                  aria-label="삭제"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+              <textarea
+                value={t.quote}
+                onChange={(e) => setTestimonials((prev) =>
+                  prev.map((item, i) => i === idx ? { ...item, quote: e.target.value } : item)
+                )}
+                placeholder="예: 입주청소를 맡겼는데 정말 꼼꼼하게 해주셔서 만족했어요. 다음에도 또 부탁드릴게요!"
+                maxLength={200}
+                rows={3}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              />
+              <Input
+                value={t.author}
+                onChange={(e) => setTestimonials((prev) =>
+                  prev.map((item, i) => i === idx ? { ...item, author: e.target.value } : item)
+                )}
+                placeholder="예: 강남구 이사청소 고객님"
+                maxLength={30}
+              />
+            </div>
+          ))}
+        </div>
+
+        {testimonials.length < 3 && (
+          <button
+            type="button"
+            onClick={() => setTestimonials((prev) => [...prev, { quote: '', author: '' }])}
+            className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/30 py-3 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            추천사 추가
+          </button>
         )}
       </div>
 

@@ -94,6 +94,7 @@ export default async function BizLandingPage({ params }: Props) {
       youtube_url: string | null
       logo_url: string | null; brand_color: string | null; brand_color_secondary: string | null
       hero_style: string | null; hero_title: string | null; hero_subtitle: string | null
+      testimonials: { quote: string; author: string }[] | null
     } | null }
 
   if (!business) notFound()
@@ -121,7 +122,7 @@ export default async function BizLandingPage({ params }: Props) {
       : 'border-white/50 text-white hover:bg-white/10 hover:text-white',
   }
 
-  const [{ data: services }, { data: recentPosts }] = await Promise.all([
+  const [{ data: services }, { data: recentPosts }, { count: reviewCount }] = await Promise.all([
     db
       .from('service_items')
       .select('id, name, base_price, unit, category')
@@ -138,6 +139,11 @@ export default async function BizLandingPage({ params }: Props) {
       .eq('published', true)
       .order('published_at', { ascending: false })
       .limit(3),
+    db
+      .from('review_claims' as never)
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id' as never, business.id)
+      .not('claimed_at' as never, 'is', null) as unknown as Promise<{ count: number | null }>,
   ])
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
@@ -317,12 +323,20 @@ export default async function BizLandingPage({ params }: Props) {
 
               {/* 왼쪽: 텍스트 */}
               <div className="flex-1 max-w-xl space-y-6">
-                {minPrice && (
-                  <div className="inline-flex items-center gap-2 bg-primary/20 text-primary border border-primary/30 rounded-full px-3 py-1 text-xs font-semibold">
-                    <Sparkles className="h-3 w-3" />
-                    {minPrice.toLocaleString()}원부터 시작
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-2">
+                  {minPrice && (
+                    <div className="inline-flex items-center gap-2 bg-primary/20 text-primary border border-primary/30 rounded-full px-3 py-1 text-xs font-semibold">
+                      <Sparkles className="h-3 w-3" />
+                      {minPrice.toLocaleString()}원부터 시작
+                    </div>
+                  )}
+                  {(reviewCount ?? 0) > 0 && (
+                    <div className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1 text-xs font-semibold">
+                      <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                      실제 후기 {reviewCount}건
+                    </div>
+                  )}
+                </div>
 
                 <h1 className={`text-4xl sm:text-5xl font-extrabold leading-tight tracking-tight ${hero.title}`}>
                   {business.hero_title ?? business.seo_title ?? business.name}
@@ -664,6 +678,33 @@ export default async function BizLandingPage({ params }: Props) {
             </div>
           </div>
         </section>
+
+        {/* ── 고객 추천사 ── */}
+        {business.testimonials && business.testimonials.length > 0 && (
+          <section className="py-16 bg-white">
+            <div className="max-w-5xl mx-auto px-4">
+              <div className="text-center mb-10">
+                <p className="text-primary font-semibold text-sm mb-2 tracking-wide uppercase">고객 후기</p>
+                <h2 className="text-2xl sm:text-3xl font-extrabold">실제 고객의 이야기</h2>
+              </div>
+              <div className="grid sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
+                {business.testimonials.map((t, idx) => (
+                  <div key={idx} className="rounded-2xl border-2 bg-white p-6 space-y-4 hover:border-primary/30 hover:shadow-md transition-all">
+                    <div className="flex gap-0.5">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
+                      ))}
+                    </div>
+                    <p className="text-sm leading-relaxed text-slate-700">
+                      &ldquo;{t.quote}&rdquo;
+                    </p>
+                    <p className="text-xs text-muted-foreground font-medium">{t.author}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* ── FAQ ── */}
         {faqs.length > 0 && (
