@@ -1042,7 +1042,17 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                             })
                           }
                         }}
-                        onSaved={() => { setEditingPost(null); window.location.reload() }}
+                        onSaved={() => {
+                          const postId = editingPost?.id
+                          setEditingPost(null)
+                          // 해시로 위치 저장 후 새로고침 → 해당 게시물로 스크롤
+                          if (postId) {
+                            window.location.hash = `post-${postId}`
+                            window.location.reload()
+                          } else {
+                            window.location.reload()
+                          }
+                        }}
                       />
                     </div>
                   )}
