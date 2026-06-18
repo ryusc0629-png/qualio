@@ -433,6 +433,7 @@ export function BrandDesignSection({
                   <li>• 자연광 또는 밝은 실내조명</li>
                   <li>• 넓은 공간 전체가 보이는 구도</li>
                   <li>• 전문 장비나 작업 모습</li>
+                  <li>• 직원이 실제로 작업하는 현장 사진 <span className="text-emerald-700 font-medium">(신뢰도 ↑)</span></li>
                 </ul>
               </div>
               <div className="space-y-1">
