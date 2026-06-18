@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label'
 import { FrequencyPicker } from '@/components/dashboard/frequency-picker'
 import { createLeadAction } from '@/lib/actions/crm'
 import { createActiveCustomerAction } from '@/lib/actions/customers'
-import { Plus, X, Search, User, Building2 } from 'lucide-react'
+import { Plus, X, Search } from 'lucide-react'
 
 // 카카오(다음) 주소 검색 — 우편번호 스크립트 동적 로드
 declare global {
@@ -205,16 +205,16 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                   <input type="radio" value="individual" {...leadForm.register('customer_type')} className="accent-primary" />
-                  <div className="flex items-center gap-1.5">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">개인</span>
+                  <div>
+                    <p className="text-sm font-medium">개인 고객</p>
+                    <p className="text-xs text-muted-foreground">개인·일회성</p>
                   </div>
                 </label>
                 <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                   <input type="radio" value="company" {...leadForm.register('customer_type')} className="accent-primary" />
-                  <div className="flex items-center gap-1.5">
-                    <Building2 className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">법인</span>
+                  <div>
+                    <p className="text-sm font-medium">법인 고객</p>
+                    <p className="text-xs text-muted-foreground">법인·정기계약</p>
                   </div>
                 </label>
               </div>
