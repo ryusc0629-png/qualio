@@ -140,6 +140,7 @@ const addSchema = z.object({
   name: z.string().min(1, '항목 이름을 입력해주세요'),
   quantity: z.coerce.number().int().min(1, '수량은 1 이상이어야 합니다'),
   unitPrice: z.coerce.number().int().min(0, '0 이상의 금액을 입력해주세요'),
+  amount: z.coerce.number().int().min(0).optional(), // 합산 금액 직접 수정 시 우선
 })
 
 export const addBookingItemAction = action
@@ -148,7 +149,7 @@ export const addBookingItemAction = action
     const { db, businessId } = await getAuth()
     await assertBookingOwned(db, businessId, parsedInput.bookingId)
 
-    const amount = parsedInput.quantity * parsedInput.unitPrice
+    const amount = parsedInput.amount ?? parsedInput.quantity * parsedInput.unitPrice
 
     const { error } = await db.from('booking_items' as never).insert({
       business_id: businessId,
@@ -178,6 +179,7 @@ const updateSchema = z.object({
   name: z.string().min(1, '항목 이름을 입력해주세요'),
   quantity: z.coerce.number().int().min(1, '수량은 1 이상이어야 합니다'),
   unitPrice: z.coerce.number().int().min(0, '0 이상의 금액을 입력해주세요'),
+  amount: z.coerce.number().int().min(0).optional(), // 합산 금액 직접 수정 시 우선
 })
 
 export const updateBookingItemAction = action
@@ -193,7 +195,7 @@ export const updateBookingItemAction = action
       .maybeSingle() as { data: { name: string; amount: number } | null }
     if (!prev) throw new Error('[APP] 항목을 찾을 수 없습니다')
 
-    const amount = parsedInput.quantity * parsedInput.unitPrice
+    const amount = parsedInput.amount ?? parsedInput.quantity * parsedInput.unitPrice
 
     const { error } = await db
       .from('booking_items' as never)

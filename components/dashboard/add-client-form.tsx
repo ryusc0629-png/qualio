@@ -120,24 +120,38 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
   const [jobDate, setJobDate] = useState('')
   const [jobTime, setJobTime] = useState('09:00')
   // 첫 작업 견적 — 기본은 항목별(서비스 선택), 체크 시 수기 단일 금액
+  // amount(합산 금액)도 직접 수정 가능 — 수량×단가와 연동
   const [useJobItems, setUseJobItems] = useState(true)
-  const [jobItems, setJobItems] = useState<{ name: string; qty: string; unitPrice: string }[]>([
-    { name: '', qty: '1', unitPrice: '' },
+  const [jobItems, setJobItems] = useState<{ name: string; qty: string; unitPrice: string; amount: string }[]>([
+    { name: '', qty: '1', unitPrice: '', amount: '' },
   ])
-  const jobItemsTotal = jobItems.reduce(
-    (s, it) => s + (parseInt(it.qty, 10) || 0) * (parseInt(it.unitPrice, 10) || 0),
-    0,
-  )
-  const updateJobItem = (idx: number, field: 'name' | 'qty' | 'unitPrice', value: string) =>
-    setJobItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)))
-  const addJobItem = () => setJobItems((prev) => [...prev, { name: '', qty: '1', unitPrice: '' }])
+  const jobItemsTotal = jobItems.reduce((s, it) => s + (parseInt(it.amount, 10) || 0), 0)
+  const emptyJobItem = { name: '', qty: '1', unitPrice: '', amount: '' }
+  const addJobItem = () => setJobItems((prev) => [...prev, { ...emptyJobItem }])
   const removeJobItem = (idx: number) => setJobItems((prev) => prev.filter((_, i) => i !== idx))
-  // 서비스 선택 시 등록된 기본 가격을 자동으로 채움 (이후 수정 가능)
+  // 수량/단가 수정 → 합산 금액 자동 계산
+  const setJobQty = (idx: number, v: string) =>
+    setJobItems((prev) => prev.map((it, i) => i === idx
+      ? { ...it, qty: v, amount: String((parseInt(v, 10) || 0) * (parseInt(it.unitPrice, 10) || 0)) } : it))
+  const setJobUnit = (idx: number, v: string) =>
+    setJobItems((prev) => prev.map((it, i) => i === idx
+      ? { ...it, unitPrice: v, amount: String((parseInt(it.qty, 10) || 0) * (parseInt(v, 10) || 0)) } : it))
+  // 합산 금액 직접 수정 → 단가는 합산÷수량으로 역산
+  const setJobAmount = (idx: number, v: string) =>
+    setJobItems((prev) => prev.map((it, i) => {
+      if (i !== idx) return it
+      const qty = parseInt(it.qty, 10) || 1
+      const amount = parseInt(v, 10) || 0
+      return { ...it, amount: v, unitPrice: qty > 0 ? String(Math.round(amount / qty)) : v }
+    }))
+  // 서비스 선택 시 등록된 기본 가격을 단가에 자동 채움 (이후 수정 가능)
   const selectJobItemService = (idx: number, name: string) => {
     const price = priceForService(name)
-    setJobItems((prev) => prev.map((it, i) =>
-      i === idx ? { ...it, name, unitPrice: price > 0 ? String(price) : it.unitPrice } : it,
-    ))
+    setJobItems((prev) => prev.map((it, i) => {
+      if (i !== idx) return it
+      const unitPrice = price > 0 ? String(price) : it.unitPrice
+      return { ...it, name, unitPrice, amount: String((parseInt(it.qty, 10) || 0) * (parseInt(unitPrice, 10) || 0)) }
+    }))
   }
 
   const leadForm = useForm<LeadInput>({
@@ -165,7 +179,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
       setJobDate('')
       setJobTime('09:00')
       setUseJobItems(true)
-      setJobItems([{ name: '', qty: '1', unitPrice: '' }])
+      setJobItems([{ ...emptyJobItem }])
       setOpen(false)
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
@@ -188,7 +202,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
     setJobDate('')
     setJobTime('09:00')
     setUseJobItems(true)
-    setJobItems([{ name: '', qty: '1', unitPrice: '' }])
+    setJobItems([{ ...emptyJobItem }])
     setClientType('lead')
   }
 
@@ -349,6 +363,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
                         name: it.name,
                         quantity: parseInt(it.qty, 10) || 1,
                         unitPrice: parseInt(it.unitPrice, 10) || 0,
+                        amount: parseInt(it.amount, 10) || 0,
                       }))
                   : undefined,
               })
@@ -508,24 +523,29 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
                                 <input
                                   inputMode="numeric"
                                   value={it.qty}
-                                  onChange={(e) => updateJobItem(idx, 'qty', digitsOnly(e.target.value))}
+                                  onChange={(e) => setJobQty(idx, digitsOnly(e.target.value))}
                                   className="w-12 h-9 rounded-lg border border-border px-2 text-sm text-center shrink-0"
                                 />
-                                <span className="text-xs text-muted-foreground shrink-0">개 ×</span>
+                                <span className="text-xs text-muted-foreground shrink-0">개 × 대당</span>
                                 <input
                                   inputMode="numeric"
                                   value={formatThousands(it.unitPrice)}
-                                  onChange={(e) => updateJobItem(idx, 'unitPrice', digitsOnly(e.target.value))}
+                                  onChange={(e) => setJobUnit(idx, digitsOnly(e.target.value))}
                                   placeholder="단가"
                                   className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
                                 />
                                 <span className="text-xs text-muted-foreground shrink-0">원</span>
                               </div>
-                              <div className="flex items-center justify-between border-t border-dashed border-border pt-1.5">
-                                <span className="text-xs text-muted-foreground">금액</span>
-                                <span className="text-sm font-semibold tabular-nums">
-                                  {formatThousands(String((parseInt(it.qty, 10) || 0) * (parseInt(it.unitPrice, 10) || 0)))}원
-                                </span>
+                              <div className="flex items-center gap-2 border-t border-dashed border-border pt-1.5">
+                                <span className="text-xs text-muted-foreground shrink-0">금액</span>
+                                <input
+                                  inputMode="numeric"
+                                  value={formatThousands(it.amount)}
+                                  onChange={(e) => setJobAmount(idx, digitsOnly(e.target.value))}
+                                  placeholder="합산 금액"
+                                  className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2.5 text-sm text-right font-semibold"
+                                />
+                                <span className="text-xs text-muted-foreground shrink-0">원</span>
                               </div>
                             </div>
                           ))}

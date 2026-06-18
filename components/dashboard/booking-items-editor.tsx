@@ -84,21 +84,31 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
 
   const total = items.reduce((s, it) => s + it.amount, 0)
 
-  function handleRowChange(id: string, field: 'name' | 'quantity' | 'unit_price', value: string) {
+  function handleRowChange(id: string, field: 'name' | 'quantity' | 'unit_price' | 'amount', value: string) {
     setItems((prev) => prev.map((it) => {
       if (it.id !== id) return it
       const next = { ...it }
       if (field === 'name') next.name = value
-      if (field === 'quantity') next.quantity = Math.max(1, parseInt(value, 10) || 1)
-      if (field === 'unit_price') next.unit_price = Math.max(0, parseInt(value, 10) || 0)
-      next.amount = next.quantity * next.unit_price
+      if (field === 'quantity') {
+        next.quantity = Math.max(1, parseInt(value, 10) || 1)
+        next.amount = next.quantity * next.unit_price
+      }
+      if (field === 'unit_price') {
+        next.unit_price = Math.max(0, parseInt(value, 10) || 0)
+        next.amount = next.quantity * next.unit_price
+      }
+      // 합산 금액 직접 수정 → 단가는 합산÷수량으로 역산
+      if (field === 'amount') {
+        next.amount = Math.max(0, parseInt(value, 10) || 0)
+        next.unit_price = next.quantity > 0 ? Math.round(next.amount / next.quantity) : next.amount
+      }
       return next
     }))
   }
 
   function saveRow(it: Item) {
     if (!it.name.trim()) { toast.error('항목 이름을 입력해주세요'); return }
-    updateItem({ itemId: it.id, bookingId, name: it.name, quantity: it.quantity, unitPrice: it.unit_price })
+    updateItem({ itemId: it.id, bookingId, name: it.name, quantity: it.quantity, unitPrice: it.unit_price, amount: it.amount })
   }
 
   function handleAdd() {
@@ -159,9 +169,15 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
                 />
                 <span className="text-xs text-muted-foreground shrink-0">원</span>
               </div>
-              <div className="flex items-center justify-between border-t border-dashed border-border pt-1.5">
-                <span className="text-xs text-muted-foreground">금액</span>
-                <span className="text-sm font-semibold tabular-nums">{won(it.amount)}</span>
+              <div className="flex items-center gap-2 border-t border-dashed border-border pt-1.5">
+                <span className="text-xs text-muted-foreground shrink-0">금액</span>
+                <input
+                  inputMode="numeric"
+                  value={formatThousands(String(it.amount))}
+                  onChange={(e) => handleRowChange(it.id, 'amount', digitsOnly(e.target.value))}
+                  className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2.5 text-sm text-right font-semibold"
+                />
+                <span className="text-xs text-muted-foreground shrink-0">원</span>
               </div>
               <button
                 type="button"

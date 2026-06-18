@@ -110,6 +110,7 @@ const createActiveCustomerSchema = z.object({
     name: z.string().min(1),
     quantity: z.coerce.number().int().min(1),
     unitPrice: z.coerce.number().int().min(0),
+    amount: z.coerce.number().int().min(0).optional(), // 합산 금액 직접 수정 시 우선
   })).optional(),
   // 법인 — 정기계약 (선택)
   hasContract: z.string().optional(), // 'true' | ''
@@ -149,7 +150,7 @@ export const createActiveCustomerAction = action
       const jobItems = (parsedInput.job_items ?? []).filter((it) => it.name.trim())
       let price: number
       if (jobItems.length > 0) {
-        price = jobItems.reduce((s, it) => s + it.quantity * it.unitPrice, 0)
+        price = jobItems.reduce((s, it) => s + (it.amount ?? it.quantity * it.unitPrice), 0)
       } else {
         if (!parsedInput.job_price) throw new Error('[APP] 작업 금액을 입력해주세요')
         price = parseInt(parsedInput.job_price, 10)
@@ -182,7 +183,7 @@ export const createActiveCustomerAction = action
             name: it.name,
             quantity: it.quantity,
             unit_price: it.unitPrice,
-            amount: it.quantity * it.unitPrice,
+            amount: it.amount ?? it.quantity * it.unitPrice,
             sort_order: idx,
           })) as never,
         )
