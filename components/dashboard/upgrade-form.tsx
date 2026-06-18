@@ -16,19 +16,22 @@ interface UpgradeFormProps {
   businessName: string
   nextPlan?: string | null
   currentPeriodEnd?: string | null
+  needsPayment?: boolean
 }
 
 // 플랜 순서 (업그레이드/다운그레이드 판별용)
 const PLAN_ORDER: Record<string, number> = { beta: 0, starter: 1, pro: 2, scale: 3 }
 
 // 결제 위젯 클라이언트 컴포넌트
-export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, currentPeriodEnd }: UpgradeFormProps) {
+export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, currentPeriodEnd, needsPayment = false }: UpgradeFormProps) {
   const [selectedPlanId, setSelectedPlanId] = useState<PlanId | null>(
     nextPlan ? (nextPlan as PlanId) : null
   )
   const [isPaying, setIsPaying] = useState(false)
 
   const isBeta = currentPlan === 'beta'
+  // 결제가 필요한 상태: 베타이거나 만료된 유료 사용자
+  const showPaymentFlow = needsPayment
   const currentPlanLabel = PLANS[currentPlan as PlanId]?.label ?? '베타'
 
   // 만료일 포맷
@@ -117,7 +120,7 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
     schedulePlanChange({ nextPlan: selectedPlanId })
   }
 
-  const handleAction = isBeta ? handlePayment : handleScheduleChange
+  const handleAction = showPaymentFlow ? handlePayment : handleScheduleChange
   const isProcessing = isPaying || isScheduling
 
   return (
@@ -258,10 +261,10 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
           {isProcessing ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {isBeta ? '결제 페이지 이동 중...' : '변경 중...'}
+              {showPaymentFlow ? '결제 페이지 이동 중...' : '변경 중...'}
             </>
           ) : selectedPlanId ? (
-            isBeta
+            showPaymentFlow
               ? `${PAID_PLANS.find((p) => p.id === selectedPlanId)?.label} 플랜 결제하기`
               : `${PAID_PLANS.find((p) => p.id === selectedPlanId)?.label} 플랜으로 변경 예약하기`
           ) : (
@@ -269,7 +272,7 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
           )}
         </Button>
         <p className="text-xs text-muted-foreground text-center">
-          {isBeta ? (
+          {showPaymentFlow ? (
             <>
               결제 1건당 <strong>1개월(30일)</strong> 이용권이 제공됩니다. 자동 갱신 없음.<br />
               토스페이먼츠를 통해 안전하게 처리됩니다.
