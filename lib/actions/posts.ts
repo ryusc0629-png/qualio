@@ -134,6 +134,7 @@ export const savePostAction = action
     content: z.string().min(10, '내용은 10자 이상이어야 합니다'),
     summary: z.string().max(200).optional(),
     imageUrl: z.string().url().optional().or(z.literal('')),
+    imageUrls: z.array(z.string().url()).optional(), // 이미지 여러 장
     published: z.boolean().default(true),
   }))
   .action(async ({ parsedInput }) => {
@@ -149,41 +150,45 @@ export const savePostAction = action
     const suffix = Date.now().toString(36)
 
     if (parsedInput.id) {
-      // 수정 — image_url은 건드리지 않음 (기존 대표 이미지 보존)
-      const updateData: {
-        title: string; content: string; summary: string | null; published: boolean
-        image_url?: string
-      } = {
+      // 수정 — as never 캐스팅으로 Supabase 타입 제약 우회
+      const updateData = {
         title: parsedInput.title,
         content: parsedInput.content,
         summary: parsedInput.summary ?? null,
         published: parsedInput.published,
+      } as Record<string, unknown>
+      // 이미지 배열이 명시적으로 전달된 경우 갱신
+      if (parsedInput.imageUrls) {
+        updateData.image_urls = parsedInput.imageUrls
+        updateData.image_url = parsedInput.imageUrls[0] ?? null
+      } else if (parsedInput.imageUrl) {
+        updateData.image_url = parsedInput.imageUrl
       }
-      // 이미지가 명시적으로 전달된 경우에만 갱신
-      if (parsedInput.imageUrl) updateData.image_url = parsedInput.imageUrl
 
       const { error } = await db
-        .from('biz_posts')
-        .update(updateData)
-        .eq('id', parsedInput.id)
-        .eq('business_id', businessId)
+        .from('biz_posts' as never)
+        .update(updateData as never)
+        .eq('id' as never, parsedInput.id)
+        .eq('business_id' as never, businessId)
 
       if (error) throw new Error('[APP] 포스트 수정에 실패했습니다')
     } else {
       // 신규
       const slug = `${baseSlug}-${suffix}`
+      const imgs = parsedInput.imageUrls ?? []
       const { error } = await db
-        .from('biz_posts')
+        .from('biz_posts' as never)
         .insert({
           business_id: businessId,
           slug,
           title: parsedInput.title,
           content: parsedInput.content,
           summary: parsedInput.summary ?? null,
-          image_url: parsedInput.imageUrl || null,
+          image_url: imgs[0] ?? parsedInput.imageUrl ?? null,
+          image_urls: imgs.length > 0 ? imgs : undefined,
           published: parsedInput.published,
           ai_generated: false,
-        })
+        } as never)
 
       if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
     }
