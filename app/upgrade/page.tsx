@@ -23,12 +23,11 @@ export default async function UpgradePage() {
 
   const businessName = (profile.businesses as { name: string } | null)?.name ?? '내 업체'
 
-  // 이미 유료 플랜이면 대시보드로
   const { data: subscription } = await db
     .from('subscriptions')
-    .select('plan')
+    .select('plan, current_period_end, next_plan' as never)
     .eq('business_id', profile.business_id)
-    .maybeSingle()
+    .maybeSingle() as { data: { plan: string; current_period_end: string | null; next_plan: string | null } | null }
 
   const currentPlan = subscription?.plan ?? 'beta'
   const isBeta = currentPlan === 'beta'
@@ -67,6 +66,8 @@ export default async function UpgradePage() {
           businessId={profile.business_id}
           currentPlan={currentPlan}
           businessName={businessName}
+          nextPlan={subscription?.next_plan ?? null}
+          currentPeriodEnd={subscription?.current_period_end ?? null}
         />
       </main>
     </div>

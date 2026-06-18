@@ -2,15 +2,17 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { PLANS, formatPrice } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
+import { CalendarClock } from 'lucide-react'
 
 interface CurrentPlanCardProps {
   planId: PlanId
   currentPeriodEnd: string | null
   status: string
+  nextPlan?: string | null
 }
 
 // 현재 구독 플랜 표시 카드 (설정 페이지용)
-export function CurrentPlanCard({ planId, currentPeriodEnd, status }: CurrentPlanCardProps) {
+export function CurrentPlanCard({ planId, currentPeriodEnd, status, nextPlan }: CurrentPlanCardProps) {
   const plan = PLANS[planId] ?? PLANS.beta
 
   // 만료일 포맷
@@ -19,11 +21,16 @@ export function CurrentPlanCard({ planId, currentPeriodEnd, status }: CurrentPla
         year: 'numeric',
         month: 'long',
         day: 'numeric',
+        timeZone: 'Asia/Seoul',
       })
     : null
 
   const isBeta = planId === 'beta'
   const isPaid = !isBeta
+
+  // 예약된 다음 플랜
+  const hasScheduledChange = nextPlan && nextPlan !== planId
+  const nextPlanLabel = hasScheduledChange ? PLANS[nextPlan as PlanId]?.label : null
 
   return (
     <div className="rounded-lg border bg-card p-5 space-y-4">
@@ -64,6 +71,16 @@ export function CurrentPlanCard({ planId, currentPeriodEnd, status }: CurrentPla
           </Button>
         </Link>
       </div>
+
+      {/* 예약된 플랜 변경 안내 */}
+      {hasScheduledChange && nextPlanLabel && (
+        <div className="flex items-center gap-2 bg-blue-50 text-blue-700 rounded-md px-3 py-2 text-sm">
+          <CalendarClock className="h-4 w-4 shrink-0" />
+          <span>
+            다음 결제부터 <strong>{nextPlanLabel} 플랜</strong>({formatPrice(PLANS[nextPlan as PlanId]?.price ?? 0)})으로 변경됩니다
+          </span>
+        </div>
+      )}
     </div>
   )
 }

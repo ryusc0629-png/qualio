@@ -29,14 +29,14 @@ export default async function SettingsPage() {
   const [businessResult, subscriptionResult] = await Promise.all([
     db
       .from('businesses')
-      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials' as never)
+      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials' as never)
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
       .from('subscriptions')
-      .select('plan, status, current_period_end')
+      .select('plan, status, current_period_end, next_plan' as never)
       .eq('business_id', profile.business_id)
-      .maybeSingle(),
+      .maybeSingle() as unknown as Promise<{ data: { plan: string; status: string; current_period_end: string | null; next_plan: string | null } | null; error: unknown }>,
   ])
 
   if (!businessResult.data) redirect('/onboarding')
@@ -48,7 +48,7 @@ export default async function SettingsPage() {
     review_reward_type: string; review_reward_description: string | null
     slug: string | null; seo_title: string | null; seo_description: string | null
     seo_keywords: string | null; seo_faqs: unknown; seo_generated_at: string | null
-    logo_url: string | null; brand_color: string | null
+    logo_url: string | null; hero_image_url: string | null; brand_color: string | null
     brand_color_secondary: string | null; hero_style: string | null
     hero_title: string | null; hero_subtitle: string | null
     testimonials: { quote: string; author: string }[] | null
@@ -57,6 +57,7 @@ export default async function SettingsPage() {
     plan: 'beta',
     status: 'active',
     current_period_end: null,
+    next_plan: null,
   }
 
   const baseUrl  = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
@@ -86,6 +87,7 @@ export default async function SettingsPage() {
         planId={(subscription.plan as PlanId) ?? 'beta'}
         status={subscription.status ?? 'active'}
         currentPeriodEnd={subscription.current_period_end ?? null}
+        nextPlan={subscription.next_plan ?? null}
       />
 
       {/* 구독 취소 — 유료 플랜 + 활성 상태일 때만 노출 */}
