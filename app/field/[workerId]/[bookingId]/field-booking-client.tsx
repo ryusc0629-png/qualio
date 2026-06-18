@@ -56,15 +56,29 @@ interface Props {
   existingBeforeUrls: string[]
   existingCustomerRequest: string
   existingNextVisitNote: string
+  memoUpdatedById: string | null
+  memoUpdatedByName: string | null
+  memoUpdatedAt: string | null
 }
 
-export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, existingBeforeUrls, existingCustomerRequest, existingNextVisitNote }: Props) {
+function relativeTime(dateStr: string): string {
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
+  if (diff < 60) return '방금 전'
+  if (diff < 3600) return `${Math.floor(diff / 60)}분 전`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`
+  return `${Math.floor(diff / 86400)}일 전`
+}
+
+export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, existingBeforeUrls, existingCustomerRequest, existingNextVisitNote, memoUpdatedById, memoUpdatedByName, memoUpdatedAt }: Props) {
   const [currentStatus, setCurrentStatus] = useState(booking.status)
   const [siteMemo, setSiteMemo] = useState(booking.memo ?? '')
   const [customerRequest, setCustomerRequest] = useState(existingCustomerRequest)
   const [nextVisitNote, setNextVisitNote] = useState(existingNextVisitNote)
   const [memoOpen, setMemoOpen] = useState(false)
   const [memoSaved, setMemoSaved] = useState(false)
+  const [lastSavedById, setLastSavedById] = useState(memoUpdatedById)
+  const [lastSavedByName, setLastSavedByName] = useState(memoUpdatedByName)
+  const [lastSavedAt, setLastSavedAt] = useState(memoUpdatedAt)
   const [paymentRequested, setPaymentRequested] = useState(false)
   const [beforePhotos, setBeforePhotos] = useState<PhotoSlot[]>(
     existingBeforeUrls.map((url) => ({ url, uploading: false }))
@@ -84,6 +98,9 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
   const { execute: saveMemo, isPending: isSavingMemo } = useAction(fieldSaveMemoAction, {
     onSuccess: () => {
       setMemoSaved(true)
+      setLastSavedById(workerId)
+      setLastSavedByName(workerName)
+      setLastSavedAt(new Date().toISOString())
       toast.success('메모가 저장됐어요!')
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
@@ -255,10 +272,15 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
               onClick={() => setMemoOpen(!memoOpen)}
               className="w-full px-4 py-3 flex items-center justify-between text-sm font-medium"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <FileText className="h-4 w-4 text-muted-foreground" />
                 <span>현장 메모 작성</span>
                 {memoSaved && <span className="text-xs text-emerald-600">(저장됨)</span>}
+                {lastSavedByName && lastSavedAt && !memoSaved && (
+                  <span className="text-xs text-muted-foreground">
+                    마지막 저장: {lastSavedByName} · {relativeTime(lastSavedAt)}
+                  </span>
+                )}
               </div>
               {memoOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
@@ -364,19 +386,30 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                   />
                 </div>
 
+                {lastSavedByName && lastSavedAt && lastSavedById !== workerId && (
+                  <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
+                    <span className="font-semibold">{lastSavedByName}</span>님이 {relativeTime(lastSavedAt)} 저장했어요.
+                    저장하면 그 내용을 덮어씁니다.
+                  </div>
+                )}
                 <Button
                   variant="outline"
                   className="w-full h-11"
                   disabled={isSavingMemo}
-                  onClick={() =>
-                    saveMemo({
+                  onClick={() => {
+                    const doSave = () => saveMemo({
                       workerId,
                       bookingId: booking.id,
                       siteMemo: siteMemo || undefined,
                       customerRequest: customerRequest || undefined,
                       nextVisitNote: nextVisitNote || undefined,
                     })
-                  }
+                    if (lastSavedById && lastSavedById !== workerId && lastSavedAt) {
+                      if (confirm(`${lastSavedByName}님이 ${relativeTime(lastSavedAt)} 저장했어요.\n덮어쓸까요?`)) doSave()
+                    } else {
+                      doSave()
+                    }
+                  }}
                 >
                   {isSavingMemo ? '저장 중...' : '메모 저장하기'}
                 </Button>

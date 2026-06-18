@@ -46,19 +46,31 @@ export default async function FieldBookingPage({ params }: Props) {
 
   if (!directCheck && !teamCheck) notFound()
 
-  // 예약 상세 조회
+  // 예약 상세 조회 (메모 최종 저장자 포함)
   const { data: booking } = await db
     .from('bookings')
-    .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, customer_request, quote_id' as never)
+    .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, customer_request, quote_id, memo_updated_by, memo_updated_at' as never)
     .eq('id', bookingId)
     .eq('business_id', worker.business_id)
     .maybeSingle() as { data: {
       id: string; customer_name: string; customer_phone: string | null
       service_address: string | null; scheduled_at: string; final_price: number
       status: string; memo: string | null; customer_request: string | null; quote_id: string | null
+      memo_updated_by: string | null; memo_updated_at: string | null
     } | null }
 
   if (!booking) notFound()
+
+  // 메모 최종 저장자 이름 조회
+  let memoUpdatedByName: string | null = null
+  if (booking.memo_updated_by) {
+    const { data: memoWorker } = await db
+      .from('workers' as never)
+      .select('name' as never)
+      .eq('id' as never, booking.memo_updated_by)
+      .maybeSingle() as { data: { name: string } | null }
+    memoUpdatedByName = memoWorker?.name ?? null
+  }
 
   // 보고서 + 작업 전 사진 조회
   const { data: report } = await db
@@ -113,6 +125,9 @@ export default async function FieldBookingPage({ params }: Props) {
       existingBeforeUrls={beforeUrls}
       existingCustomerRequest={(booking.customer_request as string) ?? ''}
       existingNextVisitNote={savedNextVisitNote}
+      memoUpdatedById={booking.memo_updated_by}
+      memoUpdatedByName={memoUpdatedByName}
+      memoUpdatedAt={booking.memo_updated_at}
     />
   )
 }

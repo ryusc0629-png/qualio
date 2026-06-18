@@ -118,11 +118,15 @@ export const fieldSaveMemoAction = action
     const { db, worker } = await verifyWorker(parsedInput.workerId)
     const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
 
-    // 1. 현장 특이사항 → bookings.memo
+    // 1. 현장 특이사항 → bookings.memo + 최종 저장자 기록
     if (parsedInput.siteMemo !== undefined) {
       await db
         .from('bookings')
-        .update({ memo: parsedInput.siteMemo || null })
+        .update({
+          memo: parsedInput.siteMemo || null,
+          memo_updated_by: worker.id,
+          memo_updated_at: new Date().toISOString(),
+        } as never)
         .eq('id', parsedInput.bookingId)
     }
 
