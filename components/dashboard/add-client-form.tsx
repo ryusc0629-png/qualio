@@ -105,7 +105,7 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
 
   const { execute: executeLead, isPending: leadPending } = useAction(createLeadAction, {
     onSuccess: () => {
-      toast.success('잠재고객이 추가됐어요!')
+      toast.success('잠재 고객이 추가됐어요!')
       leadForm.reset({ customer_type: 'company' })
       setOpen(false)
     },
@@ -167,7 +167,7 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
                 : 'bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground'
             }`}
           >
-            잠재고객
+            잠재 고객
           </button>
           <button
             type="button"
