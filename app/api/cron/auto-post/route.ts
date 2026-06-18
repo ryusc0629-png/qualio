@@ -115,31 +115,6 @@ async function publishOnePost(
   return postContent.title
 }
 
-// 트랙 B: 승인 대기 중인 포트폴리오 초안을 발행 (AI 호출 0원)
-async function publishPendingPortfolio(
-  db: ReturnType<typeof createServiceClient>,
-  businessId: string,
-): Promise<string | null> {
-  const { data } = await db
-    .from('biz_posts' as never)
-    .select('id, title' as never)
-    .eq('business_id' as never, businessId)
-    .eq('post_type' as never, 'portfolio')
-    .eq('published' as never, false)
-    .order('created_at' as never, { ascending: true })
-    .limit(1)
-    .maybeSingle() as unknown as { data: { id: string; title: string } | null }
-
-  if (!data) return null
-
-  await db
-    .from('biz_posts' as never)
-    .update({ published: true, published_at: new Date().toISOString() } as never)
-    .eq('id' as never, data.id)
-
-  return data.title
-}
-
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -183,13 +158,14 @@ export async function GET(request: NextRequest) {
       const dailyLimit = getAutoDailyPostLimit(planId)
       const effectiveTarget = Math.min(business.monthly_post_target, planLimit)
 
-      // 달력 월 기준 발행 건수 집계
+      // 달력 월 기준 발행 건수 집계 — 포트폴리오(시공 사례)는 자동 발행 카운트에서 제외
       const monthStart = new Date(Date.UTC(year, month - 1, 1)).toISOString()
       const { count } = await db
         .from('biz_posts')
         .select('id', { count: 'exact', head: true })
         .eq('business_id', business.id)
         .eq('published', true)
+        .eq('post_type' as never, 'geo')
         .gte('published_at', monthStart)
 
       const postsThisMonth = count ?? 0
@@ -200,11 +176,12 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      // 이번 달 발행 제목 목록 (중복 방지용)
+      // 이번 달 발행 제목 목록 (중복 방지용) — AI GEO 글만
       const { data: publishedThisMonth } = await db
         .from('biz_posts')
         .select('title')
         .eq('business_id', business.id)
+        .eq('post_type' as never, 'geo')
         .gte('published_at', monthStart)
       const publishedTitles = (publishedThisMonth ?? []).map((p) => p.title)
 
@@ -217,17 +194,10 @@ export async function GET(request: NextRequest) {
         .not('base_price', 'is', null)
         .not('unit', 'is', null)
 
-      // 오늘 필요한 건수만큼 순차 발행 (2트랙: 포트폴리오 우선 → AI 주제)
+      // 오늘 필요한 건수만큼 순차 발행 (AI 주제 추천 방식)
+      // 포트폴리오(시공 사례)는 자동 발행에서 제외 — 사장님이 직접 승인해 게시
       const publishedTitlesThisRun: string[] = []
       for (let i = 0; i < needed; i++) {
-        // 트랙 B: 승인 대기 포트폴리오 초안 우선 발행 (AI 비용 0원)
-        const portfolioTitle = await publishPendingPortfolio(db, business.id)
-        if (portfolioTitle) {
-          publishedTitlesThisRun.push(portfolioTitle)
-          console.log(`[Cron] 포트폴리오 발행 (${i + 1}/${needed}): ${business.name} — "${portfolioTitle}"`)
-          continue
-        }
-        // 트랙 A: 기존 AI 주제 추천 방식
         const title = await publishOnePost(db, business, services ?? [], publishedTitles, month)
         publishedTitlesThisRun.push(title)
         console.log(`[Cron] 자동 발행 완료 (${i + 1}/${needed}): ${business.name} — "${title}"`)
