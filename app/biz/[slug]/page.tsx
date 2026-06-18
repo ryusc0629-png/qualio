@@ -122,7 +122,7 @@ export default async function BizLandingPage({ params }: Props) {
       : 'border-white/50 text-white hover:bg-white/10 hover:text-white',
   }
 
-  const [{ data: services }, { data: recentPosts }, { count: reviewCount }] = await Promise.all([
+  const [{ data: services }, { data: recentPosts }] = await Promise.all([
     db
       .from('service_items')
       .select('id, name, base_price, unit, category')
@@ -139,11 +139,6 @@ export default async function BizLandingPage({ params }: Props) {
       .eq('published', true)
       .order('published_at', { ascending: false })
       .limit(3),
-    db
-      .from('review_claims' as never)
-      .select('id', { count: 'exact', head: true })
-      .eq('business_id' as never, business.id)
-      .not('claimed_at' as never, 'is', null) as unknown as Promise<{ count: number | null }>,
   ])
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
@@ -323,20 +318,12 @@ export default async function BizLandingPage({ params }: Props) {
 
               {/* 왼쪽: 텍스트 */}
               <div className="flex-1 max-w-xl space-y-6">
-                <div className="flex flex-wrap gap-2">
-                  {minPrice && (
-                    <div className="inline-flex items-center gap-2 bg-primary/20 text-primary border border-primary/30 rounded-full px-3 py-1 text-xs font-semibold">
-                      <Sparkles className="h-3 w-3" />
-                      {minPrice.toLocaleString()}원부터 시작
-                    </div>
-                  )}
-                  {(reviewCount ?? 0) > 0 && (
-                    <div className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full px-3 py-1 text-xs font-semibold">
-                      <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                      실제 후기 {reviewCount}건
-                    </div>
-                  )}
-                </div>
+                {minPrice && (
+                  <div className="inline-flex items-center gap-2 bg-primary/20 text-primary border border-primary/30 rounded-full px-3 py-1 text-xs font-semibold">
+                    <Sparkles className="h-3 w-3" />
+                    {minPrice.toLocaleString()}원부터 시작
+                  </div>
+                )}
 
                 <h1 className={`text-4xl sm:text-5xl font-extrabold leading-tight tracking-tight ${hero.title}`}>
                   {business.hero_title ?? business.seo_title ?? business.name}
