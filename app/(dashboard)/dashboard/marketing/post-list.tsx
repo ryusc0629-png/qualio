@@ -385,33 +385,40 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   // 오름차순 정렬 (오래된 글 위 → 최신 글 아래) + 오늘 위치로 자동 스크롤
   const sortedPosts = [...posts].sort((a, b) => new Date(a.published_at).getTime() - new Date(b.published_at).getTime())
   const postListRef = useRef<HTMLDivElement>(null)
+  const scheduleListRef = useRef<HTMLDivElement>(null)
 
-  // 포스트 목록 컨테이너 내부 스크롤만 조정 (페이지 전체 스크롤 건드리지 않음)
+  // 컨테이너 내부 스크롤만 조정 (페이지 전체 스크롤 건드리지 않음)
   const scrollToToday = useCallback(() => {
-    const container = postListRef.current
-    if (!container) return
-
-    // URL 해시가 있으면 해당 게시물로 (저장 후 복귀용)
-    const hash = window.location.hash.slice(1)
-    if (hash) {
-      const target = document.getElementById(hash)
-      if (target) {
-        requestAnimationFrame(() => {
-          container.scrollTop = target.offsetTop - container.offsetTop
-        })
-        window.history.replaceState(null, '', window.location.pathname)
-        return
-      }
-    }
-
-    // 오늘 KST 기준 첫 글 찾기
-    const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    const todayFirst = sortedPosts.find((p) => {
-      const pKST = new Date(new Date(p.published_at).getTime() + 9 * 60 * 60 * 1000)
-      return pKST.toISOString().slice(0, 10) >= todayStr
-    })
-
     requestAnimationFrame(() => {
+      // 1) 자동 발행 일정 — 오늘 항목으로 스크롤
+      const scheduleContainer = scheduleListRef.current
+      const todaySlot = document.getElementById('schedule-today')
+      if (scheduleContainer && todaySlot) {
+        scheduleContainer.scrollTop = todaySlot.offsetTop - scheduleContainer.offsetTop
+      }
+
+      // 2) 전체 발행 포스트 목록
+      const container = postListRef.current
+      if (!container) return
+
+      // URL 해시가 있으면 해당 게시물로 (저장 후 복귀용)
+      const hash = window.location.hash.slice(1)
+      if (hash) {
+        const target = document.getElementById(hash)
+        if (target) {
+          container.scrollTop = target.offsetTop - container.offsetTop
+          window.history.replaceState(null, '', window.location.pathname)
+          return
+        }
+      }
+
+      // 오늘 KST 기준 첫 글 찾기
+      const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      const todayFirst = sortedPosts.find((p) => {
+        const pKST = new Date(new Date(p.published_at).getTime() + 9 * 60 * 60 * 1000)
+        return pKST.toISOString().slice(0, 10) >= todayStr
+      })
+
       if (todayFirst) {
         const el = document.getElementById(`post-${todayFirst.id}`)
         if (el) container.scrollTop = el.offsetTop - container.offsetTop
@@ -918,13 +925,14 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
             이번 달 남은 발행 일정이 없어요
           </div>
         ) : (
-          <div className="divide-y max-h-80 overflow-y-auto">
+          <div ref={scheduleListRef} className="divide-y max-h-80 overflow-y-auto">
             {schedule.map((slot, i) => {
               const dayName = DAYS_KO[slot.date.getDay()]
               const url = slot.post ? postUrl(slot.post.slug) : null
               return (
                 <div
                   key={i}
+                  id={slot.status === 'today' ? 'schedule-today' : undefined}
                   className={`flex items-center gap-4 px-5 py-3 ${
                     slot.status === 'today' ? 'bg-blue-50' : 'hover:bg-slate-50'
                   }`}
