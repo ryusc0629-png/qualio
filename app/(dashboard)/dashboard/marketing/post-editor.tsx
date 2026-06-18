@@ -18,14 +18,23 @@ interface PostEditorProps {
     title: string
     summary: string | null
     published: boolean
+    content?: string | null
   }
   onClose: () => void
   onSaved: () => void
 }
 
+// 본문 앞의 JSON 메타 블록(keyPoints/faqs) — 공개 페이지에선 숨겨지므로 편집창에서도 분리
+const META_BLOCK_RE = /^```json\n[\s\S]+?\n```\n/
+
 export function PostEditor({ post, onClose, onSaved }: PostEditorProps) {
+  const rawContent = post?.content ?? ''
+  const metaMatch = rawContent.match(META_BLOCK_RE)
+  const metaBlock = metaMatch ? metaMatch[0] : ''
+  const bodyOnly = metaMatch ? rawContent.slice(metaMatch[0].length) : rawContent
+
   const [title, setTitle] = useState(post?.title ?? '')
-  const [content, setContent] = useState('')
+  const [content, setContent] = useState(bodyOnly)
   const [summary, setSummary] = useState(post?.summary ?? '')
   const [published, setPublished] = useState(post?.published ?? true)
 
@@ -46,7 +55,7 @@ export function PostEditor({ post, onClose, onSaved }: PostEditorProps) {
     savePost({
       id: post?.id,
       title,
-      content,
+      content: metaBlock + content,  // 저장 시 메타 블록 다시 붙여 keyPoints/faqs 보존
       summary: summary || undefined,
       published,
     })

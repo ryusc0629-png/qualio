@@ -29,7 +29,7 @@ export default async function MarketingPage() {
       .maybeSingle(),
     db
       .from('biz_posts' as never)
-      .select('id, slug, title, summary, published, ai_generated, published_at, image_url, image_urls, naver_title, naver_content, naver_tags, daangn_content, instagram_content, instagram_hashtags, post_type, before_image_urls, after_image_urls, channel_posted_at' as never)
+      .select('id, slug, title, content, summary, published, ai_generated, published_at, image_url, image_urls, naver_title, naver_content, naver_tags, daangn_content, instagram_content, instagram_hashtags, post_type, before_image_urls, after_image_urls, channel_posted_at' as never)
       .eq('business_id' as never, profile.business_id)
       .order('published_at' as never, { ascending: false }) as unknown as { data: Record<string, unknown>[] | null },
     db
@@ -40,12 +40,12 @@ export default async function MarketingPage() {
       .maybeSingle(),
     db
       .from('biz_posts' as never)
-      .select('id, title, summary, before_image_urls, after_image_urls' as never)
+      .select('id, title, content, summary, before_image_urls, after_image_urls' as never)
       .eq('business_id' as never, profile.business_id)
       .eq('post_type' as never, 'portfolio')
       .eq('published' as never, false)
       .order('created_at' as never, { ascending: false }) as unknown as {
-        data: { id: string; title: string; summary: string | null; before_image_urls: string[]; after_image_urls: string[] }[] | null
+        data: { id: string; title: string; content: string; summary: string | null; before_image_urls: string[]; after_image_urls: string[] }[] | null
       },
 
     // 완성된 릴스 (reel_status = 'done')
@@ -74,7 +74,7 @@ export default async function MarketingPage() {
   }))
 
   const posts = (postsResult.data ?? []) as unknown as {
-    id: string; slug: string; title: string; summary: string | null
+    id: string; slug: string; title: string; content: string; summary: string | null
     published: boolean; ai_generated: boolean; published_at: string
     image_url: string | null; image_urls: string[] | null
     naver_title: string | null; naver_content: string | null; naver_tags: string[] | null

@@ -76,6 +76,7 @@ interface Post {
 interface PendingPortfolio {
   id: string
   title: string
+  content?: string | null
   summary: string | null
   before_image_urls: string[]
   after_image_urls: string[]
@@ -445,7 +446,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                       <div className="flex gap-1.5 shrink-0">
                         <button
                           type="button"
-                          onClick={() => setEditingPost({ id: p.id, slug: '', title: p.title, summary: p.summary, published: false, ai_generated: true, published_at: '', image_url: null, image_urls: null, naver_title: null, naver_content: null, naver_tags: null, daangn_content: null, instagram_content: null, instagram_hashtags: null, post_type: 'portfolio', before_image_urls: p.before_image_urls, after_image_urls: p.after_image_urls })}
+                          onClick={() => setEditingPost({ id: p.id, slug: '', title: p.title, content: p.content ?? '', summary: p.summary, published: false, ai_generated: true, published_at: '', image_url: null, image_urls: null, naver_title: null, naver_content: null, naver_tags: null, daangn_content: null, instagram_content: null, instagram_hashtags: null, post_type: 'portfolio', before_image_urls: p.before_image_urls, after_image_urls: p.after_image_urls })}
                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 transition-colors"
                         >
                           <Pencil className="h-3.5 w-3.5" /><span className="hidden sm:inline">수정</span>

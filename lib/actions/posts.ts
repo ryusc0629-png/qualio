@@ -149,16 +149,22 @@ export const savePostAction = action
     const suffix = Date.now().toString(36)
 
     if (parsedInput.id) {
-      // 수정
+      // 수정 — image_url은 건드리지 않음 (기존 대표 이미지 보존)
+      const updateData: {
+        title: string; content: string; summary: string | null; published: boolean
+        image_url?: string
+      } = {
+        title: parsedInput.title,
+        content: parsedInput.content,
+        summary: parsedInput.summary ?? null,
+        published: parsedInput.published,
+      }
+      // 이미지가 명시적으로 전달된 경우에만 갱신
+      if (parsedInput.imageUrl) updateData.image_url = parsedInput.imageUrl
+
       const { error } = await db
         .from('biz_posts')
-        .update({
-          title: parsedInput.title,
-          content: parsedInput.content,
-          summary: parsedInput.summary ?? null,
-          image_url: parsedInput.imageUrl || null,
-          published: parsedInput.published,
-        })
+        .update(updateData)
         .eq('id', parsedInput.id)
         .eq('business_id', businessId)
 
