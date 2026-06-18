@@ -25,15 +25,15 @@ export function FadeIn({ children, delay = 0, className = '', direction = 'up' }
         }, delay)
         observer.disconnect()
       },
-      { threshold: 0.12 },
+      { threshold: 0.08 },
     )
     observer.observe(el)
     return () => observer.disconnect()
   }, [delay])
 
   const initial = direction === 'left'
-    ? 'translate3d(-24px,0,0)'
-    : 'translate3d(0,24px,0)'
+    ? 'translate3d(-48px,0,0)'
+    : 'translate3d(0,48px,0)'
 
   return (
     <div
@@ -42,7 +42,7 @@ export function FadeIn({ children, delay = 0, className = '', direction = 'up' }
       style={{
         opacity: 0,
         transform: initial,
-        transition: 'opacity 0.65s cubic-bezier(0.16,1,0.3,1), transform 0.65s cubic-bezier(0.16,1,0.3,1)',
+        transition: 'opacity 1.1s cubic-bezier(0.22,1,0.36,1), transform 1.1s cubic-bezier(0.22,1,0.36,1)',
         willChange: 'opacity, transform',
       }}
     >
