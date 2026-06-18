@@ -9,12 +9,44 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { FrequencyPicker } from '@/components/dashboard/frequency-picker'
 import { createLeadAction } from '@/lib/actions/crm'
-import { createCustomerAction } from '@/lib/actions/customers'
-import { Plus, X } from 'lucide-react'
+import { createActiveCustomerAction } from '@/lib/actions/customers'
+import { Plus, X, Search, User, Building2 } from 'lucide-react'
+
+// 카카오(다음) 주소 검색 — 우편번호 스크립트 동적 로드
+declare global {
+  interface Window {
+    daum?: {
+      Postcode: new (options: {
+        oncomplete: (data: { address: string; buildingName: string; addressType: string; bname: string }) => void
+        onclose?: () => void
+      }) => { open: () => void }
+    }
+  }
+}
+
+function openAddressSearch(onSelect: (address: string) => void) {
+  const run = () => {
+    new window.daum!.Postcode({
+      oncomplete: (data) => {
+        const extra = data.buildingName ? ` (${data.buildingName})` : ''
+        onSelect(data.address + extra)
+      },
+    }).open()
+  }
+
+  if (window.daum?.Postcode) { run(); return }
+
+  const script = document.createElement('script')
+  script.src = '//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js'
+  script.onload = run
+  document.head.appendChild(script)
+}
 
 const leadSchema = z.object({
   company_name: z.string().min(1, '업체명을 입력해주세요'),
+  customer_type: z.string(),
   phone: z.string().optional(),
   address: z.string().optional(),
   category: z.string().optional(),
@@ -29,36 +61,51 @@ const customerSchema = z.object({
   category: z.string().optional(),
   type: z.string(),
   notes: z.string().optional(),
+  // 개인 — 첫 작업 일정 (선택)
+  scheduleJob: z.string().optional(),
+  job_service: z.string().optional(),
+  job_scheduled_at: z.string().optional(),
+  job_price: z.string().optional(),
+  // 법인 — 정기계약 (선택)
+  hasContract: z.string().optional(),
+  service_type: z.string().optional(),
+  frequency: z.string().optional(),
+  contract_price: z.string().optional(),
+  start_date: z.string().optional(),
 })
 
 type LeadInput = z.infer<typeof leadSchema>
 type CustomerInput = z.infer<typeof customerSchema>
 
 const CATEGORIES = ['카페', '병원', '학원', '오피스', '상가', '식당', '헬스장', '기타']
+const SERVICE_TYPES = ['일반청소', '입주청소', '사무실 청소', '공장 청소', '기타']
 
 export function AddClientForm() {
   const [open, setOpen] = useState(false)
   const [clientType, setClientType] = useState<'lead' | 'customer'>('lead')
 
-  const leadForm = useForm<LeadInput>({ resolver: zodResolver(leadSchema) })
+  const leadForm = useForm<LeadInput>({
+    resolver: zodResolver(leadSchema),
+    defaultValues: { customer_type: 'company' },
+  })
   const customerForm = useForm<CustomerInput>({
     resolver: zodResolver(customerSchema),
-    defaultValues: { type: 'one_time' },
+    defaultValues: { type: 'one_time', scheduleJob: '', hasContract: '' },
   })
 
   const { execute: executeLead, isPending: leadPending } = useAction(createLeadAction, {
     onSuccess: () => {
       toast.success('잠재고객이 추가됐어요!')
-      leadForm.reset()
+      leadForm.reset({ customer_type: 'company' })
       setOpen(false)
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
-  const { execute: executeCustomer, isPending: customerPending } = useAction(createCustomerAction, {
+  const { execute: executeCustomer, isPending: customerPending } = useAction(createActiveCustomerAction, {
     onSuccess: () => {
       toast.success('고객이 등록됐어요!')
-      customerForm.reset()
+      customerForm.reset({ type: 'one_time', scheduleJob: '', hasContract: '' })
       setOpen(false)
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
@@ -66,10 +113,17 @@ export function AddClientForm() {
 
   const isPending = leadPending || customerPending
 
+  // 업종 노출 여부 — 법인 고객일 때만 (개인은 업종 의미 없음)
+  const leadIsCompany = leadForm.watch('customer_type') === 'company'
+  const custType = customerForm.watch('type')
+  const custIsCompany = custType === 'recurring'
+  const scheduleJob = customerForm.watch('scheduleJob') === 'true'
+  const hasContract = customerForm.watch('hasContract') === 'true'
+
   function handleClose() {
     setOpen(false)
-    leadForm.reset()
-    customerForm.reset()
+    leadForm.reset({ customer_type: 'company' })
+    customerForm.reset({ type: 'one_time', scheduleJob: '', hasContract: '' })
     setClientType('lead')
   }
 
@@ -92,15 +146,15 @@ export function AddClientForm() {
           </button>
         </div>
 
-        {/* 종류 선택 */}
-        <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-lg">
+        {/* 종류 선택 — 활성 상태를 색상으로 뚜렷하게 */}
+        <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-xl">
           <button
             type="button"
             onClick={() => setClientType('lead')}
-            className={`py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`py-2.5 rounded-lg text-sm font-semibold transition-all ${
               clientType === 'lead'
-                ? 'bg-background shadow-sm text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-background/60'
             }`}
           >
             잠재고객
@@ -108,10 +162,10 @@ export function AddClientForm() {
           <button
             type="button"
             onClick={() => setClientType('customer')}
-            className={`py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`py-2.5 rounded-lg text-sm font-semibold transition-all ${
               clientType === 'customer'
-                ? 'bg-background shadow-sm text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-background/60'
             }`}
           >
             활성 고객
@@ -135,27 +189,61 @@ export function AddClientForm() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            {/* 고객 구분 — 개인/법인 (법인 기본) */}
+            <div className="space-y-1">
+              <Label>고객 구분</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                  <input type="radio" value="company" {...leadForm.register('customer_type')} className="accent-primary" />
+                  <div className="flex items-center gap-1.5">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">법인</span>
+                  </div>
+                </label>
+                <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
+                  <input type="radio" value="individual" {...leadForm.register('customer_type')} className="accent-primary" />
+                  <div className="flex items-center gap-1.5">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">개인</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className={`grid gap-2 ${leadIsCompany ? 'grid-cols-2' : 'grid-cols-1'}`}>
               <div className="space-y-1">
                 <Label htmlFor="lead-phone">연락처</Label>
                 <Input id="lead-phone" placeholder="010-1234-5678" inputMode="tel" {...leadForm.register('phone')} />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="lead-category">업종</Label>
-                <select
-                  id="lead-category"
-                  {...leadForm.register('category')}
-                  className="w-full h-10 rounded-lg border border-border bg-background px-2.5 text-sm"
-                >
-                  <option value="">선택 안함</option>
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
+              {leadIsCompany && (
+                <div className="space-y-1">
+                  <Label htmlFor="lead-category">업종</Label>
+                  <select
+                    id="lead-category"
+                    {...leadForm.register('category')}
+                    className="w-full h-10 rounded-lg border border-border bg-background px-2.5 text-sm"
+                  >
+                    <option value="">선택 안함</option>
+                    {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="space-y-1">
               <Label htmlFor="lead-address">주소</Label>
-              <Input id="lead-address" placeholder="서울시 강남구 역삼동" {...leadForm.register('address')} />
+              <div className="flex gap-2">
+                <Input id="lead-address" placeholder="주소 검색을 눌러주세요" {...leadForm.register('address')} />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0 px-3"
+                  onClick={() => openAddressSearch((addr) => leadForm.setValue('address', addr))}
+                >
+                  <Search className="h-4 w-4 mr-1" />
+                  검색
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-1">
@@ -197,32 +285,7 @@ export function AddClientForm() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label htmlFor="cust-phone">연락처 (필수)</Label>
-                <Input id="cust-phone" placeholder="010-1234-5678" inputMode="tel" {...customerForm.register('phone')} />
-                {customerForm.formState.errors.phone && (
-                  <p className="text-xs text-destructive">{customerForm.formState.errors.phone.message}</p>
-                )}
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="cust-category">업종</Label>
-                <select
-                  id="cust-category"
-                  {...customerForm.register('category')}
-                  className="w-full h-10 rounded-lg border border-border bg-background px-2.5 text-sm"
-                >
-                  <option value="">선택 안함</option>
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label htmlFor="cust-address">주소</Label>
-              <Input id="cust-address" placeholder="서울시 강남구 역삼동" {...customerForm.register('address')} />
-            </div>
-
+            {/* 고객 구분 */}
             <div className="space-y-1">
               <Label>고객 구분</Label>
               <div className="grid grid-cols-2 gap-2">
@@ -243,6 +306,45 @@ export function AddClientForm() {
               </div>
             </div>
 
+            <div className={`grid gap-2 ${custIsCompany ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <div className="space-y-1">
+                <Label htmlFor="cust-phone">연락처 (필수)</Label>
+                <Input id="cust-phone" placeholder="010-1234-5678" inputMode="tel" {...customerForm.register('phone')} />
+                {customerForm.formState.errors.phone && (
+                  <p className="text-xs text-destructive">{customerForm.formState.errors.phone.message}</p>
+                )}
+              </div>
+              {custIsCompany && (
+                <div className="space-y-1">
+                  <Label htmlFor="cust-category">업종</Label>
+                  <select
+                    id="cust-category"
+                    {...customerForm.register('category')}
+                    className="w-full h-10 rounded-lg border border-border bg-background px-2.5 text-sm"
+                  >
+                    <option value="">선택 안함</option>
+                    {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="cust-address">주소</Label>
+              <div className="flex gap-2">
+                <Input id="cust-address" placeholder="주소 검색을 눌러주세요" {...customerForm.register('address')} />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="shrink-0 px-3"
+                  onClick={() => openAddressSearch((addr) => customerForm.setValue('address', addr))}
+                >
+                  <Search className="h-4 w-4 mr-1" />
+                  검색
+                </Button>
+              </div>
+            </div>
+
             <div className="space-y-1">
               <Label htmlFor="cust-notes">메모</Label>
               <textarea
@@ -252,6 +354,97 @@ export function AddClientForm() {
                 className="w-full min-h-[60px] rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none"
               />
             </div>
+
+            {/* 개인 고객 — 첫 작업 일정 (선택) → 캘린더 노출 */}
+            {!custIsCompany && (
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={scheduleJob}
+                    onChange={(e) => customerForm.setValue('scheduleJob', e.target.checked ? 'true' : '')}
+                    className="accent-primary h-4 w-4"
+                  />
+                  <span className="text-sm font-medium">첫 작업 일정도 같이 잡기</span>
+                </label>
+                <p className="text-xs text-muted-foreground -mt-1.5">
+                  날짜·금액을 넣으면 예약으로 등록돼 캘린더에 바로 나타나요
+                </p>
+
+                {scheduleJob && (
+                  <div className="space-y-3 pt-1">
+                    <div className="space-y-1">
+                      <Label htmlFor="job-service">서비스명</Label>
+                      <select
+                        id="job-service"
+                        {...customerForm.register('job_service')}
+                        className="w-full h-10 rounded-lg border border-border bg-background px-2.5 text-sm"
+                      >
+                        <option value="">선택 안함</option>
+                        {SERVICE_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="job-date">작업 날짜·시간 (필수)</Label>
+                      <Input id="job-date" type="datetime-local" {...customerForm.register('job_scheduled_at')} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="job-price">작업 금액 (필수)</Label>
+                      <Input id="job-price" inputMode="numeric" placeholder="150000" {...customerForm.register('job_price')} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 법인 고객 — 정기계약 (선택) */}
+            {custIsCompany && (
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hasContract}
+                    onChange={(e) => customerForm.setValue('hasContract', e.target.checked ? 'true' : '')}
+                    className="accent-primary h-4 w-4"
+                  />
+                  <span className="text-sm font-medium">정기계약도 같이 등록하기</span>
+                </label>
+                <p className="text-xs text-muted-foreground -mt-1.5">
+                  월 금액·방문 주기를 넣으면 계약으로 등록돼요
+                </p>
+
+                {hasContract && (
+                  <div className="space-y-3 pt-1">
+                    <div className="space-y-1">
+                      <Label htmlFor="contract-service">서비스 유형</Label>
+                      <select
+                        id="contract-service"
+                        {...customerForm.register('service_type')}
+                        className="w-full h-10 rounded-lg border border-border bg-background px-2.5 text-sm"
+                      >
+                        <option value="">선택해주세요</option>
+                        {SERVICE_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>방문 주기</Label>
+                      <FrequencyPicker
+                        value={customerForm.watch('frequency') ?? ''}
+                        onChange={(val) => customerForm.setValue('frequency', val)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="contract-price">월 계약금액 (필수)</Label>
+                      <Input id="contract-price" inputMode="numeric" placeholder="700000" {...customerForm.register('contract_price')} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="contract-start">시작일 (필수)</Label>
+                      <Input id="contract-start" type="date" {...customerForm.register('start_date')} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" className="flex-1" onClick={handleClose}>취소</Button>

@@ -90,6 +90,103 @@ export const updateCustomerAction = action
     return { success: true }
   })
 
+// 활성 고객 등록 — 고객유형별 분기
+// 개인(one_time): 첫 작업 일정 입력 시 예약 생성 → 캘린더 노출
+// 법인(recurring): 정기계약 입력 시 계약 생성
+const createActiveCustomerSchema = z.object({
+  name: z.string().min(1, '업체명을 입력해주세요'),
+  phone: z.string().min(1, '연락처를 입력해주세요'),
+  address: z.string().optional(),
+  category: z.string().optional(),
+  type: z.string().refine((v) => ['recurring', 'one_time'].includes(v), '유효하지 않은 고객 유형입니다'),
+  notes: z.string().optional(),
+  // 개인 — 첫 작업 일정 (선택)
+  scheduleJob: z.string().optional(), // 'true' | ''
+  job_service: z.string().optional(),
+  job_scheduled_at: z.string().optional(),
+  job_price: z.string().optional(),
+  // 법인 — 정기계약 (선택)
+  hasContract: z.string().optional(), // 'true' | ''
+  service_type: z.string().optional(),
+  frequency: z.string().optional(),
+  contract_price: z.string().optional(),
+  start_date: z.string().optional(),
+})
+
+export const createActiveCustomerAction = action
+  .schema(createActiveCustomerSchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuthenticatedBusinessId()
+
+    // 1. 고객 등록
+    const { data: customer, error: customerError } = await db
+      .from('customers')
+      .insert({
+        business_id: businessId,
+        name: parsedInput.name,
+        phone: parsedInput.phone,
+        address: parsedInput.address || null,
+        category: parsedInput.category || null,
+        type: parsedInput.type,
+        notes: parsedInput.notes || null,
+      })
+      .select('id')
+      .single()
+
+    if (customerError || !customer) throw new Error('[APP] 고객 등록에 실패했습니다')
+
+    // 2-a. 개인 고객 — 첫 작업 예약 생성 (선택) → 캘린더 노출
+    if (parsedInput.type === 'one_time' && parsedInput.scheduleJob === 'true') {
+      if (!parsedInput.job_scheduled_at) throw new Error('[APP] 작업 날짜·시간을 입력해주세요')
+      if (!parsedInput.job_price) throw new Error('[APP] 작업 금액을 입력해주세요')
+
+      const price = parseInt(parsedInput.job_price, 10)
+      if (isNaN(price) || price < 0) throw new Error('[APP] 올바른 작업 금액을 입력해주세요')
+
+      const { error: bookingError } = await db.from('bookings').insert({
+        business_id: businessId,
+        quote_id: null,
+        customer_name: parsedInput.name,
+        customer_phone: parsedInput.phone,
+        service_address: parsedInput.address || '',
+        scheduled_at: new Date(parsedInput.job_scheduled_at).toISOString(),
+        selected_tier: 'good',
+        final_price: price,
+        memo: parsedInput.job_service || null,
+        status: 'confirmed',
+      })
+
+      if (bookingError) throw new Error('[APP] 작업 일정 등록에 실패했습니다')
+    }
+
+    // 2-b. 법인 고객 — 정기계약 생성 (선택)
+    if (parsedInput.type === 'recurring' && parsedInput.hasContract === 'true') {
+      if (!parsedInput.service_type) throw new Error('[APP] 서비스 유형을 입력해주세요')
+      if (!parsedInput.frequency) throw new Error('[APP] 방문 주기를 선택해주세요')
+      if (!parsedInput.contract_price) throw new Error('[APP] 계약금액을 입력해주세요')
+      if (!parsedInput.start_date) throw new Error('[APP] 시작일을 입력해주세요')
+
+      const price = parseInt(parsedInput.contract_price, 10)
+      if (isNaN(price) || price < 1) throw new Error('[APP] 올바른 계약금액을 입력해주세요')
+
+      const { error: contractError } = await db.from('contracts').insert({
+        business_id: businessId,
+        customer_id: customer.id,
+        service_type: parsedInput.service_type,
+        frequency: parsedInput.frequency,
+        contract_price: price,
+        start_date: parsedInput.start_date,
+      })
+
+      if (contractError) throw new Error('[APP] 계약 등록에 실패했습니다')
+    }
+
+    revalidatePath('/dashboard/clients')
+    revalidatePath('/dashboard/bookings')
+    revalidatePath('/dashboard')
+    return { success: true }
+  })
+
 // 고객 + 계약 동시 등록 (CRM 계약완료 → 고객 전환용)
 const createCustomerWithContractSchema = z.object({
   name: z.string().min(1, '고객명을 입력해주세요'),
