@@ -21,7 +21,7 @@ interface WorkerRow {
 interface BookingRow {
   id: string
   business_id: string
-  worker_id: string
+  worker_id: string | null
   customer_name: string
   customer_phone: string | null
   service_address: string | null
@@ -47,22 +47,37 @@ async function verifyWorker(workerId: string) {
   return { db, worker }
 }
 
-// 직원에게 배정된 예약인지 확인
+// 직원에게 배정된 예약인지 확인 (직접 배정 OR 팀원 배정 모두 허용)
 async function verifyBookingOwnership(
   db: ReturnType<typeof createServiceClient>,
   bookingId: string,
   workerId: string,
   businessId: string,
 ) {
-  const { data: booking } = await db
-    .from('bookings')
-    .select('id, business_id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, quote_id')
-    .eq('id', bookingId)
-    .eq('business_id', businessId)
-    .eq('worker_id' as never, workerId)
-    .maybeSingle() as { data: BookingRow | null }
+  // booking_workers에서 팀원 배정 여부 확인 (직접 배정 포함)
+  const [{ data: booking }, { data: teamCheck }] = await Promise.all([
+    db
+      .from('bookings')
+      .select('id, business_id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, quote_id')
+      .eq('id', bookingId)
+      .eq('business_id', businessId)
+      .maybeSingle() as unknown as Promise<{ data: BookingRow | null }>,
+    db
+      .from('booking_workers' as never)
+      .select('booking_id' as never)
+      .eq('booking_id' as never, bookingId)
+      .eq('worker_id' as never, workerId)
+      .maybeSingle() as unknown as Promise<{ data: { booking_id: string } | null }>,
+  ])
 
-  if (!booking) throw new Error('[APP] 배정된 작업이 아니거나 존재하지 않습니다')
+  if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
+
+  // worker_id 직접 배정 또는 booking_workers 팀원 배정 중 하나라도 해당되어야 함
+  const isDirectAssigned = booking.worker_id === workerId
+  const isTeamAssigned   = !!teamCheck
+
+  if (!isDirectAssigned && !isTeamAssigned) throw new Error('[APP] 배정된 작업이 아니거나 존재하지 않습니다')
+
   return booking
 }
 
