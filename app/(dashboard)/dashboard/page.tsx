@@ -156,12 +156,13 @@ export default async function DashboardPage() {
       .select('id, status, monthly_budget')
       .eq('business_id', businessId),
 
-    // 오늘 연락 예정 거래처
+    // 연락할 거래처 — 오늘 예정 + 지난 일정(놓친 연락)까지 포함
     db.from('leads')
-      .select('id, company_name, phone, contact_name, status')
+      .select('id, company_name, phone, contact_name, status, next_follow_up_date')
       .eq('business_id', businessId)
-      .eq('next_follow_up_date', todayKSTStr)
-      .not('status', 'in', '("contracted","rejected")'),
+      .lte('next_follow_up_date', todayKSTStr)
+      .not('status', 'in', '("contracted","rejected")')
+      .order('next_follow_up_date', { ascending: true }),
 
     // 완성된 릴스 (다운로드 대기)
     db.from('reports' as never).select('id', { count: 'exact', head: true })
@@ -300,8 +301,8 @@ export default async function DashboardPage() {
               <div className="flex items-center gap-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 hover:bg-violet-100 transition-colors">
                 <PhoneCall className="h-4 w-4 text-violet-600 shrink-0" />
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-violet-800">오늘 연락해야 할 거래처가 {todayFollowUpCount}곳 있어요</p>
-                  <p className="text-xs text-violet-600 mt-0.5">거래처 관리에서 확인하세요</p>
+                  <p className="text-sm font-semibold text-violet-800">연락할 거래처가 {todayFollowUpCount}곳 있어요</p>
+                  <p className="text-xs text-violet-600 mt-0.5">오늘 예정이거나 지난 일정이에요 — 눌러서 확인하세요</p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-violet-400 shrink-0" />
               </div>
@@ -663,7 +664,7 @@ export default async function DashboardPage() {
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <div className="flex items-center gap-2">
               <PhoneCall className="h-4 w-4 text-violet-500" />
-              <h2 className="font-semibold text-sm">오늘 연락 예정 거래처</h2>
+              <h2 className="font-semibold text-sm">연락할 거래처</h2>
               <span className="text-xs font-semibold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">
                 {todayFollowUpCount}곳
               </span>
@@ -681,11 +682,22 @@ export default async function DashboardPage() {
                 new: '새 문의', contacted: '연락함', follow_up: '현장 방문',
                 quoted: '견적 보냄', negotiating: '금액 협의',
               }[lead.status] ?? lead.status
+              // 예정일이 오늘보다 지났으면 '지남' 표시 (며칠 지났는지)
+              const overdueDays = lead.next_follow_up_date && lead.next_follow_up_date < todayKSTStr
+                ? Math.round((new Date(todayKSTStr).getTime() - new Date(lead.next_follow_up_date).getTime()) / 86400000)
+                : 0
               return (
                 <Link key={lead.id} href={`/dashboard/pipeline/${lead.id}`}>
                   <div className="flex items-center px-5 py-3.5 hover:bg-muted/20 transition-colors">
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{lead.company_name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-medium text-sm truncate">{lead.company_name}</p>
+                        {overdueDays > 0 && (
+                          <span className="shrink-0 text-[10px] font-semibold bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">
+                            {overdueDays}일 지남
+                          </span>
+                        )}
+                      </div>
                       {lead.contact_name && (
                         <p className="text-xs text-muted-foreground mt-0.5">담당 {lead.contact_name}</p>
                       )}
