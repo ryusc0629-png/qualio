@@ -342,8 +342,8 @@ export default async function BizLandingPage({ params }: Props) {
               </div>
             )}
 
-            {/* 헤드라인 — Apple처럼 크고 tight */}
-            <h1 className={`text-[2.6rem] sm:text-6xl lg:text-7xl font-black leading-[1.05] tracking-[-0.03em] mb-5 sm:mb-6 ${hero.title}`}>
+            {/* 헤드라인 — 모바일 text-balance, 데스크탑 한 줄 고정 */}
+            <h1 className={`text-[2rem] sm:text-4xl lg:text-5xl xl:text-6xl font-black leading-tight lg:whitespace-nowrap text-balance lg:text-nowrap tracking-[-0.02em] mb-5 sm:mb-6 ${hero.title}`}>
               {business.hero_title ?? business.seo_title ?? business.name}
             </h1>
 

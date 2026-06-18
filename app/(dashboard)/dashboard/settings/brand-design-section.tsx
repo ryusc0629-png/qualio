@@ -118,24 +118,69 @@ export function BrandDesignSection({
       {/* ── 히어로 문구 직접 입력 ── */}
       <div className="space-y-3">
         <div>
-          <Label className="text-xs">페이지 제목</Label>
+          <div className="flex items-center justify-between">
+            <Label className="text-xs">페이지 제목</Label>
+            {/* 글자 수 카운터 */}
+            <span className={`text-[11px] tabular-nums ${
+              heroTitle.length === 0
+                ? 'text-muted-foreground'
+                : heroTitle.length <= 15
+                  ? 'text-emerald-600 font-medium'
+                  : heroTitle.length <= 22
+                    ? 'text-amber-500 font-medium'
+                    : 'text-red-500 font-medium'
+            }`}>
+              {heroTitle.length}/30자
+            </span>
+          </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">고객이 처음 보는 가장 큰 글자예요</p>
         </div>
+
+        {/* 글자 수 가이드 */}
+        <div className="flex gap-2 text-[11px]">
+          <span className="flex items-center gap-1 text-emerald-600">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+            15자 이내 — 한 줄로 표시
+          </span>
+          <span className="flex items-center gap-1 text-amber-500">
+            <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
+            16~22자 — 두 줄로 표시
+          </span>
+          <span className="flex items-center gap-1 text-red-500">
+            <span className="inline-block w-2 h-2 rounded-full bg-red-400" />
+            23자 이상 — 비추천
+          </span>
+        </div>
+
         <Input
           value={heroTitle}
           onChange={(e) => onChange({ heroTitle: e.target.value })}
           placeholder={`예: ${businessName || '다트클린'} | 입주청소 전문`}
-          maxLength={100}
+          maxLength={30}
         />
+
         <div>
-          <Label className="text-xs">페이지 소개글</Label>
-          <p className="text-[11px] text-muted-foreground mt-0.5">제목 아래 한두 줄 설명이에요</p>
+          <div className="flex items-center justify-between">
+            <Label className="text-xs">페이지 소개글</Label>
+            <span className={`text-[11px] tabular-nums ${
+              heroSubtitle.length === 0
+                ? 'text-muted-foreground'
+                : heroSubtitle.length <= 50
+                  ? 'text-emerald-600 font-medium'
+                  : heroSubtitle.length <= 80
+                    ? 'text-amber-500 font-medium'
+                    : 'text-red-500 font-medium'
+            }`}>
+              {heroSubtitle.length}/100자
+            </span>
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">제목 아래 한두 줄 설명이에요 — 50자 이내를 추천해요</p>
         </div>
         <textarea
           value={heroSubtitle}
           onChange={(e) => onChange({ heroSubtitle: e.target.value })}
           placeholder="예: 10년 경력 전문 청소팀이 꼼꼼하게 작업해드려요. 당일 견적, 빠른 방문!"
-          maxLength={300}
+          maxLength={100}
           rows={2}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
         />

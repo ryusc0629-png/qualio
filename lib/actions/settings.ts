@@ -40,8 +40,8 @@ const updateBusinessSchema = z.object({
     .optional(),
   logo_url:         z.string().max(500).optional(),
   hero_image_url:   z.string().max(500).optional(),
-  hero_title:       z.string().max(100).optional(),
-  hero_subtitle:    z.string().max(300).optional(),
+  hero_title:       z.string().max(30).optional(),
+  hero_subtitle:    z.string().max(100).optional(),
   testimonials:   z.string().optional(), // JSON string: [{quote, author}]
 })
 
