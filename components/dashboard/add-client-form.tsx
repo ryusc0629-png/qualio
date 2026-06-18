@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -122,6 +122,11 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
   const unitForService = (name: string) => serviceItems.find((s) => s.name === name)?.unit ?? '개'
   const [open, setOpen] = useState(false)
   const [clientType, setClientType] = useState<'lead' | 'customer'>('lead')
+  // 모달 컨테이너 — 열릴 때 한 번만 포커스 (매 렌더 재포커스로 입력 포커스 뺏기던 버그 방지)
+  const modalRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (open) modalRef.current?.focus()
+  }, [open])
   // 첫 작업 일정 — 다른 설정 창과 동일한 달력+시/분 선택 방식
   const [jobDate, setJobDate] = useState('')
   const [jobTime, setJobTime] = useState('09:00')
@@ -239,7 +244,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
       onClick={requestClose}
     >
       <div
-        ref={(el) => el?.focus()}
+        ref={modalRef}
         tabIndex={-1}
         className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto outline-none"
         onClick={(e) => e.stopPropagation()}
