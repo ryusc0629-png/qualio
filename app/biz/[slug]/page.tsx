@@ -240,12 +240,13 @@ export default async function BizLandingPage({ params }: Props) {
         {/* ── 헤더 ── */}
         <header className="border-b bg-white/95 backdrop-blur sticky top-0 z-20">
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-            {business.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={business.logo_url} alt={business.name} className="h-7 w-auto object-contain" />
-            ) : (
+            <div className="flex items-center gap-2">
+              {business.logo_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={business.logo_url} alt="" className="h-7 w-auto object-contain" />
+              )}
               <span className="font-bold text-sm">{business.name}</span>
-            )}
+            </div>
 
             {/* 네비게이션 */}
             <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
