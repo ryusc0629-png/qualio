@@ -386,32 +386,40 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   const sortedPosts = [...posts].sort((a, b) => new Date(a.published_at).getTime() - new Date(b.published_at).getTime())
   const postListRef = useRef<HTMLDivElement>(null)
 
+  // 포스트 목록 컨테이너 내부 스크롤만 조정 (페이지 전체 스크롤 건드리지 않음)
   const scrollToToday = useCallback(() => {
-    // URL 해시가 있으면 해당 게시물로, 없으면 오늘 첫 글로 스크롤
+    const container = postListRef.current
+    if (!container) return
+
+    // URL 해시가 있으면 해당 게시물로 (저장 후 복귀용)
     const hash = window.location.hash.slice(1)
     if (hash) {
       const target = document.getElementById(hash)
-      if (target && postListRef.current) {
-        requestAnimationFrame(() => target.scrollIntoView({ block: 'center' }))
+      if (target) {
+        requestAnimationFrame(() => {
+          container.scrollTop = target.offsetTop - container.offsetTop
+        })
         window.history.replaceState(null, '', window.location.pathname)
         return
       }
     }
+
     // 오늘 KST 기준 첫 글 찾기
     const todayStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
     const todayFirst = sortedPosts.find((p) => {
       const pKST = new Date(new Date(p.published_at).getTime() + 9 * 60 * 60 * 1000)
       return pKST.toISOString().slice(0, 10) >= todayStr
     })
-    if (todayFirst) {
-      const el = document.getElementById(`post-${todayFirst.id}`)
-      if (el) requestAnimationFrame(() => el.scrollIntoView({ block: 'start' }))
-    } else if (postListRef.current) {
-      // 오늘 글이 없으면 맨 아래(최신)로 스크롤
-      requestAnimationFrame(() => {
-        if (postListRef.current) postListRef.current.scrollTop = postListRef.current.scrollHeight
-      })
-    }
+
+    requestAnimationFrame(() => {
+      if (todayFirst) {
+        const el = document.getElementById(`post-${todayFirst.id}`)
+        if (el) container.scrollTop = el.offsetTop - container.offsetTop
+      } else {
+        // 오늘 글이 없으면 맨 아래(최신)로
+        container.scrollTop = container.scrollHeight
+      }
+    })
   }, [sortedPosts])
 
   useEffect(() => { scrollToToday() }, [scrollToToday])
@@ -1070,9 +1078,11 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                         onClose={() => {
                           const postId = editingPost?.id
                           setEditingPost(null)
-                          if (postId) {
+                          if (postId && postListRef.current) {
+                            const container = postListRef.current
                             requestAnimationFrame(() => {
-                              document.getElementById(`post-${postId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                              const el = document.getElementById(`post-${postId}`)
+                              if (el) container.scrollTop = el.offsetTop - container.offsetTop
                             })
                           }
                         }}
