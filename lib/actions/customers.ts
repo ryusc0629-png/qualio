@@ -105,6 +105,12 @@ const createActiveCustomerSchema = z.object({
   job_service: z.string().optional(),
   job_scheduled_at: z.string().optional(),
   job_price: z.string().optional(),
+  // 첫 작업 항목별 견적 (선택) — 있으면 합계가 금액이 됨
+  job_items: z.array(z.object({
+    name: z.string().min(1),
+    quantity: z.coerce.number().int().min(1),
+    unitPrice: z.coerce.number().int().min(0),
+  })).optional(),
   // 법인 — 정기계약 (선택)
   hasContract: z.string().optional(), // 'true' | ''
   service_type: z.string().optional(),
@@ -138,12 +144,19 @@ export const createActiveCustomerAction = action
     // 2-a. 개인 고객 — 첫 작업 예약 생성 (선택) → 캘린더 노출
     if (parsedInput.type === 'one_time' && parsedInput.scheduleJob === 'true') {
       if (!parsedInput.job_scheduled_at) throw new Error('[APP] 작업 날짜·시간을 입력해주세요')
-      if (!parsedInput.job_price) throw new Error('[APP] 작업 금액을 입력해주세요')
 
-      const price = parseInt(parsedInput.job_price, 10)
-      if (isNaN(price) || price < 0) throw new Error('[APP] 올바른 작업 금액을 입력해주세요')
+      // 항목별 견적이 있으면 합계가 금액 — 없으면 단일 금액 사용
+      const jobItems = (parsedInput.job_items ?? []).filter((it) => it.name.trim())
+      let price: number
+      if (jobItems.length > 0) {
+        price = jobItems.reduce((s, it) => s + it.quantity * it.unitPrice, 0)
+      } else {
+        if (!parsedInput.job_price) throw new Error('[APP] 작업 금액을 입력해주세요')
+        price = parseInt(parsedInput.job_price, 10)
+        if (isNaN(price) || price < 0) throw new Error('[APP] 올바른 작업 금액을 입력해주세요')
+      }
 
-      const { error: bookingError } = await db.from('bookings').insert({
+      const { data: booking, error: bookingError } = await db.from('bookings').insert({
         business_id: businessId,
         quote_id: null,
         customer_name: parsedInput.name,
@@ -155,8 +168,26 @@ export const createActiveCustomerAction = action
         memo: parsedInput.job_service || null,
         status: 'confirmed',
       })
+        .select('id')
+        .single()
 
-      if (bookingError) throw new Error('[APP] 작업 일정 등록에 실패했습니다')
+      if (bookingError || !booking) throw new Error('[APP] 작업 일정 등록에 실패했습니다')
+
+      // 항목별 견적 저장
+      if (jobItems.length > 0) {
+        const { error: itemsError } = await db.from('booking_items' as never).insert(
+          jobItems.map((it, idx) => ({
+            business_id: businessId,
+            booking_id: booking.id,
+            name: it.name,
+            quantity: it.quantity,
+            unit_price: it.unitPrice,
+            amount: it.quantity * it.unitPrice,
+            sort_order: idx,
+          })) as never,
+        )
+        if (itemsError) throw new Error('[APP] 작업 항목 저장에 실패했습니다')
+      }
     }
 
     // 2-b. 법인 고객 — 정기계약 생성 (선택)

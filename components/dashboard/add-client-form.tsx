@@ -13,7 +13,14 @@ import { FrequencyPicker } from '@/components/dashboard/frequency-picker'
 import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { createLeadAction } from '@/lib/actions/crm'
 import { createActiveCustomerAction } from '@/lib/actions/customers'
-import { Plus, X, Search } from 'lucide-react'
+import { Plus, X, Search, Trash2 } from 'lucide-react'
+
+// 숫자 입력 쉼표 처리 헬퍼
+const digitsOnly = (v: string) => v.replace(/[^0-9]/g, '')
+const formatThousands = (v: string) => {
+  const d = digitsOnly(v)
+  return d ? Number(d).toLocaleString('ko-KR') : ''
+}
 
 // 카카오(다음) 주소 검색 — 우편번호 스크립트 동적 로드
 declare global {
@@ -103,6 +110,19 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
   // 첫 작업 일정 — 다른 설정 창과 동일한 달력+시/분 선택 방식
   const [jobDate, setJobDate] = useState('')
   const [jobTime, setJobTime] = useState('09:00')
+  // 첫 작업 금액 — 항목별로 나눌지 여부 + 항목 목록
+  const [useJobItems, setUseJobItems] = useState(false)
+  const [jobItems, setJobItems] = useState<{ name: string; qty: string; unitPrice: string }[]>([
+    { name: '', qty: '1', unitPrice: '' },
+  ])
+  const jobItemsTotal = jobItems.reduce(
+    (s, it) => s + (parseInt(it.qty, 10) || 0) * (parseInt(it.unitPrice, 10) || 0),
+    0,
+  )
+  const updateJobItem = (idx: number, field: 'name' | 'qty' | 'unitPrice', value: string) =>
+    setJobItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)))
+  const addJobItem = () => setJobItems((prev) => [...prev, { name: '', qty: '1', unitPrice: '' }])
+  const removeJobItem = (idx: number) => setJobItems((prev) => prev.filter((_, i) => i !== idx))
 
   const leadForm = useForm<LeadInput>({
     resolver: zodResolver(leadSchema),
@@ -128,6 +148,8 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
       customerForm.reset({ type: '', scheduleJob: '', hasContract: '' })
       setJobDate('')
       setJobTime('09:00')
+      setUseJobItems(false)
+      setJobItems([{ name: '', qty: '1', unitPrice: '' }])
       setOpen(false)
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
@@ -149,6 +171,8 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
     customerForm.reset({ type: '', scheduleJob: '', hasContract: '' })
     setJobDate('')
     setJobTime('09:00')
+    setUseJobItems(false)
+    setJobItems([{ name: '', qty: '1', unitPrice: '' }])
     setClientType('lead')
   }
 
@@ -302,6 +326,15 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
               executeCustomer({
                 ...data,
                 job_scheduled_at: jobDate ? `${jobDate}T${jobTime}:00+09:00` : '',
+                job_items: useJobItems
+                  ? jobItems
+                      .filter((it) => it.name.trim())
+                      .map((it) => ({
+                        name: it.name,
+                        quantity: parseInt(it.qty, 10) || 1,
+                        unitPrice: parseInt(it.unitPrice, 10) || 0,
+                      }))
+                  : undefined,
               })
             )}
             className="space-y-3"
@@ -429,9 +462,85 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
                         onTimeChange={setJobTime}
                       />
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="job-price">작업 금액 (필수)</Label>
-                      <Input id="job-price" inputMode="numeric" placeholder="150000" {...customerForm.register('job_price')} />
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>작업 금액 (필수)</Label>
+                        <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={useJobItems}
+                            onChange={(e) => setUseJobItems(e.target.checked)}
+                            className="accent-primary h-3.5 w-3.5"
+                          />
+                          항목별로 나누기
+                        </label>
+                      </div>
+
+                      {!useJobItems ? (
+                        <Input
+                          inputMode="numeric"
+                          placeholder="150,000"
+                          value={formatThousands(customerForm.watch('job_price') ?? '')}
+                          onChange={(e) => customerForm.setValue('job_price', digitsOnly(e.target.value))}
+                        />
+                      ) : (
+                        <div className="space-y-2">
+                          {jobItems.map((it, idx) => (
+                            <div key={idx} className="rounded-lg bg-white border border-border p-2 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  value={it.name}
+                                  onChange={(e) => updateJobItem(idx, 'name', e.target.value)}
+                                  placeholder="항목명 (예: 에어컨 청소)"
+                                  className="flex-1 h-9 rounded-lg border border-border px-2.5 text-sm"
+                                />
+                                {jobItems.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeJobItem(idx)}
+                                    className="shrink-0 w-9 h-9 rounded-lg border border-border flex items-center justify-center text-destructive hover:bg-destructive/10"
+                                    aria-label="항목 빼기"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  inputMode="numeric"
+                                  value={it.qty}
+                                  onChange={(e) => updateJobItem(idx, 'qty', digitsOnly(e.target.value))}
+                                  className="w-12 h-9 rounded-lg border border-border px-2 text-sm text-center"
+                                />
+                                <span className="text-xs text-muted-foreground">개 ×</span>
+                                <input
+                                  inputMode="numeric"
+                                  value={formatThousands(it.unitPrice)}
+                                  onChange={(e) => updateJobItem(idx, 'unitPrice', digitsOnly(e.target.value))}
+                                  placeholder="단가"
+                                  className="flex-1 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
+                                />
+                                <span className="text-sm font-semibold tabular-nums w-24 text-right">
+                                  {formatThousands(String((parseInt(it.qty, 10) || 0) * (parseInt(it.unitPrice, 10) || 0)))}원
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={addJobItem}
+                            className="w-full h-9 rounded-lg border border-dashed border-border text-sm text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors flex items-center justify-center gap-1"
+                          >
+                            <Plus className="h-4 w-4" /> 항목 추가
+                          </button>
+                          <div className="flex items-center justify-between px-1">
+                            <span className="text-sm font-semibold">합계</span>
+                            <span className="text-base font-bold tabular-nums text-primary">
+                              {formatThousands(String(jobItemsTotal))}원
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -476,7 +585,13 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="contract-price">월 계약금액 (필수)</Label>
-                      <Input id="contract-price" inputMode="numeric" placeholder="700000" {...customerForm.register('contract_price')} />
+                      <Input
+                        id="contract-price"
+                        inputMode="numeric"
+                        placeholder="700,000"
+                        value={formatThousands(customerForm.watch('contract_price') ?? '')}
+                        onChange={(e) => customerForm.setValue('contract_price', digitsOnly(e.target.value))}
+                      />
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="contract-start">시작일 (필수)</Label>

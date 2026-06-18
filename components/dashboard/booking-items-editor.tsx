@@ -37,6 +37,11 @@ interface Props {
 }
 
 const won = (n: number) => new Intl.NumberFormat('ko-KR').format(n) + '원'
+const digitsOnly = (v: string) => v.replace(/[^0-9]/g, '')
+const formatThousands = (v: string) => {
+  const d = digitsOnly(v)
+  return d ? Number(d).toLocaleString('ko-KR') : ''
+}
 
 export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
   const [items, setItems] = useState<Item[]>([])
@@ -147,8 +152,8 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
                 </div>
                 <input
                   inputMode="numeric"
-                  value={String(it.unit_price)}
-                  onChange={(e) => handleRowChange(it.id, 'unit_price', e.target.value)}
+                  value={formatThousands(String(it.unit_price))}
+                  onChange={(e) => handleRowChange(it.id, 'unit_price', digitsOnly(e.target.value))}
                   placeholder="단가"
                   className="flex-1 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
                 />
@@ -190,8 +195,8 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
           <span className="text-xs text-muted-foreground">개 ×</span>
           <input
             inputMode="numeric"
-            value={newPrice}
-            onChange={(e) => setNewPrice(e.target.value)}
+            value={formatThousands(newPrice)}
+            onChange={(e) => setNewPrice(digitsOnly(e.target.value))}
             placeholder="단가"
             className="flex-1 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
           />
