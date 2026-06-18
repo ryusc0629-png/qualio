@@ -2,6 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { QuoteLinkShare } from '@/components/dashboard/quote-link-share'
+import { FollowUpSnoozeButton } from '@/components/dashboard/follow-up-snooze-button'
 import { WeeklyChart } from '@/components/dashboard/weekly-chart'
 import {
   AlertCircle, Calendar, ChevronRight, RefreshCw,
@@ -713,6 +714,7 @@ export default async function DashboardPage() {
                           <Phone className="h-3.5 w-3.5 text-violet-600" />
                         </a>
                       )}
+                      <FollowUpSnoozeButton leadId={lead.id} />
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>

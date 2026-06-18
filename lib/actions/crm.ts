@@ -180,6 +180,32 @@ export const updateLeadAction = action
     return { success: true }
   })
 
+// 후속 연락 미루기 — 다음 연락 예정일만 변경 (대시보드 '연락할 거래처'용)
+const snoozeFollowUpSchema = z.object({
+  leadId: z.string().uuid(),
+  date: z.string().refine(
+    (v) => /^\d{4}-\d{2}-\d{2}$/.test(v),
+    '날짜 형식이 올바르지 않습니다',
+  ),
+})
+
+export const snoozeFollowUpAction = action
+  .schema(snoozeFollowUpSchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuthenticatedBusinessId()
+
+    const { error } = await db
+      .from('leads')
+      .update({ next_follow_up_date: parsedInput.date })
+      .eq('id', parsedInput.leadId)
+      .eq('business_id', businessId)
+
+    if (error) throw new Error('[APP] 미루기에 실패했습니다')
+    revalidatePath('/dashboard')
+    revalidatePath('/dashboard/pipeline')
+    return { success: true }
+  })
+
 // 상담 기록 추가
 export const createLeadActivityAction = action
   .schema(createActivitySchema)
