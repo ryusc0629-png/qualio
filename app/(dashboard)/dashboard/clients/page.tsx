@@ -194,10 +194,13 @@ export default async function ClientsPage({
       .order('name', { ascending: true }),
   ])
 
-  // 폼 서비스 드롭다운용 — 등록된 서비스명 목록
-  const serviceNames = (serviceItems ?? [])
-    .map((s) => s.name)
-    .filter((n): n is string => Boolean(n))
+  // 폼 서비스 드롭다운용 — 등록된 서비스명 목록 (이름 기준 중복 제거)
+  const serviceNames = [...new Set(
+    (serviceItems ?? [])
+      .map((s) => s.name)
+      .filter((n): n is string => Boolean(n))
+      .map((n) => n.trim())
+  )]
 
   // 전화번호 → 예약 실적 맵
   const bookingMap: Record<string, { ltv: number; count: number; lastDate: string }> = {}
