@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, ChevronDown } from 'lucide-react'
+import { ArrowRight, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { isAcService } from '@/lib/utils'
 
@@ -40,10 +40,10 @@ export function ServiceList({ services, quoteUrl }: Props) {
   return (
     <div>
       <div className="relative">
-        {/* 카드 그리드 — 접힌 상태에서 첫 행만 노출 */}
+        {/* 카드 그리드 — 접힌 상태에서 첫 행 + 2행 살짝 노출 */}
         <div
           className={`grid sm:grid-cols-2 lg:grid-cols-3 gap-3 transition-[max-height] duration-500 ease-in-out ${
-            !expanded && hasMore ? 'overflow-hidden max-h-[280px] sm:max-h-[200px] lg:max-h-[112px]' : ''
+            !expanded && hasMore ? 'overflow-hidden max-h-[380px] sm:max-h-[240px] lg:max-h-[180px]' : ''
           }`}
         >
           {services.map((service) => (
@@ -73,13 +73,26 @@ export function ServiceList({ services, quoteUrl }: Props) {
 
         {/* 그라디언트 페이드 + 더보기 버튼 */}
         {hasMore && !expanded && (
-          <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-white via-white/80 to-transparent flex items-end justify-center pb-3">
+          <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-white via-white/70 to-transparent flex items-end justify-center pb-3">
             <button
               onClick={() => setExpanded(true)}
               className="flex items-center gap-1.5 bg-white border border-slate-200 shadow-md rounded-full px-5 py-2.5 text-sm font-semibold text-slate-700 hover:border-primary/40 hover:text-primary hover:shadow-lg transition-all"
             >
               <ChevronDown className="h-4 w-4" />
               서비스 {hiddenCount}개 더보기
+            </button>
+          </div>
+        )}
+
+        {/* 펼쳐진 상태 — 접기 버튼 */}
+        {hasMore && expanded && (
+          <div className="flex justify-center mt-4">
+            <button
+              onClick={() => setExpanded(false)}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronUp className="h-4 w-4" />
+              서비스 목록 접기
             </button>
           </div>
         )}
