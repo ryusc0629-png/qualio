@@ -6,7 +6,7 @@ import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, pu
 import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/portfolio'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sparkles, Plus, ExternalLink, Trash2, Eye, EyeOff, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send } from 'lucide-react'
+import { Sparkles, Plus, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { toast } from 'sonner'
 
@@ -692,9 +692,14 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                         <Button size="icon" variant="ghost" className="h-8 w-8"><ExternalLink className="h-3.5 w-3.5" /></Button>
                       </a>
                     )}
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingPost(post)}>
-                      {post.published ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingPost(post)}
+                      className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                      title="제목·내용 수정하기"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />수정
+                    </button>
                     <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" disabled={isDeleting}
                       onClick={() => { if (confirm('포스트를 삭제할까요?')) deletePost({ id: post.id }) }}>
                       <Trash2 className="h-3.5 w-3.5" />
