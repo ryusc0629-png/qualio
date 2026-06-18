@@ -5,11 +5,11 @@ import { useAction } from 'next-safe-action/hooks'
 import { savePostAction } from '@/lib/actions/posts'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Loader2, Save } from 'lucide-react'
 import { toast } from 'sonner'
+import { RichTextEditor } from './rich-text-editor'
 
 interface PostEditorProps {
   businessId: string
@@ -89,14 +89,10 @@ export function PostEditor({ post, onClose, onSaved }: PostEditorProps) {
 
         <div>
           <Label className="text-xs text-muted-foreground mb-1 block">본문</Label>
-          <Textarea
-            placeholder="포스트 본문을 작성하세요..."
-            rows={10}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            disabled={isPending}
-            className="font-mono text-sm"
-          />
+          <RichTextEditor value={content} onChange={setContent} disabled={isPending} />
+          <p className="text-xs text-muted-foreground mt-1.5">
+            위 버튼으로 제목·굵게·목록을 넣을 수 있어요. 저장하면 웹사이트에 똑같이 반영됩니다.
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
