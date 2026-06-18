@@ -20,6 +20,7 @@ import {
   ThumbsUp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { FadeIn } from '@/components/ui/fade-in'
 import { isAcService } from '@/lib/utils'
 import { buildBrandStyle, toBrandSettings } from '@/lib/brand'
 
@@ -404,6 +405,7 @@ export default async function BizLandingPage({ params }: Props) {
 
         {/* ── 신뢰 배지 바 ── */}
         <section className="border-b bg-slate-50">
+          <FadeIn>
           <div className="max-w-5xl mx-auto px-4 py-4">
             <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2">
               {[
@@ -419,10 +421,12 @@ export default async function BizLandingPage({ params }: Props) {
               ))}
             </div>
           </div>
+          </FadeIn>
         </section>
 
         {/* ── 고통 공감 섹션 ── */}
         <section className="py-16 bg-white">
+          <FadeIn>
           <div className="max-w-5xl mx-auto px-4">
             <div className="text-center mb-10">
               <p className="text-primary font-semibold text-sm mb-2 tracking-wide uppercase">이런 분들을 위해 준비했어요</p>
@@ -459,10 +463,12 @@ export default async function BizLandingPage({ params }: Props) {
               </Link>
             </div>
           </div>
+          </FadeIn>
         </section>
 
         {/* ── 예약 프로세스 (4단계) ── */}
         <section id="process" className="py-16 bg-gradient-to-b from-slate-50 to-white">
+          <FadeIn>
           <div className="max-w-5xl mx-auto px-4">
             <div className="text-center mb-14">
               <p className="text-primary font-semibold text-sm mb-2 tracking-wide uppercase">간편한 예약 프로세스</p>
@@ -501,11 +507,13 @@ export default async function BizLandingPage({ params }: Props) {
               </Link>
             </div>
           </div>
+          </FadeIn>
         </section>
 
         {/* ── 서비스 목록 ── */}
         {services && services.length > 0 && (
           <section id="services" className="py-16 bg-white">
+            <FadeIn>
             <div className="max-w-5xl mx-auto px-4">
               <div className="text-center mb-10">
                 <p className="text-primary font-semibold text-sm mb-2 tracking-wide uppercase">제공 서비스</p>
@@ -551,12 +559,14 @@ export default async function BizLandingPage({ params }: Props) {
                 </Link>
               </div>
             </div>
+            </FadeIn>
           </section>
         )}
 
         {/* ── YouTube 시공 영상 ── */}
         {youtubeId && (
           <section className="py-16 bg-white">
+            <FadeIn>
             <div className="max-w-5xl mx-auto px-4">
               <div className="text-center mb-8">
                 <p className="text-primary font-semibold text-sm mb-2 tracking-wide uppercase">실제 시공 영상</p>
@@ -573,11 +583,13 @@ export default async function BizLandingPage({ params }: Props) {
                 />
               </div>
             </div>
+            </FadeIn>
           </section>
         )}
 
         {/* ── 핵심 특장점 3가지 ── */}
         <section className="py-16 bg-slate-50">
+          <FadeIn>
           <div className="max-w-5xl mx-auto px-4">
             <div className="text-center mb-10">
               <p className="text-primary font-semibold text-sm mb-2 tracking-wide uppercase">선택하는 이유</p>
@@ -627,10 +639,12 @@ export default async function BizLandingPage({ params }: Props) {
               })}
             </div>
           </div>
+          </FadeIn>
         </section>
 
         {/* ── 가격 안심 배너 ── */}
         <section className="py-10 bg-primary/5 border-y border-primary/10">
+          <FadeIn>
           <div className="max-w-5xl mx-auto px-4">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-4">
@@ -664,11 +678,13 @@ export default async function BizLandingPage({ params }: Props) {
               </div>
             </div>
           </div>
+          </FadeIn>
         </section>
 
         {/* ── 고객 추천사 ── */}
         {business.testimonials && business.testimonials.length > 0 && (
           <section className="py-16 bg-white">
+            <FadeIn>
             <div className="max-w-5xl mx-auto px-4">
               <div className="text-center mb-10">
                 <p className="text-primary font-semibold text-sm mb-2 tracking-wide uppercase">고객 후기</p>
@@ -690,12 +706,14 @@ export default async function BizLandingPage({ params }: Props) {
                 ))}
               </div>
             </div>
+            </FadeIn>
           </section>
         )}
 
         {/* ── FAQ ── */}
         {faqs.length > 0 && (
           <section id="faq" className="py-16 bg-white">
+            <FadeIn>
             <div className="max-w-5xl mx-auto px-4">
               <div className="text-center mb-10">
                 <p className="text-primary font-semibold text-sm mb-2 tracking-wide uppercase">궁금한 점</p>
@@ -710,12 +728,14 @@ export default async function BizLandingPage({ params }: Props) {
                 ))}
               </div>
             </div>
+            </FadeIn>
           </section>
         )}
 
         {/* ── 최근 포스팅 (청소 정보) ── */}
         {recentPosts && recentPosts.length > 0 && (
           <section className="py-16 bg-slate-50">
+            <FadeIn>
             <div className="max-w-5xl mx-auto px-4">
               <div className="flex items-end justify-between mb-8">
                 <div>
@@ -758,6 +778,7 @@ export default async function BizLandingPage({ params }: Props) {
                 ))}
               </div>
             </div>
+            </FadeIn>
           </section>
         )}
 
