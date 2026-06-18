@@ -17,14 +17,11 @@ function kstDateAfter(days: number): string {
   return kst.toISOString().slice(0, 10)
 }
 
-const OPTIONS: { label: string; days: number }[] = [
-  { label: '내일', days: 1 },
-  { label: '3일 후', days: 3 },
-  { label: '1주 후', days: 7 },
-]
-
 export function FollowUpSnoozeButton({ leadId }: FollowUpSnoozeButtonProps) {
   const [open, setOpen] = useState(false)
+  // 기본값: 내일 — 최소 선택 가능일도 내일
+  const [date, setDate] = useState(() => kstDateAfter(1))
+  const tomorrow = kstDateAfter(1)
 
   const { execute, isPending } = useAction(snoozeFollowUpAction, {
     onSuccess: () => {
@@ -61,25 +58,33 @@ export function FollowUpSnoozeButton({ leadId }: FollowUpSnoozeButtonProps) {
               setOpen(false)
             }}
           />
-          <div className="absolute right-0 top-9 z-20 w-32 rounded-lg border border-border bg-white shadow-lg overflow-hidden">
-            <p className="px-3 py-2 text-[11px] font-medium text-muted-foreground border-b border-border">
-              언제로 미룰까요?
+          <div
+            className="absolute right-0 top-9 z-20 w-56 rounded-lg border border-border bg-white shadow-lg p-3 space-y-2.5"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation() }}
+          >
+            <p className="text-[11px] font-medium text-muted-foreground">
+              언제 다시 연락할까요?
             </p>
-            {OPTIONS.map((opt) => (
-              <button
-                key={opt.days}
-                type="button"
-                disabled={isPending}
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  execute({ leadId, date: kstDateAfter(opt.days) })
-                }}
-                className="block w-full text-left px-3 py-2.5 text-sm hover:bg-muted transition-colors disabled:opacity-50"
-              >
-                {opt.label}
-              </button>
-            ))}
+            <input
+              type="date"
+              value={date}
+              min={tomorrow}
+              onChange={(e) => setDate(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full h-10 rounded-lg border border-border bg-background px-2.5 text-sm"
+            />
+            <button
+              type="button"
+              disabled={isPending || !date}
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                execute({ leadId, date })
+              }}
+              className="w-full h-10 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {isPending ? '미루는 중...' : '이 날짜로 미루기'}
+            </button>
           </div>
         </>
       )}
