@@ -53,7 +53,7 @@ export function ImageLightbox({ images, initialIndex = 0, onClose }: ImageLightb
   if (!current) return null
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
+    <div ref={(el) => el?.focus()} tabIndex={-1} className="fixed inset-0 z-50 bg-black/95 flex flex-col outline-none">
       {/* 상단 바 */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <span className="text-white/70 text-sm">

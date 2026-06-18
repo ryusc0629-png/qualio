@@ -554,12 +554,14 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
                                   onChange={(e) => setJobQty(idx, digitsOnly(e.target.value))}
                                   className="w-12 h-9 rounded-lg border border-border px-2 text-sm text-center shrink-0"
                                 />
-                                <span className="text-xs text-muted-foreground shrink-0">{qtyUnitOf(it.unit)} × {perLabelOf(it.unit)}</span>
+                                <span className="text-xs text-muted-foreground shrink-0">
+                                  {useJobItems ? `${qtyUnitOf(it.unit)} × ${perLabelOf(it.unit)}` : '×'}
+                                </span>
                                 <input
                                   inputMode="numeric"
                                   value={formatThousands(it.unitPrice)}
                                   onChange={(e) => setJobUnit(idx, digitsOnly(e.target.value))}
-                                  placeholder={`${perLabelOf(it.unit)} 단가`}
+                                  placeholder={useJobItems ? `${perLabelOf(it.unit)} 단가` : '단가'}
                                   className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
                                 />
                                 <span className="text-xs text-muted-foreground shrink-0">원</span>

@@ -68,7 +68,7 @@ export function AddContractButton({ customerId, customerName }: AddContractButto
 
       {open && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4">
+          <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4 outline-none">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="font-semibold text-lg">정기계약 추가</h2>

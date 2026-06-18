@@ -99,7 +99,7 @@ export function EditCustomerButton({ customer }: EditCustomerButtonProps) {
 
       {open && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-background rounded-xl border shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto p-6 space-y-4">
+          <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-background rounded-xl border shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto p-6 space-y-4 outline-none">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-lg">
                 {isCompany ? '법인 고객 수정' : '개인 고객 수정'}
