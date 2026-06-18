@@ -119,8 +119,8 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
   // 첫 작업 일정 — 다른 설정 창과 동일한 달력+시/분 선택 방식
   const [jobDate, setJobDate] = useState('')
   const [jobTime, setJobTime] = useState('09:00')
-  // 첫 작업 금액 — 항목별로 나눌지 여부 + 항목 목록
-  const [useJobItems, setUseJobItems] = useState(false)
+  // 첫 작업 견적 — 기본은 항목별(서비스 선택), 체크 시 수기 단일 금액
+  const [useJobItems, setUseJobItems] = useState(true)
   const [jobItems, setJobItems] = useState<{ name: string; qty: string; unitPrice: string }[]>([
     { name: '', qty: '1', unitPrice: '' },
   ])
@@ -164,7 +164,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
       customerForm.reset({ type: '', scheduleJob: '', hasContract: '' })
       setJobDate('')
       setJobTime('09:00')
-      setUseJobItems(false)
+      setUseJobItems(true)
       setJobItems([{ name: '', qty: '1', unitPrice: '' }])
       setOpen(false)
     },
@@ -187,7 +187,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
     customerForm.reset({ type: '', scheduleJob: '', hasContract: '' })
     setJobDate('')
     setJobTime('09:00')
-    setUseJobItems(false)
+    setUseJobItems(true)
     setJobItems([{ name: '', qty: '1', unitPrice: '' }])
     setClientType('lead')
   }
@@ -458,37 +458,18 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
 
                 {scheduleJob && (
                   <div className="space-y-3 pt-1">
-                    <div className="space-y-1">
-                      <Label htmlFor="job-service">서비스명</Label>
-                      <select
-                        id="job-service"
-                        {...customerForm.register('job_service')}
-                        className="w-full h-10 rounded-lg border border-border bg-background px-2.5 text-sm"
-                      >
-                        <option value="">선택 안함</option>
-                        {serviceOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <Label>작업 날짜·시간 (필수)</Label>
-                      <DateTimePicker
-                        date={jobDate}
-                        time={jobTime}
-                        onDateChange={setJobDate}
-                        onTimeChange={setJobTime}
-                      />
-                    </div>
+                    {/* 1. 견적 (메인) — 기본은 서비스 항목 선택, 체크 시 수기 단일 금액 */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <Label>작업 금액 (필수)</Label>
+                        <Label>견적 (필수)</Label>
                         <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground">
                           <input
                             type="checkbox"
-                            checked={useJobItems}
-                            onChange={(e) => setUseJobItems(e.target.checked)}
+                            checked={!useJobItems}
+                            onChange={(e) => setUseJobItems(!e.target.checked)}
                             className="accent-primary h-3.5 w-3.5"
                           />
-                          항목별로 나누기
+                          수기로 견적 작성하기
                         </label>
                       </div>
 
@@ -563,6 +544,17 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
                           </div>
                         </div>
                       )}
+                    </div>
+
+                    {/* 2. 날짜·시간 (견적 다음 순서) */}
+                    <div className="space-y-1">
+                      <Label>작업 날짜·시간 (필수)</Label>
+                      <DateTimePicker
+                        date={jobDate}
+                        time={jobTime}
+                        onDateChange={setJobDate}
+                        onTimeChange={setJobTime}
+                      />
                     </div>
                   </div>
                 )}
