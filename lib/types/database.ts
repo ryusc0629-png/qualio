@@ -429,6 +429,7 @@ export type Database = {
           daangn_content: string | null
           instagram_content: string | null
           instagram_hashtags: string[] | null
+          channel_posted_at: string | null
         }
         Insert: {
           id?: string
@@ -450,6 +451,7 @@ export type Database = {
           daangn_content?: string | null
           instagram_content?: string | null
           instagram_hashtags?: string[] | null
+          channel_posted_at?: string | null
         }
         Update: {
           id?: string
@@ -471,6 +473,7 @@ export type Database = {
           daangn_content?: string | null
           instagram_content?: string | null
           instagram_hashtags?: string[] | null
+          channel_posted_at?: string | null
         }
         Relationships: [
           {

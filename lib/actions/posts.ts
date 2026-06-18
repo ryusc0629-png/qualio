@@ -443,3 +443,22 @@ export const deletePostAction = action
     revalidatePath('/dashboard/marketing')
     return { success: true }
   })
+
+// 채널(네이버/당근/인스타) 수동 업로드 완료 처리 — 작업 목록에서 사라지게 함
+export const markChannelsPostedAction = action
+  .schema(z.object({ id: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { error } = await db
+      .from('biz_posts' as never)
+      .update({ channel_posted_at: new Date().toISOString() } as never)
+      .eq('id' as never, parsedInput.id)
+      .eq('business_id' as never, businessId)
+
+    if (error) throw new Error('[APP] 완료 처리에 실패했습니다')
+
+    revalidatePath('/dashboard/marketing')
+    revalidatePath('/dashboard', 'layout')
+    return { success: true }
+  })

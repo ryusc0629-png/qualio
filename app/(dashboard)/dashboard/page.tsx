@@ -7,7 +7,7 @@ import {
   AlertCircle, Calendar, ChevronRight, RefreshCw,
   Wallet, ClipboardList, Star, Phone,
   Users, UserPlus, AlertTriangle, TrendingUp, CheckCircle2,
-  Handshake, PhoneCall, ShieldAlert, Film, ImageIcon,
+  Handshake, PhoneCall, ShieldAlert, Film, ImageIcon, Send,
 } from 'lucide-react'
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
@@ -73,6 +73,7 @@ export default async function DashboardPage() {
     { data: todayFollowUps },
     { count: doneReelCount },
     { count: pendingPortfolioCount },
+    { count: pendingChannelCount },
   ] = await Promise.all([
     // 이번 달 완료 예약
     db.from('bookings').select('final_price')
@@ -172,6 +173,14 @@ export default async function DashboardPage() {
       .eq('business_id' as never, businessId)
       .eq('post_type' as never, 'portfolio')
       .eq('published' as never, false),
+
+    // 아직 채널에 안 올린 글 (네이버/당근/인스타 콘텐츠 있고 완료 처리 안 됨)
+    db.from('biz_posts' as never).select('id', { count: 'exact', head: true })
+      .eq('business_id' as never, businessId)
+      .eq('published' as never, true)
+      .neq('post_type' as never, 'portfolio')
+      .is('channel_posted_at' as never, null)
+      .or('naver_content.not.is.null,daangn_content.not.is.null,instagram_content.not.is.null' as never),
   ])
 
   // ── 계산 ──────────────────────────────────────────────
@@ -227,7 +236,7 @@ export default async function DashboardPage() {
   // 알림 배너 여부
   const hasAlerts = (pendingQuoteCount ?? 0) > 0 || unreportedCount > 0 ||
     (unreviewedCount ?? 0) > 0 || (unassignedCount ?? 0) > 0 || todayFollowUpCount > 0 ||
-    (doneReelCount ?? 0) > 0 || (pendingPortfolioCount ?? 0) > 0
+    (doneReelCount ?? 0) > 0 || (pendingPortfolioCount ?? 0) > 0 || (pendingChannelCount ?? 0) > 0
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
@@ -272,6 +281,20 @@ export default async function DashboardPage() {
               </div>
             </Link>
           )}
+          {(pendingChannelCount ?? 0) > 0 && (
+            <Link href="/dashboard/marketing">
+              <div className="flex items-center gap-3 bg-teal-50 border border-teal-200 rounded-xl px-4 py-3 hover:bg-teal-100 transition-colors">
+                <Send className="h-4 w-4 text-teal-500 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-teal-800">
+                    채널에 올릴 글이 {pendingChannelCount}개 있어요
+                  </p>
+                  <p className="text-xs text-teal-600 mt-0.5">네이버·당근·인스타에 올리고 “올렸어요”를 눌러주세요</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-teal-400 shrink-0" />
+              </div>
+            </Link>
+          )}
           {todayFollowUpCount > 0 && (
             <Link href="/dashboard/pipeline">
               <div className="flex items-center gap-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 hover:bg-violet-100 transition-colors">
@@ -313,9 +336,9 @@ export default async function DashboardPage() {
                 <ClipboardList className="h-4 w-4 text-orange-600 shrink-0" />
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-orange-800">
-                    작업 보고서를 안 보낸 고객이 {unreportedCount}명이에요
+                    작업 보고서 미작성 {unreportedCount}건
                   </p>
-                  <p className="text-xs text-orange-600 mt-0.5">눌러서 바로 발송하세요</p>
+                  <p className="text-xs text-orange-600 mt-0.5">눌러서 보고서를 작성하세요</p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-orange-500 shrink-0" />
               </div>

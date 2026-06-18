@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
-import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, publishTodayAction, generatePostImagesAction } from '@/lib/actions/posts'
+import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, publishTodayAction, generatePostImagesAction, markChannelsPostedAction } from '@/lib/actions/posts'
 import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/portfolio'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -68,6 +68,7 @@ interface Post {
   post_type?: string | null
   before_image_urls?: string[] | null
   after_image_urls?: string[] | null
+  channel_posted_at?: string | null
 }
 
 interface PendingPortfolio {
@@ -179,6 +180,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   const [instaPost, setInstaPost] = useState<Post | null>(null)
   const [galleryPost, setGalleryPost] = useState<Post | null>(null)
   const [genId, setGenId] = useState<string | null>(null)
+  const [postingId, setPostingId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
   const handleCopy = (content: string) => {
@@ -197,15 +199,12 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   const currentMonth = now.getMonth() + 1
   const schedule = buildSchedule(autoPostLimit, posts, suggestions)
 
-  // 최근 3일 내 자동 발행된 글 중 아직 채널에 올릴 거리 (포트폴리오 제외)
-  const channelTodos = posts
-    .filter((p) => {
-      if (p.post_type === 'portfolio' || !p.published) return false
-      if (!(p.naver_content || p.daangn_content || p.instagram_content)) return false
-      const days = (Date.now() - new Date(p.published_at).getTime()) / 86400000
-      return days <= 3
-    })
-    .slice(0, 5)
+  // 아직 채널에 안 올린 글 (포트폴리오 제외, 채널 콘텐츠 있고 완료 처리 안 된 것)
+  const channelTodos = posts.filter((p) => {
+    if (p.post_type === 'portfolio' || !p.published) return false
+    if (!(p.naver_content || p.daangn_content || p.instagram_content)) return false
+    return !p.channel_posted_at
+  })
 
   // 사장님이 처리해야 할 작업물 총합 (릴스 + 시공 사례 + 새 글)
   const totalTodos = doneReels.length + pendingPortfolios.length + channelTodos.length
@@ -243,6 +242,11 @@ const { execute: deletePost, isPending: isDeleting } = useAction(deletePostActio
       setTimeout(() => window.location.replace(window.location.pathname), 1200)
     },
     onError: ({ error }) => { setGenId(null); toast.error(error.serverError ?? '이미지 생성에 실패했어요') },
+  })
+
+  const { execute: markChannelsPosted } = useAction(markChannelsPostedAction, {
+    onSuccess: () => { toast.success('올림 완료로 표시했어요!'); setTimeout(() => window.location.replace(window.location.pathname), 800) },
+    onError: ({ error }) => { setPostingId(null); toast.error(error.serverError ?? '처리에 실패했어요') },
   })
 
   const { execute: approvePortfolio, isPending: isApproving } = useAction(approvePortfolioAction, {
@@ -457,26 +461,40 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
               <div className="px-4 sm:px-5 py-3.5">
                 <div className="flex items-center gap-1.5 mb-2.5">
                   <Send className="h-4 w-4 text-primary" />
-                  <p className="text-sm font-semibold">새로 올라온 글 {channelTodos.length}개</p>
-                  <span className="text-xs text-muted-foreground hidden sm:inline">— 네이버·당근·인스타에 올려보세요</span>
+                  <p className="text-sm font-semibold">채널에 올릴 글 {channelTodos.length}개</p>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">— 복사해서 올린 뒤 “올렸어요”를 눌러주세요</span>
                 </div>
                 <div className="space-y-2">
                   {channelTodos.map((post) => (
-                    <div key={post.id} className="flex items-center gap-3 rounded-xl border bg-slate-50/60 px-3 py-2.5">
-                      {post.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={post.image_url} alt="" className="w-9 h-9 rounded-lg object-cover border shrink-0" />
-                      ) : (
-                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                          <Sparkles className="h-4 w-4 text-primary" />
+                    <div key={post.id} className="rounded-xl border bg-slate-50/60 px-3 py-2.5 space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-3">
+                      <div className="flex items-center gap-3 min-w-0 sm:flex-1">
+                        {post.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={post.image_url} alt="" className="w-9 h-9 rounded-lg object-cover border shrink-0" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                            <Sparkles className="h-4 w-4 text-primary" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{post.title}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(post.published_at).toLocaleDateString('ko-KR')} 발행</p>
                         </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{post.title}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(post.published_at).toLocaleDateString('ko-KR')} 발행</p>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-1 flex-wrap sm:flex-nowrap sm:shrink-0">
                         {renderChannelButtons(post)}
+                        <button
+                          type="button"
+                          disabled={postingId === post.id}
+                          onClick={() => { setPostingId(post.id); markChannelsPosted({ id: post.id }) }}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 disabled:opacity-60 transition-colors"
+                          title="네이버·당근·인스타에 다 올렸으면 눌러서 완료 처리하세요"
+                        >
+                          {postingId === post.id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <Check className="h-3.5 w-3.5" />}
+                          올렸어요
+                        </button>
                       </div>
                     </div>
                   ))}
