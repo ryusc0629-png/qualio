@@ -27,13 +27,31 @@ export default async function FieldBookingPage({ params }: Props) {
 
   if (!worker || !worker.is_active) notFound()
 
-  // 예약 조회 (해당 직원에게 배정된 것만)
+  // 접근 권한 확인: 직접 배정(worker_id) 또는 팀원 배정(booking_workers) 중 하나라도 해당되어야 함
+  const [{ data: directCheck }, { data: teamCheck }] = await Promise.all([
+    db
+      .from('bookings')
+      .select('id')
+      .eq('id', bookingId)
+      .eq('business_id', worker.business_id)
+      .eq('worker_id' as never, workerId)
+      .maybeSingle(),
+    db
+      .from('booking_workers' as never)
+      .select('booking_id' as never)
+      .eq('booking_id' as never, bookingId)
+      .eq('worker_id' as never, workerId)
+      .maybeSingle() as unknown as Promise<{ data: { booking_id: string } | null }>,
+  ])
+
+  if (!directCheck && !teamCheck) notFound()
+
+  // 예약 상세 조회
   const { data: booking } = await db
     .from('bookings')
     .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, customer_request, quote_id' as never)
     .eq('id', bookingId)
     .eq('business_id', worker.business_id)
-    .eq('worker_id' as never, workerId)
     .maybeSingle() as { data: {
       id: string; customer_name: string; customer_phone: string | null
       service_address: string | null; scheduled_at: string; final_price: number
