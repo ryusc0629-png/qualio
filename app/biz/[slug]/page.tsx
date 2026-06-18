@@ -85,12 +85,13 @@ export default async function BizLandingPage({ params }: Props) {
 
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, logo_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle' as never)
+    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, youtube_url, logo_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle' as never)
     .eq('slug', slug)
     .maybeSingle() as { data: {
       id: string; name: string; phone: string | null; address: string | null
       description: string | null; seo_title: string | null; seo_description: string | null
       seo_keywords: string | null; seo_faqs: unknown; naver_place_url: string | null
+      youtube_url: string | null
       logo_url: string | null; brand_color: string | null; brand_color_secondary: string | null
       hero_style: string | null; hero_title: string | null; hero_subtitle: string | null
     } | null }
@@ -141,6 +142,14 @@ export default async function BizLandingPage({ params }: Props) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
   const faqs = (business.seo_faqs as unknown as FaqItem[]) ?? []
+
+  // YouTube URL → embed ID 추출
+  function getYoutubeId(url: string | null): string | null {
+    if (!url) return null
+    const m = url.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/)
+    return m?.[1] ?? null
+  }
+  const youtubeId = getYoutubeId(business.youtube_url)
   const minPrice = services && services.length > 0
     ? Math.min(...services.map((s) => s.base_price))
     : null
@@ -544,6 +553,28 @@ export default async function BizLandingPage({ params }: Props) {
           </section>
         )}
 
+        {/* ── YouTube 시공 영상 ── */}
+        {youtubeId && (
+          <section className="py-16 bg-white">
+            <div className="max-w-5xl mx-auto px-4">
+              <div className="text-center mb-8">
+                <p className="text-primary font-semibold text-sm mb-2 tracking-wide uppercase">실제 시공 영상</p>
+                <h2 className="text-2xl sm:text-3xl font-extrabold">직접 확인해보세요</h2>
+                <p className="text-muted-foreground mt-2 text-sm">말보다 영상이 확실해요</p>
+              </div>
+              <div className="max-w-2xl mx-auto rounded-2xl overflow-hidden border shadow-lg aspect-video">
+                <iframe
+                  src={`https://www.youtube.com/embed/${youtubeId}?rel=0&modestbranding=1`}
+                  title={`${business.name} 시공 영상`}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="w-full h-full"
+                />
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* ── 핵심 특장점 3가지 ── */}
         <section className="py-16 bg-slate-50">
           <div className="max-w-5xl mx-auto px-4">
@@ -745,7 +776,7 @@ export default async function BizLandingPage({ params }: Props) {
         </section>
 
         {/* ── 푸터 ── */}
-        <footer className="border-t bg-white">
+        <footer className="border-t bg-white pb-20 sm:pb-0">
           <div className="max-w-5xl mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
             <span>{business.name}</span>
             <span>
@@ -755,6 +786,25 @@ export default async function BizLandingPage({ params }: Props) {
           </div>
         </footer>
 
+      </div>
+
+      {/* ── 모바일 하단 고정 CTA 바 ── */}
+      <div className="sm:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-3 flex items-center gap-3">
+        {business.phone && (
+          <a
+            href={`tel:${business.phone}`}
+            className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl border border-input text-sm font-semibold text-foreground"
+          >
+            <Phone className="h-4 w-4" />
+            전화 문의
+          </a>
+        )}
+        <Link href={`/q/${business.id}`} className={business.phone ? 'flex-1' : 'w-full'}>
+          <Button className="w-full h-12 text-sm font-bold gap-2">
+            <Star className="h-4 w-4" />
+            무료 견적 받기
+          </Button>
+        </Link>
       </div>
     </>
   )
