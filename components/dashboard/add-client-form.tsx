@@ -47,7 +47,10 @@ function openAddressSearch(onSelect: (address: string) => void) {
 
 const leadSchema = z.object({
   company_name: z.string().min(1, '업체명을 입력해주세요'),
-  customer_type: z.string(),
+  customer_type: z.string().refine(
+    (v) => ['individual', 'company'].includes(v),
+    '개인 또는 법인을 선택해주세요',
+  ),
   phone: z.string().optional(),
   address: z.string().optional(),
   category: z.string().optional(),
@@ -60,7 +63,10 @@ const customerSchema = z.object({
   phone: z.string().min(1, '연락처를 입력해주세요 (예: 010-1234-5678)'),
   address: z.string().optional(),
   category: z.string().optional(),
-  type: z.string(),
+  type: z.string().refine(
+    (v) => ['one_time', 'recurring'].includes(v),
+    '개인 또는 법인을 선택해주세요',
+  ),
   notes: z.string().optional(),
   // 개인 — 첫 작업 일정 (선택)
   scheduleJob: z.string().optional(),
@@ -100,17 +106,17 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
 
   const leadForm = useForm<LeadInput>({
     resolver: zodResolver(leadSchema),
-    defaultValues: { customer_type: 'company' },
+    defaultValues: { customer_type: '' },
   })
   const customerForm = useForm<CustomerInput>({
     resolver: zodResolver(customerSchema),
-    defaultValues: { type: 'one_time', scheduleJob: '', hasContract: '' },
+    defaultValues: { type: '', scheduleJob: '', hasContract: '' },
   })
 
   const { execute: executeLead, isPending: leadPending } = useAction(createLeadAction, {
     onSuccess: () => {
       toast.success('잠재 고객이 추가됐어요!')
-      leadForm.reset({ customer_type: 'company' })
+      leadForm.reset({ customer_type: '' })
       setOpen(false)
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
@@ -119,7 +125,7 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
   const { execute: executeCustomer, isPending: customerPending } = useAction(createActiveCustomerAction, {
     onSuccess: () => {
       toast.success('고객이 등록됐어요!')
-      customerForm.reset({ type: 'one_time', scheduleJob: '', hasContract: '' })
+      customerForm.reset({ type: '', scheduleJob: '', hasContract: '' })
       setJobDate('')
       setJobTime('09:00')
       setOpen(false)
@@ -133,13 +139,14 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
   const leadIsCompany = leadForm.watch('customer_type') === 'company'
   const custType = customerForm.watch('type')
   const custIsCompany = custType === 'recurring'
+  const custIsIndividual = custType === 'one_time'
   const scheduleJob = customerForm.watch('scheduleJob') === 'true'
   const hasContract = customerForm.watch('hasContract') === 'true'
 
   function handleClose() {
     setOpen(false)
-    leadForm.reset({ customer_type: 'company' })
-    customerForm.reset({ type: 'one_time', scheduleJob: '', hasContract: '' })
+    leadForm.reset({ customer_type: '' })
+    customerForm.reset({ type: '', scheduleJob: '', hasContract: '' })
     setJobDate('')
     setJobTime('09:00')
     setClientType('lead')
@@ -207,9 +214,9 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
               )}
             </div>
 
-            {/* 고객 구분 — 개인/법인 (법인 기본) */}
+            {/* 고객 구분 — 개인/법인 (필수 선택, 기본값 없음) */}
             <div className="space-y-1">
-              <Label>고객 구분</Label>
+              <Label>고객 구분 (필수)</Label>
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                   <input type="radio" value="individual" {...leadForm.register('customer_type')} className="accent-primary" />
@@ -226,6 +233,9 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
                   </div>
                 </label>
               </div>
+              {leadForm.formState.errors.customer_type && (
+                <p className="text-xs text-destructive">{leadForm.formState.errors.customer_type.message}</p>
+              )}
             </div>
 
             <div className={`grid gap-2 ${leadIsCompany ? 'grid-cols-2' : 'grid-cols-1'}`}>
@@ -308,9 +318,9 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
               )}
             </div>
 
-            {/* 고객 구분 */}
+            {/* 고객 구분 — 필수 선택, 기본값 없음 */}
             <div className="space-y-1">
-              <Label>고객 구분</Label>
+              <Label>고객 구분 (필수)</Label>
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                   <input type="radio" value="one_time" {...customerForm.register('type')} className="accent-primary" />
@@ -327,6 +337,9 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
                   </div>
                 </label>
               </div>
+              {customerForm.formState.errors.type && (
+                <p className="text-xs text-destructive">{customerForm.formState.errors.type.message}</p>
+              )}
             </div>
 
             <div className={`grid gap-2 ${custIsCompany ? 'grid-cols-2' : 'grid-cols-1'}`}>
@@ -379,7 +392,7 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
             </div>
 
             {/* 개인 고객 — 첫 작업 일정 (선택) → 캘린더 노출 */}
-            {!custIsCompany && (
+            {custIsIndividual && (
               <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
