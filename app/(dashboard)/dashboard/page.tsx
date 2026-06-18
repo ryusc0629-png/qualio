@@ -623,11 +623,11 @@ export default async function DashboardPage() {
             {todayBookings.map((booking) => {
               const status = STATUS_LABEL[booking.status] ?? { text: booking.status, className: 'bg-gray-100 text-gray-600' }
               const scheduledTime = booking.scheduled_at
-                ? new Date(booking.scheduled_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+                ? new Date(booking.scheduled_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' })
                 : '—'
               return (
                 <div key={booking.id} className="flex items-center px-5 py-3.5 hover:bg-muted/20 transition-colors">
-                  <p className="text-sm font-bold text-primary tabular-nums w-12 shrink-0">{scheduledTime}</p>
+                  <p className="text-sm font-bold text-primary tabular-nums w-16 shrink-0">{scheduledTime}</p>
                   <div className="flex-1 min-w-0 mx-3">
                     <p className="font-medium text-sm truncate">{booking.customer_name}</p>
                   </div>
@@ -745,10 +745,10 @@ export default async function DashboardPage() {
             {upcomingBookings.map((booking) => {
               const status = STATUS_LABEL[booking.status] ?? { text: booking.status, className: 'bg-gray-100 text-gray-600' }
               const scheduledDate = booking.scheduled_at
-                ? new Date(booking.scheduled_at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short' })
+                ? new Date(booking.scheduled_at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short', timeZone: 'Asia/Seoul' })
                 : '—'
               const scheduledTime = booking.scheduled_at
-                ? new Date(booking.scheduled_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+                ? new Date(booking.scheduled_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' })
                 : '—'
               return (
                 <div key={booking.id} className="flex items-center px-5 py-3.5 hover:bg-muted/20 transition-colors">
