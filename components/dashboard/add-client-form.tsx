@@ -390,6 +390,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
                         quantity: parseInt(it.qty, 10) || 1,
                         unitPrice: parseInt(it.unitPrice, 10) || 0,
                         amount: parseInt(it.amount, 10) || 0,
+                        unit: useJobItems ? it.unit : '개',
                       }))
                     : undefined
                 })(),

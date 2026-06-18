@@ -31,6 +31,7 @@ interface BookingItemRow {
   quantity: number
   unit_price: number
   amount: number
+  unit: string
   sort_order: number
 }
 
@@ -99,7 +100,7 @@ export const getBookingItemsAction = action
 
     const [itemsRes, changesRes, servicesRes] = await Promise.all([
       db.from('booking_items' as never)
-        .select('id, booking_id, name, quantity, unit_price, amount, sort_order' as never)
+        .select('id, booking_id, name, quantity, unit_price, amount, unit, sort_order' as never)
         .eq('booking_id' as never, parsedInput.bookingId)
         .eq('business_id' as never, businessId)
         .order('sort_order' as never, { ascending: true }) as unknown as Promise<{ data: BookingItemRow[] | null }>,
@@ -115,21 +116,21 @@ export const getBookingItemsAction = action
           }[] | null
         }>,
       db.from('service_items')
-        .select('name, base_price')
+        .select('name, base_price, unit')
         .eq('business_id', businessId)
         .eq('is_active', true)
         .order('name', { ascending: true }) as unknown as Promise<{
-          data: { name: string; base_price: number }[] | null
+          data: { name: string; base_price: number; unit: string }[] | null
         }>,
     ])
 
-    // 서비스 이름 기준 중복 제거 (첫 가격 유지)
-    const serviceMap = new Map<string, number>()
+    // 서비스 이름 기준 중복 제거 (첫 항목 유지)
+    const serviceMap = new Map<string, { base_price: number; unit: string }>()
     for (const s of servicesRes.data ?? []) {
       const name = (s.name ?? '').trim()
-      if (name && !serviceMap.has(name)) serviceMap.set(name, s.base_price ?? 0)
+      if (name && !serviceMap.has(name)) serviceMap.set(name, { base_price: s.base_price ?? 0, unit: s.unit ?? '개' })
     }
-    const services = [...serviceMap].map(([name, base_price]) => ({ name, base_price }))
+    const services = [...serviceMap].map(([name, v]) => ({ name, base_price: v.base_price, unit: v.unit }))
 
     return { items: itemsRes.data ?? [], changes: changesRes.data ?? [], services }
   })
@@ -141,6 +142,7 @@ const addSchema = z.object({
   quantity: z.coerce.number().int().min(1, '수량은 1 이상이어야 합니다'),
   unitPrice: z.coerce.number().int().min(0, '0 이상의 금액을 입력해주세요'),
   amount: z.coerce.number().int().min(0).optional(), // 합산 금액 직접 수정 시 우선
+  unit: z.string().optional(),
 })
 
 export const addBookingItemAction = action
@@ -158,6 +160,7 @@ export const addBookingItemAction = action
       quantity: parsedInput.quantity,
       unit_price: parsedInput.unitPrice,
       amount,
+      unit: parsedInput.unit ?? '개',
       sort_order: Date.now() % 1000000,
     } as never)
     if (error) throw new Error('[APP] 항목 추가에 실패했습니다')
@@ -180,6 +183,7 @@ const updateSchema = z.object({
   quantity: z.coerce.number().int().min(1, '수량은 1 이상이어야 합니다'),
   unitPrice: z.coerce.number().int().min(0, '0 이상의 금액을 입력해주세요'),
   amount: z.coerce.number().int().min(0).optional(), // 합산 금액 직접 수정 시 우선
+  unit: z.string().optional(),
 })
 
 export const updateBookingItemAction = action
@@ -204,6 +208,7 @@ export const updateBookingItemAction = action
         quantity: parsedInput.quantity,
         unit_price: parsedInput.unitPrice,
         amount,
+        ...(parsedInput.unit ? { unit: parsedInput.unit } : {}),
       } as never)
       .eq('id' as never, parsedInput.itemId)
       .eq('business_id' as never, businessId)

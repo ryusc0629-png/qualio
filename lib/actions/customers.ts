@@ -111,6 +111,7 @@ const createActiveCustomerSchema = z.object({
     quantity: z.coerce.number().int().min(1),
     unitPrice: z.coerce.number().int().min(0),
     amount: z.coerce.number().int().min(0).optional(), // 합산 금액 직접 수정 시 우선
+    unit: z.string().optional(), // '정액' | '평당' | '개'
   })).optional(),
   // 법인 — 정기계약 (선택)
   hasContract: z.string().optional(), // 'true' | ''
@@ -184,6 +185,7 @@ export const createActiveCustomerAction = action
             quantity: it.quantity,
             unit_price: it.unitPrice,
             amount: it.amount ?? it.quantity * it.unitPrice,
+            unit: it.unit ?? '개',
             sort_order: idx,
           })) as never,
         )

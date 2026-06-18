@@ -17,7 +17,12 @@ interface Item {
   quantity: number
   unit_price: number
   amount: number
+  unit: string
 }
+
+// 단위별 라벨
+const qtyUnitOf = (unit: string) => (unit === '평당' ? '평' : unit === '정액' ? '회' : '개')
+const perLabelOf = (unit: string) => (unit === '평당' ? '평당' : unit === '정액' ? '정액' : '대당')
 
 interface Change {
   id: string
@@ -46,7 +51,7 @@ const formatThousands = (v: string) => {
 export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
   const [items, setItems] = useState<Item[]>([])
   const [changes, setChanges] = useState<Change[]>([])
-  const [services, setServices] = useState<{ name: string; base_price: number }[]>([])
+  const [services, setServices] = useState<{ name: string; base_price: number; unit: string }[]>([])
   const [loaded, setLoaded] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
 
@@ -54,6 +59,7 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
   const [newName, setNewName] = useState('')
   const [newQty, setNewQty] = useState('1')
   const [newPrice, setNewPrice] = useState('')
+  const [newUnit, setNewUnit] = useState('개')
 
   const { execute: fetchItems } = useAction(getBookingItemsAction, {
     onSuccess: ({ data }) => {
@@ -70,7 +76,7 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
   useEffect(() => { reload() }, [reload])
 
   const { execute: addItem, isPending: adding } = useAction(addBookingItemAction, {
-    onSuccess: () => { toast.success('항목을 추가했어요'); setNewName(''); setNewQty('1'); setNewPrice(''); reload() },
+    onSuccess: () => { toast.success('항목을 추가했어요'); setNewName(''); setNewQty('1'); setNewPrice(''); setNewUnit('개'); reload() },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
   const { execute: updateItem } = useAction(updateBookingItemAction, {
@@ -108,12 +114,12 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
 
   function saveRow(it: Item) {
     if (!it.name.trim()) { toast.error('항목 이름을 입력해주세요'); return }
-    updateItem({ itemId: it.id, bookingId, name: it.name, quantity: it.quantity, unitPrice: it.unit_price, amount: it.amount })
+    updateItem({ itemId: it.id, bookingId, name: it.name, quantity: it.quantity, unitPrice: it.unit_price, amount: it.amount, unit: it.unit })
   }
 
   function handleAdd() {
     if (!newName.trim()) { toast.error('항목 이름을 입력해주세요'); return }
-    addItem({ bookingId, name: newName, quantity: newQty, unitPrice: newPrice || '0' })
+    addItem({ bookingId, name: newName, quantity: newQty, unitPrice: newPrice || '0', unit: newUnit })
   }
 
   return (
@@ -159,12 +165,12 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
                   onChange={(e) => handleRowChange(it.id, 'quantity', e.target.value)}
                   className="w-12 h-9 rounded-lg border border-border px-2 text-sm text-center shrink-0"
                 />
-                <span className="text-xs text-muted-foreground shrink-0">개 ×</span>
+                <span className="text-xs text-muted-foreground shrink-0">{qtyUnitOf(it.unit)} × {perLabelOf(it.unit)}</span>
                 <input
                   inputMode="numeric"
                   value={formatThousands(String(it.unit_price))}
                   onChange={(e) => handleRowChange(it.id, 'unit_price', digitsOnly(e.target.value))}
-                  placeholder="단가"
+                  placeholder={`${perLabelOf(it.unit)} 단가`}
                   className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
                 />
                 <span className="text-xs text-muted-foreground shrink-0">원</span>
@@ -205,8 +211,11 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
             onChange={(e) => {
               const name = e.target.value
               setNewName(name)
-              const price = services.find((s) => s.name === name)?.base_price ?? 0
-              if (price > 0) setNewPrice(String(price))
+              const svc = services.find((s) => s.name === name)
+              if (svc) {
+                setNewUnit(svc.unit)
+                if (svc.base_price > 0) setNewPrice(String(svc.base_price))
+              }
             }}
             className="w-full h-9 rounded-lg border border-border bg-white px-2.5 text-sm"
           >
@@ -228,12 +237,12 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
             onChange={(e) => setNewQty(e.target.value)}
             className="w-12 h-9 rounded-lg border border-border px-2 text-sm text-center shrink-0"
           />
-          <span className="text-xs text-muted-foreground shrink-0">개 ×</span>
+          <span className="text-xs text-muted-foreground shrink-0">{qtyUnitOf(newUnit)} × {perLabelOf(newUnit)}</span>
           <input
             inputMode="numeric"
             value={formatThousands(newPrice)}
             onChange={(e) => setNewPrice(digitsOnly(e.target.value))}
-            placeholder="단가"
+            placeholder={`${perLabelOf(newUnit)} 단가`}
             className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
           />
           <button
