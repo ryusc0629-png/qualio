@@ -390,11 +390,14 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   // 컨테이너 내부 스크롤만 조정 (페이지 전체 스크롤 건드리지 않음)
   const scrollToToday = useCallback(() => {
     requestAnimationFrame(() => {
-      // 1) 자동 발행 일정 — 오늘 항목으로 스크롤
+      // 1) 자동 발행 일정 — 오늘 날짜 항목으로 스크롤
       const scheduleContainer = scheduleListRef.current
-      const todaySlot = document.getElementById('schedule-today')
-      if (scheduleContainer && todaySlot) {
-        scheduleContainer.scrollTop = todaySlot.offsetTop - scheduleContainer.offsetTop
+      if (scheduleContainer) {
+        const todayDay = new Date(Date.now() + 9 * 60 * 60 * 1000).getDate()
+        const todayEl = document.getElementById(`schedule-day-${todayDay}`)
+        if (todayEl) {
+          scheduleContainer.scrollTop = todayEl.offsetTop - scheduleContainer.offsetTop
+        }
       }
 
       // 2) 전체 발행 포스트 목록
@@ -932,7 +935,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
               return (
                 <div
                   key={i}
-                  id={slot.status === 'today' ? 'schedule-today' : undefined}
+                  id={`schedule-day-${slot.day}`}
                   className={`flex items-center gap-4 px-5 py-3 ${
                     slot.status === 'today' ? 'bg-blue-50' : 'hover:bg-slate-50'
                   }`}
