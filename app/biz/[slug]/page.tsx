@@ -133,7 +133,6 @@ export default async function BizLandingPage({ params }: Props) {
       .select('id, name, base_price, unit, category')
       .eq('business_id', business.id)
       .eq('is_active', true)
-      .eq('show_in_quote', true)
       .is('deleted_at', null)
       .order('sort_order')
       .order('created_at'),
