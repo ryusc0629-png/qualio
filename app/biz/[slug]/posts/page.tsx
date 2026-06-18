@@ -51,7 +51,7 @@ export default async function BizPostsPage({ params, searchParams }: Props) {
 
   let query = db
     .from('biz_posts')
-    .select('slug, title, summary, published_at, post_type' as never)
+    .select('slug, title, summary, published_at, post_type, after_image_urls, before_image_urls' as never)
     .eq('business_id', business.id)
     .eq('published', true)
     .order('published_at', { ascending: false })
@@ -60,7 +60,11 @@ export default async function BizPostsPage({ params, searchParams }: Props) {
     query = query.eq('post_type' as never, type)
   }
 
-  type PostRow = { slug: string; title: string; summary: string | null; published_at: string; post_type: string }
+  type PostRow = {
+    slug: string; title: string; summary: string | null
+    published_at: string; post_type: string
+    after_image_urls: string[] | null; before_image_urls: string[] | null
+  }
   const { data: posts } = (await query) as unknown as { data: PostRow[] | null }
 
   const activeType = (type === 'geo' || type === 'portfolio') ? type : ''
@@ -148,41 +152,71 @@ export default async function BizPostsPage({ params, searchParams }: Props) {
           </div>
         ) : (
           <div className="grid sm:grid-cols-2 gap-5">
-            {posts.map((post) => (
-              <Link
-                key={post.slug}
-                href={`/biz/${slug}/posts/${post.slug}`}
-                className="group block rounded-2xl border-2 bg-white p-6 hover:shadow-lg hover:border-primary/40 transition-all"
-              >
-                {/* 카테고리 뱃지 */}
-                {post.post_type === 'portfolio' ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5 mb-3">
-                    <Wrench className="h-3 w-3" />
-                    시공 사례
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5 mb-3">
-                    <BookOpen className="h-3 w-3" />
-                    청소 정보
-                  </span>
-                )}
+            {posts.map((post) => {
+              const thumbnail = post.after_image_urls?.[0] ?? null
+              const isPortfolio = post.post_type === 'portfolio'
 
-                <p className="font-bold leading-snug group-hover:text-primary transition-colors line-clamp-2 mb-2">
-                  {post.title}
-                </p>
-                {post.summary && (
-                  <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">
-                    {post.summary}
-                  </p>
-                )}
-                <div className="flex items-center justify-between mt-5">
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(post.published_at).toLocaleDateString('ko-KR')}
-                  </p>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
-                </div>
-              </Link>
-            ))}
+              return (
+                <Link
+                  key={post.slug}
+                  href={`/biz/${slug}/posts/${post.slug}`}
+                  className="group block rounded-2xl border-2 bg-white overflow-hidden hover:shadow-lg hover:border-primary/40 transition-all"
+                >
+                  {/* 포트폴리오 썸네일 */}
+                  {isPortfolio && thumbnail && (
+                    <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={thumbnail}
+                        alt={post.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <span className="absolute top-3 left-3 inline-flex items-center gap-1 text-[11px] font-semibold text-white bg-black/50 backdrop-blur-sm rounded-full px-2.5 py-0.5">
+                        <Wrench className="h-3 w-3" />
+                        시공 사례
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="p-5">
+                    {/* 썸네일 없는 카드의 뱃지 */}
+                    {!(isPortfolio && thumbnail) && (
+                      isPortfolio ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5 mb-3">
+                          <Wrench className="h-3 w-3" />
+                          시공 사례
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5 mb-3">
+                          <BookOpen className="h-3 w-3" />
+                          청소 정보
+                        </span>
+                      )
+                    )}
+
+                    {/* geo 포스트 컬러 바 */}
+                    {!isPortfolio && (
+                      <div className="h-1 w-10 bg-primary rounded-full mb-3 group-hover:w-16 transition-all duration-300" />
+                    )}
+
+                    <p className="font-bold leading-snug group-hover:text-primary transition-colors line-clamp-2 mb-2">
+                      {post.title}
+                    </p>
+                    {post.summary && (
+                      <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+                        {post.summary}
+                      </p>
+                    )}
+                    <div className="flex items-center justify-between mt-4">
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(post.published_at).toLocaleDateString('ko-KR')}
+                      </p>
+                      <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                    </div>
+                  </div>
+                </Link>
+              )
+            })}
           </div>
         )}
       </section>
