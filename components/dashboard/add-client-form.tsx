@@ -129,6 +129,9 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
   const emptyJobItem = { name: '', qty: '1', unitPrice: '', amount: '' }
   const addJobItem = () => setJobItems((prev) => [...prev, { ...emptyJobItem }])
   const removeJobItem = (idx: number) => setJobItems((prev) => prev.filter((_, i) => i !== idx))
+  // 수기 모드 — 항목명 직접 입력
+  const setJobName = (idx: number, v: string) =>
+    setJobItems((prev) => prev.map((it, i) => (i === idx ? { ...it, name: v } : it)))
   // 수량/단가 수정 → 합산 금액 자동 계산
   const setJobQty = (idx: number, v: string) =>
     setJobItems((prev) => prev.map((it, i) => i === idx
@@ -206,6 +209,14 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
     setClientType('lead')
   }
 
+  // 창 외부 클릭으로 닫기 — 입력 중이면 실수 방지 확인 (Jobber식 안전장치)
+  function requestClose() {
+    const hasJobInput = jobItems.some((it) => it.name.trim() || it.amount.trim() || it.unitPrice.trim())
+    const dirty = customerForm.formState.isDirty || leadForm.formState.isDirty || hasJobInput
+    if (dirty && !window.confirm('입력한 내용이 사라져요. 닫을까요?')) return
+    handleClose()
+  }
+
   if (!open) {
     return (
       <Button onClick={() => setOpen(true)}>
@@ -216,8 +227,14 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+      onClick={requestClose}
+    >
+      <div
+        className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-lg">고객 추가</h2>
           <button onClick={handleClose}>
@@ -356,16 +373,17 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
               executeCustomer({
                 ...data,
                 job_scheduled_at: jobDate ? `${jobDate}T${jobTime}:00+09:00` : '',
-                job_items: useJobItems
-                  ? jobItems
-                      .filter((it) => it.name.trim())
-                      .map((it) => ({
-                        name: it.name,
+                job_items: (() => {
+                  const valid = jobItems.filter((it) => it.name.trim() || parseInt(it.amount, 10) > 0)
+                  return valid.length > 0
+                    ? valid.map((it) => ({
+                        name: it.name.trim() || '작업',
                         quantity: parseInt(it.qty, 10) || 1,
                         unitPrice: parseInt(it.unitPrice, 10) || 0,
                         amount: parseInt(it.amount, 10) || 0,
                       }))
-                  : undefined,
+                    : undefined
+                })(),
               })
             )}
             className="space-y-3"
@@ -488,26 +506,27 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
                         </label>
                       </div>
 
-                      {!useJobItems ? (
-                        <Input
-                          inputMode="numeric"
-                          placeholder="150,000"
-                          value={formatThousands(customerForm.watch('job_price') ?? '')}
-                          onChange={(e) => customerForm.setValue('job_price', digitsOnly(e.target.value))}
-                        />
-                      ) : (
-                        <div className="space-y-2">
+                      <div className="space-y-2">
                           {jobItems.map((it, idx) => (
                             <div key={idx} className="rounded-lg bg-white border border-border p-2 space-y-2">
                               <div className="flex items-center gap-2">
-                                <select
-                                  value={it.name}
-                                  onChange={(e) => selectJobItemService(idx, e.target.value)}
-                                  className="flex-1 h-9 rounded-lg border border-border bg-background px-2.5 text-sm"
-                                >
-                                  <option value="">서비스 선택</option>
-                                  {serviceOptions.map((s) => <option key={s} value={s}>{s}</option>)}
-                                </select>
+                                {useJobItems ? (
+                                  <select
+                                    value={it.name}
+                                    onChange={(e) => selectJobItemService(idx, e.target.value)}
+                                    className="flex-1 h-9 rounded-lg border border-border bg-background px-2.5 text-sm"
+                                  >
+                                    <option value="">서비스 선택</option>
+                                    {serviceOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                                  </select>
+                                ) : (
+                                  <input
+                                    value={it.name}
+                                    onChange={(e) => setJobName(idx, e.target.value)}
+                                    placeholder="항목명 (예: 에어컨 청소)"
+                                    className="flex-1 h-9 rounded-lg border border-border bg-background px-2.5 text-sm"
+                                  />
+                                )}
                                 {jobItems.length > 1 && (
                                   <button
                                     type="button"
@@ -563,7 +582,6 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
                             </span>
                           </div>
                         </div>
-                      )}
                     </div>
 
                     {/* 2. 날짜·시간 (견적 다음 순서) */}
