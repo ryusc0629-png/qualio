@@ -156,15 +156,15 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
           </button>
         </div>
 
-        {/* 종류 선택 — 활성 상태를 색상으로 뚜렷하게 */}
-        <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-xl">
+        {/* 종류 선택 — 선택 상태를 색상 + 테두리로 뚜렷하게 */}
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => setClientType('lead')}
-            className={`py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            className={`py-2.5 rounded-lg border text-sm font-semibold transition-all ${
               clientType === 'lead'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:bg-background/60'
+                ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                : 'bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground'
             }`}
           >
             잠재고객
@@ -172,13 +172,13 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
           <button
             type="button"
             onClick={() => setClientType('customer')}
-            className={`py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            className={`py-2.5 rounded-lg border text-sm font-semibold transition-all ${
               clientType === 'customer'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:bg-background/60'
+                ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                : 'bg-background text-muted-foreground border-border hover:border-primary/40 hover:text-foreground'
             }`}
           >
-            활성 고객
+            확정 고객
           </button>
         </div>
 
