@@ -108,9 +108,13 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
 
   // 수금 완료
   const { execute: completePayment, isPending: isCompleting } = useAction(fieldCompletePaymentAction, {
-    onSuccess: () => {
+    onSuccess: ({ data }) => {
       setCurrentStatus('completed')
-      toast.success('수금 완료!')
+      if (data?.reviewSkipped) {
+        toast.success('수금 완료! (리뷰 요청 미발송)')
+      } else {
+        toast.success('수금 완료!')
+      }
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -536,19 +540,33 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
           )}
 
           {currentStatus === 'in_progress' && paymentRequested && (
-            <Button
-              size="lg"
-              className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700"
-              disabled={isCompleting}
-              onClick={() => {
-                if (confirm(`${booking.finalPrice.toLocaleString()}원 수금 완료할까요?`)) {
-                  completePayment({ workerId, bookingId: booking.id })
-                }
-              }}
-            >
-              <CheckCircle2 className="h-5 w-5" />
-              {isCompleting ? '처리 중...' : `수금 완료 · ${booking.finalPrice.toLocaleString()}원`}
-            </Button>
+            <div className="space-y-2">
+              <Button
+                size="lg"
+                className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700"
+                disabled={isCompleting}
+                onClick={() => {
+                  if (confirm(`${booking.finalPrice.toLocaleString()}원 수금 완료할까요?`)) {
+                    completePayment({ workerId, bookingId: booking.id })
+                  }
+                }}
+              >
+                <CheckCircle2 className="h-5 w-5" />
+                {isCompleting ? '처리 중...' : `수금 완료 · ${booking.finalPrice.toLocaleString()}원`}
+              </Button>
+              <button
+                type="button"
+                className="w-full text-xs text-muted-foreground underline py-1"
+                disabled={isCompleting}
+                onClick={() => {
+                  if (confirm('리뷰 요청을 보내지 않고 완료할까요?')) {
+                    completePayment({ workerId, bookingId: booking.id, skipReview: true })
+                  }
+                }}
+              >
+                리뷰 요청 없이 완료하기 →
+              </button>
+            </div>
           )}
         </div>
       )}

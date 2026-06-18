@@ -229,11 +229,12 @@ export const fieldRequestPaymentAction = action
     return { success: true }
   })
 
-// 수금 완료 (in_progress → completed) + 리뷰 자동 발송
+// 수금 완료 (in_progress → completed) + 리뷰 자동 발송 (skipReview=true면 발송 생략)
 export const fieldCompletePaymentAction = action
   .schema(z.object({
-    workerId:  z.string().uuid(),
-    bookingId: z.string().uuid(),
+    workerId:   z.string().uuid(),
+    bookingId:  z.string().uuid(),
+    skipReview: z.boolean().optional(),
   }))
   .action(async ({ parsedInput }) => {
     const { db, worker } = await verifyWorker(parsedInput.workerId)
@@ -291,23 +292,25 @@ export const fieldCompletePaymentAction = action
       }
     }
 
-    // 리뷰 요청 발송 (실패해도 수금 완료는 유지)
-    const reviewUrl = business.google_place_url || business.naver_place_url
-    if (booking.customer_phone && reviewUrl) {
-      try {
-        await sendReviewRequestAlimtalk({
-          customerPhone: booking.customer_phone,
-          customerName:  booking.customer_name ?? '고객',
-          businessName:  business.name,
-          cleaningType,
-          reviewUrl,
-        })
-      } catch (err) {
-        console.error('[Field] 리뷰 요청 발송 실패:', err)
+    // 리뷰 요청 발송 (skipReview=true면 생략, 실패해도 수금 완료는 유지)
+    if (!parsedInput.skipReview) {
+      const reviewUrl = business.google_place_url || business.naver_place_url
+      if (booking.customer_phone && reviewUrl) {
+        try {
+          await sendReviewRequestAlimtalk({
+            customerPhone: booking.customer_phone,
+            customerName:  booking.customer_name ?? '고객',
+            businessName:  business.name,
+            cleaningType,
+            reviewUrl,
+          })
+        } catch (err) {
+          console.error('[Field] 리뷰 요청 발송 실패:', err)
+        }
       }
     }
 
-    return { success: true }
+    return { success: true, reviewSkipped: !!parsedInput.skipReview }
   })
 
 // 작업 전 현장 사진 저장 (메모와 함께 저장, 보고서에 자동 연결)
