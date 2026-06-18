@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { FrequencyPicker } from '@/components/dashboard/frequency-picker'
+import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { createLeadAction } from '@/lib/actions/crm'
 import { createActiveCustomerAction } from '@/lib/actions/customers'
 import { Plus, X, Search } from 'lucide-react'
@@ -93,6 +94,9 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
     : DEFAULT_SERVICES
   const [open, setOpen] = useState(false)
   const [clientType, setClientType] = useState<'lead' | 'customer'>('lead')
+  // 첫 작업 일정 — 다른 설정 창과 동일한 달력+시/분 선택 방식
+  const [jobDate, setJobDate] = useState('')
+  const [jobTime, setJobTime] = useState('09:00')
 
   const leadForm = useForm<LeadInput>({
     resolver: zodResolver(leadSchema),
@@ -116,6 +120,8 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
     onSuccess: () => {
       toast.success('고객이 등록됐어요!')
       customerForm.reset({ type: 'one_time', scheduleJob: '', hasContract: '' })
+      setJobDate('')
+      setJobTime('09:00')
       setOpen(false)
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
@@ -134,6 +140,8 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
     setOpen(false)
     leadForm.reset({ customer_type: 'company' })
     customerForm.reset({ type: 'one_time', scheduleJob: '', hasContract: '' })
+    setJobDate('')
+    setJobTime('09:00')
     setClientType('lead')
   }
 
@@ -280,7 +288,12 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
           </form>
         ) : (
           <form
-            onSubmit={customerForm.handleSubmit((data) => executeCustomer(data))}
+            onSubmit={customerForm.handleSubmit((data) =>
+              executeCustomer({
+                ...data,
+                job_scheduled_at: jobDate ? `${jobDate}T${jobTime}:00+09:00` : '',
+              })
+            )}
             className="space-y-3"
           >
             <p className="text-xs text-muted-foreground -mt-1">
@@ -395,8 +408,13 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="job-date">작업 날짜·시간 (필수)</Label>
-                      <Input id="job-date" type="datetime-local" {...customerForm.register('job_scheduled_at')} />
+                      <Label>작업 날짜·시간 (필수)</Label>
+                      <DateTimePicker
+                        date={jobDate}
+                        time={jobTime}
+                        onDateChange={setJobDate}
+                        onTimeChange={setJobTime}
+                      />
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="job-price">작업 금액 (필수)</Label>
