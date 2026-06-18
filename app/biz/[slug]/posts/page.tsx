@@ -2,11 +2,12 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowLeft, ArrowRight, BookOpen, Phone } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, Phone, Wrench } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface Props {
   params: Promise<{ slug: string }>
+  searchParams: Promise<{ type?: string }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -23,14 +24,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
   return {
-    title: `청소 정보 & 노하우 | ${business.name}`,
-    description: `${business.name}의 청소 전문 정보와 노하우를 확인하세요.`,
+    title: `청소 정보 & 시공 사례 | ${business.name}`,
+    description: `${business.name}의 청소 전문 정보와 시공 사례를 확인하세요.`,
     alternates: { canonical: `${appUrl}/biz/${slug}/posts` },
   }
 }
 
-export default async function BizPostsPage({ params }: Props) {
+const TABS = [
+  { key: '',            label: '전체',      icon: null },
+  { key: 'geo',         label: '청소 정보', icon: BookOpen },
+  { key: 'portfolio',   label: '시공 사례', icon: Wrench },
+] as const
+
+export default async function BizPostsPage({ params, searchParams }: Props) {
   const { slug } = await params
+  const { type } = await searchParams
   const db = createServiceClient()
 
   const { data: business } = await db
@@ -41,12 +49,21 @@ export default async function BizPostsPage({ params }: Props) {
 
   if (!business) notFound()
 
-  const { data: posts } = await db
+  let query = db
     .from('biz_posts')
-    .select('slug, title, summary, published_at')
+    .select('slug, title, summary, published_at, post_type' as never)
     .eq('business_id', business.id)
     .eq('published', true)
     .order('published_at', { ascending: false })
+
+  if (type === 'geo' || type === 'portfolio') {
+    query = query.eq('post_type' as never, type)
+  }
+
+  type PostRow = { slug: string; title: string; summary: string | null; published_at: string; post_type: string }
+  const { data: posts } = (await query) as unknown as { data: PostRow[] | null }
+
+  const activeType = (type === 'geo' || type === 'portfolio') ? type : ''
 
   return (
     <div className="min-h-screen bg-white">
@@ -83,22 +100,48 @@ export default async function BizPostsPage({ params }: Props) {
         <div className="max-w-4xl mx-auto px-4">
           <div className="flex items-center gap-2 text-primary mb-2">
             <BookOpen className="h-4 w-4" />
-            <span className="text-sm font-semibold tracking-wide uppercase">청소 전문 정보</span>
+            <span className="text-sm font-semibold tracking-wide uppercase">청소 전문 콘텐츠</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold">청소 정보 & 노하우</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold">청소 정보 & 시공 사례</h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            {business.name} 전문가가 알려주는 청소 꿀팁과 유용한 정보
+            {business.name} 전문가의 청소 노하우와 실제 시공 사례
           </p>
+
+          {/* ── 카테고리 탭 ── */}
+          <div className="flex gap-2 mt-5">
+            {TABS.map((tab) => {
+              const href = tab.key ? `/biz/${slug}/posts?type=${tab.key}` : `/biz/${slug}/posts`
+              const isActive = activeType === tab.key
+              const Icon = tab.icon
+              return (
+                <Link
+                  key={tab.key}
+                  href={href}
+                  className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-white border border-border text-muted-foreground hover:text-foreground hover:border-primary/40'
+                  }`}
+                >
+                  {Icon && <Icon className="h-3.5 w-3.5" />}
+                  {tab.label}
+                </Link>
+              )
+            })}
+          </div>
         </div>
       </section>
 
       {/* ── 포스트 목록 ── */}
       <section className="max-w-4xl mx-auto px-4 py-10">
         {!posts || posts.length === 0 ? (
-          // 빈 상태
           <div className="text-center py-20 space-y-3">
             <BookOpen className="h-10 w-10 text-muted-foreground mx-auto" />
-            <p className="text-muted-foreground">아직 등록된 청소 정보가 없어요</p>
+            <p className="text-muted-foreground">
+              {activeType === 'geo' && '아직 등록된 청소 정보가 없어요'}
+              {activeType === 'portfolio' && '아직 등록된 시공 사례가 없어요'}
+              {activeType === '' && '아직 등록된 콘텐츠가 없어요'}
+            </p>
             <Link href={`/biz/${slug}`}>
               <Button variant="outline" className="mt-2">업체 홈으로 돌아가기</Button>
             </Link>
@@ -111,8 +154,19 @@ export default async function BizPostsPage({ params }: Props) {
                 href={`/biz/${slug}/posts/${post.slug}`}
                 className="group block rounded-2xl border-2 bg-white p-6 hover:shadow-lg hover:border-primary/40 transition-all"
               >
-                {/* 컬러 포인트 바 */}
-                <div className="h-1 w-10 bg-primary rounded-full mb-4 group-hover:w-16 transition-all duration-300" />
+                {/* 카테고리 뱃지 */}
+                {post.post_type === 'portfolio' ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5 mb-3">
+                    <Wrench className="h-3 w-3" />
+                    시공 사례
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5 mb-3">
+                    <BookOpen className="h-3 w-3" />
+                    청소 정보
+                  </span>
+                )}
+
                 <p className="font-bold leading-snug group-hover:text-primary transition-colors line-clamp-2 mb-2">
                   {post.title}
                 </p>
