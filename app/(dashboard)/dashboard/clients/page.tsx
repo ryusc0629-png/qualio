@@ -186,21 +186,21 @@ export default async function ClientsPage({
       .eq('status', 'pending')
       .order('created_at', { ascending: false }),
 
-    // 사이드바 '서비스 항목'에 등록된 서비스 (활성만)
+    // 사이드바 '서비스 항목'에 등록된 서비스 (활성만) — 이름 + 기본 가격
     db.from('service_items')
-      .select('name')
+      .select('name, base_price')
       .eq('business_id', businessId)
       .eq('is_active', true)
       .order('name', { ascending: true }),
   ])
 
-  // 폼 서비스 드롭다운용 — 등록된 서비스명 목록 (이름 기준 중복 제거)
-  const serviceNames = [...new Set(
-    (serviceItems ?? [])
-      .map((s) => s.name)
-      .filter((n): n is string => Boolean(n))
-      .map((n) => n.trim())
-  )]
+  // 폼 서비스 선택용 — 이름+가격, 이름 기준 중복 제거 (첫 가격 유지)
+  const serviceMap = new Map<string, number>()
+  for (const s of serviceItems ?? []) {
+    const name = (s.name ?? '').trim()
+    if (name && !serviceMap.has(name)) serviceMap.set(name, s.base_price ?? 0)
+  }
+  const services = [...serviceMap].map(([name, base_price]) => ({ name, base_price }))
 
   // 전화번호 → 예약 실적 맵
   const bookingMap: Record<string, { ltv: number; count: number; lastDate: string }> = {}
@@ -283,7 +283,7 @@ export default async function ClientsPage({
           <h1 className="text-xl font-bold">고객 관리</h1>
           <p className="text-sm text-muted-foreground mt-1">개인 고객과 법인 거래처를 한 곳에서 관리해요</p>
         </div>
-        <AddClientForm serviceNames={serviceNames} />
+        <AddClientForm services={services} />
       </div>
 
       {/* 요약 통계 */}

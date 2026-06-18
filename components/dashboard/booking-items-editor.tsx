@@ -46,6 +46,7 @@ const formatThousands = (v: string) => {
 export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
   const [items, setItems] = useState<Item[]>([])
   const [changes, setChanges] = useState<Change[]>([])
+  const [services, setServices] = useState<{ name: string; base_price: number }[]>([])
   const [loaded, setLoaded] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
 
@@ -59,6 +60,7 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
       if (!data) return
       setItems(data.items as Item[])
       setChanges(data.changes as Change[])
+      setServices(data.services ?? [])
       setLoaded(true)
     },
   })
@@ -179,12 +181,28 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
       {/* 새 항목 추가 */}
       <div className="rounded-lg bg-white border border-border p-2.5 space-y-2">
         <p className="text-xs font-medium text-muted-foreground">항목 추가</p>
-        <input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="항목명 (예: 에어컨 청소)"
-          className="w-full h-9 rounded-lg border border-border px-2.5 text-sm"
-        />
+        {services.length > 0 ? (
+          <select
+            value={newName}
+            onChange={(e) => {
+              const name = e.target.value
+              setNewName(name)
+              const price = services.find((s) => s.name === name)?.base_price ?? 0
+              if (price > 0) setNewPrice(String(price))
+            }}
+            className="w-full h-9 rounded-lg border border-border bg-white px-2.5 text-sm"
+          >
+            <option value="">서비스 선택</option>
+            {services.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+          </select>
+        ) : (
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="항목명 (예: 에어컨 청소)"
+            className="w-full h-9 rounded-lg border border-border px-2.5 text-sm"
+          />
+        )}
         <div className="flex items-center gap-2">
           <input
             inputMode="numeric"

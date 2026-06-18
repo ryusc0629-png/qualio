@@ -97,7 +97,7 @@ export const getBookingItemsAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getAuth()
 
-    const [itemsRes, changesRes] = await Promise.all([
+    const [itemsRes, changesRes, servicesRes] = await Promise.all([
       db.from('booking_items' as never)
         .select('id, booking_id, name, quantity, unit_price, amount, sort_order' as never)
         .eq('booking_id' as never, parsedInput.bookingId)
@@ -114,9 +114,24 @@ export const getBookingItemsAction = action
             changed_by: string; changed_by_name: string | null; created_at: string
           }[] | null
         }>,
+      db.from('service_items')
+        .select('name, base_price')
+        .eq('business_id', businessId)
+        .eq('is_active', true)
+        .order('name', { ascending: true }) as unknown as Promise<{
+          data: { name: string; base_price: number }[] | null
+        }>,
     ])
 
-    return { items: itemsRes.data ?? [], changes: changesRes.data ?? [] }
+    // 서비스 이름 기준 중복 제거 (첫 가격 유지)
+    const serviceMap = new Map<string, number>()
+    for (const s of servicesRes.data ?? []) {
+      const name = (s.name ?? '').trim()
+      if (name && !serviceMap.has(name)) serviceMap.set(name, s.base_price ?? 0)
+    }
+    const services = [...serviceMap].map(([name, base_price]) => ({ name, base_price }))
+
+    return { items: itemsRes.data ?? [], changes: changesRes.data ?? [], services }
   })
 
 // ── 항목 추가 ───────────────────────────────────────────

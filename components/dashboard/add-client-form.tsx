@@ -93,18 +93,27 @@ type CustomerInput = z.infer<typeof customerSchema>
 
 const CATEGORIES = ['카페', '병원', '학원', '오피스', '상가', '식당', '헬스장', '기타']
 
+interface ServiceOption {
+  name: string
+  base_price: number
+}
+
 interface AddClientFormProps {
-  // 사이드바 '서비스 항목'에 등록된 서비스명 (없으면 기본값 사용)
-  serviceNames?: string[]
+  // 사이드바 '서비스 항목'에 등록된 서비스(이름+가격). 없으면 기본값 사용
+  services?: ServiceOption[]
 }
 
 const DEFAULT_SERVICES = ['일반청소', '입주청소', '사무실 청소', '공장 청소', '기타']
 
-export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
-  // 등록된 서비스가 있으면 그걸 쓰고, 없으면 기본값 — 마지막에 '기타' 보장
-  const services = serviceNames.length > 0
-    ? [...serviceNames, '기타']
-    : DEFAULT_SERVICES
+export function AddClientForm({ services = [] }: AddClientFormProps) {
+  // 등록된 서비스가 있으면 그걸 쓰고, 없으면 기본값(가격 0)
+  const serviceItems: ServiceOption[] = services.length > 0
+    ? services
+    : DEFAULT_SERVICES.map((name) => ({ name, base_price: 0 }))
+  // 드롭다운 이름 목록 — 마지막에 '기타' 보장
+  const serviceOptions = [...serviceItems.map((s) => s.name), '기타']
+  // 서비스명 → 기본 가격
+  const priceForService = (name: string) => serviceItems.find((s) => s.name === name)?.base_price ?? 0
   const [open, setOpen] = useState(false)
   const [clientType, setClientType] = useState<'lead' | 'customer'>('lead')
   // 첫 작업 일정 — 다른 설정 창과 동일한 달력+시/분 선택 방식
@@ -123,6 +132,13 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
     setJobItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)))
   const addJobItem = () => setJobItems((prev) => [...prev, { name: '', qty: '1', unitPrice: '' }])
   const removeJobItem = (idx: number) => setJobItems((prev) => prev.filter((_, i) => i !== idx))
+  // 서비스 선택 시 등록된 기본 가격을 자동으로 채움 (이후 수정 가능)
+  const selectJobItemService = (idx: number, name: string) => {
+    const price = priceForService(name)
+    setJobItems((prev) => prev.map((it, i) =>
+      i === idx ? { ...it, name, unitPrice: price > 0 ? String(price) : it.unitPrice } : it,
+    ))
+  }
 
   const leadForm = useForm<LeadInput>({
     resolver: zodResolver(leadSchema),
@@ -450,7 +466,7 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
                         className="w-full h-10 rounded-lg border border-border bg-background px-2.5 text-sm"
                       >
                         <option value="">선택 안함</option>
-                        {services.map((s) => <option key={s} value={s}>{s}</option>)}
+                        {serviceOptions.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
                     <div className="space-y-1">
@@ -488,12 +504,14 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
                           {jobItems.map((it, idx) => (
                             <div key={idx} className="rounded-lg bg-white border border-border p-2 space-y-2">
                               <div className="flex items-center gap-2">
-                                <input
+                                <select
                                   value={it.name}
-                                  onChange={(e) => updateJobItem(idx, 'name', e.target.value)}
-                                  placeholder="항목명 (예: 에어컨 청소)"
-                                  className="flex-1 h-9 rounded-lg border border-border px-2.5 text-sm"
-                                />
+                                  onChange={(e) => selectJobItemService(idx, e.target.value)}
+                                  className="flex-1 h-9 rounded-lg border border-border bg-background px-2.5 text-sm"
+                                >
+                                  <option value="">서비스 선택</option>
+                                  {serviceOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                                </select>
                                 {jobItems.length > 1 && (
                                   <button
                                     type="button"
@@ -573,7 +591,7 @@ export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
                         className="w-full h-10 rounded-lg border border-border bg-background px-2.5 text-sm"
                       >
                         <option value="">선택해주세요</option>
-                        {services.map((s) => <option key={s} value={s}>{s}</option>)}
+                        {serviceOptions.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
                     <div className="space-y-1">
