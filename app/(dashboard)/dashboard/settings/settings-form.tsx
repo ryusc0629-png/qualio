@@ -436,12 +436,12 @@ export function SettingsForm({ business }: Props) {
           </p>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-2">
           {testimonials.map((t, idx) => (
-            <div key={idx} className="rounded-xl border bg-muted/30 p-4 space-y-3">
+            <div key={idx} className="rounded-lg border bg-muted/30 p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-                  <Quote className="h-3.5 w-3.5" />
+                  <Quote className="h-3 w-3" />
                   추천사 {idx + 1}
                 </div>
                 <button
@@ -450,7 +450,7 @@ export function SettingsForm({ business }: Props) {
                   className="text-muted-foreground hover:text-destructive transition-colors"
                   aria-label="삭제"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
               <textarea
@@ -460,7 +460,7 @@ export function SettingsForm({ business }: Props) {
                 )}
                 placeholder="예: 입주청소를 맡겼는데 정말 꼼꼼하게 해주셔서 만족했어요. 다음에도 또 부탁드릴게요!"
                 maxLength={200}
-                rows={3}
+                rows={2}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
               />
               <Input
@@ -470,6 +470,7 @@ export function SettingsForm({ business }: Props) {
                 )}
                 placeholder="예: 강남구 이사청소 고객님"
                 maxLength={30}
+                className="h-8 text-sm"
               />
             </div>
           ))}
