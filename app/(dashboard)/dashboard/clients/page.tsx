@@ -144,6 +144,7 @@ export default async function ClientsPage({
     { data: b2bQuotes },
     reviewClaimsResult,
     { data: pendingQuotes },
+    { data: serviceItems },
   ] = await Promise.all([
     db.from('customers')
       .select('id, name, phone, address, category, type, notes, lead_id, created_at')
@@ -184,7 +185,19 @@ export default async function ClientsPage({
       .eq('business_id', businessId)
       .eq('status', 'pending')
       .order('created_at', { ascending: false }),
+
+    // 사이드바 '서비스 항목'에 등록된 서비스 (활성만)
+    db.from('service_items')
+      .select('name')
+      .eq('business_id', businessId)
+      .eq('is_active', true)
+      .order('name', { ascending: true }),
   ])
+
+  // 폼 서비스 드롭다운용 — 등록된 서비스명 목록
+  const serviceNames = (serviceItems ?? [])
+    .map((s) => s.name)
+    .filter((n): n is string => Boolean(n))
 
   // 전화번호 → 예약 실적 맵
   const bookingMap: Record<string, { ltv: number; count: number; lastDate: string }> = {}
@@ -267,7 +280,7 @@ export default async function ClientsPage({
           <h1 className="text-xl font-bold">고객 관리</h1>
           <p className="text-sm text-muted-foreground mt-1">개인 고객과 법인 거래처를 한 곳에서 관리해요</p>
         </div>
-        <AddClientForm />
+        <AddClientForm serviceNames={serviceNames} />
       </div>
 
       {/* 요약 통계 */}

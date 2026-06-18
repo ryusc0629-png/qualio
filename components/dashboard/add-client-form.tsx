@@ -78,9 +78,19 @@ type LeadInput = z.infer<typeof leadSchema>
 type CustomerInput = z.infer<typeof customerSchema>
 
 const CATEGORIES = ['카페', '병원', '학원', '오피스', '상가', '식당', '헬스장', '기타']
-const SERVICE_TYPES = ['일반청소', '입주청소', '사무실 청소', '공장 청소', '기타']
 
-export function AddClientForm() {
+interface AddClientFormProps {
+  // 사이드바 '서비스 항목'에 등록된 서비스명 (없으면 기본값 사용)
+  serviceNames?: string[]
+}
+
+const DEFAULT_SERVICES = ['일반청소', '입주청소', '사무실 청소', '공장 청소', '기타']
+
+export function AddClientForm({ serviceNames = [] }: AddClientFormProps) {
+  // 등록된 서비스가 있으면 그걸 쓰고, 없으면 기본값 — 마지막에 '기타' 보장
+  const services = serviceNames.length > 0
+    ? [...serviceNames, '기타']
+    : DEFAULT_SERVICES
   const [open, setOpen] = useState(false)
   const [clientType, setClientType] = useState<'lead' | 'customer'>('lead')
 
@@ -381,7 +391,7 @@ export function AddClientForm() {
                         className="w-full h-10 rounded-lg border border-border bg-background px-2.5 text-sm"
                       >
                         <option value="">선택 안함</option>
-                        {SERVICE_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        {services.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
                     <div className="space-y-1">
@@ -423,7 +433,7 @@ export function AddClientForm() {
                         className="w-full h-10 rounded-lg border border-border bg-background px-2.5 text-sm"
                       >
                         <option value="">선택해주세요</option>
-                        {SERVICE_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+                        {services.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
                     <div className="space-y-1">
