@@ -49,6 +49,7 @@ interface Business {
   review_reward_type: string
   review_reward_description: string | null
   logo_url: string | null
+  hero_image_url: string | null
   brand_color: string | null
   brand_color_secondary: string | null
   hero_style: string | null
@@ -85,6 +86,7 @@ export function SettingsForm({ business }: Props) {
     business.hero_style === 'light' ? 'light' : 'dark',
   )
   const [logoUrl, setLogoUrl] = useState(business.logo_url ?? '')
+  const [heroImageUrl, setHeroImageUrl] = useState(business.hero_image_url ?? '')
   const [heroTitle, setHeroTitle] = useState(business.hero_title ?? '')
   const [heroSubtitle, setHeroSubtitle] = useState(business.hero_subtitle ?? '')
   const [testimonials, setTestimonials] = useState<Testimonial[]>(
@@ -123,6 +125,7 @@ export function SettingsForm({ business }: Props) {
       brand_color_secondary:     normalizeHex(brandSecondary) ?? '',
       hero_style:                heroStyle,
       logo_url:                  logoUrl.trim(),
+      hero_image_url:            heroImageUrl.trim(),
       hero_title:                heroTitle.trim(),
       hero_subtitle:             heroSubtitle.trim(),
       testimonials:              JSON.stringify(
@@ -189,6 +192,7 @@ export function SettingsForm({ business }: Props) {
         brandSecondary={brandSecondary}
         heroStyle={heroStyle}
         logoUrl={logoUrl}
+        heroImageUrl={heroImageUrl}
         heroTitle={heroTitle}
         heroSubtitle={heroSubtitle}
         onChange={(next) => {
@@ -196,6 +200,7 @@ export function SettingsForm({ business }: Props) {
           if (next.brandSecondary !== undefined) setBrandSecondary(next.brandSecondary)
           if (next.heroStyle !== undefined) setHeroStyle(next.heroStyle)
           if (next.logoUrl !== undefined) setLogoUrl(next.logoUrl)
+          if (next.heroImageUrl !== undefined) setHeroImageUrl(next.heroImageUrl)
           if (next.heroTitle !== undefined) setHeroTitle(next.heroTitle)
           if (next.heroSubtitle !== undefined) setHeroSubtitle(next.heroSubtitle)
         }}

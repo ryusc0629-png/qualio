@@ -86,14 +86,15 @@ export default async function BizLandingPage({ params }: Props) {
 
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, youtube_url, logo_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials' as never)
+    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, youtube_url, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials' as never)
     .eq('slug', slug)
     .maybeSingle() as { data: {
       id: string; name: string; phone: string | null; address: string | null
       description: string | null; seo_title: string | null; seo_description: string | null
       seo_keywords: string | null; seo_faqs: unknown; naver_place_url: string | null
       youtube_url: string | null
-      logo_url: string | null; brand_color: string | null; brand_color_secondary: string | null
+      logo_url: string | null; hero_image_url: string | null
+      brand_color: string | null; brand_color_secondary: string | null
       hero_style: string | null; hero_title: string | null; hero_subtitle: string | null
       testimonials: { quote: string; author: string }[] | null
     } | null }
@@ -104,23 +105,26 @@ export default async function BizLandingPage({ params }: Props) {
   const brand = toBrandSettings(business)
   const themeStyle = buildBrandStyle(brand)
   const isLightHero = brand.heroStyle === 'light'
+  // 히어로 이미지가 있으면 항상 어두운 스타일 (오버레이 위에 흰 텍스트)
+  const hasHeroImage = !!business.hero_image_url
+  const effectiveDark = !isLightHero || hasHeroImage
   // 히어로 dark/light 변형별 클래스
   const hero = {
-    section: isLightHero
+    section: isLightHero && !hasHeroImage
       ? 'relative overflow-hidden bg-gradient-to-br from-primary/10 via-white to-white'
       : 'relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900',
-    title: isLightHero ? 'text-slate-900' : 'text-white',
-    desc: isLightHero ? 'text-slate-600' : 'text-slate-300',
-    muted: isLightHero ? 'text-slate-500' : 'text-slate-400',
-    mutedHover: isLightHero ? 'hover:text-slate-900' : 'hover:text-white',
-    statCard: isLightHero
-      ? 'bg-white border border-slate-200 shadow-sm'
-      : 'bg-white/8 backdrop-blur border border-white/10',
-    statValue: isLightHero ? 'text-slate-900' : 'text-white',
-    statSub: isLightHero ? 'text-slate-400' : 'text-slate-500',
-    outlineBtn: isLightHero
-      ? 'border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-      : 'border-white/50 text-white hover:bg-white/10 hover:text-white',
+    title: effectiveDark ? 'text-white' : 'text-slate-900',
+    desc: effectiveDark ? 'text-slate-300' : 'text-slate-600',
+    muted: effectiveDark ? 'text-slate-400' : 'text-slate-500',
+    mutedHover: effectiveDark ? 'hover:text-white' : 'hover:text-slate-900',
+    statCard: effectiveDark
+      ? 'bg-white/8 backdrop-blur border border-white/10'
+      : 'bg-white border border-slate-200 shadow-sm',
+    statValue: effectiveDark ? 'text-white' : 'text-slate-900',
+    statSub: effectiveDark ? 'text-slate-400' : 'text-slate-500',
+    outlineBtn: effectiveDark
+      ? 'border-white/50 text-white hover:bg-white/10 hover:text-white'
+      : 'border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900',
   }
 
   const [{ data: services }, { data: recentPosts }] = await Promise.all([
@@ -294,21 +298,39 @@ export default async function BizLandingPage({ params }: Props) {
 
         {/* ── 히어로 ── */}
         <section className={hero.section}>
-          {/* 배경 장식 */}
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent" />
-          <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/8 rounded-full blur-3xl -translate-y-1/3 translate-x-1/4" />
-          <div
-            className="absolute bottom-0 left-0 w-96 h-96 rounded-full blur-3xl translate-y-1/2 -translate-x-1/3 opacity-15"
-            style={{ backgroundColor: 'var(--brand-secondary)' }}
-          />
-          {!isLightHero && (
-            <div
-              className="absolute inset-0 opacity-[0.025]"
-              style={{
-                backgroundImage: 'linear-gradient(rgba(255,255,255,.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.3) 1px, transparent 1px)',
-                backgroundSize: '48px 48px',
-              }}
-            />
+          {/* 히어로 이미지 배경 (등록된 경우) */}
+          {business.hero_image_url && (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={business.hero_image_url}
+                alt={business.name}
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+              {/* 이미지 위에 어두운 오버레이 — 텍스트 가독성 확보 */}
+              <div className="absolute inset-0 bg-black/55" />
+            </>
+          )}
+
+          {/* 배경 장식 (이미지 없을 때만) */}
+          {!business.hero_image_url && (
+            <>
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/20 via-transparent to-transparent" />
+              <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-primary/8 rounded-full blur-3xl -translate-y-1/3 translate-x-1/4" />
+              <div
+                className="absolute bottom-0 left-0 w-96 h-96 rounded-full blur-3xl translate-y-1/2 -translate-x-1/3 opacity-15"
+                style={{ backgroundColor: 'var(--brand-secondary)' }}
+              />
+              {!isLightHero && (
+                <div
+                  className="absolute inset-0 opacity-[0.025]"
+                  style={{
+                    backgroundImage: 'linear-gradient(rgba(255,255,255,.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.3) 1px, transparent 1px)',
+                    backgroundSize: '48px 48px',
+                  }}
+                />
+              )}
+            </>
           )}
 
           <div className="relative max-w-4xl mx-auto px-6 pt-16 pb-20 sm:pt-24 sm:pb-28 text-center">

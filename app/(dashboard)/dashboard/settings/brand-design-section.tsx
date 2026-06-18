@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { ExternalLink, Upload, X, Loader2 } from 'lucide-react'
+import { ExternalLink, Upload, X, Loader2, AlertTriangle, CheckCircle2, Camera } from 'lucide-react'
 import {
   BRAND_PRESETS,
   DEFAULT_BRAND_COLOR,
@@ -22,6 +22,7 @@ interface Props {
   brandSecondary: string
   heroStyle: HeroStyle
   logoUrl: string
+  heroImageUrl: string
   heroTitle: string
   heroSubtitle: string
   onChange: (next: {
@@ -29,6 +30,7 @@ interface Props {
     brandSecondary?: string
     heroStyle?: HeroStyle
     logoUrl?: string
+    heroImageUrl?: string
     heroTitle?: string
     heroSubtitle?: string
   }) => void
@@ -42,6 +44,7 @@ export function BrandDesignSection({
   brandSecondary,
   heroStyle,
   logoUrl,
+  heroImageUrl,
   heroTitle,
   heroSubtitle,
   onChange,
@@ -50,7 +53,10 @@ export function BrandDesignSection({
   const secondary = normalizeHex(brandSecondary) ?? DEFAULT_BRAND_SECONDARY
   const isDark = heroStyle === 'dark'
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const heroImageInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [isUploadingHero, setIsUploadingHero] = useState(false)
+  const [showHeroGuide, setShowHeroGuide] = useState(false)
 
   const activePreset = BRAND_PRESETS.find(
     (p) => p.primary === primary && p.secondary === secondary,
@@ -73,6 +79,26 @@ export function BrandDesignSection({
     } finally {
       setIsUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleHeroImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploadingHero(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch('/api/upload-hero-image', { method: 'POST', body: form })
+      const json = await res.json() as { url?: string; error?: string }
+      if (!res.ok || !json.url) throw new Error(json.error ?? '업로드 실패')
+      onChange({ heroImageUrl: json.url })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '업로드에 실패했어요. 다시 시도해주세요')
+    } finally {
+      setIsUploadingHero(false)
+      if (heroImageInputRef.current) heroImageInputRef.current.value = ''
     }
   }
 
@@ -328,6 +354,119 @@ export function BrandDesignSection({
         />
         <p className="text-[11px] text-muted-foreground">
           비워두면 업체명이 글자로 표시돼요. 로고를 올리면 페이지 상단에 표시됩니다. (JPG, PNG 5MB 이하)
+        </p>
+      </div>
+
+      {/* ── 히어로 배경 이미지 업로드 ── */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs">대표 사진 (선택)</Label>
+          <button
+            type="button"
+            onClick={() => setShowHeroGuide((v) => !v)}
+            className="flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            <Camera className="h-3 w-3" />
+            어떤 사진이 좋은가요?
+          </button>
+        </div>
+
+        {/* 품질 가이드 — 토글 */}
+        {showHeroGuide && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2.5 text-xs">
+            <div className="flex items-start gap-2 text-amber-700">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <p className="font-semibold leading-snug">
+                퀄리티 낮은 사진은 오히려 고객 신뢰를 낮출 수 있어요. 아래 기준을 꼭 확인해주세요.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <p className="font-semibold text-emerald-700">✅ 이런 사진이 좋아요</p>
+                <ul className="space-y-0.5 text-muted-foreground pl-1">
+                  <li>• 밝고 깔끔하게 정돈된 시공 후 모습</li>
+                  <li>• 자연광 또는 밝은 실내조명</li>
+                  <li>• 넓은 공간 전체가 보이는 구도</li>
+                  <li>• 전문 장비나 작업 모습</li>
+                </ul>
+              </div>
+              <div className="space-y-1">
+                <p className="font-semibold text-red-600">❌ 이런 사진은 피해주세요</p>
+                <ul className="space-y-0.5 text-muted-foreground pl-1">
+                  <li>• 어둡거나 흐릿한 사진</li>
+                  <li>• 픽셀이 깨지거나 흔들린 사진</li>
+                  <li>• 청소 전 (지저분한) 상태 사진</li>
+                  <li>• 스마트폰으로 찍은 저화질 사진</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {heroImageUrl ? (
+          <div className="relative rounded-xl overflow-hidden border aspect-video bg-muted">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={heroImageUrl}
+              alt="대표 사진 미리보기"
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+            <div className="absolute top-2 right-2 flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => heroImageInputRef.current?.click()}
+                disabled={isUploadingHero}
+                className="flex items-center gap-1.5 bg-black/60 hover:bg-black/80 text-white text-[11px] px-2.5 py-1.5 rounded-lg transition-colors"
+              >
+                <Upload className="h-3 w-3" />
+                교체
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange({ heroImageUrl: '' })}
+                className="bg-black/60 hover:bg-black/80 rounded-lg p-1.5 text-white transition-colors"
+                aria-label="사진 삭제"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="absolute bottom-2 left-2 flex items-center gap-1.5 bg-black/50 text-white text-[11px] px-2 py-1 rounded-md">
+              <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+              등록된 대표 사진
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => heroImageInputRef.current?.click()}
+            disabled={isUploadingHero}
+            className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-muted-foreground/30 py-8 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors disabled:opacity-50"
+          >
+            {isUploadingHero ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                <span>올리는 중...</span>
+              </>
+            ) : (
+              <>
+                <Camera className="h-6 w-6" />
+                <span>대표 사진 올리기</span>
+                <span className="text-[11px] text-muted-foreground/70">밝고 깔끔한 시공 후 사진 권장</span>
+              </>
+            )}
+          </button>
+        )}
+
+        <input
+          ref={heroImageInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleHeroImageUpload}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          홍보 페이지 상단에 표시되는 대표 사진이에요. 비워두면 색상 배경만 보여요. (JPG, PNG 5MB 이하)
         </p>
       </div>
 

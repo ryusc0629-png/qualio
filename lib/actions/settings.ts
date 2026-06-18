@@ -38,9 +38,10 @@ const updateBusinessSchema = z.object({
     .string()
     .refine((v) => ['dark', 'light'].includes(v), '유효하지 않은 히어로 스타일입니다')
     .optional(),
-  logo_url:       z.string().max(500).optional(),
-  hero_title:     z.string().max(100).optional(),
-  hero_subtitle:  z.string().max(300).optional(),
+  logo_url:         z.string().max(500).optional(),
+  hero_image_url:   z.string().max(500).optional(),
+  hero_title:       z.string().max(100).optional(),
+  hero_subtitle:    z.string().max(300).optional(),
   testimonials:   z.string().optional(), // JSON string: [{quote, author}]
 })
 
@@ -79,6 +80,7 @@ export const updateBusinessAction = action
         brand_color_secondary:     parsedInput.brand_color_secondary || null,
         hero_style:                parsedInput.hero_style            || 'dark',
         logo_url:                  parsedInput.logo_url              || null,
+        hero_image_url:            (parsedInput.hero_image_url        || null) as never,
         hero_title:                (parsedInput.hero_title            || null) as never,
         hero_subtitle:             (parsedInput.hero_subtitle         || null) as never,
         testimonials:              (parsedInput.testimonials
