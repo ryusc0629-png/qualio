@@ -293,6 +293,10 @@ export function BrandDesignSection({
           비워두면 업체명이 글자로 표시돼요. 로고를 올리면 페이지 상단에 표시됩니다. (JPG, PNG 5MB 이하)
         </p>
       </div>
+
+      <p className="text-xs text-center text-muted-foreground border-t pt-4">
+        변경 후 아래로 스크롤하여 <span className="font-semibold text-foreground">설정 저장</span> 버튼을 눌러주세요
+      </p>
     </div>
   )
 }
