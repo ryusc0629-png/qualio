@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Noto_Sans_KR, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import { ScrollReset } from "@/components/ui/scroll-reset";
 import "./globals.css";
 
 const notoSansKR = Noto_Sans_KR({
@@ -31,6 +32,7 @@ export default function RootLayout({
       className={`${notoSansKR.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <ScrollReset />
         {children}
         <Toaster richColors position="bottom-right" />
       </body>
