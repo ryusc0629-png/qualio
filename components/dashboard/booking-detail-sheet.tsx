@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
+import { BookingItemsEditor } from '@/components/dashboard/booking-items-editor'
 import {
   Sheet,
   SheetContent,
@@ -530,6 +531,13 @@ export function BookingDetailSheet({
               </Row>
             )}
           </div>
+
+          {/* 항목별 견적 편집 — 통화·현장 조정 + 변경 이력 */}
+          {booking && (
+            <div className="mb-4">
+              <BookingItemsEditor bookingId={booking.id} fallbackTotal={booking.final_price} />
+            </div>
+          )}
 
           {/* 고객 상세 정보 링크 */}
           {booking?.customer_id && (
