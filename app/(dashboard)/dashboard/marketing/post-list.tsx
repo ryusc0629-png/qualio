@@ -988,7 +988,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
             {posts.map((post) => {
               const url = postUrl(post.slug)
               return (
-                <div key={post.id}>
+                <div key={post.id} id={`post-${post.id}`}>
                   <div className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -1033,7 +1033,15 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                       <PostEditor
                         businessId={businessId}
                         post={editingPost}
-                        onClose={() => setEditingPost(null)}
+                        onClose={() => {
+                          const postId = editingPost?.id
+                          setEditingPost(null)
+                          if (postId) {
+                            requestAnimationFrame(() => {
+                              document.getElementById(`post-${postId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                            })
+                          }
+                        }}
                         onSaved={() => { setEditingPost(null); window.location.reload() }}
                       />
                     </div>
