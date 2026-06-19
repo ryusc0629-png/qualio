@@ -27,7 +27,7 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { href: '/dashboard',          label: '대시보드',    desc: undefined,        icon: LayoutDashboard, exact: true },
+  { href: '/dashboard',          label: '홈',          desc: undefined,        icon: LayoutDashboard, exact: true },
   { href: '/dashboard/clients',  label: '고객 관리',   desc: '견적·예약·거래처', icon: Users },
   { href: '/dashboard/schedule', label: '일정·배정',   desc: undefined,        icon: CalendarDays },
   { href: '/dashboard/claims',   label: '클레임',      desc: '미해결 관리',     icon: ShieldAlert },
