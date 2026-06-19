@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { Menu } from 'lucide-react'
 import { Sidebar } from './sidebar'
 import { BottomNav } from './bottom-nav'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
@@ -39,16 +38,13 @@ export function DashboardShell({ businessName, children }: DashboardShellProps) 
       <div className="flex-1 flex flex-col min-w-0">
         {/* 모바일 상단 헤더 */}
         <header className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-white sticky top-0 z-30">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-lg hover:bg-muted"
-            aria-label="메뉴 열기"
-          >
-            <Menu className="h-5 w-5 text-muted-foreground" />
-          </button>
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-primary rounded-md flex items-center justify-center">
-              <span className="text-primary-foreground text-xs font-bold">Q</span>
+              {/* 브랜드 마크 — 파비콘/앱아이콘과 동일한 기하학 Q */}
+              <svg viewBox="0 0 512 512" className="w-4 h-4 text-primary-foreground" fill="none" stroke="currentColor" aria-hidden="true">
+                <circle cx="250" cy="234" r="120" strokeWidth="46" />
+                <line x1="306" y1="290" x2="384" y2="368" strokeWidth="46" strokeLinecap="round" />
+              </svg>
             </div>
             <p className="font-semibold text-sm truncate">{businessName}</p>
           </div>
