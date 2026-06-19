@@ -44,13 +44,13 @@ export default async function ClaimsPage() {
     // 클레임 등록 시 기존 고객을 골라 자동 채우기 위한 목록
     db
       .from('customers')
-      .select('id, name, phone')
+      .select('id, name, phone, address')
       .eq('business_id', profile.business_id)
       .order('name', { ascending: true }),
   ])
 
   const claims = data ?? []
-  const customers = (customerRows ?? []).map((c) => ({ id: c.id, name: c.name, phone: c.phone }))
+  const customers = (customerRows ?? []).map((c) => ({ id: c.id, name: c.name, phone: c.phone, address: c.address }))
   const openClaims = claims.filter((c) => c.status !== 'resolved')
   const resolvedClaims = claims.filter((c) => c.status === 'resolved')
 

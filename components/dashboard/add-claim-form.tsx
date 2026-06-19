@@ -29,24 +29,36 @@ interface Customer {
   id: string
   name: string
   phone: string | null
+  address?: string | null
 }
 
 interface Props {
-  customers: Customer[]
+  // 검색 피커용 전체 고객 목록 (고객 상세에서 열 땐 불필요)
+  customers?: Customer[]
+  // 고객 상세 화면처럼 대상 고객이 이미 정해진 경우 — 피커 없이 그 고객으로 고정
+  presetCustomer?: Customer | null
+  triggerLabel?: string
+  triggerClassName?: string
 }
 
-export function AddClaimForm({ customers }: Props) {
+export function AddClaimForm({ customers = [], presetCustomer = null, triggerLabel = '클레임 등록하기', triggerClassName }: Props) {
   const [open, setOpen] = useState(false)
   const focusRef = useAutoFocusRef<HTMLDivElement>()
 
+  // 대상 고객이 미리 정해졌으면 그 고객으로 고정(변경 불가)
+  const locked = !!presetCustomer
+
   // 고객 선택 상태 — 기존 고객을 고르면 이름/연락처가 자동으로 채워짐
   const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<Customer | null>(null)
+  const [selected, setSelected] = useState<Customer | null>(presetCustomer)
   // 목록에 없는 새 고객이면 직접 입력 (고객이 한 명도 없으면 기본 직접 입력)
-  const [manual, setManual] = useState(customers.length === 0)
+  const [manual, setManual] = useState(!presetCustomer && customers.length === 0)
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormInput>({
     resolver: zodResolver(schema),
+    defaultValues: presetCustomer
+      ? { customer_name: presetCustomer.name, customer_phone: presetCustomer.phone ?? '' }
+      : undefined,
   })
 
   const filtered = useMemo(() => {
@@ -70,9 +82,9 @@ export function AddClaimForm({ customers }: Props) {
 
   function resetAll() {
     reset()
-    setSelected(null)
+    setSelected(presetCustomer)
     setSearch('')
-    setManual(customers.length === 0)
+    setManual(!presetCustomer && customers.length === 0)
   }
 
   function pickCustomer(c: Customer) {
@@ -89,9 +101,9 @@ export function AddClaimForm({ customers }: Props) {
 
   if (!open) {
     return (
-      <Button onClick={() => setOpen(true)} className="h-12">
+      <Button onClick={() => setOpen(true)} className={triggerClassName ?? 'h-12'}>
         <Plus className="h-4 w-4 mr-1.5" />
-        클레임 등록하기
+        {triggerLabel}
       </Button>
     )
   }
@@ -126,13 +138,15 @@ export function AddClaimForm({ customers }: Props) {
                   </p>
                   {selected.phone && <p className="text-xs text-muted-foreground mt-0.5">{selected.phone}</p>}
                 </div>
-                <button
-                  type="button"
-                  onClick={clearSelection}
-                  className="shrink-0 text-xs text-muted-foreground hover:text-foreground underline"
-                >
-                  변경
-                </button>
+                {!locked && (
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    className="shrink-0 text-xs text-muted-foreground hover:text-foreground underline"
+                  >
+                    변경
+                  </button>
+                )}
               </div>
             ) : manual ? (
               // 직접 입력 — 목록에 없는 고객
@@ -186,7 +200,10 @@ export function AddClaimForm({ customers }: Props) {
                         className="w-full text-left px-3 py-2.5 hover:bg-muted transition-colors"
                       >
                         <p className="text-sm font-medium">{c.name}</p>
-                        {c.phone && <p className="text-xs text-muted-foreground">{c.phone}</p>}
+                        {/* 전화·주소를 함께 보여 동명이인을 구분 */}
+                        <p className="text-xs text-muted-foreground truncate">
+                          {[c.phone, c.address].filter(Boolean).join(' · ') || '연락처 없음'}
+                        </p>
                       </button>
                     ))
                   )}

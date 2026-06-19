@@ -1,14 +1,30 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, Calendar, Receipt, ChevronRight, FileText, User, Star } from 'lucide-react'
+import { ChevronLeft, Calendar, Receipt, ChevronRight, FileText, User, Star, ShieldAlert, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { ContactActions } from '@/components/dashboard/contact-actions'
+import { AddClaimForm } from '@/components/dashboard/add-claim-form'
+import { ClaimActions } from '@/components/dashboard/claim-actions'
 import { contractAccruedRevenue, type ContractLike } from '@/lib/utils/ltv'
 
 interface Props {
   params: Promise<{ customerId: string }>
 }
+
+interface CustomerClaimRow {
+  id: string
+  title: string
+  content: string | null
+  is_urgent: boolean
+  status: string
+  resolution: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
+const fmtClaimDate = (iso: string) =>
+  new Date(iso).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' })
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
   confirmed:   { label: '예약 확정',  className: 'bg-blue-100 text-blue-700' },
@@ -103,6 +119,20 @@ export default async function CustomerDetailPage({ params }: Props) {
     .eq('business_id', profile.business_id)
     .eq('customer_id', customerId)
 
+  // 이 고객의 클레임 조회 (전화번호로 연결 — 예약/리뷰와 동일 방식)
+  const { data: claimsData } = customer.phone
+    ? await db
+        .from('claims' as never)
+        .select('id, title, content, is_urgent, status, resolution, created_at, resolved_at' as never)
+        .eq('business_id' as never, profile.business_id)
+        .eq('customer_phone' as never, customer.phone)
+        .order('is_urgent' as never, { ascending: false })
+        .order('created_at' as never, { ascending: false }) as unknown as { data: CustomerClaimRow[] | null }
+    : { data: null }
+
+  const customerClaims = claimsData ?? []
+  const openClaimCount = customerClaims.filter((c) => c.status !== 'resolved').length
+
   const oneOffTotal = bookingList
     .filter((b) => b.status === 'completed')
     .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
@@ -196,6 +226,73 @@ export default async function CustomerDetailPage({ params }: Props) {
             <span className="text-sm font-normal text-muted-foreground ml-0.5">회</span>
           </p>
         </div>
+      </div>
+
+      {/* 클레임 — 이 고객으로 바로 등록(같은 모달 재사용) */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
+            <ShieldAlert className="h-4 w-4 text-rose-500" />
+            클레임
+            {openClaimCount > 0 && (
+              <span className="text-xs font-semibold text-rose-600">{openClaimCount}건 미해결</span>
+            )}
+          </h2>
+          <AddClaimForm
+            presetCustomer={{ id: customer.id, name: customer.name, phone: customer.phone }}
+            triggerLabel="클레임 등록"
+            triggerClassName="h-9 px-3 text-sm"
+          />
+        </div>
+
+        {customerClaims.length === 0 ? (
+          <div className="bg-white rounded-xl border border-dashed border-border px-4 py-6 text-center">
+            <p className="text-sm text-muted-foreground">이 고객의 클레임이 없어요</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {customerClaims.map((claim) => {
+              const resolved = claim.status === 'resolved'
+              return (
+                <article
+                  key={claim.id}
+                  className={`rounded-xl border p-4 space-y-2 ${resolved ? 'bg-muted/30 border-border' : 'bg-white border-border'}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {!resolved && claim.is_urgent && (
+                          <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-full">
+                            <AlertTriangle className="h-3 w-3" />
+                            긴급
+                          </span>
+                        )}
+                        <p className={`font-semibold ${resolved ? 'text-muted-foreground line-through decoration-muted-foreground/40' : ''}`}>
+                          {claim.title}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 text-xs text-muted-foreground inline-flex items-center gap-1">
+                      {resolved && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+                      {fmtClaimDate(resolved && claim.resolved_at ? claim.resolved_at : claim.created_at)}
+                    </span>
+                  </div>
+                  {claim.content && !resolved && (
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap border-t border-border pt-2">
+                      {claim.content}
+                    </p>
+                  )}
+                  {claim.resolution && resolved && (
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap border-t border-border pt-2">
+                      해결: {claim.resolution}
+                    </p>
+                  )}
+                  <ClaimActions claimId={claim.id} status={claim.status} />
+                </article>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* 서비스 이력 */}
