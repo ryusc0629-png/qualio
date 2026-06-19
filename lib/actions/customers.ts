@@ -259,6 +259,7 @@ export const createActiveCustomerAction = action
 
     revalidatePath('/dashboard/clients')
     revalidatePath('/dashboard/bookings')
+    revalidatePath('/dashboard/schedule')
     revalidatePath('/dashboard')
     return { success: true }
   })

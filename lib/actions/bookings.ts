@@ -52,13 +52,35 @@ export const addBookingAction = action
 
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
+    const scheduledIso = new Date(parsedInput.scheduled_at).toISOString()
+
+    // 중복 제출 방어 — 같은 고객·일시·금액의 예약이 이미 있으면 또 만들지 않음
+    // (추가 직후 일정 화면에 안 보여 다시 누르는 경우 등으로 같은 예약이 2번 박히던 문제 방지)
+    const { data: existingBooking } = await db
+      .from('bookings')
+      .select('id')
+      .eq('business_id', profile.business_id)
+      .eq('customer_phone', parsedInput.customer_phone)
+      .eq('scheduled_at', scheduledIso)
+      .eq('final_price', parsedInput.final_price)
+      .is('deleted_at', null)
+      .limit(1)
+
+    if (existingBooking && existingBooking.length > 0) {
+      // 이미 동일 예약 존재 — 중복 생성 없이 성공으로 처리
+      revalidatePath('/dashboard/schedule')
+      revalidatePath('/dashboard/bookings')
+      revalidatePath('/dashboard/clients')
+      return { success: true }
+    }
+
     const { error } = await db.from('bookings').insert({
       business_id: profile.business_id,
       quote_id: null,
       customer_name: parsedInput.customer_name,
       customer_phone: parsedInput.customer_phone,
       service_address: parsedInput.service_address,
-      scheduled_at: new Date(parsedInput.scheduled_at).toISOString(),
+      scheduled_at: scheduledIso,
       selected_tier: 'good',
       final_price: parsedInput.final_price,
       memo: parsedInput.memo ?? null,
@@ -85,6 +107,7 @@ export const addBookingAction = action
       })
     }
 
+    revalidatePath('/dashboard/schedule')
     revalidatePath('/dashboard/bookings')
     revalidatePath('/dashboard/clients')
     return { success: true }
