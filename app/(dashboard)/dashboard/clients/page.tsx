@@ -9,6 +9,7 @@ import { ConfirmBookingButton } from '@/components/dashboard/confirm-booking-but
 import { formatFrequency } from '@/lib/utils/frequency'
 import { contractAccruedRevenue } from '@/lib/utils/ltv'
 import { ClientSearchInput } from '@/components/dashboard/client-search-input'
+import { formatCompactKRW } from '@/lib/format/krw'
 import { Phone, MapPin, Calendar, TrendingUp, ChevronRight, Building2, User, Archive, Star } from 'lucide-react'
 
 // ── 타입 ────────────────────────────────────────────────
@@ -309,9 +310,9 @@ export default async function ClientsPage({
         </div>
         <div className="bg-white rounded-xl border p-4">
           <p className="text-xs text-muted-foreground">월 정기 매출</p>
-          <p className="text-2xl font-bold mt-1 tabular-nums text-emerald-600">
-            {monthlyRecurring > 0 ? monthlyRecurring.toLocaleString('ko-KR') : '—'}
-            {monthlyRecurring > 0 && <span className="text-sm font-normal text-muted-foreground ml-0.5">원</span>}
+          {/* 좁은 카드를 안 넘치게: 만원/억원 축약 + 폰트 자동 축소(clamp) */}
+          <p className="text-[clamp(0.95rem,4.2vw,1.5rem)] font-bold mt-1 tabular-nums whitespace-nowrap text-emerald-600">
+            {formatCompactKRW(monthlyRecurring)}
           </p>
           {monthlyRecurring > 0 && (
             <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-0.5">
