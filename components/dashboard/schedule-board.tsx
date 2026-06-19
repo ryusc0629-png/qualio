@@ -58,6 +58,7 @@ interface Booking {
   reportId?: string | null
   reviewSent?: boolean
   hasReviewHistory?: boolean
+  hasOpenClaim?: boolean
 }
 
 interface Props {
@@ -131,6 +132,14 @@ function BookingCard({
       style={{ backgroundColor: isCompleted ? '#f3f4f6' : color }}
     >
       <div className="flex items-center gap-1">
+        {booking.hasOpenClaim && (
+          <span
+            title="미해결 클레임 있음"
+            className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] font-bold leading-none"
+          >
+            !
+          </span>
+        )}
         {isCompleted && <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />}
         {booking.hasReviewHistory && !isCompleted && <span className="shrink-0" title="리뷰 작성 고객">⭐</span>}
         <p className={`font-bold truncate ${isCompleted ? 'line-through' : ''}`}>{booking.customer_name}</p>

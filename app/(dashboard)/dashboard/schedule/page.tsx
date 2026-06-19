@@ -150,6 +150,21 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     }
   }
 
+  // 미해결 클레임이 있는 고객 전화번호 조회 (캘린더 카드에 빨간 표시)
+  const claimPhones = new Set<string>()
+  if (phones.length > 0) {
+    const { data: openClaimRows } = await db
+      .from('claims' as never)
+      .select('customer_phone' as never)
+      .eq('business_id' as never, businessId)
+      .neq('status' as never, 'resolved')
+      .in('customer_phone' as never, phones) as unknown as { data: { customer_phone: string | null }[] | null }
+
+    for (const c of openClaimRows ?? []) {
+      if (c.customer_phone) claimPhones.add(c.customer_phone)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -177,6 +192,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           reportId:        reportMap.get(b.id)?.id ?? null,
           reviewSent:      reportMap.get(b.id)?.reviewSent ?? false,
           hasReviewHistory: b.customer_phone ? reviewedPhones.has(b.customer_phone) : false,
+          hasOpenClaim:     b.customer_phone ? claimPhones.has(b.customer_phone) : false,
         }))}
         weekStart={rangeStart.toISOString()}
         weekLabel={rangeLabel}

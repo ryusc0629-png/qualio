@@ -54,6 +54,7 @@ export const createClaimAction = action
     }
     revalidatePath('/dashboard')
     revalidatePath('/dashboard/claims')
+    revalidatePath('/dashboard/schedule')
     revalidatePath('/dashboard/clients/[customerId]', 'page')
     return { success: true }
   })
@@ -85,6 +86,7 @@ export const resolveClaimAction = action
     }
     revalidatePath('/dashboard')
     revalidatePath('/dashboard/claims')
+    revalidatePath('/dashboard/schedule')
     revalidatePath('/dashboard/clients/[customerId]', 'page')
     return { success: true }
   })
@@ -111,6 +113,7 @@ export const reopenClaimAction = action
     }
     revalidatePath('/dashboard')
     revalidatePath('/dashboard/claims')
+    revalidatePath('/dashboard/schedule')
     revalidatePath('/dashboard/clients/[customerId]', 'page')
     return { success: true }
   })
@@ -137,6 +140,7 @@ export const deleteClaimAction = action
     }
     revalidatePath('/dashboard')
     revalidatePath('/dashboard/claims')
+    revalidatePath('/dashboard/schedule')
     revalidatePath('/dashboard/clients/[customerId]', 'page')
     return { success: true }
   })
