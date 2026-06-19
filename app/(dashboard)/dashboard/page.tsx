@@ -75,6 +75,7 @@ export default async function DashboardPage() {
     { count: doneReelCount },
     { count: pendingPortfolioCount },
     { count: pendingChannelCount },
+    { data: fieldPriceChanges },
   ] = await Promise.all([
     // 이번 달 완료 예약
     db.from('bookings').select('final_price')
@@ -183,6 +184,13 @@ export default async function DashboardPage() {
       .neq('post_type' as never, 'portfolio')
       .is('channel_posted_at' as never, null)
       .or('naver_content.not.is.null,daangn_content.not.is.null,instagram_content.not.is.null' as never),
+
+    // 오늘 현장에서 금액을 조정한 변경 이력 (직원이 항목 가감)
+    db.from('booking_price_changes' as never)
+      .select('booking_id' as never)
+      .eq('business_id' as never, businessId)
+      .eq('changed_by' as never, 'worker')
+      .gte('created_at' as never, todayStartUTC.toISOString()) as unknown as Promise<{ data: { booking_id: string }[] | null }>,
   ])
 
   // ── 계산 ──────────────────────────────────────────────
@@ -235,10 +243,14 @@ export default async function DashboardPage() {
     year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
   })
 
+  // 오늘 현장에서 금액이 조정된 예약 수 (직원 변경, 중복 제거)
+  const fieldPriceChangedCount = new Set((fieldPriceChanges ?? []).map((c) => c.booking_id)).size
+
   // 알림 배너 여부
   const hasAlerts = (pendingQuoteCount ?? 0) > 0 || unreportedCount > 0 ||
     (unreviewedCount ?? 0) > 0 || (unassignedCount ?? 0) > 0 || todayFollowUpCount > 0 ||
-    (doneReelCount ?? 0) > 0 || (pendingPortfolioCount ?? 0) > 0 || (pendingChannelCount ?? 0) > 0
+    (doneReelCount ?? 0) > 0 || (pendingPortfolioCount ?? 0) > 0 || (pendingChannelCount ?? 0) > 0 ||
+    fieldPriceChangedCount > 0
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
@@ -255,6 +267,20 @@ export default async function DashboardPage() {
       {/* 액션 알림 */}
       {hasAlerts && (
         <div className="space-y-2">
+          {fieldPriceChangedCount > 0 && (
+            <Link href="/dashboard/schedule">
+              <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 hover:bg-indigo-100 transition-colors">
+                <Wallet className="h-4 w-4 text-indigo-500 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-indigo-800">
+                    현장에서 금액을 조정한 예약이 {fieldPriceChangedCount}건 있어요
+                  </p>
+                  <p className="text-xs text-indigo-600 mt-0.5">예약을 열어 누가·무엇을 바꿨는지 확인하세요</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-indigo-400 shrink-0" />
+              </div>
+            </Link>
+          )}
           {(doneReelCount ?? 0) > 0 && (
             <Link href="/dashboard/marketing">
               <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 hover:bg-rose-100 transition-colors">
