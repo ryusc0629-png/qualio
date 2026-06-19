@@ -155,7 +155,7 @@ export default async function AlimtalkTodoPage() {
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-3"
         >
           <ChevronLeft className="h-3.5 w-3.5" />
-          대시보드
+          홈
         </Link>
         <h1 className="text-2xl font-bold">알림톡 발송</h1>
         <p className="text-sm text-muted-foreground mt-1">

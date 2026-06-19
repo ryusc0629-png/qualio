@@ -80,7 +80,7 @@ export default async function SettingsPage() {
           <h2 className="font-semibold text-sm">고객 견적 요청 링크</h2>
           <p className="text-xs text-muted-foreground mt-1">
             카카오톡·문자로 공유하면 고객이 직접 견적을 요청할 수 있어요.
-            대시보드 우측 상단 <span className="font-medium text-foreground">견적 링크 복사</span> 버튼으로도 빠르게 복사할 수 있어요.
+            홈 화면 우측 상단 <span className="font-medium text-foreground">견적 링크 복사</span> 버튼으로도 빠르게 복사할 수 있어요.
           </p>
         </div>
         <CopyLinkButton url={quoteUrl} />
