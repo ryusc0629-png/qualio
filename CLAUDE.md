@@ -62,6 +62,53 @@ redirect('/dashboard')      // Server Action 내부에서만 허용
 
 ---
 
+## 커스텀 모달 포커스 필수
+
+div 기반 모달을 만들 때, 콘텐츠 div에 반드시 포커스 처리를 추가할 것:
+
+```typescript
+// ✅ 모달 콘텐츠 div — 열리자마자 포커스 잡힘
+<div
+  ref={(el) => el?.focus()}
+  tabIndex={-1}
+  className="... outline-none"
+>
+
+// ❌ 포커스 없으면 맥북에서 첫 클릭이 포커스 잡기에 소비됨 (두 번째 클릭부터 작동)
+<div className="...">
+```
+
+**왜 이렇게 쓰는가:** 맥북 데스크탑 브라우저는 새로 열린 모달에 포커스를 자동으로 옮기지 않음. Radix Dialog/Sheet는 자동 처리되므로 해당 없음 — `fixed inset-0` 커스텀 모달에만 적용.
+
+---
+
+## 모달 배경 스크롤 잠금 필수
+
+모달이 열려 있는 동안 뒷 배경 페이지가 스크롤되면 안 됨(스크롤 체이닝 방지). 두 가지를 함께 적용할 것:
+
+**1. 커스텀(div) 모달 — 배경 스크롤 잠금 + 체이닝 차단**
+
+```typescript
+import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
+
+// ✅ 오버레이 바로 안에 <ScrollLock /> 배치 → 열린 동안 배경 잠금, 닫히면 자동 해제
+<div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <ScrollLock />
+  {/* 스크롤되는 콘텐츠 패널엔 overscroll-contain 추가 */}
+  <div className="... max-h-[90vh] overflow-y-auto overscroll-contain outline-none">
+    ...
+  </div>
+</div>
+
+// ❌ ScrollLock 없으면 모달 안 스크롤이 끝에 닿을 때 배경 페이지가 밀림
+```
+
+**2. Radix Dialog/Sheet** — `DialogContent`/`SheetContent`에 이미 `overscroll-contain`이 들어가 있어 추가 작업 불필요.
+
+**왜 이렇게 쓰는가:** Radix는 `body`만 잠그는데, 대시보드 본문이 `<main overflow-auto>`라 맥북 트랙패드에서 모달 내부 스크롤이 끝에 닿으면 체이닝으로 배경이 밀림. `overscroll-behavior: contain`이 체이닝을 끊고, `ScrollLock`(=html/body `overflow:hidden`)이 배경을 완전히 고정. `ScrollLock`은 잠금 횟수를 세므로 모달 중첩에도 안전하며, 조건부 렌더(`{open && ...}` 또는 `if(!open) return`)되는 오버레이 안에 두어 마운트/언마운트로 자동 동작시킬 것.
+
+---
+
 ## Supabase 조인 문법 (FK 명시 필수)
 
 ```typescript
@@ -72,6 +119,46 @@ redirect('/dashboard')      // Server Action 내부에서만 허용
 // ❌ FK 생략 시 다중 관계 에러 발생
 .select('id, profiles(full_name)')
 ```
+
+---
+
+## Supabase 새 컬럼 타입 단언 패턴
+
+마이그레이션으로 컬럼을 추가했지만 `database.ts` 타입이 아직 갱신되지 않은 경우:
+
+```typescript
+// ✅ select에 as never, 결과에 as unknown as 명시 타입
+const { data } = await db
+  .from('subscriptions')
+  .select('plan, status, next_plan' as never)
+  .eq('business_id', businessId)
+  .maybeSingle() as unknown as { data: { plan: string; status: string; next_plan: string | null } | null }
+
+// ✅ update/insert에 as never 또는 as any
+await db
+  .from('subscriptions')
+  .update({ next_plan: 'pro' } as never)
+  .eq('id', id)
+
+// ❌ 타입 에러 무시하고 그냥 쓰면 빌드 실패
+```
+
+---
+
+## 시간 표시 규칙 (UTC→KST)
+
+Vercel 서버는 UTC로 동작하므로, 날짜/시간 표시 시 반드시 `timeZone: 'Asia/Seoul'` 명시:
+
+```typescript
+// ✅ 올바른 방식 — KST로 표시
+date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' })
+date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' })
+
+// ❌ timeZone 생략 시 Vercel에서 UTC로 표시 (로컬에선 정상 → 배포 후 9시간 밀림)
+date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+```
+
+**왜 이렇게 쓰는가:** 로컬 개발 환경은 OS 타임존(KST)을 따르지만, Vercel 서버는 UTC. `timeZone`을 생략하면 로컬에선 정상이다가 배포 후 시간이 9시간 밀려 보임.
 
 ---
 

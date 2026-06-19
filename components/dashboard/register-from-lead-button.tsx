@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { createCustomerWithContractAction } from '@/lib/actions/customers'
 import { FrequencyPicker } from '@/components/dashboard/frequency-picker'
 import { UserPlus, X } from 'lucide-react'
+import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 
 const schema = z.object({
   name: z.string().min(1, '고객명을 입력해주세요'),
@@ -91,7 +92,8 @@ export function RegisterFromLeadButton({ lead, alreadyRegistered }: RegisterFrom
 
       {open && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto outline-none">
+          <ScrollLock />
+          <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain outline-none">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="font-semibold text-lg">고객 등록</h2>

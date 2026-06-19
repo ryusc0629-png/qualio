@@ -14,6 +14,7 @@ import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { createLeadAction } from '@/lib/actions/crm'
 import { createActiveCustomerAction } from '@/lib/actions/customers'
 import { Plus, X, Search, Trash2 } from 'lucide-react'
+import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 
 // 숫자 입력 쉼표 처리 헬퍼
 const digitsOnly = (v: string) => v.replace(/[^0-9]/g, '')
@@ -243,10 +244,11 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
       className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
       onClick={requestClose}
     >
+      <ScrollLock />
       <div
         ref={modalRef}
         tabIndex={-1}
-        className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto outline-none"
+        className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">

@@ -60,7 +60,8 @@ function SheetContent({
       <DialogPrimitive.Content
         data-slot="sheet-content"
         className={cn(
-          "fixed z-50 flex flex-col bg-background shadow-xl transition ease-in-out duration-300",
+          // overscroll-contain: 시트 내부 스크롤이 끝에 닿아도 뒷 배경으로 전달되지 않음
+          "fixed z-50 flex flex-col overscroll-contain bg-background shadow-xl transition ease-in-out duration-300",
           "data-open:animate-in data-closed:animate-out data-closed:duration-200",
           SIDE_CLASSES[side],
           className

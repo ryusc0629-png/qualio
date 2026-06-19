@@ -127,6 +127,11 @@
   html {
     @apply font-sans;
   }
+  /* 문서 끝에서의 스크롤 체이닝/고무줄 효과 차단 — 모달 안 스크롤이 배경으로 새지 않게 함 */
+  html,
+  body {
+    overscroll-behavior: none;
+  }
 }
 
 /* 쉬운 서식 편집기(RichTextEditor) 본문 — 제목/목록/굵게를 실제 모양대로 표시 */

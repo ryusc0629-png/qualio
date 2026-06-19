@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createCustomerAction } from '@/lib/actions/customers'
 import { Plus, X } from 'lucide-react'
+import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 
 const schema = z.object({
   name: z.string().min(1, '고객명을 입력해주세요'),
@@ -69,7 +70,8 @@ export function AddCustomerForm({ defaultValues, variant = 'default' }: AddCusto
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4 outline-none">
+      <ScrollLock />
+      <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain outline-none">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-lg">고객 추가</h2>
           <button onClick={() => setOpen(false)}>

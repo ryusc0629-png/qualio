@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Menu } from 'lucide-react'
 import { Sidebar } from './sidebar'
+import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 
 interface DashboardShellProps {
   businessName: string
@@ -17,10 +18,13 @@ export function DashboardShell({ businessName, children }: DashboardShellProps) 
     <div className="min-h-screen flex">
       {/* 모바일 오버레이 배경 */}
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 z-40 md:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <>
+          <ScrollLock />
+          <div
+            className="fixed inset-0 bg-black/40 z-40 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        </>
       )}
 
       {/* 사이드바 */}

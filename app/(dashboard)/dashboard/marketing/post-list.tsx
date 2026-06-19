@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Sparkles, Plus, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send, SkipForward, Save, ChevronUp } from 'lucide-react'
 import { PostEditor } from './post-editor'
+import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import { toast } from 'sonner'
 
 interface TopicSuggestion {
@@ -209,7 +210,8 @@ function ImageGalleryModal({
     const src = images[viewingIdx]
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setViewingIdx(null)}>
-        <div ref={(el) => el?.focus()} tabIndex={-1} className="relative max-w-4xl max-h-[90vh] w-full outline-none" onClick={(e) => e.stopPropagation()}>
+        <ScrollLock />
+        <div ref={(el) => el?.focus()} tabIndex={-1} className="relative max-w-4xl max-h-[90vh] w-full overscroll-contain outline-none" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
             onClick={() => setViewingIdx(null)}
@@ -236,7 +238,8 @@ function ImageGalleryModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl outline-none" onClick={(e) => e.stopPropagation()}>
+      <ScrollLock />
+      <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overscroll-contain shadow-2xl outline-none" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-md bg-violet-100 flex items-center justify-center">
@@ -1136,7 +1139,8 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
       {/* 당근마켓용 글 모달 */}
       {daangnPost && daangnPost.daangn_content && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-white rounded-2xl w-full max-w-lg flex flex-col shadow-2xl outline-none">
+          <ScrollLock />
+          <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col overscroll-contain shadow-2xl outline-none">
             <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-md bg-[#FF6F0F] flex items-center justify-center text-sm">🥕</div>
@@ -1181,7 +1185,8 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
       {/* 인스타그램용 글 모달 */}
       {instaPost && instaPost.instagram_content && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-white rounded-2xl w-full max-w-lg flex flex-col shadow-2xl outline-none">
+          <ScrollLock />
+          <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col overscroll-contain shadow-2xl outline-none">
             <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-md bg-gradient-to-br from-[#f09433] via-[#e6683c] to-[#bc1888] flex items-center justify-center text-white font-bold text-xs">IG</div>
@@ -1247,7 +1252,8 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
       {/* 네이버 블로그용 글 모달 */}
       {naverPost && naverPost.naver_content && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl outline-none">
+          <ScrollLock />
+          <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overscroll-contain shadow-2xl outline-none">
             {/* 헤더 */}
             <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
               <div className="flex items-center gap-2">
