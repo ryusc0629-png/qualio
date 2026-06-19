@@ -77,6 +77,7 @@ export default async function DashboardPage() {
     { count: pendingPortfolioCount },
     { count: pendingChannelCount },
     { data: fieldPriceChanges },
+    { count: openClaimCount },
   ] = await Promise.all([
     // 이번 달 완료 예약
     db.from('bookings').select('final_price')
@@ -192,6 +193,12 @@ export default async function DashboardPage() {
       .eq('business_id' as never, businessId)
       .eq('changed_by' as never, 'worker')
       .gte('created_at' as never, todayStartUTC.toISOString()) as unknown as Promise<{ data: { booking_id: string }[] | null }>,
+
+    // 미해결 클레임 수
+    db.from('claims' as never)
+      .select('id' as never, { count: 'exact', head: true })
+      .eq('business_id' as never, businessId)
+      .neq('status' as never, 'resolved') as unknown as Promise<{ count: number | null }>,
   ])
 
   // ── 계산 ──────────────────────────────────────────────
@@ -251,7 +258,7 @@ export default async function DashboardPage() {
   const hasAlerts = (pendingQuoteCount ?? 0) > 0 || unreportedCount > 0 ||
     (unreviewedCount ?? 0) > 0 || (unassignedCount ?? 0) > 0 || todayFollowUpCount > 0 ||
     (doneReelCount ?? 0) > 0 || (pendingPortfolioCount ?? 0) > 0 || (pendingChannelCount ?? 0) > 0 ||
-    fieldPriceChangedCount > 0
+    fieldPriceChangedCount > 0 || (openClaimCount ?? 0) > 0
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
@@ -271,6 +278,20 @@ export default async function DashboardPage() {
       {/* 액션 알림 */}
       {hasAlerts && (
         <div className="space-y-2">
+          {(openClaimCount ?? 0) > 0 && (
+            <Link href="/dashboard/claims">
+              <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 hover:bg-rose-100 transition-colors">
+                <ShieldAlert className="h-4 w-4 text-rose-500 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-rose-800">
+                    미해결 클레임이 {openClaimCount}건 있어요
+                  </p>
+                  <p className="text-xs text-rose-600 mt-0.5">고객 불만이 쌓이기 전에 눌러서 해결하세요</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-rose-400 shrink-0" />
+              </div>
+            </Link>
+          )}
           {fieldPriceChangedCount > 0 && (
             <Link href="/dashboard/schedule">
               <div className="flex items-center gap-3 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 hover:bg-indigo-100 transition-colors">
@@ -497,15 +518,20 @@ export default async function DashboardPage() {
           </div>
         </Link>
 
-        <div className="bg-white rounded-xl border border-dashed border-border p-4 h-full opacity-60">
-          <div className="flex items-center gap-2 mb-2">
-            <ShieldAlert className="h-4 w-4 text-muted-foreground" />
-            <span className="text-xs font-medium text-muted-foreground">미해결 클레임</span>
-            <span className="text-[10px] bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">준비 중</span>
+        <Link href="/dashboard/claims" className="block">
+          <div className="bg-white rounded-xl border border-border p-4 h-full hover:border-rose-300 hover:shadow-sm transition-all">
+            <div className="flex items-center gap-2 mb-2">
+              <ShieldAlert className={`h-4 w-4 ${(openClaimCount ?? 0) > 0 ? 'text-rose-500' : 'text-muted-foreground'}`} />
+              <span className="text-xs font-medium text-muted-foreground">미해결 클레임</span>
+            </div>
+            <p className={`text-2xl font-bold tabular-nums ${(openClaimCount ?? 0) > 0 ? 'text-rose-600' : 'text-foreground'}`}>
+              {openClaimCount ?? 0}<span className="text-sm font-normal text-muted-foreground ml-0.5">건</span>
+            </p>
+            <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+              {(openClaimCount ?? 0) > 0 ? '눌러서 해결하세요' : '미해결 클레임 없음'}
+            </p>
           </div>
-          <p className="text-2xl font-bold tabular-nums text-muted-foreground">—</p>
-          <p className="text-[11px] text-muted-foreground/70 mt-0.5">클레임 관리 기능 개발 예정</p>
-        </div>
+        </Link>
       </div>
 
       {/* 운영 현황 — 2컬럼 */}
