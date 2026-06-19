@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Noto_Sans_KR, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { ScrollReset } from "@/components/ui/scroll-reset";
@@ -19,6 +19,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "퀄리오 | 청소 업체 관리 솔루션",
   description: "동네 소형 청소 업체를 프리미엄 기업으로",
+};
+
+// viewportFit: cover — 아이폰 노치/홈인디케이터 안전영역(env(safe-area-inset-*)) 활성화
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Menu } from 'lucide-react'
 import { Sidebar } from './sidebar'
+import { BottomNav } from './bottom-nav'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 
 interface DashboardShellProps {
@@ -53,10 +54,13 @@ export function DashboardShell({ businessName, children }: DashboardShellProps) 
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-6 overflow-auto">
+        <main className="flex-1 p-4 pb-24 md:p-6 overflow-auto">
           {children}
         </main>
       </div>
+
+      {/* 모바일 하단 탭 — 더보기는 전체 메뉴(사이드바) 열기 */}
+      <BottomNav onMore={() => setSidebarOpen(true)} />
     </div>
   )
 }
