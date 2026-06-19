@@ -1,4 +1,6 @@
 // 퀄리오 구독 플랜 정의 — 네이밍/금액 변경 시 이 파일만 수정
+import { formatMoney } from '@/lib/format/money'
+
 export const PLANS = {
   beta: {
     id: 'beta' as const,
@@ -87,10 +89,10 @@ export type Plan = (typeof PLANS)[PlanId]
 // 유료 플랜 목록 (결제 페이지에서 사용)
 export const PAID_PLANS = [PLANS.starter, PLANS.pro, PLANS.scale] as const
 
-// 금액 포맷 (39000 → "39,000원/월")
+// 금액 포맷 (39000 → "39,000원/월") — 통화 표기는 마켓 설정을 따른다
 export function formatPrice(price: number): string {
   if (price === 0) return '무료'
-  return `${price.toLocaleString('ko-KR')}원/월`
+  return `${formatMoney(price)}/월`
 }
 
 // 플랜 ID로 금액 조회 (결제 검증 시 사용)

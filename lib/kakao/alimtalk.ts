@@ -1,4 +1,5 @@
 import { SolapiMessageService } from 'solapi'
+import { formatDateTime } from '@/lib/format/datetime'
 
 // 예약 확정 알림톡 발송 파라미터
 // 퀄리오 단일 채널로 모든 고객사 대신 발송 — 업체별 Solapi 가입 불필요
@@ -23,17 +24,9 @@ const TIER_LABELS: Record<string, string> = {
   best:   '프리미엄',
 }
 
-// ISO 날짜를 한국어 형식으로 변환
+// ISO 날짜를 현지 표시 형식으로 변환(통화/타임존은 마켓 설정을 따른다)
 function formatKoreanDate(isoString: string): string {
-  const date = new Date(isoString)
-  return date.toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Asia/Seoul',
-  })
+  return formatDateTime(isoString)
 }
 
 // 견적 발송 알림톡 파라미터
