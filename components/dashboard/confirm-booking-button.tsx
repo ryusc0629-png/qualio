@@ -16,24 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { CheckCircle, Search } from 'lucide-react'
-
-function openAddressSearch(onSelect: (address: string) => void) {
-  const run = () => {
-    new window.daum!.Postcode({
-      oncomplete: (data) => {
-        const extra = data.buildingName ? ` (${data.buildingName})` : ''
-        onSelect(data.address + extra)
-      },
-    }).open()
-  }
-
-  if (window.daum?.Postcode) { run(); return }
-
-  const script = document.createElement('script')
-  script.src = '//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js'
-  script.onload = run
-  document.head.appendChild(script)
-}
+import { openAddressSearch } from '@/lib/address/postcode'
 
 const TIER_OPTIONS = [
   { value: 'good',   label: '기본' },

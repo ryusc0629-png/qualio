@@ -105,7 +105,27 @@ import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 
 **2. Radix Dialog/Sheet** — `DialogContent`/`SheetContent`에 이미 `overscroll-contain`이 들어가 있어 추가 작업 불필요.
 
-**왜 이렇게 쓰는가:** Radix는 `body`만 잠그는데, 대시보드 본문이 `<main overflow-auto>`라 맥북 트랙패드에서 모달 내부 스크롤이 끝에 닿으면 체이닝으로 배경이 밀림. `overscroll-behavior: contain`이 체이닝을 끊고, `ScrollLock`(=html/body `overflow:hidden`)이 배경을 완전히 고정. `ScrollLock`은 잠금 횟수를 세므로 모달 중첩에도 안전하며, 조건부 렌더(`{open && ...}` 또는 `if(!open) return`)되는 오버레이 안에 두어 마운트/언마운트로 자동 동작시킬 것.
+**왜 이렇게 쓰는가:** 대시보드의 실제 스크롤 컨테이너는 `body`가 아니라 `<main overflow-auto>`(dashboard-shell.tsx)임. 그래서 `body`만 잠그면 맥북 트랙패드에서 모달 내부 스크롤이 끝에 닿을 때 체이닝으로 `<main>`(=배경)이 밀림. `ScrollLock`은 이를 막기 위해 `html`/`body`뿐 아니라 페이지의 모든 `<main>` 요소까지 `overflow:hidden`으로 함께 잠가 배경을 완전히 고정함(스크롤 위치는 유지되어 점프 없음). `overscroll-behavior: contain`은 보조 안전장치. `ScrollLock`은 잠금 횟수를 세므로 모달 중첩에도 안전하며, 조건부 렌더(`{open && ...}` 또는 `if(!open) return`)되는 오버레이 안에 두어 마운트/언마운트로 자동 동작시킬 것. (Radix Dialog/Sheet는 react-remove-scroll이 wheel/touch 이벤트를 가로채 배경 스크롤을 원천 차단하므로 별도 처리 불필요.)
+
+---
+
+## 주소 검색(다음 우편번호) 공용 유틸 필수
+
+주소 검색이 필요하면 **반드시** 공용 유틸 하나만 쓸 것. 컴포넌트마다 `Postcode().open()`을 직접 호출하지 말 것.
+
+```typescript
+import { openAddressSearch } from '@/lib/address/postcode'
+
+// ✅ 고른 주소(도로명/지번 + 건물명)를 콜백으로 받음 — 선택/닫기 시 레이어 자동 제거
+<Button type="button" onClick={() => openAddressSearch((addr) => form.setValue('address', addr))}>
+  주소 검색
+</Button>
+
+// ❌ 직접 .open() 호출 금지 — 주소를 골라도 검색창이 안 닫혀 사용자가 헷갈림
+new window.daum.Postcode({ oncomplete }).open()
+```
+
+**왜 이렇게 쓰는가:** 다음(카카오) `Postcode.open()` 팝업 방식은 주소를 고른 뒤에도 검색 레이어가 화면에 남아 "주소는 입력됐는데 창이 안 닫히네?" 하고 헷갈리게 만든다. `lib/address/postcode.ts`의 `openAddressSearch`는 `.open()` 대신 우리가 만든 오버레이에 `.embed()`로 띄우고, 선택(oncomplete)·✕·배경 클릭·ESC 시 레이어를 직접 제거하므로 **항상 확실히 닫힌다**. 스크립트도 1회만 로드(중복 삽입 방지)하고 배경 스크롤도 잠근다. 새 주소 입력란을 만들 때 이 함수만 호출하면 닫힘 버그가 재발하지 않는다.
 
 ---
 

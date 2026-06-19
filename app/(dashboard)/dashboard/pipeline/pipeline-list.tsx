@@ -3,6 +3,7 @@
 import { useState, useTransition, useCallback } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { useRouter } from 'next/navigation'
+import { openAddressSearch } from '@/lib/address/postcode'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -56,20 +57,6 @@ const FILTER_TABS = [
 ]
 
 // ── 타입 ──────────────────────────────────────────────────
-
-// 카카오 우편번호 서비스 타입
-interface DaumPostcodeResult {
-  roadAddress: string
-  jibunAddress: string
-}
-interface DaumPostcodeInstance {
-  open(): void
-}
-interface DaumPostcodeWindow {
-  daum?: {
-    Postcode: new (config: { oncomplete: (data: DaumPostcodeResult) => void }) => DaumPostcodeInstance
-  }
-}
 
 type Lead = {
   id: string
@@ -551,22 +538,7 @@ function LeadForm({
   liveStatus?: LiveStatus
 }) {
   const handleAddressSearch = useCallback(() => {
-    const run = () => {
-      new (window as unknown as DaumPostcodeWindow).daum!.Postcode({
-        oncomplete: (data) => {
-          onChange('address', data.roadAddress || data.jibunAddress)
-        },
-      }).open()
-    }
-
-    if ((window as unknown as DaumPostcodeWindow).daum?.Postcode) {
-      run()
-    } else {
-      const script = document.createElement('script')
-      script.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js'
-      script.onload = run
-      document.body.appendChild(script)
-    }
+    openAddressSearch((address) => onChange('address', address))
   }, [onChange])
 
   const displayBudget = form.monthly_budget

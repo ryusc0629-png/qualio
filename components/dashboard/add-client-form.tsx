@@ -16,42 +16,13 @@ import { createActiveCustomerAction } from '@/lib/actions/customers'
 import { Plus, X, Search, Trash2 } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import { formatPhone } from '@/lib/format/phone'
+import { openAddressSearch } from '@/lib/address/postcode'
 
 // 숫자 입력 쉼표 처리 헬퍼
 const digitsOnly = (v: string) => v.replace(/[^0-9]/g, '')
 const formatThousands = (v: string) => {
   const d = digitsOnly(v)
   return d ? Number(d).toLocaleString('ko-KR') : ''
-}
-
-// 카카오(다음) 주소 검색 — 우편번호 스크립트 동적 로드
-declare global {
-  interface Window {
-    daum?: {
-      Postcode: new (options: {
-        oncomplete: (data: { address: string; buildingName: string; addressType: string; bname: string }) => void
-        onclose?: () => void
-      }) => { open: () => void }
-    }
-  }
-}
-
-function openAddressSearch(onSelect: (address: string) => void) {
-  const run = () => {
-    new window.daum!.Postcode({
-      oncomplete: (data) => {
-        const extra = data.buildingName ? ` (${data.buildingName})` : ''
-        onSelect(data.address + extra)
-      },
-    }).open()
-  }
-
-  if (window.daum?.Postcode) { run(); return }
-
-  const script = document.createElement('script')
-  script.src = '//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js'
-  script.onload = run
-  document.head.appendChild(script)
 }
 
 const leadSchema = z.object({

@@ -10,42 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createBookingAction } from '@/lib/actions/quotes'
 import { Check, Plus, Lightbulb, Search } from 'lucide-react'
-
-// 카카오(다음) 우편번호 API 타입 선언
-declare global {
-  interface Window {
-    daum?: {
-      Postcode: new (options: {
-        oncomplete: (data: { address: string; buildingName: string; addressType: string; bname: string }) => void
-        onclose?: () => void
-      }) => { open: () => void }
-    }
-  }
-}
-
-// 카카오 주소 검색 팝업 실행
-function openAddressSearch(onSelect: (address: string) => void) {
-  const run = () => {
-    new window.daum!.Postcode({
-      oncomplete: (data) => {
-        // 도로명 주소 + 건물명(있으면) 조합
-        const extra = data.buildingName ? ` (${data.buildingName})` : ''
-        onSelect(data.address + extra)
-      },
-    }).open()
-  }
-
-  if (window.daum?.Postcode) {
-    run()
-    return
-  }
-
-  // 스크립트 최초 로드 후 실행
-  const script = document.createElement('script')
-  script.src = '//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js'
-  script.onload = run
-  document.head.appendChild(script)
-}
+import { openAddressSearch } from '@/lib/address/postcode'
 
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
 

@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
+import { openAddressSearch } from '@/lib/address/postcode'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,20 +17,6 @@ import {
 import { FrequencyPicker } from '@/components/dashboard/frequency-picker'
 import { createCustomerWithContractAction } from '@/lib/actions/customers'
 import { UserCheck, CheckCircle2 } from 'lucide-react'
-
-// 카카오(다음) 우편번호 서비스 타입
-interface DaumPostcodeResult {
-  roadAddress: string
-  jibunAddress: string
-}
-interface DaumPostcodeInstance {
-  open(): void
-}
-interface DaumPostcodeWindow {
-  daum?: {
-    Postcode: new (config: { oncomplete: (data: DaumPostcodeResult) => void }) => DaumPostcodeInstance
-  }
-}
 
 interface Props {
   lead: {
@@ -75,22 +62,7 @@ export function ConvertToCustomerButton({ lead, quote, alreadyConverted }: Props
 
   // 카카오 주소 검색
   const handleAddressSearch = useCallback(() => {
-    const run = () => {
-      new (window as unknown as DaumPostcodeWindow).daum!.Postcode({
-        oncomplete: (data) => {
-          setAddress(data.roadAddress || data.jibunAddress)
-        },
-      }).open()
-    }
-
-    if ((window as unknown as DaumPostcodeWindow).daum?.Postcode) {
-      run()
-    } else {
-      const script = document.createElement('script')
-      script.src = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js'
-      script.onload = run
-      document.body.appendChild(script)
-    }
+    openAddressSearch((address) => setAddress(address))
   }, [])
 
   const handleSubmit = () => {
