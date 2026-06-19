@@ -56,20 +56,24 @@ function sceneVariants(info: SubjectInfo): string[] {
 }
 
 // seed → 서로 다른 장면 프롬프트 배열 (스타일 수식어 포함)
+// Claude imagePrompt(영문 장면 묘사)가 들어오면 그 맥락 그대로 사용 → 샷 타입만 변형
+// 한국어 제목이 들어오면 키워드 매칭 → SUBJECT_MAP 기반 장면 생성
 function buildVariantPrompts(seed: string): string[] {
   const trimmed = (seed ?? '').trim()
   const hasKorean = /[가-힣]/.test(trimmed)
 
   let scenes: string[]
   if (trimmed && !hasKorean) {
-    // 영문 seed(Claude 힌트 등): 같은 대상에 샷 타입만 다르게
+    // 영문 seed(Claude imagePrompt): 글 맥락 기반으로 샷 타입만 다르게
+    // Claude가 이미 주제에 맞는 구체적 장면을 묘사했으므로 최대한 살림
     scenes = [
-      trimmed,
-      `clean spotless result of ${trimmed}, wide shot, no person`,
-      `extreme macro detail close-up of ${trimmed}, no person`,
-      `bright tidy wide-angle view related to ${trimmed}, no person`,
+      trimmed, // 1) 원본 장면 그대로
+      `wide-angle result shot: ${trimmed}, clean and bright, no person, interior photography`, // 2) 결과 와이드
+      `extreme macro close-up detail of the main subject in: ${trimmed}, fine texture detail, no person`, // 3) 디테일 매크로
+      `alternative angle of: ${trimmed}, different perspective, bright atmosphere, no person`, // 4) 다른 앵글
     ]
   } else {
+    // 한국어 제목 → 키워드 매칭으로 장면 생성
     const matched = trimmed ? SUBJECT_MAP.find((s) => s.kw.some((k) => trimmed.includes(k))) : undefined
     scenes = sceneVariants(matched?.info ?? FALLBACK)
   }

@@ -5,6 +5,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft, Calendar, Clock, MapPin, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { BeforeAfterSlider } from '@/components/ui/before-after-slider'
 import { detectViewSource } from '@/lib/utils/detect-view-source'
 
 interface Props {
@@ -190,11 +191,15 @@ export default async function PostPage({ params }: Props) {
 
   const { data: post } = await db
     .from('biz_posts')
-    .select('id, title, content, summary, image_url, published_at, ai_generated')
+    .select('id, title, content, summary, image_url, published_at, ai_generated, post_type, before_image_urls, after_image_urls' as never)
     .eq('business_id', business.id)
     .eq('slug', postSlug)
     .eq('published', true)
-    .maybeSingle()
+    .maybeSingle() as { data: {
+      id: string; title: string; content: string; summary: string | null
+      image_url: string | null; published_at: string; ai_generated: boolean
+      post_type: string; before_image_urls: string[] | null; after_image_urls: string[] | null
+    } | null }
 
   if (!post) notFound()
 
@@ -371,6 +376,22 @@ export default async function PostPage({ params }: Props) {
                       </a>
                     ))}
                   </nav>
+                </div>
+              )}
+
+              {/* Before/After 슬라이더 — 포트폴리오 전용 */}
+              {post.post_type === 'portfolio' &&
+                post.before_image_urls?.[0] &&
+                post.after_image_urls?.[0] && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wider">시공 전후 비교</p>
+                  <BeforeAfterSlider
+                    beforeUrl={post.before_image_urls[0]}
+                    afterUrl={post.after_image_urls[0]}
+                  />
+                  <p className="text-[11px] text-center text-muted-foreground">
+                    ← 드래그하여 시공 전후를 비교해보세요
+                  </p>
                 </div>
               )}
 
