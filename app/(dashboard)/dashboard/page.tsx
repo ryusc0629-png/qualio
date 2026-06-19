@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { QuoteLinkShare } from '@/components/dashboard/quote-link-share'
 import { FollowUpSnoozeButton } from '@/components/dashboard/follow-up-snooze-button'
 import { WeeklyChart } from '@/components/dashboard/weekly-chart'
+import { OnboardingChecklist } from '@/components/dashboard/onboarding-checklist'
 import {
   AlertCircle, Calendar, ChevronRight, RefreshCw,
   Wallet, ClipboardList, Star, Phone,
@@ -263,6 +264,9 @@ export default async function DashboardPage() {
         </div>
         <QuoteLinkShare url={quoteUrl} />
       </div>
+
+      {/* 첫 이용 온보딩 체크리스트 — 셋업을 모두 마치면 자동으로 사라짐 */}
+      <OnboardingChecklist businessId={businessId} />
 
       {/* 액션 알림 */}
       {hasAlerts && (

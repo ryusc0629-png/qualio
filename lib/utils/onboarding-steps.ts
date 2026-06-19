@@ -1,0 +1,87 @@
+// 첫 이용 온보딩 체크리스트 — DB 상태(개수)를 읽어 각 단계 완료 여부를 자동 판정한다.
+// UI에 고정된 가이드 투어와 달리, 데이터 기반이라 화면이 바뀌어도 정확함이 유지된다.
+
+export interface OnboardingCounts {
+  serviceItems: number
+  quoteTiers: number
+  quotes: number
+  bookings: number
+  completedBookings: number
+}
+
+export interface OnboardingStep {
+  key: string
+  label: string
+  description: string
+  href: string
+  cta: string
+  done: boolean
+}
+
+// 핵심 매출 흐름(서비스 등록 → 견적 → 예약 → 완료) 순서대로 단계를 구성한다.
+export function buildOnboardingSteps(c: OnboardingCounts): OnboardingStep[] {
+  return [
+    {
+      key: 'business',
+      label: '업체 정보 등록',
+      description: '가입할 때 입력을 마쳤어요',
+      href: '/dashboard/settings',
+      cta: '정보 수정하기',
+      done: true, // 온보딩을 통과해야 대시보드에 진입하므로 항상 완료
+    },
+    {
+      key: 'service',
+      label: '서비스 항목 등록하기',
+      description: '청소 종류와 가격을 먼저 등록해요',
+      href: '/dashboard/services',
+      cta: '서비스 등록하기',
+      done: c.serviceItems > 0,
+    },
+    {
+      key: 'tier',
+      label: '가격 묶음 만들기',
+      description: '기본·고급·프리미엄처럼 고를 수 있는 견적 묶음이에요',
+      href: '/dashboard/tiers',
+      cta: '가격 묶음 만들기',
+      done: c.quoteTiers > 0,
+    },
+    {
+      key: 'quote',
+      label: '첫 견적 보내기',
+      description: '고객에게 견적 링크를 보내보세요',
+      href: '/dashboard/quotes',
+      cta: '견적 만들기',
+      done: c.quotes > 0,
+    },
+    {
+      key: 'booking',
+      label: '첫 예약 받기',
+      description: '고객이 예약하면 여기에 쌓여요',
+      href: '/dashboard/schedule',
+      cta: '예약 보기',
+      done: c.bookings > 0,
+    },
+    {
+      key: 'complete',
+      label: '첫 작업 완료하고 보고서 보내기',
+      description: '작업이 끝나면 사진 보고서를 보내요',
+      href: '/dashboard/schedule',
+      cta: '예약 보기',
+      done: c.completedBookings > 0,
+    },
+  ]
+}
+
+export interface OnboardingProgress {
+  done: number
+  total: number
+  allDone: boolean
+  // 다음에 해야 할(아직 안 끝난 첫) 단계
+  nextStep: OnboardingStep | null
+}
+
+export function onboardingProgress(steps: OnboardingStep[]): OnboardingProgress {
+  const done = steps.filter((s) => s.done).length
+  const nextStep = steps.find((s) => !s.done) ?? null
+  return { done, total: steps.length, allDone: done === steps.length, nextStep }
+}
