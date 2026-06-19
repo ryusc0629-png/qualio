@@ -7,19 +7,14 @@
 // NRR/코호트는 최소 2개월치 스냅샷이 쌓여야 의미가 생긴다(그 전엔 null 반환).
 // ────────────────────────────────────────────────────────────────────────────
 
-import { createClient as createRawClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/server'
+import { createInternalClient } from '@/lib/supabase/internal'
 import { getMarket } from '@/lib/i18n/locale'
 import { getAdminMetrics, effectiveMrr } from '@/lib/admin/metrics'
 
-// metrics_snapshots / business_mrr_snapshots 는 database.ts 타입에 아직 없다.
-// 제네릭 없는 service 클라이언트로 접근하고, 결과는 명시 타입으로 단언한다.
-function internalDb() {
-  return createRawClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  )
-}
+// metrics_snapshots / business_mrr_snapshots 는 database.ts 타입에 아직 없어
+// 제네릭 없는 internal 클라이언트로 접근하고, 결과는 명시 타입으로 단언한다.
+const internalDb = createInternalClient
 
 /** 마켓 타임존 기준 'YYYY-MM' (한국이면 KST) */
 export function currentPeriod(date: Date = new Date()): string {

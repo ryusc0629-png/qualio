@@ -1,5 +1,6 @@
 import { getAdminMetrics } from '@/lib/admin/metrics'
 import { computeNrr, getMrrTrend } from '@/lib/admin/snapshot'
+import { getPaymentFunnel } from '@/lib/admin/payment-funnel'
 import { formatMoney } from '@/lib/format/money'
 import { formatDateTime } from '@/lib/format/datetime'
 
@@ -35,7 +36,12 @@ function Stat({ label, value, sub, accent }: { label: string; value: string; sub
 }
 
 export default async function AdminMetricsPage() {
-  const [m, nrr, trend] = await Promise.all([getAdminMetrics(), computeNrr(), getMrrTrend()])
+  const [m, nrr, trend, funnel] = await Promise.all([
+    getAdminMetrics(),
+    computeNrr(),
+    getMrrTrend(),
+    getPaymentFunnel(),
+  ])
 
   const maxTrendMrr = Math.max(1, ...trend.map((t) => t.mrr))
 
@@ -123,6 +129,29 @@ export default async function AdminMetricsPage() {
         <Stat label="완료 예약" value={`${m.gmv.completedBookings}건`} sub={`전체 ${m.gmv.totalBookings}건`} />
         <Stat label="정기계약 (활성)" value={`${m.gmv.activeContracts}건`} />
         <Stat label="정기계약 월매출" value={formatMoney(m.gmv.contractMrr)} sub="월 환산" />
+      </Section>
+
+      {/* 결제 퍼널 — 임베디드 결제(핀테크) 전환율. 토스 라이브 후 채워짐 */}
+      <Section title="🧾 결제 퍼널 (할부 전환율)" hint="할부 노출→선택→결제. 결제가 매출을 올린다는 증명 = 핀테크 멀티플 근거">
+        {funnel.hasData ? (
+          <>
+            <Stat
+              label="할부 전환율"
+              value={funnel.installmentConversionRate === null ? '—' : pct(funnel.installmentConversionRate)}
+              sub={`선택 ${funnel.installmentSelected} / 노출 ${funnel.installmentShown}`}
+              accent
+            />
+            <Stat label="결제 완료" value={`${funnel.paidCount}건`} />
+            <Stat label="결제 GMV" value={formatMoney(funnel.paymentGmv)} sub="take-rate 기반" />
+            <Stat label="결제창 노출" value={`${funnel.checkoutShown}건`} />
+          </>
+        ) : (
+          <div className="col-span-2 rounded-lg border border-dashed bg-background p-4 text-xs leading-relaxed text-muted-foreground sm:col-span-3 lg:col-span-4">
+            아직 결제 이벤트가 없어요. <strong>토스 결제 라이브 후</strong> 예약 결제 플로우에서
+            <code className="mx-1 rounded bg-muted px-1">trackPaymentFunnelEvent()</code>를 호출하면
+            할부 전환율·결제 GMV가 자동으로 채워집니다. (연결 지점: <code>lib/payments/track.ts</code>)
+          </div>
+        )}
       </Section>
 
       {/* 성장 — 퍼널 최상단 */}
