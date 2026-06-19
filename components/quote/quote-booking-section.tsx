@@ -71,7 +71,11 @@ export function QuoteBookingSection({
   })
 
   const { execute, isPending } = useAction(createBookingAction, {
-    onSuccess: () => setDone(true),
+    onSuccess: () => {
+      setDone(true)
+      // 예약 완료 후 페이지 최상단으로 — 폼이 짧은 완료 화면으로 바뀌며 스크롤이 중간에 걸리던 문제 방지
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
