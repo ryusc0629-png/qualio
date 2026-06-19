@@ -6,7 +6,7 @@ import { ko } from 'date-fns/locale'
 import Link from 'next/link'
 import {
   Phone, Clock, User, ChevronRight,
-  Pencil, Check, X, CalendarDays, CheckCircle2, Send, Star, Users,
+  Pencil, Check, X, CalendarDays, CheckCircle2, Send, Star, Users, ShieldAlert,
 } from 'lucide-react'
 import { MapNavButton } from '@/components/dashboard/map-nav-button'
 import { toast } from 'sonner'
@@ -61,6 +61,7 @@ interface Booking {
   reportId?: string | null
   reviewSent?: boolean
   hasReviewHistory?: boolean
+  hasOpenClaim?: boolean
 }
 
 interface Props {
@@ -545,8 +546,22 @@ export function BookingDetailSheet({
             </Link>
           )}
 
-          {/* 이 작업 클레임 등록 — 같은 모달 재사용, 고객·작업 자동 연결 */}
-          {booking && (
+          {/* 클레임 — 이미 있으면 '현황 확인', 없으면 '등록'. 같은 고객 기준 */}
+          {booking && (booking.hasOpenClaim ? (
+            <Link
+              href={booking.customer_id ? `/dashboard/clients/${booking.customer_id}` : '/dashboard/claims'}
+              className="flex items-center justify-between px-4 py-3.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 transition-colors mb-4"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <ShieldAlert className="h-4 w-4 text-rose-600 shrink-0" />
+                <div>
+                  <span className="text-sm font-semibold text-rose-700">클레임 처리 현황 확인하기</span>
+                  <p className="text-xs text-rose-600/80 mt-0.5">이 고객의 미해결 클레임이 있어요</p>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-rose-400 shrink-0" />
+            </Link>
+          ) : (
             <AddClaimForm
               presetCustomer={{ id: booking.customer_id ?? '', name: booking.customer_name, phone: booking.customer_phone }}
               presetBookingId={booking.id}
@@ -554,7 +569,7 @@ export function BookingDetailSheet({
               triggerVariant="outline"
               triggerClassName="w-full h-12 justify-start gap-2 text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700 mb-4"
             />
-          )}
+          ))}
 
         </div>
 
