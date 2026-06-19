@@ -18,6 +18,7 @@ const SUB_TASKS = [
   'review-request',
   'quote-followup',
   'reengagement',
+  'metrics-snapshot', // 본사 지표 월별 스냅샷(NRR/코호트 기반)
 ] as const
 
 export async function GET(request: NextRequest) {

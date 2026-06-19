@@ -1,4 +1,5 @@
 import { getAdminMetrics } from '@/lib/admin/metrics'
+import { computeNrr, getMrrTrend } from '@/lib/admin/snapshot'
 import { formatMoney } from '@/lib/format/money'
 import { formatDateTime } from '@/lib/format/datetime'
 
@@ -34,7 +35,9 @@ function Stat({ label, value, sub, accent }: { label: string; value: string; sub
 }
 
 export default async function AdminMetricsPage() {
-  const m = await getAdminMetrics()
+  const [m, nrr, trend] = await Promise.all([getAdminMetrics(), computeNrr(), getMrrTrend()])
+
+  const maxTrendMrr = Math.max(1, ...trend.map((t) => t.mrr))
 
   return (
     <div>
@@ -66,7 +69,51 @@ export default async function AdminMetricsPage() {
         <Stat label="무료→유료 전환율" value={pct(m.retention.freeToPaidRate)} accent />
         <Stat label="해지 업체 수" value={`${m.retention.canceledCount}곳`} />
         <Stat label="이탈률 (Churn)" value={pct(m.retention.churnRate)} sub="해지 / (유료+해지)" />
+        {nrr.nrr === null ? (
+          <Stat
+            label="NRR (순매출유지율)"
+            value="데이터 누적 중"
+            sub="2개월치 스냅샷 필요"
+          />
+        ) : (
+          <Stat
+            label="NRR (순매출유지율)"
+            value={pct(nrr.nrr)}
+            sub={`${nrr.retainedBusinesses}/${nrr.cohortBusinesses}곳 유지 · ${nrr.previous}→${nrr.current}`}
+            accent
+          />
+        )}
       </Section>
+
+      {/* MRR 추이 — 스냅샷이 쌓이면 채워진다 */}
+      <section className="mb-8">
+        <div className="mb-3">
+          <h2 className="text-base font-semibold">📊 MRR 추이</h2>
+          <p className="text-xs text-muted-foreground">
+            매일 적재되는 월별 스냅샷. NRR·성장 곡선의 근거 데이터
+          </p>
+        </div>
+        {trend.length === 0 ? (
+          <div className="rounded-lg border border-dashed bg-background p-6 text-center text-sm text-muted-foreground">
+            아직 스냅샷이 없어요. 매일 자동 적재되며, 며칠 뒤부터 추이가 보입니다.
+          </div>
+        ) : (
+          <div className="rounded-lg border bg-background p-4">
+            <div className="flex items-end gap-3" style={{ height: 140 }}>
+              {trend.map((t) => (
+                <div key={t.period} className="flex flex-1 flex-col items-center justify-end gap-1">
+                  <span className="text-[11px] font-medium tabular-nums">{formatMoney(t.mrr)}</span>
+                  <div
+                    className="w-full rounded-t bg-emerald-500/80"
+                    style={{ height: `${Math.max(4, (t.mrr / maxTrendMrr) * 100)}px` }}
+                  />
+                  <span className="text-[11px] text-muted-foreground">{t.period.slice(5)}월</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* GMV — 임베디드 결제(핀테크) 가치 기반 */}
       <Section title="💳 GMV·거래 (결제망 가치)" hint="플랫폼을 통과하는 거래액. 향후 결제 take-rate의 기반">

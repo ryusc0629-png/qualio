@@ -74,13 +74,19 @@ export interface AdminMetrics {
 
 // ── 보조 함수 ────────────────────────────────────────────────────────────────
 
-const PAID_STATUSES = new Set(['active', 'past_due']) // 매출이 잡히는 구독 상태
+// 매출이 잡히는 구독 상태 (스냅샷 모듈에서도 재사용)
+export const PAID_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due'])
 const COMPLETED_BOOKING = 'completed'
 const OPEN_LEAD_STATUSES = new Set(['new', 'contacted', 'quoted', 'follow_up']) // 진행 중
 const WEEKS_PER_MONTH = 4.345
 
-function planPrice(plan: string): number {
+export function planPrice(plan: string): number {
   return (PLANS as Record<string, { price: number }>)[plan]?.price ?? 0
+}
+
+/** 구독의 현재 유효 MRR — 매출 상태가 아니면 0(이탈/베타) */
+export function effectiveMrr(plan: string, status: string): number {
+  return PAID_SUBSCRIPTION_STATUSES.has(status) ? planPrice(plan) : 0
 }
 
 function planLabel(plan: string): string {
@@ -151,7 +157,7 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
 
   // ── 매출 ──
   const paidSubs = subscriptions.filter(
-    (s) => PAID_STATUSES.has(s.status) && planPrice(s.plan) > 0,
+    (s) => PAID_SUBSCRIPTION_STATUSES.has(s.status) && planPrice(s.plan) > 0,
   )
   const payingBusinesses = paidSubs.length
   const mrr = paidSubs.reduce((sum, s) => sum + planPrice(s.plan), 0)
