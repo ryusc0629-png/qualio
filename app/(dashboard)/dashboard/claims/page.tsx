@@ -34,14 +34,23 @@ export default async function ClaimsPage() {
 
   if (!profile?.business_id) redirect('/onboarding')
 
-  const { data } = await db
-    .from('claims' as never)
-    .select('id, customer_name, customer_phone, title, content, is_urgent, status, resolution, created_at, resolved_at' as never)
-    .eq('business_id' as never, profile.business_id)
-    .order('is_urgent' as never, { ascending: false })
-    .order('created_at' as never, { ascending: false }) as unknown as { data: ClaimRow[] | null }
+  const [{ data }, { data: customerRows }] = await Promise.all([
+    db
+      .from('claims' as never)
+      .select('id, customer_name, customer_phone, title, content, is_urgent, status, resolution, created_at, resolved_at' as never)
+      .eq('business_id' as never, profile.business_id)
+      .order('is_urgent' as never, { ascending: false })
+      .order('created_at' as never, { ascending: false }) as unknown as Promise<{ data: ClaimRow[] | null }>,
+    // 클레임 등록 시 기존 고객을 골라 자동 채우기 위한 목록
+    db
+      .from('customers')
+      .select('id, name, phone')
+      .eq('business_id', profile.business_id)
+      .order('name', { ascending: true }),
+  ])
 
   const claims = data ?? []
+  const customers = (customerRows ?? []).map((c) => ({ id: c.id, name: c.name, phone: c.phone }))
   const openClaims = claims.filter((c) => c.status !== 'resolved')
   const resolvedClaims = claims.filter((c) => c.status === 'resolved')
 
@@ -58,7 +67,7 @@ export default async function ClaimsPage() {
             고객 불만·하자를 기록하고 해결까지 챙기세요
           </p>
         </div>
-        <AddClaimForm />
+        <AddClaimForm customers={customers} />
       </div>
 
       {/* 미해결 */}
