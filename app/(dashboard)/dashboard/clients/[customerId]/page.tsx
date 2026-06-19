@@ -1,8 +1,9 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, Phone, MapPin, Calendar, Receipt, ChevronRight, FileText, User, Star } from 'lucide-react'
+import { ChevronLeft, Calendar, Receipt, ChevronRight, FileText, User, Star } from 'lucide-react'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
+import { ContactActions } from '@/components/dashboard/contact-actions'
 import { contractAccruedRevenue, type ContractLike } from '@/lib/utils/ltv'
 
 interface Props {
@@ -155,20 +156,8 @@ export default async function CustomerDetailPage({ params }: Props) {
           </div>
         </div>
 
-        <div className="space-y-1.5">
-          {customer.phone && (
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <Phone className="h-3.5 w-3.5 shrink-0" />
-              {customer.phone}
-            </p>
-          )}
-          {customer.address && (
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <MapPin className="h-3.5 w-3.5 shrink-0" />
-              {customer.address}
-            </p>
-          )}
-        </div>
+        {/* 전화·문자·길찾기 바로가기 (탭 한 번으로 전화/지도) */}
+        <ContactActions phone={customer.phone} address={customer.address} />
 
         {customer.notes && (
           <p className="text-sm text-muted-foreground border-t border-border pt-3">
