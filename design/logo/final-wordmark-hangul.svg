@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 280" width="960" height="280" role="img" aria-label="퀄리오 한글 워드마크">
+  <defs>
+    <linearGradient id="qwh" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#047857"/>
+      <stop offset="1" stop-color="#10b981"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(26,42) scale(0.382)">
+    <rect width="512" height="512" rx="116" fill="url(#qwh)"/>
+    <circle cx="250" cy="234" r="120" fill="none" stroke="#ffffff" stroke-width="46"/>
+    <line x1="306" y1="290" x2="384" y2="368" stroke="#ffffff" stroke-width="46" stroke-linecap="round"/>
+  </g>
+  <text x="266" y="180" font-family="'Pretendard','Noto Sans KR',sans-serif" font-size="132" font-weight="800" fill="#065f46" letter-spacing="-2">퀄리오</text>
+  <text x="270" y="234" font-family="'Pretendard','Noto Sans KR',sans-serif" font-size="36" font-weight="500" fill="#6b7280" letter-spacing="2">청소 운영의 모든 것</text>
+</svg>

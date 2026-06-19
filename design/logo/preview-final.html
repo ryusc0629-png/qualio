@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>퀄리오 — 최종 로고 (에메랄드)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --em:#047857; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Nunito','Noto Sans KR',-apple-system,sans-serif; color:var(--ink); background:#f8fafc; }
+  .wrap { max-width:980px; margin:0 auto; padding:48px 24px 80px; }
+  h1 { font-size:26px; margin:0 0 6px; }
+  .sub { color:var(--muted); margin:0 0 28px; line-height:1.6; }
+  h2 { font-size:17px; margin:36px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+  .shots { display:flex; gap:16px; flex-wrap:wrap; }
+  .shot { flex:1; min-width:160px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:28px 12px; border-radius:16px; border:1px solid var(--line); }
+  .shot.light { background:#fff; } .shot.dark { background:#0f172a; } .shot.tint { background:#ecfdf5; }
+  .shot img.lg { width:104px; height:104px; } .shot img.md { width:64px; height:64px; } .shot img.sm { width:36px; height:36px; }
+  .shot small { font-size:11px; color:var(--muted); } .shot.dark small { color:#94a3b8; }
+  .word { background:#fff; border:1px solid var(--line); border-radius:16px; padding:28px; margin-bottom:14px; text-align:center; }
+  .word.dark { background:#0f172a; } .word img { max-width:100%; max-height:120px; height:auto; }
+  .pal { display:flex; gap:10px; flex-wrap:wrap; }
+  .sw { width:130px; border-radius:10px; overflow:hidden; border:1px solid var(--line); font-size:11px; }
+  .sw .c { height:52px; } .sw .t { padding:6px 8px; font-family:ui-monospace,monospace; }
+  .rec { background:#ecfdf5; border:1px solid #6ee7b7; border-radius:14px; padding:16px 20px; margin:28px 0 0; font-size:14px; line-height:1.7; }
+  .rec b { color:var(--em); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>퀄리오 — 최종 로고 (에메랄드)</h1>
+  <p class="sub">숨고가 점령한 <b>틸·보라</b>를 모두 피한 <b>에메랄드 그린</b>으로 확정. 청소·홈케어의 청결/신선 정체성 + 기하학 모노그램·산세리프 워드마크. 앱에 적용 완료.</p>
+
+  <h2>앱 아이콘</h2>
+  <div class="shots">
+    <div class="shot light"><img class="lg" src="final-icon.svg" alt=""><small>라이트</small></div>
+    <div class="shot dark"><img class="lg" src="final-icon.svg" alt=""><small>다크</small></div>
+    <div class="shot tint"><img class="md" src="final-icon.svg" alt=""><small>64px</small></div>
+    <div class="shot light"><img class="sm" src="final-icon.svg" alt=""><small>36px (파비콘)</small></div>
+    <div class="shot tint"><img class="lg" src="final-icon-maskable.svg" alt=""><small>마스커블(안드로이드)</small></div>
+  </div>
+
+  <h2>워드마크</h2>
+  <div class="word"><img src="final-wordmark-hangul.svg" alt="퀄리오"></div>
+  <div class="word dark"><img src="final-wordmark-hangul.svg" alt="퀄리오 다크"></div>
+  <div class="word"><img src="final-wordmark-latin.svg" alt="Qualio"></div>
+
+  <h2>브랜드 컬러 (에메랄드)</h2>
+  <div class="pal">
+    <div class="sw"><div class="c" style="background:#065f46"></div><div class="t">Emerald 800<br>#065f46</div></div>
+    <div class="sw"><div class="c" style="background:#047857"></div><div class="t">Emerald 700<br>#047857</div></div>
+    <div class="sw"><div class="c" style="background:#059669"></div><div class="t">Emerald 600 (메인)<br>#059669</div></div>
+    <div class="sw"><div class="c" style="background:#10b981"></div><div class="t">Emerald 500<br>#10b981</div></div>
+    <div class="sw"><div class="c" style="background:#d1fae5"></div><div class="t">Emerald 100<br>#d1fae5</div></div>
+  </div>
+
+  <div class="rec">
+    ✅ 적용 완료: 아이콘(파비콘·앱·마스커블)·apple-icon·manifest·UI 메인색(<b>--primary</b>)을 에메랄드로 교체했습니다.
+    <b>차후 다른 색으로 바꾸려면</b> globals.css의 oklch 토큰 + 아이콘 4곳만 수정하면 됩니다.
+  </div>
+</div>
+</body>
+</html>

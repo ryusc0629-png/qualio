@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>퀄리오 로고 시안 — 비교</title>
+<style>
+  :root { --teal:#0d9488; --teal-d:#0f766e; --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Pretendard','Noto Sans KR',-apple-system,sans-serif; color:var(--ink); background:#f8fafc; line-height:1.6; }
+  header { padding:48px 24px 24px; max-width:1100px; margin:0 auto; }
+  h1 { font-size:28px; margin:0 0 8px; }
+  header p { color:var(--muted); margin:0; }
+  .wrap { max-width:1100px; margin:0 auto; padding:0 24px 80px; }
+  h2 { font-size:18px; margin:40px 0 16px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:20px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:16px; overflow:hidden; }
+  .card .badge { display:inline-block; font-size:12px; font-weight:700; color:var(--teal-d); background:#ccfbf1; padding:2px 10px; border-radius:999px; margin-bottom:6px; }
+  .card .body { padding:18px; }
+  .card h3 { margin:0 0 4px; font-size:16px; }
+  .card .desc { margin:0; font-size:13px; color:var(--muted); }
+  /* 미리보기 영역: 라이트 + 다크 + 소형 */
+  .shots { display:flex; align-items:stretch; border-bottom:1px solid var(--line); }
+  .shot { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:24px 8px; }
+  .shot.light { background:#ffffff; }
+  .shot.dark { background:#0f172a; }
+  .shot.tint { background:#ecfdf5; }
+  .shot img.lg { width:96px; height:96px; }
+  .shot img.sm { width:36px; height:36px; }
+  .shot small { font-size:10px; color:var(--muted); }
+  .shot.dark small { color:#94a3b8; }
+  /* 워드마크 */
+  .word { background:#fff; border:1px solid var(--line); border-radius:16px; padding:28px; margin-bottom:16px; }
+  .word img { max-width:100%; height:auto; }
+  .word.dark { background:#0f172a; }
+  .rec { background:#ecfeff; border:1px solid #a5f3fc; border-radius:14px; padding:16px 20px; margin:24px 0; font-size:14px; }
+  .rec b { color:var(--teal-d); }
+  .palette { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
+  .sw { width:120px; border-radius:10px; overflow:hidden; border:1px solid var(--line); font-size:11px; }
+  .sw .c { height:48px; } .sw .t { padding:6px 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>퀄리오 로고 시안</h1>
+  <p>5가지 심볼 방향 + 한글·영문 워드마크입니다. 라이트/다크 배경과 소형(파비콘) 크기에서 어떻게 보이는지 함께 확인하세요.</p>
+</header>
+
+<div class="wrap">
+
+  <div class="rec">
+    💡 <b>추천</b>: 앱 아이콘·파비콘은 <b>A 모노그램</b>(가장 단정·소형에서 또렷), 마케팅/홍보 페이지엔 <b>B 반짝임</b> 또는 <b>C 물방울</b>(청소 느낌)을 권합니다.
+    하나의 브랜드로 통일하려면 <b>A</b>를 기본 심볼로, 한글 워드마크 <b>퀄리오</b>를 가로형으로 함께 쓰는 조합이 가장 안전합니다.
+  </div>
+
+  <h2>심볼 (앱 아이콘 / 파비콘)</h2>
+  <div class="grid">
+
+    <div class="card">
+      <div class="shots">
+        <div class="shot light"><img class="lg" src="mark-a-monogram.svg" alt=""><small>라이트</small></div>
+        <div class="shot dark"><img class="lg" src="mark-a-monogram.svg" alt=""><small>다크</small></div>
+        <div class="shot tint"><img class="sm" src="mark-a-monogram.svg" alt=""><small>36px</small></div>
+      </div>
+      <div class="body">
+        <span class="badge">A</span>
+        <h3>모노그램</h3>
+        <p class="desc">기하학적 Q(링+꼬리). 가장 단정하고 작은 크기에서도 또렷 — 앱 아이콘 기본값으로 최적.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="shots">
+        <div class="shot light"><img class="lg" src="mark-b-sparkle.svg" alt=""><small>라이트</small></div>
+        <div class="shot dark"><img class="lg" src="mark-b-sparkle.svg" alt=""><small>다크</small></div>
+        <div class="shot tint"><img class="sm" src="mark-b-sparkle.svg" alt=""><small>36px</small></div>
+      </div>
+      <div class="body">
+        <span class="badge">B</span>
+        <h3>반짝임</h3>
+        <p class="desc">Q + 반짝임(✨). "청소 후 반짝이는 깨끗함"을 직관적으로 전달 — 마케팅에 강함.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="shots">
+        <div class="shot light"><img class="lg" src="mark-c-droplet.svg" alt=""><small>라이트</small></div>
+        <div class="shot dark"><img class="lg" src="mark-c-droplet.svg" alt=""><small>다크</small></div>
+        <div class="shot tint"><img class="sm" src="mark-c-droplet.svg" alt=""><small>36px</small></div>
+      </div>
+      <div class="body">
+        <span class="badge">C</span>
+        <h3>물방울</h3>
+        <p class="desc">물방울 안의 Q. 물·청소·신선함의 상징. 부드럽고 친근 — 비테크 사장님 친화적.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="shots">
+        <div class="shot light"><img class="lg" src="mark-d-trust.svg" alt=""><small>라이트</small></div>
+        <div class="shot dark"><img class="lg" src="mark-d-trust.svg" alt=""><small>다크</small></div>
+        <div class="shot tint"><img class="sm" src="mark-d-trust.svg" alt=""><small>36px</small></div>
+      </div>
+      <div class="body">
+        <span class="badge">D</span>
+        <h3>신뢰 배지</h3>
+        <p class="desc">Q + 체크 배지. "검증된·믿을 수 있는" 느낌 — 법인 거래 중심 B2B 신뢰감 강조.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="shots">
+        <div class="shot light"><img class="lg" src="mark-e-bubbles.svg" alt=""><small>라이트</small></div>
+        <div class="shot dark"><img class="lg" src="mark-e-bubbles.svg" alt=""><small>다크</small></div>
+        <div class="shot tint"><img class="sm" src="mark-e-bubbles.svg" alt=""><small>36px</small></div>
+      </div>
+      <div class="body">
+        <span class="badge">E</span>
+        <h3>버블</h3>
+        <p class="desc">Q + 청소 거품. 경쾌하고 친근한 분위기. 단, 소형에서는 거품이 작게 뭉칠 수 있음.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <h2>워드마크 (가로형 로고)</h2>
+  <div class="word"><img src="wordmark-hangul.svg" alt="퀄리오 한글 워드마크"></div>
+  <div class="word dark"><img src="wordmark-hangul.svg" alt="퀄리오 한글 워드마크 (다크)"></div>
+  <div class="word"><img src="wordmark-latin.svg" alt="Qualio 영문 워드마크"></div>
+
+  <h2>브랜드 컬러</h2>
+  <div class="palette">
+    <div class="sw"><div class="c" style="background:#0f766e"></div><div class="t">Teal 700<br>#0f766e</div></div>
+    <div class="sw"><div class="c" style="background:#0d9488"></div><div class="t">Teal 600 (메인)<br>#0d9488</div></div>
+    <div class="sw"><div class="c" style="background:#14b8a6"></div><div class="t">Teal 500<br>#14b8a6</div></div>
+    <div class="sw"><div class="c" style="background:#ccfbf1"></div><div class="t">Teal 100<br>#ccfbf1</div></div>
+  </div>
+
+</div>
+</body>
+</html>

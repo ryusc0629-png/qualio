@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="퀄리오 모노그램">
+  <defs>
+    <linearGradient id="qa-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+  <!-- 둥근 사각 배경 -->
+  <rect width="512" height="512" rx="116" fill="url(#qa-bg)"/>
+  <!-- 기하학적 Q: 링 + 꼬리 (폰트 비의존) -->
+  <circle cx="250" cy="234" r="120" fill="none" stroke="#ffffff" stroke-width="46"/>
+  <line x1="306" y1="290" x2="384" y2="368" stroke="#ffffff" stroke-width="46" stroke-linecap="round"/>
+</svg>

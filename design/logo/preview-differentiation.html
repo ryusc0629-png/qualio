@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>퀄리오 — 숨고와 차별화 색상 검토</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Nunito','Noto Sans KR',-apple-system,sans-serif; color:var(--ink); background:#f8fafc; }
+  .wrap { max-width:1080px; margin:0 auto; padding:48px 24px 80px; }
+  h1 { font-size:26px; margin:0 0 8px; }
+  .sub { color:var(--muted); margin:0 0 28px; line-height:1.6; }
+  h2 { font-size:18px; margin:36px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--line); }
+  .row { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:16px; }
+  .opt { background:#fff; border:1px solid var(--line); border-radius:16px; padding:18px; text-align:center; }
+  .opt.warn { border-color:#fecaca; background:#fef2f2; }
+  .opt.good { border-color:#a7f3d0; }
+  .opt svg { width:104px; height:104px; }
+  .opt h3 { margin:12px 0 2px; font-size:14px; }
+  .opt .hex { font-size:11px; color:var(--muted); font-family:ui-monospace,monospace; }
+  .tag { display:inline-block; font-size:11px; font-weight:800; padding:2px 9px; border-radius:999px; margin-top:8px; }
+  .tag.bad { background:#fee2e2; color:#b91c1c; }
+  .tag.ok { background:#d1fae5; color:#047857; }
+  .compare { display:flex; gap:20px; flex-wrap:wrap; align-items:center; background:#fff; border:1px solid var(--line); border-radius:16px; padding:24px; }
+  .compare .cell { text-align:center; }
+  .compare .cell .cap { font-size:12px; color:var(--muted); margin-top:8px; }
+  .soomgo { width:104px; height:104px; border-radius:999px; background:radial-gradient(circle at 35% 30%, #6fcabd, #3aa99b 70%); display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Jua',sans-serif; font-size:24px; }
+  .form { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:16px; }
+  .fcard { background:#fff; border:1px solid var(--line); border-radius:16px; padding:18px; }
+  .fcard .demo { height:96px; display:flex; align-items:center; justify-content:center; border-radius:12px; margin-bottom:12px; }
+  .fcard h3 { margin:0 0 4px; font-size:14px; } .fcard p { margin:0; font-size:12px; color:var(--muted); line-height:1.5; }
+  .rec { background:#ecfeff; border:1px solid #a5f3fc; border-radius:14px; padding:16px 20px; margin:28px 0 0; font-size:14px; line-height:1.7; }
+  .rec b { color:#0f766e; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>숨고와 비슷한가? — 색상·형태 차별화 검토</h1>
+  <p class="sub">숨고 옛 로고는 <b>밝은 민트~틸 + 흰 워드마크 + 원형</b>입니다. 현재 퀄리오 톤이 여기에 가깝습니다. 아래에서 "닮은 것"과 "차별화된 것"을 직접 비교하세요.</p>
+
+  <h2>① 옆에 두고 비교</h2>
+  <div class="compare">
+    <div class="cell">
+      <div class="soomgo">Soomgo</div>
+      <div class="cap">숨고 옛 로고 (재현)</div>
+    </div>
+    <div class="cell">
+      <svg viewBox="0 0 512 512"><circle cx="256" cy="256" r="256" fill="#14b8a6"/><circle cx="244" cy="240" r="112" fill="none" stroke="#fff" stroke-width="58"/><line x1="298" y1="294" x2="368" y2="364" stroke="#fff" stroke-width="58" stroke-linecap="round"/></svg>
+      <div class="cap">현재 톤 + 원형 (⚠️ 가장 닮음)</div>
+    </div>
+    <div class="cell">
+      <svg viewBox="0 0 512 512"><defs><linearGradient id="dt" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#094f47"/><stop offset="1" stop-color="#0d8276"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#dt)"/><circle cx="250" cy="234" r="120" fill="none" stroke="#fff" stroke-width="46"/><line x1="306" y1="290" x2="384" y2="368" stroke="#fff" stroke-width="46" stroke-linecap="round"/></svg>
+      <div class="cap">딥틸 + 사각 + 모노그램 (✅ 구분됨)</div>
+    </div>
+  </div>
+
+  <h2>② 색상 옵션 (모노그램에 적용)</h2>
+  <div class="row">
+    <div class="opt warn">
+      <svg viewBox="0 0 512 512"><defs><linearGradient id="c1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0d9488"/><stop offset="1" stop-color="#14b8a6"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#c1)"/><circle cx="250" cy="234" r="120" fill="none" stroke="#fff" stroke-width="46"/><line x1="306" y1="290" x2="384" y2="368" stroke="#fff" stroke-width="46" stroke-linecap="round"/></svg>
+      <h3>현재 틸</h3><div class="hex">#0d9488 → #14b8a6</div>
+      <span class="tag bad">숨고와 가까움</span>
+    </div>
+    <div class="opt good">
+      <svg viewBox="0 0 512 512"><defs><linearGradient id="c2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#094f47"/><stop offset="1" stop-color="#0d8276"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#c2)"/><circle cx="250" cy="234" r="120" fill="none" stroke="#fff" stroke-width="46"/><line x1="306" y1="290" x2="384" y2="368" stroke="#fff" stroke-width="46" stroke-linecap="round"/></svg>
+      <h3>딥 틸 / 페트롤</h3><div class="hex">#094f47 → #0d8276</div>
+      <span class="tag ok">추천 · 프리미엄</span>
+    </div>
+    <div class="opt good">
+      <svg viewBox="0 0 512 512"><defs><linearGradient id="c3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f766e"/><stop offset="1" stop-color="#14b8a6"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#c3)"/><circle cx="248" cy="238" r="118" fill="none" stroke="#fff" stroke-width="46"/><line x1="300" y1="290" x2="372" y2="362" stroke="#fff" stroke-width="46" stroke-linecap="round"/><path d="M392 110 C398 150 408 160 448 166 C408 172 398 182 392 222 C386 182 376 172 336 166 C376 160 386 150 392 110 Z" fill="#ff6f59"/></svg>
+      <h3>틸 + 코랄 악센트</h3><div class="hex">#0d9488 + #ff6f59</div>
+      <span class="tag ok">추천 · 차별 강함</span>
+    </div>
+    <div class="opt">
+      <svg viewBox="0 0 512 512"><defs><linearGradient id="c4" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#166534"/><stop offset="1" stop-color="#22c55e"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#c4)"/><circle cx="250" cy="234" r="120" fill="none" stroke="#fff" stroke-width="46"/><line x1="306" y1="290" x2="384" y2="368" stroke="#fff" stroke-width="46" stroke-linecap="round"/></svg>
+      <h3>포레스트 그린</h3><div class="hex">#166534 → #22c55e</div>
+      <span class="tag ok">전환 옵션</span>
+    </div>
+    <div class="opt">
+      <svg viewBox="0 0 512 512"><defs><linearGradient id="c5" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3730a3"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#c5)"/><circle cx="250" cy="234" r="120" fill="none" stroke="#fff" stroke-width="46"/><line x1="306" y1="290" x2="384" y2="368" stroke="#fff" stroke-width="46" stroke-linecap="round"/></svg>
+      <h3>인디고 (B2B 신뢰)</h3><div class="hex">#3730a3 → #6366f1</div>
+      <span class="tag ok">전환 옵션</span>
+    </div>
+  </div>
+
+  <h2>③ 형태 차별 — 숨고 시그니처 피하기</h2>
+  <div class="form">
+    <div class="fcard">
+      <div class="demo" style="background:#14b8a6"><span style="font-family:'Jua';color:#fff;font-size:30px">퀄리오</span></div>
+      <h3>⚠️ 흰 워드마크 on 틸</h3>
+      <p>숨고 옛 로고의 핵심 인상. 가장 닮아 보임 → 피하기.</p>
+    </div>
+    <div class="fcard">
+      <div class="demo" style="background:#fff;border:1px solid var(--line)"><span style="font-family:'Jua';color:#0f766e;font-size:30px">퀄리오</span></div>
+      <h3>✅ 틸 글자 on 흰 배경</h3>
+      <p>색은 유지하되 반전. 즉시 다른 인상.</p>
+    </div>
+    <div class="fcard">
+      <div class="demo" style="background:#fff;border:1px solid var(--line)">
+        <svg viewBox="0 0 512 512" style="width:64px;height:64px"><defs><linearGradient id="f1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#094f47"/><stop offset="1" stop-color="#0d8276"/></linearGradient></defs><rect width="512" height="512" rx="116" fill="url(#f1)"/><circle cx="250" cy="234" r="120" fill="none" stroke="#fff" stroke-width="46"/><line x1="306" y1="290" x2="384" y2="368" stroke="#fff" stroke-width="46" stroke-linecap="round"/></svg>
+      </div>
+      <h3>✅ 기하학 모노그램 + 사각</h3>
+      <p>친근한 필기체 대신 기하학. 원형 대신 둥근 사각.</p>
+    </div>
+  </div>
+
+  <div class="rec">
+    💡 <b>제 추천</b>: 색은 <b>딥 틸/페트롤(#094f47→#0d8276)</b>로 한 단계 깊게 가거나, <b>틸 + 코랄 악센트</b>로 숨고에 없는 포인트를 더하세요.
+    형태는 <b>흰 필기체 워드마크 on 틸 원형(=숨고 시그니처)</b>을 피하고, <b>기하학 모노그램 + 둥근 사각</b> 또는 <b>틸 글자 on 흰 배경</b>으로 가면 충분히 구분됩니다.
+  </div>
+</div>
+</body>
+</html>

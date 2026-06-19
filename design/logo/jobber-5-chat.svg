@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="퀄리오 알림톡 말풍선">
+  <defs>
+    <linearGradient id="j5" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#16c0a8"/>
+    </linearGradient>
+  </defs>
+  <!-- 말풍선 (자동 알림톡·소통 형상화) -->
+  <rect x="58" y="66" width="396" height="312" rx="100" fill="url(#j5)"/>
+  <path d="M156 354 L156 452 L246 366 Z" fill="#0f766e"/>
+  <!-- 말풍선 속 Q -->
+  <circle cx="252" cy="212" r="92" fill="none" stroke="#ffffff" stroke-width="38"/>
+  <line x1="296" y1="256" x2="344" y2="304" stroke="#ffffff" stroke-width="38" stroke-linecap="round"/>
+</svg>

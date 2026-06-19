@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="퀄리오 물방울">
+  <defs>
+    <linearGradient id="qc-bg" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#14b8a6"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+  </defs>
+  <!-- 물방울 실루엣 (청소·물) -->
+  <path d="M256 56 C328 168 400 232 400 318 A144 144 0 1 1 112 318 C112 232 184 168 256 56 Z" fill="url(#qc-bg)"/>
+  <!-- 물방울 속 Q -->
+  <circle cx="248" cy="324" r="86" fill="none" stroke="#ffffff" stroke-width="34"/>
+  <line x1="288" y1="364" x2="330" y2="406" stroke="#ffffff" stroke-width="34" stroke-linecap="round"/>
+  <!-- 하이라이트 -->
+  <ellipse cx="206" cy="250" rx="20" ry="34" fill="#ffffff" opacity="0.35" transform="rotate(-24 206 250)"/>
+</svg>

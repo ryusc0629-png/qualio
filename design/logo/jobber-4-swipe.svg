@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="퀄리오 광택">
+  <defs>
+    <linearGradient id="j4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#16c0a8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="152" fill="url(#j4)"/>
+  <!-- Q -->
+  <circle cx="262" cy="262" r="110" fill="none" stroke="#ffffff" stroke-width="46"/>
+  <line x1="314" y1="314" x2="382" y2="382" stroke="#ffffff" stroke-width="46" stroke-linecap="round"/>
+  <!-- 닦은 자리의 광택 (형상화) -->
+  <line x1="150" y1="150" x2="96" y2="206" stroke="#ffffff" stroke-width="24" stroke-linecap="round" opacity="0.95"/>
+  <line x1="214" y1="138" x2="170" y2="186" stroke="#ffffff" stroke-width="15" stroke-linecap="round" opacity="0.6"/>
+</svg>

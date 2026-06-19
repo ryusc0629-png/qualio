@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="퀄리오 홈케어">
+  <defs>
+    <linearGradient id="j3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#16c0a8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="152" fill="url(#j3)"/>
+  <!-- 지붕 (집·홈케어 형상화) -->
+  <path d="M150 220 L256 130 L362 220" fill="none" stroke="#ffffff" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 둥근 창 = Q -->
+  <circle cx="256" cy="306" r="86" fill="none" stroke="#ffffff" stroke-width="46"/>
+  <line x1="298" y1="348" x2="346" y2="396" stroke="#ffffff" stroke-width="46" stroke-linecap="round"/>
+</svg>

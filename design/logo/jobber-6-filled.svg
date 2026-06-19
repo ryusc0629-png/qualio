@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="퀄리오 볼드 필">
+  <defs>
+    <linearGradient id="j6" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#16c0a8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="152" fill="url(#j6)"/>
+  <!-- 꽉 찬 Q (볼드·프리미엄) — 흰 원판 + 음각 카운터 -->
+  <circle cx="248" cy="238" r="130" fill="#ffffff"/>
+  <circle cx="248" cy="238" r="54" fill="url(#j6)"/>
+  <!-- 꼬리 -->
+  <line x1="298" y1="288" x2="376" y2="366" stroke="#ffffff" stroke-width="54" stroke-linecap="round"/>
+  <!-- 꼬리와 링 사이 음각 분리선 -->
+  <line x1="286" y1="300" x2="306" y2="320" stroke="url(#j6)" stroke-width="22" stroke-linecap="round"/>
+</svg>

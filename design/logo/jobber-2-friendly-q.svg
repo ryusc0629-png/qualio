@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="퀄리오 친근한 Q">
+  <defs>
+    <linearGradient id="j2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#16c0a8"/>
+    </linearGradient>
+  </defs>
+  <!-- 친근한 스퀘어클(아주 둥근 사각) -->
+  <rect width="512" height="512" rx="152" fill="url(#j2)"/>
+  <!-- 두툼하고 둥근 Q — Jobber식 친근함 -->
+  <circle cx="244" cy="240" r="112" fill="none" stroke="#ffffff" stroke-width="58"/>
+  <line x1="298" y1="294" x2="368" y2="364" stroke="#ffffff" stroke-width="58" stroke-linecap="round"/>
+</svg>

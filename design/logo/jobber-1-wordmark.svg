@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 280" width="920" height="280" role="img" aria-label="퀄리오 친근한 한글 워드마크">
+  <defs>
+    <linearGradient id="jw" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#16c0a8"/>
+    </linearGradient>
+  </defs>
+  <!-- 친근한 Q 심볼 -->
+  <g transform="translate(24,42) scale(0.382)">
+    <rect width="512" height="512" rx="152" fill="url(#jw)"/>
+    <circle cx="244" cy="240" r="112" fill="none" stroke="#ffffff" stroke-width="58"/>
+    <line x1="298" y1="294" x2="368" y2="364" stroke="#ffffff" stroke-width="58" stroke-linecap="round"/>
+  </g>
+  <!-- 둥근 한글 워드마크 -->
+  <text x="266" y="186" font-family="'Jua','Noto Sans KR',sans-serif" font-size="140" fill="#0f766e" letter-spacing="-1">퀄리오</text>
+  <!-- 친근한 마침 점 (Jobber식 악센트) -->
+  <circle cx="700" cy="170" r="18" fill="#16c0a8"/>
+</svg>

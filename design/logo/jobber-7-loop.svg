@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="퀄리오 자동화 순환">
+  <defs>
+    <linearGradient id="j7" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#16c0a8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="152" fill="url(#j7)"/>
+  <!-- 링 = 견적→예약→결제→리뷰 순환 -->
+  <circle cx="252" cy="236" r="116" fill="none" stroke="#ffffff" stroke-width="44"/>
+  <!-- 꼬리 끝을 화살표로 → 자동으로 도는 흐름 형상화 -->
+  <line x1="300" y1="284" x2="372" y2="356" stroke="#ffffff" stroke-width="44" stroke-linecap="round"/>
+  <path d="M372 356 L372 312 M372 356 L328 356" fill="none" stroke="#ffffff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
