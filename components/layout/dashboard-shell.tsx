@@ -34,23 +34,10 @@ export function DashboardShell({ businessName, children }: DashboardShellProps) 
         onClose={() => setSidebarOpen(false)}
       />
 
-      {/* 메인 콘텐츠 */}
+      {/* 메인 콘텐츠 — 모바일은 상단 바 없이 본문을 꽉 채움 (업체명은 홈 인사말로 표시) */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* 모바일 상단 헤더 */}
-        <header className="md:hidden flex items-center gap-3 px-4 py-3 border-b border-border bg-white sticky top-0 z-30">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-primary rounded-md flex items-center justify-center">
-              {/* 브랜드 마크 — 파비콘/앱아이콘과 동일한 기하학 Q */}
-              <svg viewBox="0 0 512 512" className="w-4 h-4 text-primary-foreground" fill="none" stroke="currentColor" aria-hidden="true">
-                <circle cx="250" cy="234" r="120" strokeWidth="46" />
-                <line x1="306" y1="290" x2="384" y2="368" strokeWidth="46" strokeLinecap="round" />
-              </svg>
-            </div>
-            <p className="font-semibold text-sm truncate">{businessName}</p>
-          </div>
-        </header>
-
-        <main className="flex-1 p-4 pb-24 md:p-6 overflow-auto">
+        {/* 모바일은 노치/상태바 안전영역만큼 위 여백, 데스크탑은 일반 패딩 */}
+        <main className="flex-1 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-24 md:p-6 overflow-auto">
           {children}
         </main>
       </div>
