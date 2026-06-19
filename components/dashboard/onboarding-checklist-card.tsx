@@ -5,7 +5,13 @@ import Link from 'next/link'
 import { CheckCircle2, Circle, ChevronRight, Rocket, X } from 'lucide-react'
 import type { OnboardingStep } from '@/lib/utils/onboarding-steps'
 
-const DISMISS_KEY = 'qualio:onboarding-dismissed'
+// "오늘은 그만 보기" 한 날짜(KST)를 저장한다. 다음 날이 되면 다시 노출 → 매일 한 번 가볍게 푸시.
+const SNOOZE_KEY = 'qualio:onboarding-snoozed-date'
+
+// KST 기준 오늘 날짜(yyyy-mm-dd). Vercel(UTC)과 무관하게 클라이언트에서 한국 날짜로 계산.
+function todayKST(): string {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
 
 interface Props {
   steps: OnboardingStep[]
@@ -14,31 +20,31 @@ interface Props {
   nextLabel: string | null
 }
 
-// 온보딩 체크리스트의 화면 표시 + "나중에 할게요" 닫기.
-// 닫기 상태는 localStorage에 저장 → 같은 기기에서 다시 뜨지 않음(마이그레이션 불필요).
+// 온보딩 체크리스트의 화면 표시 + "나중에 할게요"(오늘 하루 숨김).
+// 닫아도 영구 삭제가 아니라 그날 하루만 숨기고 다음 날 다시 뜬다(localStorage, 마이그레이션 불필요).
 export function OnboardingChecklistCard({ steps, done, total, nextLabel }: Props) {
   const [mounted, setMounted] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
+  const [snoozed, setSnoozed] = useState(false)
 
   useEffect(() => {
     setMounted(true)
-    if (typeof window !== 'undefined' && localStorage.getItem(DISMISS_KEY) === '1') {
-      setDismissed(true)
+    if (typeof window !== 'undefined' && localStorage.getItem(SNOOZE_KEY) === todayKST()) {
+      setSnoozed(true) // 오늘 이미 닫음 → 내일 다시 노출
     }
   }, [])
 
   // localStorage 확인 전에는 렌더하지 않음 → 닫은 사용자에게 깜빡임 노출 방지
-  if (!mounted || dismissed) return null
+  if (!mounted || snoozed) return null
 
   const pct = Math.round((done / total) * 100)
 
-  function handleDismiss() {
+  function handleSnooze() {
     try {
-      localStorage.setItem(DISMISS_KEY, '1')
+      localStorage.setItem(SNOOZE_KEY, todayKST())
     } catch {
       // localStorage 접근 불가(시크릿 모드 등)여도 이번 세션에선 숨김
     }
-    setDismissed(true)
+    setSnoozed(true)
   }
 
   return (
@@ -46,10 +52,11 @@ export function OnboardingChecklistCard({ steps, done, total, nextLabel }: Props
       {/* 나중에 할게요(닫기) */}
       <button
         type="button"
-        onClick={handleDismiss}
+        onClick={handleSnooze}
+        title="오늘 하루 숨겨요. 내일 다시 보여드릴게요."
         className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs text-muted-foreground hover:bg-primary/10 hover:text-foreground transition-colors"
       >
-        나중에 할게요
+        오늘은 그만 보기
         <X className="h-3.5 w-3.5" />
       </button>
 
