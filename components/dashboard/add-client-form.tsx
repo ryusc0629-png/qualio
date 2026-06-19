@@ -15,6 +15,7 @@ import { createLeadAction } from '@/lib/actions/crm'
 import { createActiveCustomerAction } from '@/lib/actions/customers'
 import { Plus, X, Search, Trash2 } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
+import { formatPhone } from '@/lib/format/phone'
 
 // 숫자 입력 쉼표 처리 헬퍼
 const digitsOnly = (v: string) => v.replace(/[^0-9]/g, '')
@@ -130,7 +131,8 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
   }, [open])
   // 첫 작업 일정 — 다른 설정 창과 동일한 달력+시/분 선택 방식
   const [jobDate, setJobDate] = useState('')
-  const [jobTime, setJobTime] = useState('09:00')
+  // 시간은 기본 선택하지 않음 — 사용자가 고르기 전엔 아무것도 강조되지 않게 (Jobber 방식)
+  const [jobTime, setJobTime] = useState('')
   // 첫 작업 견적 — 기본은 항목별(서비스 선택), 체크 시 수기 단일 금액
   // amount(합산 금액)도 직접 수정 가능 — 수량×단가와 연동
   const [useJobItems, setUseJobItems] = useState(true)
@@ -193,7 +195,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
       toast.success('고객이 등록됐어요!')
       customerForm.reset({ type: '', scheduleJob: '', hasContract: '' })
       setJobDate('')
-      setJobTime('09:00')
+      setJobTime('')
       setUseJobItems(true)
       setJobItems([{ ...emptyJobItem }])
       setOpen(false)
@@ -216,7 +218,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
     leadForm.reset({ customer_type: '' })
     customerForm.reset({ type: '', scheduleJob: '', hasContract: '' })
     setJobDate('')
-    setJobTime('09:00')
+    setJobTime('')
     setUseJobItems(true)
     setJobItems([{ ...emptyJobItem }])
     setClientType('lead')
@@ -295,7 +297,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
 
             <div className="space-y-1">
               <Label htmlFor="lead-name">업체명 (필수)</Label>
-              <Input id="lead-name" placeholder="강남 웰니스 카페" {...leadForm.register('company_name')} />
+              <Input id="lead-name" placeholder="강남 웰니스 카페" autoComplete="off" {...leadForm.register('company_name')} />
               {leadForm.formState.errors.company_name && (
                 <p className="text-xs text-destructive">{leadForm.formState.errors.company_name.message}</p>
               )}
@@ -328,7 +330,14 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
             <div className={`grid gap-2 ${leadIsCompany ? 'grid-cols-2' : 'grid-cols-1'}`}>
               <div className="space-y-1">
                 <Label htmlFor="lead-phone">연락처</Label>
-                <Input id="lead-phone" placeholder="010-1234-5678" inputMode="tel" {...leadForm.register('phone')} />
+                <Input
+                  id="lead-phone"
+                  placeholder="010-1234-5678"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={leadForm.watch('phone') ?? ''}
+                  onChange={(e) => leadForm.setValue('phone', formatPhone(e.target.value))}
+                />
               </div>
               {leadIsCompany && (
                 <div className="space-y-1">
@@ -348,7 +357,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
             <div className="space-y-1">
               <Label htmlFor="lead-address">주소</Label>
               <div className="flex gap-2">
-                <Input id="lead-address" placeholder="주소 검색을 눌러주세요" {...leadForm.register('address')} />
+                <Input id="lead-address" placeholder="주소 검색을 눌러주세요" autoComplete="off" {...leadForm.register('address')} />
                 <Button
                   type="button"
                   variant="outline"
@@ -385,10 +394,15 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
           </form>
         ) : (
           <form
-            onSubmit={customerForm.handleSubmit((data) =>
+            onSubmit={customerForm.handleSubmit((data) => {
+              // 첫 작업 일정을 켰다면 날짜·시간은 둘 다 골라야 함 (필수)
+              if (custIsIndividual && scheduleJob) {
+                if (!jobDate) { toast.error('작업 날짜를 선택해주세요'); return }
+                if (!jobTime) { toast.error('작업 시간을 선택해주세요'); return }
+              }
               executeCustomer({
                 ...data,
-                job_scheduled_at: jobDate ? `${jobDate}T${jobTime}:00+09:00` : '',
+                job_scheduled_at: jobDate && jobTime ? `${jobDate}T${jobTime}:00+09:00` : '',
                 job_items: (() => {
                   const valid = jobItems.filter((it) => it.name.trim() || parseInt(it.amount, 10) > 0)
                   return valid.length > 0
@@ -402,7 +416,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
                     : undefined
                 })(),
               })
-            )}
+            })}
             className="space-y-3"
           >
             <p className="text-xs text-muted-foreground -mt-1">
@@ -411,7 +425,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
 
             <div className="space-y-1">
               <Label htmlFor="cust-name">업체명 (필수)</Label>
-              <Input id="cust-name" placeholder="청라 오피스빌딩" {...customerForm.register('name')} />
+              <Input id="cust-name" placeholder="청라 오피스빌딩" autoComplete="off" {...customerForm.register('name')} />
               {customerForm.formState.errors.name && (
                 <p className="text-xs text-destructive">{customerForm.formState.errors.name.message}</p>
               )}
@@ -444,7 +458,14 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
             <div className={`grid gap-2 ${custIsCompany ? 'grid-cols-2' : 'grid-cols-1'}`}>
               <div className="space-y-1">
                 <Label htmlFor="cust-phone">연락처 (필수)</Label>
-                <Input id="cust-phone" placeholder="010-1234-5678" inputMode="tel" {...customerForm.register('phone')} />
+                <Input
+                  id="cust-phone"
+                  placeholder="010-1234-5678"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={customerForm.watch('phone') ?? ''}
+                  onChange={(e) => customerForm.setValue('phone', formatPhone(e.target.value))}
+                />
                 {customerForm.formState.errors.phone && (
                   <p className="text-xs text-destructive">{customerForm.formState.errors.phone.message}</p>
                 )}
@@ -467,7 +488,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
             <div className="space-y-1">
               <Label htmlFor="cust-address">주소</Label>
               <div className="flex gap-2">
-                <Input id="cust-address" placeholder="주소 검색을 눌러주세요" {...customerForm.register('address')} />
+                <Input id="cust-address" placeholder="주소 검색을 눌러주세요" autoComplete="off" {...customerForm.register('address')} />
                 <Button
                   type="button"
                   variant="outline"

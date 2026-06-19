@@ -13,6 +13,7 @@ import { createContractAction } from '@/lib/actions/contracts'
 import { FrequencyPicker } from '@/components/dashboard/frequency-picker'
 import { Plus, X } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
+import { useAutoFocusRef } from '@/lib/hooks/use-auto-focus'
 
 const schema = z.object({
   customer_id: z.string().min(1, '고객을 선택해주세요'),
@@ -42,6 +43,7 @@ interface AddContractFormProps {
 
 export function AddContractForm({ customers, defaultCustomerId }: AddContractFormProps) {
   const [open, setOpen] = useState(false)
+  const focusRef = useAutoFocusRef<HTMLDivElement>()
   const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormInput>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -73,7 +75,7 @@ export function AddContractForm({ customers, defaultCustomerId }: AddContractFor
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <ScrollLock />
-      <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain outline-none">
+      <div ref={focusRef} tabIndex={-1} className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain outline-none">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-lg">정기계약 추가</h2>
           <button onClick={() => setOpen(false)}>

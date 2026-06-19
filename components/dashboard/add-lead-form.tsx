@@ -12,6 +12,8 @@ import { Label } from '@/components/ui/label'
 import { createLeadAction } from '@/lib/actions/crm'
 import { Plus, X } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
+import { useAutoFocusRef } from '@/lib/hooks/use-auto-focus'
+import { formatPhone } from '@/lib/format/phone'
 
 const schema = z.object({
   company_name: z.string().min(1, '업체명을 입력해주세요'),
@@ -29,7 +31,8 @@ const CATEGORIES = ['카페', '병원', '학원', '오피스', '상가', '식당
 
 export function AddLeadForm() {
   const [open, setOpen] = useState(false)
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormInput>({
+  const focusRef = useAutoFocusRef<HTMLDivElement>()
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormInput>({
     resolver: zodResolver(schema),
   })
 
@@ -56,7 +59,7 @@ export function AddLeadForm() {
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
       <ScrollLock />
-      <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain outline-none">
+      <div ref={focusRef} tabIndex={-1} className="bg-background rounded-xl border shadow-lg w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain outline-none">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold text-lg">잠재고객 추가</h2>
           <button onClick={() => setOpen(false)}>
@@ -95,7 +98,14 @@ export function AddLeadForm() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="phone">연락처</Label>
-              <Input id="phone" placeholder="010-0000-0000" {...register('phone')} />
+              <Input
+                id="phone"
+                placeholder="010-1234-5678"
+                inputMode="numeric"
+                autoComplete="off"
+                value={watch('phone') ?? ''}
+                onChange={(e) => setValue('phone', formatPhone(e.target.value))}
+              />
             </div>
           </div>
 

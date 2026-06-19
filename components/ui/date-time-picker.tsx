@@ -138,13 +138,13 @@ export function DateTimePicker({ date, time, onDateChange, onTimeChange }: DateT
                 disabled={past}
                 onClick={() => handleDayClick(cell.day)}
                 className={[
-                  'h-8 w-full rounded-lg text-xs font-medium transition-colors',
+                  'relative h-8 w-full rounded-lg text-xs font-medium transition-colors',
                   sel
                     ? 'bg-primary text-primary-foreground'
-                    : today_
-                      ? 'border border-primary text-primary'
-                      : past
-                        ? 'text-muted-foreground/40 cursor-not-allowed'
+                    : past
+                      ? 'text-muted-foreground/40 cursor-not-allowed'
+                      : today_
+                        ? 'font-bold text-primary hover:bg-muted'
                         : sunday
                           ? 'text-red-500 hover:bg-muted'
                           : saturday
@@ -153,6 +153,10 @@ export function DateTimePicker({ date, time, onDateChange, onTimeChange }: DateT
                 ].join(' ')}
               >
                 {cell.day}
+                {/* 오늘 표시 — 선택 전엔 테두리 대신 은은한 점만 (선택과 헷갈리지 않게) */}
+                {today_ && !sel && (
+                  <span className="absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-primary" />
+                )}
               </button>
             )
           })}

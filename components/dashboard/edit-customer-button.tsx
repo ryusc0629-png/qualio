@@ -12,6 +12,8 @@ import { Label } from '@/components/ui/label'
 import { updateCustomerAction } from '@/lib/actions/customers'
 import { Pencil, X } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
+import { useAutoFocusRef } from '@/lib/hooks/use-auto-focus'
+import { formatPhone } from '@/lib/format/phone'
 
 const schema = z.object({
   customerId: z.string().uuid(),
@@ -41,8 +43,9 @@ interface EditCustomerButtonProps {
 
 export function EditCustomerButton({ customer }: EditCustomerButtonProps) {
   const [open, setOpen] = useState(false)
+  const focusRef = useAutoFocusRef<HTMLDivElement>()
 
-  const { register, handleSubmit, control, formState: { errors } } = useForm<FormInput>({
+  const { register, handleSubmit, control, setValue, watch, formState: { errors } } = useForm<FormInput>({
     resolver: zodResolver(schema),
     defaultValues: {
       customerId: customer.id,
@@ -101,7 +104,7 @@ export function EditCustomerButton({ customer }: EditCustomerButtonProps) {
       {open && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <ScrollLock />
-          <div ref={(el) => el?.focus()} tabIndex={-1} className="bg-background rounded-xl border shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto overscroll-contain p-6 space-y-4 outline-none">
+          <div ref={focusRef} tabIndex={-1} className="bg-background rounded-xl border shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto overscroll-contain p-6 space-y-4 outline-none">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-lg">
                 {isCompany ? '법인 고객 수정' : '개인 고객 수정'}
@@ -123,7 +126,14 @@ export function EditCustomerButton({ customer }: EditCustomerButtonProps) {
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <Label htmlFor="edit-phone">연락처 *</Label>
-                  <Input id="edit-phone" {...register('phone')} />
+                  <Input
+                    id="edit-phone"
+                    placeholder="010-1234-5678"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={watch('phone') ?? ''}
+                    onChange={(e) => setValue('phone', formatPhone(e.target.value))}
+                  />
                   {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
                 </div>
                 <div className="space-y-1">
