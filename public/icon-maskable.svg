@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- maskable: 안전영역(가운데 80%) 안에 로고 배치 -->
+  <rect width="512" height="512" fill="#0d9488"/>
+  <text x="50%" y="50%" dy="0.36em" text-anchor="middle"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="240" font-weight="700" fill="#ffffff">Q</text>
+</svg>

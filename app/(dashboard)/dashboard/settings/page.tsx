@@ -5,6 +5,7 @@ import { CurrentPlanCard } from '@/components/dashboard/current-plan-card'
 import { CancelSubscriptionButton } from '@/components/dashboard/cancel-subscription-button'
 import { GeoPanel } from '@/components/dashboard/geo-panel'
 import { CopyLinkButton } from '@/components/dashboard/copy-link-button'
+import { PushNotificationToggle } from '@/components/dashboard/push-notification-toggle'
 import type { PlanId } from '@/lib/config/plans'
 
 interface FaqItem {
@@ -69,6 +70,9 @@ export default async function SettingsPage() {
         <h1 className="text-xl font-bold">설정</h1>
         <p className="text-sm text-muted-foreground mt-1">업체 정보 및 채널 연동을 관리합니다</p>
       </div>
+
+      {/* 폰 알림 받기 (앱 푸시) */}
+      <PushNotificationToggle />
 
       {/* 고객 견적 요청 링크 */}
       <div className="bg-white rounded-xl border border-border p-5 space-y-3">

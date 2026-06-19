@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache'
 import { generateTierDescriptions } from '@/lib/ai/tier-descriptions'
 import { recommendBundles } from '@/lib/ai/bundle-recommendation'
 import { sendBookingConfirmAlimtalk, sendQuoteAlimtalk } from '@/lib/kakao/alimtalk'
+import { sendPushToBusiness } from '@/lib/push/web-push'
 
 // 공개 폼용 액션 클라이언트 (인증 불필요)
 const publicAction = createSafeActionClient({
@@ -316,6 +317,14 @@ export const calculateAndCreateQuoteAction = publicAction
       } catch (e) {
         console.error('[Alimtalk] 견적 알림톡 발송 실패 — 가격 표시는 정상', e)
       }
+
+      // 대표에게 앱 푸시 — "새 견적이 들어왔어요" (실패해도 견적 표시는 정상)
+      await sendPushToBusiness(parsedInput.business_id, {
+        title: '새 견적이 들어왔어요! 🧾',
+        body: `${parsedInput.customer_name}님 · ${service.name}${parsedInput.space_size ? ` · ${parsedInput.space_size}평` : ''}`,
+        url: '/dashboard',
+        tag: `quote-${quote.id}`,
+      })
     }
 
     // 클라이언트에 반환 (가격 카드 렌더링용)
@@ -390,6 +399,14 @@ export const createBookingAction = publicAction
     })
 
     if (bookingError) throw new Error('[APP] 예약 생성에 실패했습니다')
+
+    // 대표에게 앱 푸시 — "새 예약이 잡혔어요" (실패해도 예약 처리는 정상)
+    await sendPushToBusiness(quote.business_id, {
+      title: '새 예약이 잡혔어요! 📅',
+      body: `${parsedInput.customer_name}님 · ${quote.cleaning_type}`,
+      url: '/dashboard',
+      tag: `booking-${quote.id}`,
+    })
 
     // 견적 상태를 'booked'로 업데이트
     await db
