@@ -71,6 +71,15 @@ export const updateCustomerAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getAuthenticatedBusinessId()
 
+    // 수정 전 옛 전화번호 확보 — 예약(bookings)은 customer_phone으로 연결돼 있어
+    // 이름/번호를 바꾸면 옛 번호로 잡힌 기존 예약의 표시값도 함께 갱신해야 어긋나지 않음
+    const { data: prev } = await db
+      .from('customers')
+      .select('phone')
+      .eq('id', parsedInput.customerId)
+      .eq('business_id', businessId)
+      .maybeSingle()
+
     const { error } = await db
       .from('customers')
       .update({
@@ -84,9 +93,33 @@ export const updateCustomerAction = action
       .eq('id', parsedInput.customerId)
       .eq('business_id', businessId)
 
-    if (error) throw new Error('[APP] 고객 정보 수정에 실패했습니다')
+    if (error) {
+      console.error('[Customers] 고객 정보 수정 실패:', error)
+      throw new Error('[APP] 고객 정보 수정에 실패했습니다')
+    }
+
+    // 옛 번호로 연결된 예약들의 이름·번호(비정규화 값)를 새 값으로 동기화
+    if (prev?.phone) {
+      const { error: bookingError } = await db
+        .from('bookings')
+        .update({
+          customer_name: parsedInput.name,
+          customer_phone: parsedInput.phone,
+        })
+        .eq('business_id', businessId)
+        .eq('customer_phone', prev.phone)
+
+      if (bookingError) {
+        console.error('[Customers] 예약 고객정보 동기화 실패:', bookingError)
+        throw new Error('[APP] 일정의 고객 정보를 갱신하지 못했어요. 다시 시도해주세요')
+      }
+    }
 
     revalidatePath('/dashboard/clients')
+    revalidatePath('/dashboard/schedule')
+    revalidatePath('/dashboard/work')
+    revalidatePath('/dashboard/bookings')
+    revalidatePath('/dashboard')
     return { success: true }
   })
 
@@ -173,7 +206,10 @@ export const createActiveCustomerAction = action
         .select('id')
         .single()
 
-      if (bookingError || !booking) throw new Error('[APP] 작업 일정 등록에 실패했습니다')
+      if (bookingError || !booking) {
+        console.error('[Customers] 작업 일정(booking) 등록 실패:', bookingError)
+        throw new Error('[APP] 작업 일정 등록에 실패했습니다')
+      }
 
       // 항목별 견적 저장
       if (jobItems.length > 0) {
@@ -189,7 +225,10 @@ export const createActiveCustomerAction = action
             sort_order: idx,
           })) as never,
         )
-        if (itemsError) throw new Error('[APP] 작업 항목 저장에 실패했습니다')
+        if (itemsError) {
+          console.error('[Customers] 작업 항목(booking_items) 저장 실패:', itemsError)
+          throw new Error('[APP] 작업 항목 저장에 실패했습니다')
+        }
       }
     }
 
@@ -212,7 +251,10 @@ export const createActiveCustomerAction = action
         start_date: parsedInput.start_date,
       })
 
-      if (contractError) throw new Error('[APP] 계약 등록에 실패했습니다')
+      if (contractError) {
+        console.error('[Customers] 정기계약(contract) 등록 실패:', contractError)
+        throw new Error('[APP] 계약 등록에 실패했습니다')
+      }
     }
 
     revalidatePath('/dashboard/clients')
@@ -299,6 +341,30 @@ export const deleteCustomerAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getAuthenticatedBusinessId()
 
+    // 삭제 전 전화번호 확보 — 예약(bookings)은 customer_phone으로 연결돼 있어
+    // 이 번호로 일정도 함께 정리해야 일정배정 화면과 데이터가 어긋나지 않음
+    const { data: customer } = await db
+      .from('customers')
+      .select('phone')
+      .eq('id', parsedInput.customerId)
+      .eq('business_id', businessId)
+      .maybeSingle()
+
+    // 이 고객의 예약 일정을 소프트 삭제 → 일정배정/작업 화면에서 함께 사라짐
+    if (customer?.phone) {
+      const { error: bookingError } = await db
+        .from('bookings')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('business_id', businessId)
+        .eq('customer_phone', customer.phone)
+        .is('deleted_at', null)
+
+      if (bookingError) {
+        console.error('[Customers] 고객 일정(bookings) 정리 실패:', bookingError)
+        throw new Error('[APP] 고객의 일정을 정리하지 못했어요. 다시 시도해주세요')
+      }
+    }
+
     // 연결된 contracts는 ON DELETE CASCADE로 자동 삭제됨
     const { error } = await db
       .from('customers')
@@ -306,9 +372,15 @@ export const deleteCustomerAction = action
       .eq('id', parsedInput.customerId)
       .eq('business_id', businessId)
 
-    if (error) throw new Error('[APP] 삭제에 실패했습니다')
+    if (error) {
+      console.error('[Customers] 고객 삭제 실패:', error)
+      throw new Error('[APP] 삭제에 실패했습니다')
+    }
 
     revalidatePath('/dashboard/clients')
+    revalidatePath('/dashboard/schedule')
+    revalidatePath('/dashboard/work')
+    revalidatePath('/dashboard/bookings')
     revalidatePath('/dashboard')
     return { success: true }
   })

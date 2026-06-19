@@ -1,5 +1,5 @@
 -- 한 예약에 여러 직원/도급사를 배정하기 위한 다대다 중간 테이블
-CREATE TABLE booking_workers (
+CREATE TABLE IF NOT EXISTS booking_workers (
   id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   booking_id UUID        NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
   worker_id  UUID        NOT NULL REFERENCES workers(id) ON DELETE CASCADE,
