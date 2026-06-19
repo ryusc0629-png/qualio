@@ -69,10 +69,8 @@ export function FieldBookingItemsEditor({ workerId, bookingId, fallbackTotal, on
       setItems(loadedItems)
       setChanges(data.changes as Change[])
       setLoaded(true)
-      // 항목이 있으면 합계를 상위에 반영
-      if (loadedItems.length > 0) {
-        onTotalChange?.(loadedItems.reduce((s, it) => s + it.amount, 0))
-      }
+      // 항목이 있으면 합계, 없으면 기존 단일 금액(fallback)을 상위에 반영
+      onTotalChange?.(loadedItems.length > 0 ? loadedItems.reduce((s, it) => s + it.amount, 0) : fallbackTotal)
     },
   })
 

@@ -39,6 +39,8 @@ interface Change {
 interface Props {
   bookingId: string
   fallbackTotal: number
+  // 항목 합계가 바뀌면 상위(결제 금액 표시)에 알림 — 항목 0개면 fallbackTotal 유지
+  onTotalChange?: (total: number) => void
 }
 
 const won = (n: number) => new Intl.NumberFormat('ko-KR').format(n) + '원'
@@ -48,7 +50,7 @@ const formatThousands = (v: string) => {
   return d ? Number(d).toLocaleString('ko-KR') : ''
 }
 
-export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
+export function BookingItemsEditor({ bookingId, fallbackTotal, onTotalChange }: Props) {
   const [items, setItems] = useState<Item[]>([])
   const [changes, setChanges] = useState<Change[]>([])
   const [services, setServices] = useState<{ name: string; base_price: number; unit: string }[]>([])
@@ -64,10 +66,13 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
   const { execute: fetchItems } = useAction(getBookingItemsAction, {
     onSuccess: ({ data }) => {
       if (!data) return
-      setItems(data.items as Item[])
+      const loadedItems = data.items as Item[]
+      setItems(loadedItems)
       setChanges(data.changes as Change[])
       setServices(data.services ?? [])
       setLoaded(true)
+      // 항목이 있으면 합계, 없으면 기존 단일 금액(fallback)을 상위에 반영
+      onTotalChange?.(loadedItems.length > 0 ? loadedItems.reduce((s, it) => s + it.amount, 0) : fallbackTotal)
     },
   })
 
@@ -133,9 +138,22 @@ export function BookingItemsEditor({ bookingId, fallbackTotal }: Props) {
       {!loaded ? (
         <p className="text-xs text-muted-foreground py-2">불러오는 중...</p>
       ) : items.length === 0 ? (
-        <div className="rounded-lg bg-white border border-dashed border-border px-3 py-3 text-center">
+        <div className="rounded-lg bg-white border border-dashed border-border px-3 py-3 text-center space-y-2.5">
           <p className="text-xs text-muted-foreground">
             아직 항목이 없어요. 금액({won(fallbackTotal)})을 항목으로 나누면<br />할인·현장 조정이 쉬워져요.
+          </p>
+          {fallbackTotal > 0 && (
+            <button
+              type="button"
+              disabled={adding}
+              onClick={() => addItem({ bookingId, name: '청소 서비스', quantity: 1, unitPrice: String(fallbackTotal), amount: String(fallbackTotal), unit: '정액' })}
+              className="w-full h-9 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors disabled:opacity-50"
+            >
+              현재 금액({won(fallbackTotal)})을 항목으로 가져오기
+            </button>
+          )}
+          <p className="text-[11px] text-muted-foreground/70">
+            이렇게 시작하면 총액은 그대로 두고 항목만 더하거나 빼면 돼요.
           </p>
         </div>
       ) : (

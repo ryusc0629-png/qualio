@@ -127,12 +127,15 @@ export function BookingDetailSheet({
   const [currentReviewSent, setCurrentReviewSent] = useState(false)
   const [reviewDialogOpen, setReviewDialogOpen]   = useState(false)
   const [localWorkerIds, setLocalWorkerIds]       = useState<string[]>([])
+  // 항목 편집으로 결제 금액이 바뀌면 즉시 반영 (편집기가 onTotalChange로 알려줌)
+  const [liveTotal, setLiveTotal]                 = useState(0)
 
   // booking이 바뀔 때마다 상태 초기화
   useEffect(() => {
     setCurrentReportId(booking?.reportId ?? null)
     setCurrentReviewSent(booking?.reviewSent ?? false)
     setLocalWorkerIds(booking?.workerIds ?? [])
+    setLiveTotal(booking?.final_price ?? 0)
   }, [booking?.id])
 
   const isCancelled = !booking ||
@@ -256,7 +259,7 @@ export function BookingDetailSheet({
     ? format(new Date(booking.scheduled_at), 'HH:mm')
     : ''
   const formattedPrice = booking
-    ? new Intl.NumberFormat('ko-KR').format(booking.final_price) + '원'
+    ? new Intl.NumberFormat('ko-KR').format(liveTotal) + '원'
     : ''
   const mapsUrl = booking?.service_address
     ? `https://map.kakao.com/?q=${encodeURIComponent(booking.service_address)}`
@@ -525,7 +528,7 @@ export function BookingDetailSheet({
               </Row>
             )}
 
-            {booking && booking.final_price > 0 && (
+            {booking && liveTotal > 0 && (
               <Row icon={<span className="text-base">💰</span>} label="결제 금액">
                 <span className="font-semibold text-foreground">{formattedPrice}</span>
               </Row>
@@ -535,7 +538,11 @@ export function BookingDetailSheet({
           {/* 항목별 견적 편집 — 통화·현장 조정 + 변경 이력 */}
           {booking && (
             <div className="mb-4">
-              <BookingItemsEditor bookingId={booking.id} fallbackTotal={booking.final_price} />
+              <BookingItemsEditor
+                bookingId={booking.id}
+                fallbackTotal={booking.final_price}
+                onTotalChange={setLiveTotal}
+              />
             </div>
           )}
 
