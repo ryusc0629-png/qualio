@@ -20,9 +20,10 @@ import { STAGE_CONFIG } from '../pipeline-list'
 import { B2bQuoteForm } from './b2b-quote-form'
 import { ConvertToCustomerButton } from './convert-to-customer-button'
 import type { LiveStatus } from '@/lib/utils/lead-live-status'
-import { Phone, MapPin, Calendar, ArrowLeft, Plus, PhoneCall, MapPin as VisitIcon, FileText, StickyNote, Mail, Mic } from 'lucide-react'
+import { Calendar, ArrowLeft, Plus, PhoneCall, MapPin as VisitIcon, FileText, StickyNote, Mic } from 'lucide-react'
 import Link from 'next/link'
 import { MeetingRecorder } from '@/components/dashboard/meeting-recorder'
+import { ContactActions } from '@/components/dashboard/contact-actions'
 
 // ── 타입 ──────────────────────────────────────────────────
 
@@ -184,25 +185,9 @@ export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, 
               )}
             </div>
 
-            <div className="mt-2 space-y-1">
-              {lead.phone && (
-                <p className="text-sm flex items-center gap-1.5 text-muted-foreground">
-                  <Phone className="h-3.5 w-3.5 shrink-0" />
-                  {lead.phone}
-                </p>
-              )}
-              {lead.email && (
-                <p className="text-sm flex items-center gap-1.5 text-muted-foreground">
-                  <Mail className="h-3.5 w-3.5 shrink-0" />
-                  {lead.email}
-                </p>
-              )}
-              {lead.address && (
-                <p className="text-sm flex items-center gap-1.5 text-muted-foreground">
-                  <MapPin className="h-3.5 w-3.5 shrink-0" />
-                  {lead.address}
-                </p>
-              )}
+            <div className="mt-2 space-y-1.5">
+              {/* 전화·문자·이메일·길찾기 바로가기 */}
+              <ContactActions phone={lead.phone} email={lead.email} address={lead.address} />
               {lead.monthly_budget && (
                 <p className="text-sm text-muted-foreground">
                   예상 월 <span className="font-semibold text-foreground">{lead.monthly_budget.toLocaleString()}원</span>

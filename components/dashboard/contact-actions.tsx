@@ -1,17 +1,19 @@
-import { Phone, MessageSquare, MapPin, Navigation } from 'lucide-react'
+import { Phone, MessageSquare, Mail } from 'lucide-react'
+import { MapNavButton } from '@/components/dashboard/map-nav-button'
 
-// 고객 전화번호·주소를 "탭 한 번"으로 쓰게 해주는 바로가기.
-// - 전화번호: 탭 → 전화 / 문자
-// - 주소: 탭 → 네이버 지도에서 길찾기 (현장앱과 동일 방식)
-// 순수 링크(a 태그)라 별도 JS 불필요 → 서버 컴포넌트에서도 그대로 사용 가능.
+// 고객 전화번호·이메일·주소를 "탭 한 번"으로 쓰게 해주는 바로가기.
+// - 전화번호: 탭 → 전화 / 문자 (순수 a 태그, 서버 컴포넌트에서도 동작)
+// - 이메일: 탭 → 메일 보내기
+// - 주소: 카카오맵/네이버맵/티맵 중 골라서 길찾기 (MapNavButton)
 
 interface ContactActionsProps {
   phone?: string | null
+  email?: string | null
   address?: string | null
 }
 
-export function ContactActions({ phone, address }: ContactActionsProps) {
-  if (!phone && !address) return null
+export function ContactActions({ phone, email, address }: ContactActionsProps) {
+  if (!phone && !email && !address) return null
 
   return (
     <div className="space-y-2">
@@ -35,21 +37,17 @@ export function ContactActions({ phone, address }: ContactActionsProps) {
         </div>
       )}
 
-      {address && (
+      {email && (
         <a
-          href={`https://map.naver.com/v5/search/${encodeURIComponent(address)}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 h-11 text-sm active:bg-muted transition-colors"
+          href={`mailto:${email}`}
+          className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 h-11 text-sm font-medium active:bg-muted transition-colors"
         >
-          <MapPin className="h-4 w-4 shrink-0 text-primary" />
-          <span className="flex-1 truncate font-medium">{address}</span>
-          <span className="flex items-center gap-1 text-xs font-semibold text-primary shrink-0">
-            <Navigation className="h-3.5 w-3.5" />
-            길찾기
-          </span>
+          <Mail className="h-4 w-4 shrink-0 text-primary" />
+          <span className="truncate">{email}</span>
         </a>
       )}
+
+      {address && <MapNavButton address={address} />}
     </div>
   )
 }

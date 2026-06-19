@@ -5,9 +5,10 @@ import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import Link from 'next/link'
 import {
-  Phone, MapPin, Clock, User, ChevronRight,
+  Phone, Clock, User, ChevronRight,
   Pencil, Check, X, CalendarDays, CheckCircle2, Send, Star, Users,
 } from 'lucide-react'
+import { MapNavButton } from '@/components/dashboard/map-nav-button'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
 import { BookingItemsEditor } from '@/components/dashboard/booking-items-editor'
@@ -261,9 +262,6 @@ export function BookingDetailSheet({
   const formattedPrice = booking
     ? new Intl.NumberFormat('ko-KR').format(liveTotal) + '원'
     : ''
-  const mapsUrl = booking?.service_address
-    ? `https://map.kakao.com/?q=${encodeURIComponent(booking.service_address)}`
-    : null
 
   return (
     <>
@@ -511,21 +509,7 @@ export function BookingDetailSheet({
             )}
 
             {booking?.service_address && (
-              <Row icon={<MapPin className="h-4 w-4" />} label="주소">
-                <div className="flex items-start gap-2">
-                  <span className="font-medium leading-snug">{booking.service_address}</span>
-                  {mapsUrl && (
-                    <a
-                      href={mapsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 text-xs text-primary hover:underline whitespace-nowrap mt-0.5"
-                    >
-                      지도 보기
-                    </a>
-                  )}
-                </div>
-              </Row>
+              <MapNavButton address={booking.service_address} />
             )}
 
             {booking && liveTotal > 0 && (

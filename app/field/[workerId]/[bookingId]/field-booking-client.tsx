@@ -16,10 +16,9 @@ import {
   fieldRequestPaymentAction,
 } from '@/lib/actions/field'
 import { FieldBookingItemsEditor } from '@/components/field/field-booking-items-editor'
+import { ContactActions } from '@/components/dashboard/contact-actions'
 import {
   ArrowLeft,
-  MapPin,
-  Phone,
   Clock,
   Banknote,
   Camera,
@@ -237,27 +236,8 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
           <h2 className="font-semibold text-lg">{booking.customerName}</h2>
 
           <div className="space-y-2">
-            {booking.customerPhone && (
-              <a
-                href={`tel:${booking.customerPhone}`}
-                className="flex items-center gap-2.5 text-sm text-primary"
-              >
-                <Phone className="h-4 w-4" />
-                <span>{booking.customerPhone}</span>
-              </a>
-            )}
-
-            {booking.serviceAddress && (
-              <a
-                href={`https://map.naver.com/v5/search/${encodeURIComponent(booking.serviceAddress)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-start gap-2.5 text-sm text-primary"
-              >
-                <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
-                <span>{booking.serviceAddress}</span>
-              </a>
-            )}
+            {/* 전화·문자·길찾기(카카오/네이버/티맵) 바로가기 */}
+            <ContactActions phone={booking.customerPhone} address={booking.serviceAddress} />
 
             <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
               <Clock className="h-4 w-4" />
