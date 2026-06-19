@@ -12,6 +12,7 @@ import { MapNavButton } from '@/components/dashboard/map-nav-button'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
 import { BookingItemsEditor } from '@/components/dashboard/booking-items-editor'
+import { AddClaimForm } from '@/components/dashboard/add-claim-form'
 import {
   Sheet,
   SheetContent,
@@ -542,6 +543,17 @@ export function BookingDetailSheet({
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
             </Link>
+          )}
+
+          {/* 이 작업 클레임 등록 — 같은 모달 재사용, 고객·작업 자동 연결 */}
+          {booking && (
+            <AddClaimForm
+              presetCustomer={{ id: booking.customer_id ?? '', name: booking.customer_name, phone: booking.customer_phone }}
+              presetBookingId={booking.id}
+              triggerLabel="이 작업 클레임 등록"
+              triggerVariant="outline"
+              triggerClassName="w-full h-12 justify-start gap-2 text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700 mb-4"
+            />
           )}
 
         </div>

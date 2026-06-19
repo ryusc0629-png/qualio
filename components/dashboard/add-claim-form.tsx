@@ -37,11 +37,21 @@ interface Props {
   customers?: Customer[]
   // 고객 상세 화면처럼 대상 고객이 이미 정해진 경우 — 피커 없이 그 고객으로 고정
   presetCustomer?: Customer | null
+  // 예약 상세에서 열면 그 작업과 클레임을 연결
+  presetBookingId?: string | null
   triggerLabel?: string
   triggerClassName?: string
+  triggerVariant?: 'default' | 'outline' | 'secondary' | 'ghost'
 }
 
-export function AddClaimForm({ customers = [], presetCustomer = null, triggerLabel = '클레임 등록하기', triggerClassName }: Props) {
+export function AddClaimForm({
+  customers = [],
+  presetCustomer = null,
+  presetBookingId = null,
+  triggerLabel = '클레임 등록하기',
+  triggerClassName,
+  triggerVariant = 'default',
+}: Props) {
   const [open, setOpen] = useState(false)
   const focusRef = useAutoFocusRef<HTMLDivElement>()
 
@@ -101,7 +111,7 @@ export function AddClaimForm({ customers = [], presetCustomer = null, triggerLab
 
   if (!open) {
     return (
-      <Button onClick={() => setOpen(true)} className={triggerClassName ?? 'h-12'}>
+      <Button variant={triggerVariant} onClick={() => setOpen(true)} className={triggerClassName ?? 'h-12'}>
         <Plus className="h-4 w-4 mr-1.5" />
         {triggerLabel}
       </Button>
@@ -123,7 +133,7 @@ export function AddClaimForm({ customers = [], presetCustomer = null, triggerLab
           </button>
         </div>
 
-        <form onSubmit={handleSubmit((data) => execute({ ...data }))} className="space-y-3">
+        <form onSubmit={handleSubmit((data) => execute({ ...data, booking_id: presetBookingId ?? undefined }))} className="space-y-3">
           {/* 고객 선택 — 기존 고객에서 고르기 */}
           <div className="space-y-1">
             <Label>어느 고객인가요? (필수)</Label>

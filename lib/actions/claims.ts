@@ -29,6 +29,7 @@ const createClaimSchema = z.object({
   title:          z.string().min(1, '어떤 문제인지 한 줄로 적어주세요'),
   content:        z.string().optional(),
   is_urgent:      z.boolean().optional(),
+  booking_id:     z.string().uuid().optional(), // 예약 상세에서 등록하면 그 작업과 연결
 })
 
 export const createClaimAction = action
@@ -43,6 +44,7 @@ export const createClaimAction = action
       title:          parsedInput.title,
       content:        parsedInput.content ?? null,
       is_urgent:      parsedInput.is_urgent ?? false,
+      booking_id:     parsedInput.booking_id ?? null,
       status:         'open',
     } as never)
 
