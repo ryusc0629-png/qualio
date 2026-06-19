@@ -651,3 +651,213 @@ export const fieldGenerateAiReportAction = action
     const result = await generateAiReport(parsedInput.memo, parsedInput.serviceItems)
     return { success: true, report: result }
   })
+
+// ── 현장 항목별 견적 편집 (2단계) ─────────────────────────
+// 1단계(대시보드, booking-items.ts)와 동일한 테이블을 쓰되,
+// 현장 직원이 수정하므로 이력에 changed_by:'worker' + 직원 이름을 남긴다.
+type FieldDb = ReturnType<typeof createServiceClient>
+
+interface FieldBookingItemRow {
+  id: string
+  name: string
+  quantity: number
+  unit_price: number
+  amount: number
+  unit: string
+  sort_order: number
+}
+
+// 항목 합계로 bookings.final_price 동기화 (항목이 1개 이상일 때만)
+async function syncFieldBookingTotal(db: FieldDb, businessId: string, bookingId: string) {
+  const { data } = await db
+    .from('booking_items' as never)
+    .select('amount' as never)
+    .eq('booking_id' as never, bookingId)
+    .eq('business_id' as never, businessId) as { data: { amount: number }[] | null }
+
+  const items = data ?? []
+  if (items.length === 0) return // 항목이 없으면 기존 단일 금액 유지
+
+  const total = items.reduce((s, it) => s + (it.amount ?? 0), 0)
+  await db
+    .from('bookings')
+    .update({ final_price: total })
+    .eq('id', bookingId)
+    .eq('business_id', businessId)
+}
+
+// 현장 변경 이력 기록 (작업자 표시)
+async function logFieldChange(
+  db: FieldDb,
+  businessId: string,
+  bookingId: string,
+  workerName: string,
+  input: {
+    change_type: 'add' | 'update' | 'remove'
+    item_name: string | null
+    old_amount: number | null
+    new_amount: number | null
+  },
+) {
+  await db.from('booking_price_changes' as never).insert({
+    business_id: businessId,
+    booking_id: bookingId,
+    changed_by: 'worker',
+    changed_by_name: workerName,
+    change_type: input.change_type,
+    item_name: input.item_name,
+    old_amount: input.old_amount,
+    new_amount: input.new_amount,
+    reason: null,
+  } as never)
+}
+
+// 항목 조회 (직원용) — 항목 + 변경 이력
+export const fieldGetBookingItemsAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    const [itemsRes, changesRes] = await Promise.all([
+      db.from('booking_items' as never)
+        .select('id, name, quantity, unit_price, amount, unit, sort_order' as never)
+        .eq('booking_id' as never, parsedInput.bookingId)
+        .eq('business_id' as never, worker.business_id)
+        .order('sort_order' as never, { ascending: true }) as unknown as Promise<{ data: FieldBookingItemRow[] | null }>,
+      db.from('booking_price_changes' as never)
+        .select('id, change_type, item_name, old_amount, new_amount, reason, changed_by, changed_by_name, created_at' as never)
+        .eq('booking_id' as never, parsedInput.bookingId)
+        .eq('business_id' as never, worker.business_id)
+        .order('created_at' as never, { ascending: false }) as unknown as Promise<{
+          data: {
+            id: string; change_type: string; item_name: string | null
+            old_amount: number | null; new_amount: number | null; reason: string | null
+            changed_by: string; changed_by_name: string | null; created_at: string
+          }[] | null
+        }>,
+    ])
+
+    return { items: itemsRes.data ?? [], changes: changesRes.data ?? [] }
+  })
+
+// 항목 추가 (직원용)
+export const fieldAddBookingItemAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+    name:      z.string().min(1, '항목 이름을 입력해주세요'),
+    quantity:  z.coerce.number().int().min(1, '수량은 1 이상이어야 합니다'),
+    unitPrice: z.coerce.number().int().min(0, '0 이상의 금액을 입력해주세요'),
+    amount:    z.coerce.number().int().min(0).optional(),
+    unit:      z.string().optional(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    const amount = parsedInput.amount ?? parsedInput.quantity * parsedInput.unitPrice
+
+    const { error } = await db.from('booking_items' as never).insert({
+      business_id: worker.business_id,
+      booking_id: parsedInput.bookingId,
+      name: parsedInput.name,
+      quantity: parsedInput.quantity,
+      unit_price: parsedInput.unitPrice,
+      amount,
+      unit: parsedInput.unit ?? '개',
+      sort_order: Date.now() % 1000000,
+    } as never)
+    if (error) throw new Error('[APP] 항목 추가에 실패했어요')
+
+    await logFieldChange(db, worker.business_id, parsedInput.bookingId, worker.name, {
+      change_type: 'add', item_name: parsedInput.name, old_amount: null, new_amount: amount,
+    })
+    await syncFieldBookingTotal(db, worker.business_id, parsedInput.bookingId)
+
+    return { success: true }
+  })
+
+// 항목 수정 (직원용)
+export const fieldUpdateBookingItemAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+    itemId:    z.string().uuid(),
+    name:      z.string().min(1, '항목 이름을 입력해주세요'),
+    quantity:  z.coerce.number().int().min(1, '수량은 1 이상이어야 합니다'),
+    unitPrice: z.coerce.number().int().min(0, '0 이상의 금액을 입력해주세요'),
+    amount:    z.coerce.number().int().min(0).optional(),
+    unit:      z.string().optional(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    const { data: prev } = await db
+      .from('booking_items' as never)
+      .select('name, amount' as never)
+      .eq('id' as never, parsedInput.itemId)
+      .eq('business_id' as never, worker.business_id)
+      .maybeSingle() as { data: { name: string; amount: number } | null }
+    if (!prev) throw new Error('[APP] 항목을 찾을 수 없어요')
+
+    const amount = parsedInput.amount ?? parsedInput.quantity * parsedInput.unitPrice
+
+    const { error } = await db
+      .from('booking_items' as never)
+      .update({
+        name: parsedInput.name,
+        quantity: parsedInput.quantity,
+        unit_price: parsedInput.unitPrice,
+        amount,
+        ...(parsedInput.unit ? { unit: parsedInput.unit } : {}),
+      } as never)
+      .eq('id' as never, parsedInput.itemId)
+      .eq('business_id' as never, worker.business_id)
+    if (error) throw new Error('[APP] 항목 수정에 실패했어요')
+
+    await logFieldChange(db, worker.business_id, parsedInput.bookingId, worker.name, {
+      change_type: 'update', item_name: parsedInput.name, old_amount: prev.amount, new_amount: amount,
+    })
+    await syncFieldBookingTotal(db, worker.business_id, parsedInput.bookingId)
+
+    return { success: true }
+  })
+
+// 항목 삭제 (직원용)
+export const fieldDeleteBookingItemAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+    itemId:    z.string().uuid(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    const { data: prev } = await db
+      .from('booking_items' as never)
+      .select('name, amount' as never)
+      .eq('id' as never, parsedInput.itemId)
+      .eq('business_id' as never, worker.business_id)
+      .maybeSingle() as { data: { name: string; amount: number } | null }
+    if (!prev) throw new Error('[APP] 항목을 찾을 수 없어요')
+
+    const { error } = await db
+      .from('booking_items' as never)
+      .delete()
+      .eq('id' as never, parsedInput.itemId)
+      .eq('business_id' as never, worker.business_id)
+    if (error) throw new Error('[APP] 항목 삭제에 실패했어요')
+
+    await logFieldChange(db, worker.business_id, parsedInput.bookingId, worker.name, {
+      change_type: 'remove', item_name: prev.name, old_amount: prev.amount, new_amount: null,
+    })
+    await syncFieldBookingTotal(db, worker.business_id, parsedInput.bookingId)
+
+    return { success: true }
+  })

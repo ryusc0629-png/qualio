@@ -15,6 +15,7 @@ import {
   fieldCompletePaymentAction,
   fieldRequestPaymentAction,
 } from '@/lib/actions/field'
+import { FieldBookingItemsEditor } from '@/components/field/field-booking-items-editor'
 import {
   ArrowLeft,
   MapPin,
@@ -71,6 +72,8 @@ function relativeTime(dateStr: string): string {
 
 export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, existingBeforeUrls, existingCustomerRequest, existingNextVisitNote, memoUpdatedById, memoUpdatedByName, memoUpdatedAt }: Props) {
   const [currentStatus, setCurrentStatus] = useState(booking.status)
+  // 현장에서 항목을 조정하면 결제 금액도 실시간으로 따라간다
+  const [liveTotal, setLiveTotal] = useState(booking.finalPrice)
   const [siteMemo, setSiteMemo] = useState(booking.memo ?? '')
   const [customerRequest, setCustomerRequest] = useState(existingCustomerRequest)
   const [nextVisitNote, setNextVisitNote] = useState(existingNextVisitNote)
@@ -263,7 +266,7 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
 
             <div className="flex items-center gap-2.5 text-sm font-medium">
               <Banknote className="h-4 w-4 text-muted-foreground" />
-              <span>{booking.finalPrice.toLocaleString('ko-KR')}원</span>
+              <span>{liveTotal.toLocaleString('ko-KR')}원</span>
             </div>
           </div>
         </div>
@@ -422,6 +425,16 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
           </div>
         )}
 
+        {/* 항목별 금액 조정 — 작업 중이거나 완료 전 */}
+        {(currentStatus === 'in_progress' || currentStatus === 'confirmed') && (
+          <FieldBookingItemsEditor
+            workerId={workerId}
+            bookingId={booking.id}
+            fallbackTotal={booking.finalPrice}
+            onTotalChange={setLiveTotal}
+          />
+        )}
+
         {/* 릴스 촬영 유도 — 작업 중일 때만 */}
         {currentStatus === 'in_progress' && (
           <div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 space-y-3">
@@ -519,7 +532,7 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                 onClick={() => requestPayment({ workerId, bookingId: booking.id })}
               >
                 <CircleDollarSign className="h-5 w-5" />
-                {isRequestingPayment ? '발송 중...' : `결제 요청하기 · ${booking.finalPrice.toLocaleString()}원`}
+                {isRequestingPayment ? '발송 중...' : `결제 요청하기 · ${liveTotal.toLocaleString()}원`}
               </Button>
               {!booking.customerPhone && (
                 <p className="text-xs text-muted-foreground text-center">고객 연락처가 없어 결제 요청을 보낼 수 없어요</p>
@@ -529,7 +542,7 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                 className="w-full text-xs text-muted-foreground underline py-1"
                 disabled={isCompleting}
                 onClick={() => {
-                  if (confirm(`현금으로 ${booking.finalPrice.toLocaleString()}원을 받으셨나요?\n\n확인하면 수금 완료 처리됩니다.`)) {
+                  if (confirm(`현금으로 ${liveTotal.toLocaleString()}원을 받으셨나요?\n\n확인하면 수금 완료 처리됩니다.`)) {
                     completePayment({ workerId, bookingId: booking.id })
                   }
                 }}
@@ -546,13 +559,13 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                 className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700"
                 disabled={isCompleting}
                 onClick={() => {
-                  if (confirm(`${booking.finalPrice.toLocaleString()}원 수금 완료할까요?`)) {
+                  if (confirm(`${liveTotal.toLocaleString()}원 수금 완료할까요?`)) {
                     completePayment({ workerId, bookingId: booking.id })
                   }
                 }}
               >
                 <CheckCircle2 className="h-5 w-5" />
-                {isCompleting ? '처리 중...' : `수금 완료 · ${booking.finalPrice.toLocaleString()}원`}
+                {isCompleting ? '처리 중...' : `수금 완료 · ${liveTotal.toLocaleString()}원`}
               </Button>
               <button
                 type="button"
