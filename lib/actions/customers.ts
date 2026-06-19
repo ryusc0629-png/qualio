@@ -113,12 +113,25 @@ export const updateCustomerAction = action
         console.error('[Customers] 예약 고객정보 동기화 실패:', bookingError)
         throw new Error('[APP] 일정의 고객 정보를 갱신하지 못했어요. 다시 시도해주세요')
       }
+
+      // 클레임도 같은 번호로 연결돼 있어 함께 동기화 — 고객 상세 이력이 어긋나지 않게
+      const { error: claimError } = await db
+        .from('claims' as never)
+        .update({ customer_name: parsedInput.name, customer_phone: parsedInput.phone } as never)
+        .eq('business_id' as never, businessId)
+        .eq('customer_phone' as never, prev.phone)
+
+      if (claimError) {
+        console.error('[Customers] 클레임 고객정보 동기화 실패:', claimError)
+        throw new Error('[APP] 클레임의 고객 정보를 갱신하지 못했어요. 다시 시도해주세요')
+      }
     }
 
     revalidatePath('/dashboard/clients')
     revalidatePath('/dashboard/schedule')
     revalidatePath('/dashboard/work')
     revalidatePath('/dashboard/bookings')
+    revalidatePath('/dashboard/claims')
     revalidatePath('/dashboard')
     return { success: true }
   })
@@ -364,6 +377,18 @@ export const deleteCustomerAction = action
         console.error('[Customers] 고객 일정(bookings) 정리 실패:', bookingError)
         throw new Error('[APP] 고객의 일정을 정리하지 못했어요. 다시 시도해주세요')
       }
+
+      // 이 고객의 클레임도 함께 정리 — 삭제된 고객의 클레임이 떠돌지 않게
+      const { error: claimError } = await db
+        .from('claims' as never)
+        .delete()
+        .eq('business_id' as never, businessId)
+        .eq('customer_phone' as never, customer.phone)
+
+      if (claimError) {
+        console.error('[Customers] 고객 클레임 정리 실패:', claimError)
+        throw new Error('[APP] 고객의 클레임을 정리하지 못했어요. 다시 시도해주세요')
+      }
     }
 
     // 연결된 contracts는 ON DELETE CASCADE로 자동 삭제됨
@@ -382,6 +407,7 @@ export const deleteCustomerAction = action
     revalidatePath('/dashboard/schedule')
     revalidatePath('/dashboard/work')
     revalidatePath('/dashboard/bookings')
+    revalidatePath('/dashboard/claims')
     revalidatePath('/dashboard')
     return { success: true }
   })
