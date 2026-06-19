@@ -9,22 +9,24 @@ import { resolveClaimAction, reopenClaimAction, deleteClaimAction } from '@/lib/
 interface Props {
   claimId: string
   status: string
+  // 처리 후 호출 (모달 안에서 목록 즉시 갱신용)
+  onChanged?: () => void
 }
 
-export function ClaimActions({ claimId, status }: Props) {
+export function ClaimActions({ claimId, status, onChanged }: Props) {
   const [resolving, setResolving] = useState(false)
   const [note, setNote] = useState('')
 
   const resolve = useAction(resolveClaimAction, {
-    onSuccess: () => { toast.success('해결로 표시했어요'); setResolving(false); setNote('') },
+    onSuccess: () => { toast.success('해결로 표시했어요'); setResolving(false); setNote(''); onChanged?.() },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
   const reopen = useAction(reopenClaimAction, {
-    onSuccess: () => toast.success('다시 열었어요'),
+    onSuccess: () => { toast.success('다시 열었어요'); onChanged?.() },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
   const remove = useAction(deleteClaimAction, {
-    onSuccess: () => toast.success('삭제했어요'),
+    onSuccess: () => { toast.success('삭제했어요'); onChanged?.() },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 

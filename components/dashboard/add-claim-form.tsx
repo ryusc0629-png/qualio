@@ -42,6 +42,8 @@ interface Props {
   triggerLabel?: string
   triggerClassName?: string
   triggerVariant?: 'default' | 'outline' | 'secondary' | 'ghost'
+  // 등록 성공 후 호출 (모달 안에서 목록 즉시 갱신용)
+  onCreated?: () => void
 }
 
 export function AddClaimForm({
@@ -51,6 +53,7 @@ export function AddClaimForm({
   triggerLabel = '클레임 등록하기',
   triggerClassName,
   triggerVariant = 'default',
+  onCreated,
 }: Props) {
   const [open, setOpen] = useState(false)
   const focusRef = useAutoFocusRef<HTMLDivElement>()
@@ -84,6 +87,7 @@ export function AddClaimForm({
       toast.success('클레임을 등록했어요')
       resetAll()
       setOpen(false)
+      onCreated?.()
     },
     onError: ({ error }) => {
       toast.error(error.serverError ?? '다시 시도해주세요')

@@ -6,13 +6,14 @@ import { ko } from 'date-fns/locale'
 import Link from 'next/link'
 import {
   Phone, Clock, User, ChevronRight,
-  Pencil, Check, X, CalendarDays, CheckCircle2, Send, Star, Users, ShieldAlert,
+  Pencil, Check, X, CalendarDays, CheckCircle2, Send, Star, Users,
 } from 'lucide-react'
 import { MapNavButton } from '@/components/dashboard/map-nav-button'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
 import { BookingItemsEditor } from '@/components/dashboard/booking-items-editor'
 import { AddClaimForm } from '@/components/dashboard/add-claim-form'
+import { ClaimsStatusButton } from '@/components/dashboard/claims-status-button'
 import {
   Sheet,
   SheetContent,
@@ -546,21 +547,14 @@ export function BookingDetailSheet({
             </Link>
           )}
 
-          {/* 클레임 — 이미 있으면 '현황 확인', 없으면 '등록'. 같은 고객 기준 */}
+          {/* 클레임 — 이미 있으면 '현황 확인'(모달), 없으면 '등록'. 페이지 이동 없음 */}
           {booking && (booking.hasOpenClaim ? (
-            <Link
-              href={booking.customer_id ? `/dashboard/clients/${booking.customer_id}` : '/dashboard/claims'}
-              className="flex items-center justify-between px-4 py-3.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 transition-colors mb-4"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <ShieldAlert className="h-4 w-4 text-rose-600 shrink-0" />
-                <div>
-                  <span className="text-sm font-semibold text-rose-700">클레임 처리 현황 확인하기</span>
-                  <p className="text-xs text-rose-600/80 mt-0.5">이 고객의 미해결 클레임이 있어요</p>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-rose-400 shrink-0" />
-            </Link>
+            <ClaimsStatusButton
+              customerId={booking.customer_id}
+              customerName={booking.customer_name}
+              customerPhone={booking.customer_phone}
+              bookingId={booking.id}
+            />
           ) : (
             <AddClaimForm
               presetCustomer={{ id: booking.customer_id ?? '', name: booking.customer_name, phone: booking.customer_phone }}

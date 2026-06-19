@@ -22,6 +22,32 @@ async function getAuthenticatedBusinessId() {
   return { db, businessId: profile.business_id }
 }
 
+// 특정 고객(전화번호)의 클레임 목록 조회 — 예약 상세에서 모달로 현황 확인용
+const getClaimsByPhoneSchema = z.object({
+  customerPhone: z.string().min(1),
+})
+
+export const getClaimsByPhoneAction = action
+  .schema(getClaimsByPhoneSchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuthenticatedBusinessId()
+
+    const { data } = await db
+      .from('claims' as never)
+      .select('id, title, content, is_urgent, status, resolution, created_at, resolved_at' as never)
+      .eq('business_id' as never, businessId)
+      .eq('customer_phone' as never, parsedInput.customerPhone)
+      .order('is_urgent' as never, { ascending: false })
+      .order('created_at' as never, { ascending: false }) as unknown as {
+        data: {
+          id: string; title: string; content: string | null; is_urgent: boolean
+          status: string; resolution: string | null; created_at: string; resolved_at: string | null
+        }[] | null
+      }
+
+    return { claims: data ?? [] }
+  })
+
 // 클레임 등록 스키마
 const createClaimSchema = z.object({
   customer_name:  z.string().min(1, '고객 이름을 입력해주세요'),
