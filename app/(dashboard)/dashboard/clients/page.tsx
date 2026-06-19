@@ -7,6 +7,7 @@ import { DeleteCustomerButton } from '@/components/dashboard/delete-customer-but
 import { ContractStatusSelect } from '@/components/dashboard/contract-status-select'
 import { ConfirmBookingButton } from '@/components/dashboard/confirm-booking-button'
 import { formatFrequency } from '@/lib/utils/frequency'
+import { contractAccruedRevenue } from '@/lib/utils/ltv'
 import { ClientSearchInput } from '@/components/dashboard/client-search-input'
 import { Phone, MapPin, Calendar, TrendingUp, ChevronRight, Building2, User, Archive, Star } from 'lucide-react'
 
@@ -57,6 +58,8 @@ type ContractRow = {
   frequency: string
   contract_price: number
   status: string
+  start_date: string
+  end_date: string | null
 }
 
 type B2bQuoteRow = {
@@ -151,7 +154,7 @@ export default async function ClientsPage({
       .eq('business_id', businessId),
 
     db.from('contracts')
-      .select('id, customer_id, service_type, frequency, contract_price, status')
+      .select('id, customer_id, service_type, frequency, contract_price, status, start_date, end_date')
       .eq('business_id', businessId),
 
     db.from('bookings')
@@ -239,10 +242,9 @@ export default async function ClientsPage({
   function sortCustomers(list: CustomerRow[]): CustomerRow[] {
     const withLtv = list.map(c => {
       const bookingLtv = c.phone ? (bookingMap[c.phone]?.ltv ?? 0) : 0
-      const activeContract = (contractMap[c.id] ?? []).find(ct => ct.status === 'active')
-      // 활성 계약이 있으면 연간 계약금을 LTV로 우선 사용 (예약 실적보다 높을 때)
-      const contractAnnual = activeContract ? activeContract.contract_price * 12 : 0
-      return { c, ltv: Math.max(bookingLtv, contractAnnual) }
+      // 통합 LTV = 일회성 예약 합계 + 계약 누적(경과 개월 × 월계약금)
+      const ltv = bookingLtv + contractAccruedRevenue(contractMap[c.id] ?? [])
+      return { c, ltv }
     })
     if (sort === 'ltv_asc') return withLtv.sort((a, b) => a.ltv - b.ltv).map(x => x.c)
     if (sort === 'newest')  return [...list].sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -425,7 +427,8 @@ export default async function ClientsPage({
               const customerContracts = contractMap[customer.id] ?? []
               const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
               const hasAnyContract = customerContracts.length > 0
-              const ltv = booking?.ltv ?? 0
+              // 통합 LTV = 일회성 예약 합계 + 계약 누적
+              const ltv = (booking?.ltv ?? 0) + contractAccruedRevenue(customerContracts)
               const bookingCount = booking?.count ?? 0
               const lastVisitDate = booking?.lastDate ?? null
               const statusKey = activeContract ? 'contract' : bookingCount >= 2 ? 'repeat' : bookingCount === 1 ? 'first' : 'registered'
@@ -481,7 +484,12 @@ export default async function ClientsPage({
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-2">
                       <div className="text-right">
-                        {ltv > 0 && <p className="text-base font-bold tabular-nums">{ltv.toLocaleString('ko-KR')}원</p>}
+                        {ltv > 0 && (
+                          <>
+                            <p className="text-[10px] text-muted-foreground leading-none">누적 가치</p>
+                            <p className="text-base font-bold tabular-nums">{ltv.toLocaleString('ko-KR')}원</p>
+                          </>
+                        )}
                         {activeContract && (
                           <p className="text-xs text-emerald-600 font-medium tabular-nums">
                             {activeContract.contract_price.toLocaleString('ko-KR')}원/월
@@ -599,6 +607,8 @@ export default async function ClientsPage({
                 const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
                 const hasAnyContract = customerContracts.length > 0
                 const bookingLtv = customer.phone ? (bookingMap[customer.phone]?.ltv ?? 0) : 0
+                // 통합 LTV = 일회성 예약 합계 + 계약 누적
+                const ltv = bookingLtv + contractAccruedRevenue(customerContracts)
                 return (
                   <div key={`company-${customer.id}`} className="bg-emerald-50 rounded-xl border border-emerald-100 p-4 hover:border-emerald-300 transition-colors">
                     <div className="flex items-start gap-3">
@@ -633,7 +643,12 @@ export default async function ClientsPage({
                       </div>
                       <div className="shrink-0 flex flex-col items-end gap-2">
                         <div className="text-right">
-                          {bookingLtv > 0 && <p className="text-base font-bold tabular-nums">{bookingLtv.toLocaleString('ko-KR')}원</p>}
+                          {ltv > 0 && (
+                            <>
+                              <p className="text-[10px] text-muted-foreground leading-none">누적 가치</p>
+                              <p className="text-base font-bold tabular-nums">{ltv.toLocaleString('ko-KR')}원</p>
+                            </>
+                          )}
                           {activeContract && (
                             <p className="text-xs text-emerald-600 font-medium tabular-nums">
                               {activeContract.contract_price.toLocaleString('ko-KR')}원/월

@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft, Phone, MapPin, Calendar, Receipt, ChevronRight, FileText, User, Star } from 'lucide-react'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
+import { contractAccruedRevenue, type ContractLike } from '@/lib/utils/ltv'
 
 interface Props {
   params: Promise<{ customerId: string }>
@@ -94,9 +95,20 @@ export default async function CustomerDetailPage({ params }: Props) {
     reviewCount = count ?? 0
   }
 
-  const totalLTV = bookingList
+  // 이 고객의 계약 조회 — LTV에 계약 누적 매출을 더하기 위해
+  const { data: customerContracts } = await db
+    .from('contracts')
+    .select('contract_price, start_date, end_date, status')
+    .eq('business_id', profile.business_id)
+    .eq('customer_id', customerId)
+
+  const oneOffTotal = bookingList
     .filter((b) => b.status === 'completed')
     .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
+
+  // 통합 LTV = 일회성 완료 예약 합계 + 계약 누적(경과 개월 × 월계약금)
+  const contractTotal = contractAccruedRevenue((customerContracts ?? []) as ContractLike[])
+  const totalLTV = oneOffTotal + contractTotal
 
   const completedCount = bookingList.filter((b) => b.status === 'completed').length
 
@@ -175,6 +187,11 @@ export default async function CustomerDetailPage({ params }: Props) {
               <span className="text-sm font-normal text-muted-foreground ml-0.5">원</span>
             )}
           </p>
+          {contractTotal > 0 && (
+            <p className="text-[10px] text-muted-foreground mt-1 leading-tight">
+              일회성 {Math.round(oneOffTotal / 10000)}만 + 계약 {Math.round(contractTotal / 10000)}만
+            </p>
+          )}
         </div>
         <div className="bg-white rounded-xl border border-border p-4">
           <p className="text-xs text-muted-foreground">완료 방문</p>
