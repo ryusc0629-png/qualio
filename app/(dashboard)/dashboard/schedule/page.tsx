@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, addDays, subDays, format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { ScheduleBoard } from '@/components/dashboard/schedule-board'
+import { AddClientForm } from '@/components/dashboard/add-client-form'
 
 interface PageProps {
   searchParams: Promise<{ week?: string; view?: string; date?: string; booking?: string }>
@@ -56,7 +57,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     rangeLabel = `${format(rangeStart, 'M월 d일', { locale: ko })} — ${format(rangeEnd, 'M월 d일', { locale: ko })}`
   }
 
-  const [workersResult, bookingsResult] = await Promise.all([
+  const [workersResult, bookingsResult, servicesResult] = await Promise.all([
     db
       .from('workers' as never)
       .select('id, name, type, color, phone')
@@ -73,7 +74,24 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       .lte('scheduled_at' as never, rangeEnd.toISOString())
       .is('deleted_at' as never, null)
       .order('scheduled_at' as never),
+
+    // 신규 일정 추가 폼의 서비스 선택용 (활성 서비스 항목)
+    db
+      .from('service_items')
+      .select('name, base_price, unit')
+      .eq('business_id', businessId)
+      .eq('is_active', true)
+      .order('name', { ascending: true }),
   ])
+
+  // 폼 서비스 선택용 — 이름+가격+단위, 이름 기준 중복 제거 (고객 추가 폼과 동일)
+  type ServiceItemRow = { name: string | null; base_price: number | null; unit: string | null }
+  const serviceMap = new Map<string, { base_price: number; unit: string }>()
+  for (const s of ((servicesResult.data ?? []) as ServiceItemRow[])) {
+    const name = (s.name ?? '').trim()
+    if (name && !serviceMap.has(name)) serviceMap.set(name, { base_price: s.base_price ?? 0, unit: s.unit ?? '개' })
+  }
+  const services = [...serviceMap].map(([name, v]) => ({ name, base_price: v.base_price, unit: v.unit }))
 
   // 예약별 배정된 팀원 목록 조회
   const bookingIds = ((bookingsResult as unknown as { data: { id: string }[] | null }).data ?? []).map(b => b.id)
@@ -167,11 +185,15 @@ export default async function SchedulePage({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">일정</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          예약을 드래그해서 날짜와 담당자를 변경하세요
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">일정</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            예약을 드래그해서 날짜와 담당자를 변경하세요
+          </p>
+        </div>
+        {/* 신규 일정 추가 — 고객 추가와 동일한 폼(고객+첫 작업) 재사용 */}
+        <AddClientForm services={services} triggerLabel="신규 일정 추가" refreshOnSuccess />
       </div>
 
       <ScheduleBoard
