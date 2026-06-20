@@ -73,6 +73,8 @@ interface Props {
   onTimeChange:    (bookingId: string, newScheduledAt: string) => void
   onCancel:        (bookingId: string) => void
   onStatusChange?: (bookingId: string, newStatus: string) => void
+  // 클레임 등록/해결 시 캘린더 배지를 즉시 갱신 (새로고침 없이)
+  onClaimChange?:  (bookingId: string, hasOpenClaim: boolean) => void
 }
 
 // ── 상태 배지 ────────────────────────────────────────────
@@ -122,6 +124,7 @@ export function BookingDetailSheet({
   onTimeChange,
   onCancel,
   onStatusChange,
+  onClaimChange,
 }: Props) {
   const [editingTime, setEditingTime] = useState(false)
   const [editingDate, setEditingDate] = useState(false)
@@ -554,6 +557,7 @@ export function BookingDetailSheet({
               customerName={booking.customer_name}
               customerPhone={booking.customer_phone}
               bookingId={booking.id}
+              onOpenClaimsChange={(hasOpen) => onClaimChange?.(booking.id, hasOpen)}
             />
           ) : (
             <AddClaimForm
@@ -562,6 +566,7 @@ export function BookingDetailSheet({
               triggerLabel="이 작업 클레임 등록"
               triggerVariant="outline"
               triggerClassName="w-full h-12 justify-start gap-2 text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700 mb-4"
+              onCreated={() => onClaimChange?.(booking.id, true)}
             />
           ))}
 

@@ -472,6 +472,19 @@ export function ScheduleBoard({
     )
   }
 
+  // 클레임 등록/해결 시 캘린더 배지 즉시 갱신
+  // (서버는 customer_phone 기준이라, 같은 고객의 모든 예약 배지를 함께 갱신)
+  const handleSheetClaimChange = (bookingId: string, hasOpenClaim: boolean) => {
+    setBookings((prev) => {
+      const phone = prev.find((b) => b.id === bookingId)?.customer_phone
+      return prev.map((b) =>
+        (phone && b.customer_phone === phone) || b.id === bookingId
+          ? { ...b, hasOpenClaim }
+          : b
+      )
+    })
+  }
+
   const handleDragStart = (event: DragStartEvent) => {
     const booking = bookings.find((b) => b.id === event.active.id)
     setActiveBooking(booking ?? null)
@@ -710,6 +723,7 @@ export function ScheduleBoard({
         onTimeChange={handleSheetTimeChange}
         onCancel={handleSheetCancel}
         onStatusChange={handleSheetStatusChange}
+        onClaimChange={handleSheetClaimChange}
       />
     </div>
   )

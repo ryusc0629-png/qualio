@@ -37,13 +37,15 @@ interface Props {
   customerName: string
   customerPhone: string | null
   bookingId: string
+  // 클레임을 불러올 때마다 미해결 건 존재 여부를 알려줌 (캘린더 배지 즉시 갱신용)
+  onOpenClaimsChange?: (hasOpen: boolean) => void
 }
 
 const fmt = (iso: string) =>
   new Date(iso).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' })
 
 // 예약 상세에서 '클레임 처리 현황 확인하기' — 페이지 이동 없이 모달로 그 고객 클레임을 보고 처리
-export function ClaimsStatusButton({ customerId, customerName, customerPhone, bookingId }: Props) {
+export function ClaimsStatusButton({ customerId, customerName, customerPhone, bookingId, onOpenClaimsChange }: Props) {
   const [open, setOpen] = useState(false)
   const [claims, setClaims] = useState<Claim[]>([])
   const [workers, setWorkers] = useState<WorkerOpt[]>([])
@@ -51,8 +53,11 @@ export function ClaimsStatusButton({ customerId, customerName, customerPhone, bo
   const { execute, isPending } = useAction(getClaimsByPhoneAction, {
     onSuccess: ({ data }) => {
       if (!data) return
-      setClaims(data.claims as Claim[])
+      const loaded = data.claims as Claim[]
+      setClaims(loaded)
       setWorkers(data.workers as WorkerOpt[])
+      // 미해결 클레임이 하나도 없으면 캘린더 배지를 끄도록 부모에 알림
+      onOpenClaimsChange?.(loaded.some((c) => c.status !== 'resolved'))
     },
   })
 
