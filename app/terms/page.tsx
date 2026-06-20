@@ -69,18 +69,18 @@ export default function TermsPage() {
               <tbody className="divide-y">
                 <tr>
                   <td className="px-4 py-2">Starter</td>
-                  <td className="px-4 py-2">39,000원/월</td>
-                  <td className="px-4 py-2 text-muted-foreground">1~2인 소규모 업체</td>
+                  <td className="px-4 py-2">49,000원/월</td>
+                  <td className="px-4 py-2 text-muted-foreground">신규 창업·1~2인 소규모</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-2">Pro</td>
-                  <td className="px-4 py-2">149,000원/월</td>
-                  <td className="px-4 py-2 text-muted-foreground">월 매출 1천만원 이상</td>
+                  <td className="px-4 py-2">290,000원/월</td>
+                  <td className="px-4 py-2 text-muted-foreground">성장기·법인 거래처 보유</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-2">Scale</td>
-                  <td className="px-4 py-2">299,000원/월</td>
-                  <td className="px-4 py-2 text-muted-foreground">다지점 기업형</td>
+                  <td className="px-4 py-2">490,000원/월</td>
+                  <td className="px-4 py-2 text-muted-foreground">다지점·기업형</td>
                 </tr>
               </tbody>
             </table>

@@ -1,4 +1,16 @@
 // 퀄리오 구독 플랜 정의 — 네이밍/금액 변경 시 이 파일만 수정
+//
+// 가격 철학 (2026-06 개편):
+//   1) 가치 기반(value-based): 퀄리오는 검증된 +250만원/월 매출 상승을 준다.
+//      가격은 그 ROI를 근거로 매긴다(매출의 ~3%로 매출 25%↑). 원가 기준 아님.
+//   2) 랜딩→확장(land & expand): 신규/학원 수강생은 스타터로 싸게 들이고,
+//      매출이 커지면 프로로 올라타게 한다. 이 상향 이동이 곧 NRR(밸류에이션 핵심).
+//   3) 평균 ARPA 목표 30만 → "가운데(프로)"를 30만 근처에 둔다.
+//      스타터가 평균을 내리고 스케일이 올리므로, 주력은 가운데여야 한다.
+//   4) 구독은 정액 SaaS로 단순하게. 결제 take-rate·소모품은 별도 층으로 얹는다(섞지 않음).
+//
+//   ※ 금액은 v1 제안값이다. 베타 사용자 WTP(지불의향)로 검증 후 확정한다.
+//     올리기는 어렵고 내리긴 쉬우므로 앵커는 높게 잡았다.
 import { formatMoney } from '@/lib/format/money'
 
 export const PLANS = {
@@ -26,10 +38,10 @@ export const PLANS = {
     name: 'Starter',
     label: '스타터',
     tagline: 'Tier 1. 스타터 (Starter)',
-    price: 39_000,
+    price: 49_000,
     highlight: false,
     description: '"내 인건비/시간을 아껴주는 비서"',
-    target: '1~2인 부부 창업, 영세 업체',
+    target: '신규 창업·1~2인 (학원 수강생 진입용)',
     autoPostLimit: 10,
     autoDailyPostLimit: 1,
     features: [
@@ -46,10 +58,10 @@ export const PLANS = {
     name: 'Pro',
     label: '프로',
     tagline: 'Tier 2. 프로 (Pro)',
-    price: 149_000,
+    price: 290_000,
     highlight: true,
     description: '"알아서 돈을 벌어오는 영업실장"',
-    target: '월 매출 1천만원 이상, 상위 20%',
+    target: '성장기·법인 거래처 보유 (주력 · 평균 ARPA)',
     autoPostLimit: 30,
     autoDailyPostLimit: 2,
     features: [
@@ -66,10 +78,10 @@ export const PLANS = {
     name: 'Scale',
     label: '스케일',
     tagline: 'Tier 3. 스케일 (Scale)',
-    price: 299_000,
+    price: 490_000,
     highlight: false,
     description: '"내 브랜드를 지키는 요새"',
-    target: '다수 팀/지점 보유 기업형',
+    target: '다지점·기업형 (앵커 · 전담 매니저)',
     autoPostLimit: 60,
     autoDailyPostLimit: 2,
     features: [
