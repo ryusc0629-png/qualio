@@ -25,17 +25,21 @@ interface Props {
   seoGeneratedAt: string | null
 }
 
-// 업체명을 읽기 좋은 주소(slug)로 변환 — 한글/영문/숫자/하이픈만, 앞뒤 하이픈 제거
+// 업체명을 주소(slug)로 변환 — 영문 소문자/숫자/하이픈만(한글·특수문자 제거).
+// 공유 시 깨짐·정규화 문제를 피하려고 영어만 허용한다.
 function slugify(name: string): string {
   return name
     .toLowerCase()
     .trim()
     .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9가-힣가-힣-]/g, '')
+    .replace(/[^a-z0-9-]/g, '')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 40)
 }
+
+// 입력칸에서 영문 외 문자는 즉시 제거 (한글 입력 자체를 막음)
+const sanitizeSlug = (v: string) => v.toLowerCase().replace(/[^a-z0-9-]/g, '')
 
 export function GeoPanel({
   businessName,
@@ -128,9 +132,9 @@ export function GeoPanel({
                   <span className="text-muted-foreground shrink-0">{appUrl}/biz/</span>
                   <input
                     value={newSlug}
-                    onChange={(e) => setNewSlug(e.target.value)}
+                    onChange={(e) => setNewSlug(sanitizeSlug(e.target.value))}
                     className="flex-1 bg-transparent outline-none py-2"
-                    placeholder="my-business"
+                    placeholder="dartclean"
                   />
                 </div>
                 <Button
@@ -187,7 +191,7 @@ export function GeoPanel({
           )}
           <p className="text-xs text-muted-foreground">
             {editingSlug
-              ? '업체명이 들어간 쉬운 주소가 검색·신뢰에 유리해요. 주소를 바꿔도 예전 주소로 들어오면 새 주소로 자동 연결돼서 기존 링크는 안 깨져요.'
+              ? '영어 소문자·숫자·하이픈만 쓸 수 있어요 (예: dartclean). 한글은 공유할 때 깨질 수 있어 막아뒀어요. 주소를 바꿔도 예전 주소로 들어오면 새 주소로 자동 연결돼 기존 링크는 안 깨져요.'
               : '이 링크를 카카오톡·블로그·SNS에 공유하면 AI 검색엔진이 업체를 인식합니다'}
           </p>
         </div>
