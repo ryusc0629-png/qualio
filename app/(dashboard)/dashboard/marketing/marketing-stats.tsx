@@ -76,6 +76,10 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
   const views = postViewsResult.data ?? []
   const totalViews = views.length
   const aiViews = views.filter((v) => isAiSource(v.source)).length
+  // 일반 검색(SEO) 유입 — 네이버·구글·다음
+  const seoViews = views.filter((v) => ['google', 'naver', 'daum'].includes(v.source)).length
+  // 직접 방문·SNS·기타 (전체에서 AI·검색 제외)
+  const directOtherViews = totalViews - aiViews - seoViews
 
   // 소스별 집계
   const sourceCounts = views.reduce<Partial<Record<ViewSource, number>>>((acc, v) => {
@@ -121,7 +125,7 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
         <p className="text-xs text-muted-foreground mt-0.5">이번 달 기준 · 조회수는 최근 6개월</p>
       </div>
 
-      {/* 상단 지표 카드 */}
+      {/* 상단 지표 카드 — 견적/전환 */}
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border bg-white p-4 space-y-0.5">
           <p className="text-2xl font-bold text-primary">{quoteCount}</p>
@@ -131,13 +135,30 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
           <p className="text-2xl font-bold">{conversionRate}%</p>
           <p className="text-xs text-muted-foreground">견적 → 예약 전환율</p>
         </div>
-        <div className="rounded-xl border bg-white p-4 space-y-0.5">
-          <p className="text-2xl font-bold">{totalViews.toLocaleString()}</p>
-          <p className="text-xs text-muted-foreground">총 조회수 (6개월)</p>
+      </div>
+
+      {/* 유입 경로 — AI 검색 / 일반 검색(SEO) / 직접·기타 */}
+      <div className="rounded-xl border bg-white overflow-hidden">
+        <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
+          <p className="font-semibold text-sm">유입 경로</p>
+          <p className="text-xs text-muted-foreground">총 {totalViews.toLocaleString()}회 · 최근 6개월</p>
         </div>
-        <div className="rounded-xl border bg-white p-4 space-y-0.5">
-          <p className="text-2xl font-bold text-emerald-600">{aiViews.toLocaleString()}</p>
-          <p className="text-xs text-muted-foreground">AI 검색 유입</p>
+        <div className="grid grid-cols-3 divide-x">
+          <div className="px-2 py-4 text-center">
+            <p className="text-xl font-bold text-emerald-600">{aiViews.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">AI 검색</p>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">ChatGPT·Perplexity</p>
+          </div>
+          <div className="px-2 py-4 text-center">
+            <p className="text-xl font-bold text-blue-600">{seoViews.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">일반 검색</p>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">네이버·구글·다음</p>
+          </div>
+          <div className="px-2 py-4 text-center">
+            <p className="text-xl font-bold">{directOtherViews.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">직접·기타</p>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">링크·SNS 등</p>
+          </div>
         </div>
       </div>
 
