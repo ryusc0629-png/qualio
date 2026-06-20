@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import Link from 'next/link'
@@ -170,12 +170,16 @@ export function BookingDetailSheet({
     onError:   ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
+  // 취소 대상 id를 미리 잡아둔다 — 비동기 완료 시점에 booking이 바뀌어도 정확히 그 예약을 제거
+  const pendingCancelId = useRef<string | null>(null)
+
   // 예약 취소 액션
   const { execute: cancelBooking, isPending: cancelPending } = useAction(cancelBookingFromScheduleAction, {
     onSuccess: () => {
-      if (!booking) return
+      const id = pendingCancelId.current ?? booking?.id ?? null
+      pendingCancelId.current = null
       toast.success('예약이 취소됐어요')
-      onCancel(booking.id)
+      if (id) onCancel(id) // 보드에서 카드 즉시 제거
       onClose()
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
@@ -228,6 +232,7 @@ export function BookingDetailSheet({
   const handleCancelBooking = () => {
     if (!booking) return
     if (!confirm('예약을 취소할까요? 취소 후에는 되돌릴 수 없습니다.')) return
+    pendingCancelId.current = booking.id
     cancelBooking({ bookingId: booking.id })
   }
 
