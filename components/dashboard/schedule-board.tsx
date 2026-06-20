@@ -626,11 +626,12 @@ export function ScheduleBoard({
               ))}
             </div>
 
-            {/* 데이터 행: worker × day */}
-            <div className="space-y-1">
+            {/* 데이터 행: worker × day — 담당자별 구분선으로 누구 일정인지 한눈에 */}
+            <div className="divide-y divide-border border-y border-border">
               {rows.map((row) => (
                 <div
                   key={String(row.id)}
+                  className="py-1"
                   style={{
                     display: 'grid',
                     gridTemplateColumns: view === 'day'
