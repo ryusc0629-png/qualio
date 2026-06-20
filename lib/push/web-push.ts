@@ -49,9 +49,36 @@ export async function sendPushToBusiness(businessId: string, payload: PushPayloa
     return
   }
 
-  const subs = (data ?? []) as SubscriptionRow[]
-  if (subs.length === 0) return
+  await deliver(db, (data ?? []) as SubscriptionRow[], payload)
+}
 
+/**
+ * 한 직원·도급사의 모든 기기에 푸시 발송 (현장 앱 설치자).
+ * 클레임 처리 요청 등 직원에게 보내는 알림에 사용. 동작 원리는 sendPushToBusiness와 동일.
+ */
+export async function sendPushToWorker(workerId: string, payload: PushPayload): Promise<void> {
+  if (!vapidReady) {
+    console.error('[Push] VAPID 키가 설정되지 않아 발송을 건너뜁니다')
+    return
+  }
+
+  const db = createServiceClient() as unknown as SupabaseClient
+  const { data, error } = await db
+    .from('push_subscriptions')
+    .select('endpoint, p256dh, auth')
+    .eq('worker_id', workerId)
+
+  if (error) {
+    console.error('[Push] 직원 구독 조회 실패:', error)
+    return
+  }
+
+  await deliver(db, (data ?? []) as SubscriptionRow[], payload)
+}
+
+// 구독 목록에 실제 발송 + 만료(404/410) 구독 정리
+async function deliver(db: SupabaseClient, subs: SubscriptionRow[], payload: PushPayload): Promise<void> {
+  if (subs.length === 0) return
   const body = JSON.stringify(payload)
 
   await Promise.all(

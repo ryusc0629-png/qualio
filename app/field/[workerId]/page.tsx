@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { MapPin, Clock, ChevronRight, Briefcase } from 'lucide-react'
+import { WorkerPushToggle } from '@/components/field/worker-push-toggle'
 
 // workers 테이블 타입 (Supabase 타입 아직 미생성)
 interface WorkerRow {
@@ -198,6 +199,11 @@ export default async function FieldDashboard({ params }: Props) {
             </Link>
           ))
         )}
+
+        {/* 앱 알림 켜기 — 클레임 처리 요청 등을 폰으로 받기 (직원 종속 핵심 길목) */}
+        <div className="pt-2">
+          <WorkerPushToggle workerId={workerId} />
+        </div>
       </div>
     </div>
   )

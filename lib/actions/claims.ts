@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
+import { sendPushToWorker } from '@/lib/push/web-push'
 import { revalidatePath } from 'next/cache'
 
 // 인증 + business_id 조회 헬퍼 (crm.ts와 동일 패턴)
@@ -44,6 +45,30 @@ export const assignClaimAction = action
       console.error('[assignClaimAction] DB 오류:', error)
       throw new Error('[APP] 담당자 지정에 실패했어요. 다시 시도해주세요')
     }
+
+    // 담당자가 지정되면 그 직원 폰(현장 앱)으로 처리 요청 푸시 — 발송 실패해도 지정은 유지
+    if (parsedInput.workerId) {
+      const { data: claim } = await db
+        .from('claims' as never)
+        .select('title, booking_id, customer_name, is_urgent' as never)
+        .eq('id' as never, parsedInput.claimId)
+        .eq('business_id' as never, businessId)
+        .maybeSingle() as unknown as {
+          data: { title: string; booking_id: string | null; customer_name: string; is_urgent: boolean } | null
+        }
+
+      if (claim) {
+        await sendPushToWorker(parsedInput.workerId, {
+          title: claim.is_urgent ? '🚨 긴급 클레임 처리 요청' : '클레임 처리 요청',
+          body: `${claim.customer_name} · ${claim.title}`,
+          url: claim.booking_id
+            ? `/field/${parsedInput.workerId}/${claim.booking_id}`
+            : `/field/${parsedInput.workerId}`,
+          tag: `claim-${parsedInput.claimId}`,
+        })
+      }
+    }
+
     revalidatePath('/dashboard/claims')
     revalidatePath('/dashboard/clients/[customerId]', 'page')
     return { success: true }
