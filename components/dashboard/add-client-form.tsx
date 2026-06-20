@@ -178,6 +178,7 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
 
   // 업종 노출 여부 — 법인 고객일 때만 (개인은 업종 의미 없음)
   const leadIsCompany = leadForm.watch('customer_type') === 'company'
+  const leadIsIndividual = leadForm.watch('customer_type') === 'individual'
   const custType = customerForm.watch('type')
   const custIsCompany = custType === 'recurring'
   const custIsIndividual = custType === 'one_time'
@@ -267,8 +268,8 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
             </p>
 
             <div className="space-y-1">
-              <Label htmlFor="lead-name">업체명 (필수)</Label>
-              <Input id="lead-name" placeholder="강남 웰니스 카페" autoComplete="off" {...leadForm.register('company_name')} />
+              <Label htmlFor="lead-name">{leadIsIndividual ? '고객명 (필수)' : '업체명 (필수)'}</Label>
+              <Input id="lead-name" placeholder={leadIsIndividual ? '예: 김영희' : '강남 웰니스 카페'} autoComplete="off" {...leadForm.register('company_name')} />
               {leadForm.formState.errors.company_name && (
                 <p className="text-xs text-destructive">{leadForm.formState.errors.company_name.message}</p>
               )}
