@@ -131,7 +131,9 @@ function renderContent(content: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug, postSlug } = await params
+  const { slug: rawSlug, postSlug: rawPostSlug } = await params
+  const slug = rawSlug.normalize('NFC') // 한글 주소 NFC/NFD 불일치 방지
+  const postSlug = rawPostSlug.normalize('NFC')
   const db = createServiceClient()
 
   const { data: business } = await db
@@ -178,7 +180,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function PostPage({ params }: Props) {
-  const { slug, postSlug } = await params
+  const { slug: rawSlug, postSlug: rawPostSlug } = await params
+  const slug = rawSlug.normalize('NFC') // 한글 주소 NFC/NFD 불일치 방지
+  const postSlug = rawPostSlug.normalize('NFC')
   const db = createServiceClient()
 
   const { data: business } = await db

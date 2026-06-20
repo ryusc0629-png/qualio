@@ -35,7 +35,8 @@ interface FaqItem {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug } = await params
+  const { slug: rawSlug } = await params
+  const slug = rawSlug.normalize('NFC') // 한글 주소 NFC/NFD 불일치로 인한 매칭 실패 방지
   const db = createServiceClient()
 
   const { data: business } = await db
@@ -69,7 +70,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 
 export default async function BizLandingPage({ params }: Props) {
-  const { slug } = await params
+  const { slug: rawSlug } = await params
+  const slug = rawSlug.normalize('NFC') // 한글 주소 NFC/NFD 불일치로 인한 매칭 실패 방지
   const db = createServiceClient()
 
   const { data: business } = await db

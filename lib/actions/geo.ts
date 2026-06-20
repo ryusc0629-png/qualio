@@ -120,7 +120,7 @@ export const updateSlugAction = action
 
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
-    const newSlug = parsedInput.slug
+    const newSlug = parsedInput.slug.normalize('NFC') // 한글 주소 NFC로 통일(검색·매칭 일관성)
 
     // 다른 업체가 현재 쓰는 주소거나, 다른 업체의 옛 주소(리다이렉트 대상)면 거절
     const { data: takenAsCurrent } = await db
