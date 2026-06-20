@@ -532,7 +532,7 @@ export default async function DashboardPage() {
               {openClaimCount ?? 0}<span className="text-sm font-normal text-muted-foreground ml-0.5">건</span>
             </p>
             <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-              {(openClaimCount ?? 0) > 0 ? '눌러서 해결하세요' : '미해결 클레임 없음'}
+              {(openClaimCount ?? 0) > 0 ? '눌러서 해결하세요' : '눌러서 기록·이력 보기'}
             </p>
           </div>
         </Link>
