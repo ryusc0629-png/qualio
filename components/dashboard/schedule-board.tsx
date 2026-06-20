@@ -530,6 +530,13 @@ export function ScheduleBoard({
     const prevDate = format(new Date(booking.scheduled_at), 'yyyy-MM-dd')
     if (booking.worker_id === newWorker && prevDate === newDate) return
 
+    // 날짜 차이(일 단위)만큼 통째로 옮긴다 — KST 시:분 보존, 하루 밀림 방지.
+    // (scheduled_at의 날짜 문자열만 갈아끼우면 UTC 날짜≠KST 날짜인 예약이 하루 밀림)
+    const dayDiff = Math.round(
+      (new Date(newDate + 'T00:00:00').getTime() - new Date(prevDate + 'T00:00:00').getTime()) / 86400000
+    )
+    const newScheduledAt = addDays(new Date(booking.scheduled_at), dayDiff).toISOString()
+
     // 낙관적 업데이트 — 드래그로 배정 시 단일 담당자로 교체
     setBookings((prev) =>
       prev.map((b) =>
@@ -538,7 +545,7 @@ export function ScheduleBoard({
               ...b,
               worker_id: newWorker,
               workerIds: newWorker ? [newWorker] : [],
-              scheduled_at: b.scheduled_at.replace(/^\d{4}-\d{2}-\d{2}/, newDate),
+              scheduled_at: newScheduledAt,
             }
           : b
       )

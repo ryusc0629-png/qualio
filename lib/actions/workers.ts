@@ -198,13 +198,17 @@ export const assignBookingAction = action
 
     if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
 
+    // newDate는 KST 달력 날짜. 표시되는 KST 시:분은 그대로 두고 날짜만 옮긴다.
+    // (UTC 시:분을 그대로 쓰면 KST 날짜≠UTC 날짜인 예약이 하루 밀리는 버그가 생김)
     const prevTime = new Date(booking.scheduled_at)
+    const kst = new Date(prevTime.getTime() + 9 * 60 * 60 * 1000) // KST로 환산
+    const kstHours = kst.getUTCHours()
+    const kstMinutes = kst.getUTCMinutes()
     const [year, month, day] = parsedInput.newDate.split('-').map(Number)
-    const newScheduledAt = new Date(Date.UTC(
-      year!, month! - 1, day!,
-      prevTime.getUTCHours(),
-      prevTime.getUTCMinutes(),
-    )).toISOString()
+    // newDate(KST) + 기존 KST 시:분 → UTC(−9시간)로 저장
+    const newScheduledAt = new Date(
+      Date.UTC(year!, month! - 1, day!, kstHours, kstMinutes) - 9 * 60 * 60 * 1000
+    ).toISOString()
 
     const { error } = await db
       .from('bookings')
