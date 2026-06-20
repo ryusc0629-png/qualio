@@ -395,8 +395,8 @@ export function AddClientForm({ services = [] }: AddClientFormProps) {
             </p>
 
             <div className="space-y-1">
-              <Label htmlFor="cust-name">업체명 (필수)</Label>
-              <Input id="cust-name" placeholder="청라 오피스빌딩" autoComplete="off" {...customerForm.register('name')} />
+              <Label htmlFor="cust-name">{custIsIndividual ? '고객명 (필수)' : '업체명 (필수)'}</Label>
+              <Input id="cust-name" placeholder={custIsIndividual ? '예: 김영희' : '청라 오피스빌딩'} autoComplete="off" {...customerForm.register('name')} />
               {customerForm.formState.errors.name && (
                 <p className="text-xs text-destructive">{customerForm.formState.errors.name.message}</p>
               )}

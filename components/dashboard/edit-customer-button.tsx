@@ -10,10 +10,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { updateCustomerAction } from '@/lib/actions/customers'
-import { Pencil, X } from 'lucide-react'
+import { Pencil, X, Search } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import { useAutoFocusRef } from '@/lib/hooks/use-auto-focus'
 import { formatPhone } from '@/lib/format/phone'
+import { openAddressSearch } from '@/lib/address/postcode'
 
 const schema = z.object({
   customerId: z.string().uuid(),
@@ -117,47 +118,16 @@ export function EditCustomerButton({ customer }: EditCustomerButtonProps) {
             <form onSubmit={handleSubmit((data) => execute(data))} className="space-y-3">
               <input type="hidden" {...register('customerId')} />
 
+              {/* 이름 — 개인은 '고객명', 법인은 '업체명' */}
               <div className="space-y-1">
-                <Label htmlFor="edit-name">{isCompany ? '업체명 *' : '고객명 *'}</Label>
+                <Label htmlFor="edit-name">{isCompany ? '업체명 (필수)' : '고객명 (필수)'}</Label>
                 <Input id="edit-name" placeholder={isCompany ? '예: (주)클린빌딩' : '예: 김영희'} {...register('name')} />
                 {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label htmlFor="edit-phone">연락처 *</Label>
-                  <Input
-                    id="edit-phone"
-                    placeholder="010-1234-5678"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    value={watch('phone') ?? ''}
-                    onChange={(e) => setValue('phone', formatPhone(e.target.value))}
-                  />
-                  {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="edit-category">업종</Label>
-                  <select
-                    id="edit-category"
-                    {...register('category')}
-                    className="w-full h-8 rounded-lg border border-border bg-background px-2.5 text-sm"
-                  >
-                    <option value="">선택 안함</option>
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
+              {/* 고객 구분 — 추가 폼과 동일하게 이름 바로 아래 배치 */}
               <div className="space-y-1">
-                <Label htmlFor="edit-address">주소</Label>
-                <Input id="edit-address" {...register('address')} />
-              </div>
-
-              <div className="space-y-1">
-                <Label>고객 구분</Label>
+                <Label>고객 구분 (필수)</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="flex items-center gap-2 rounded-lg border p-2.5 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                     <input type="radio" value="one_time" {...register('type')} className="accent-primary" />
@@ -173,6 +143,54 @@ export function EditCustomerButton({ customer }: EditCustomerButtonProps) {
                       <p className="text-xs text-muted-foreground">법인·정기계약</p>
                     </div>
                   </label>
+                </div>
+              </div>
+
+              {/* 연락처 (+ 법인일 때만 업종) — 추가 폼과 동일 */}
+              <div className={`grid gap-2 ${isCompany ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                <div className="space-y-1">
+                  <Label htmlFor="edit-phone">연락처 (필수)</Label>
+                  <Input
+                    id="edit-phone"
+                    placeholder="010-1234-5678"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={watch('phone') ?? ''}
+                    onChange={(e) => setValue('phone', formatPhone(e.target.value))}
+                  />
+                  {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
+                </div>
+                {isCompany && (
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-category">업종</Label>
+                    <select
+                      id="edit-category"
+                      {...register('category')}
+                      className="w-full h-10 rounded-lg border border-border bg-background px-2.5 text-sm"
+                    >
+                      <option value="">선택 안함</option>
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* 주소 — 추가 폼과 동일하게 검색 버튼 제공 */}
+              <div className="space-y-1">
+                <Label htmlFor="edit-address">주소</Label>
+                <div className="flex gap-2">
+                  <Input id="edit-address" placeholder="주소 검색을 눌러주세요" autoComplete="off" {...register('address')} />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="shrink-0 px-3"
+                    onClick={() => openAddressSearch((addr) => setValue('address', addr))}
+                  >
+                    <Search className="h-4 w-4 mr-1" />
+                    검색
+                  </Button>
                 </div>
               </div>
 
