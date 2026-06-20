@@ -16,6 +16,7 @@ interface FaqItem {
 
 interface Props {
   businessId: string
+  businessName?: string | null
   slug: string | null
   seoTitle: string | null
   seoDescription: string | null
@@ -24,7 +25,20 @@ interface Props {
   seoGeneratedAt: string | null
 }
 
+// 업체명을 읽기 좋은 주소(slug)로 변환 — 한글/영문/숫자/하이픈만, 앞뒤 하이픈 제거
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9가-힣가-힣-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 40)
+}
+
 export function GeoPanel({
+  businessName,
   slug: initialSlug,
   seoTitle: initialTitle,
   seoDescription: initialDescription,
@@ -33,6 +47,7 @@ export function GeoPanel({
   seoGeneratedAt,
 }: Props) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+  const suggestedSlug = slugify(businessName ?? '')
 
   const [slug, setSlug]               = useState(initialSlug ?? '')
   const [editingSlug, setEditingSlug] = useState(false)
@@ -161,8 +176,19 @@ export function GeoPanel({
               </>
             )}
           </div>
+          {editingSlug && suggestedSlug && suggestedSlug.length >= 3 && suggestedSlug !== newSlug && (
+            <button
+              type="button"
+              onClick={() => setNewSlug(suggestedSlug)}
+              className="text-xs text-primary hover:underline text-left"
+            >
+              추천 주소 쓰기: <span className="font-semibold">{appUrl}/biz/{suggestedSlug}</span>
+            </button>
+          )}
           <p className="text-xs text-muted-foreground">
-            이 링크를 카카오톡·블로그·SNS에 공유하면 AI 검색엔진이 업체를 인식합니다
+            {editingSlug
+              ? '업체명이 들어간 쉬운 주소가 검색·신뢰에 유리해요. 주소를 바꿔도 예전 주소로 들어오면 새 주소로 자동 연결돼서 기존 링크는 안 깨져요.'
+              : '이 링크를 카카오톡·블로그·SNS에 공유하면 AI 검색엔진이 업체를 인식합니다'}
           </p>
         </div>
       )}

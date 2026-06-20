@@ -1,5 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import {
@@ -87,7 +87,16 @@ export default async function BizLandingPage({ params }: Props) {
       testimonials: { quote: string; author: string }[] | null
     } | null }
 
-  if (!business) notFound()
+  if (!business) {
+    // 옛 주소로 들어왔으면 현재 주소로 영구 이동(301) — 기존/공유/색인된 링크 보존
+    const { data: moved } = await db
+      .from('businesses')
+      .select('slug')
+      .contains('previous_slugs' as never, [slug] as never)
+      .maybeSingle() as unknown as { data: { slug: string | null } | null }
+    if (moved?.slug) permanentRedirect(`/biz/${moved.slug}`)
+    notFound()
+  }
 
   // ── 브랜드 테마 ── (CSS 변수 주입, AI 토큰과 무관)
   const brand = toBrandSettings(business)

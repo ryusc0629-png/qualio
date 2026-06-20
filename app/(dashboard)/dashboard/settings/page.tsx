@@ -104,6 +104,7 @@ export default async function SettingsPage() {
       {/* GEO 자동화 패널 */}
       <GeoPanel
         businessId={business.id}
+        businessName={business.name ?? null}
         slug={business.slug ?? null}
         seoTitle={business.seo_title ?? null}
         seoDescription={business.seo_description ?? null}

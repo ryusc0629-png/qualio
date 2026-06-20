@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateGeoContent, generateSlug } from '@/lib/ai/geo-content'
+import { pingIndexNow } from '@/lib/seo/indexnow'
 import { revalidatePath } from 'next/cache'
 
 // GEO 콘텐츠 자동 생성 액션
@@ -119,23 +120,52 @@ export const updateSlugAction = action
 
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
-    // slug 중복 확인
-    const { data: existing } = await db
+    const newSlug = parsedInput.slug
+
+    // 다른 업체가 현재 쓰는 주소거나, 다른 업체의 옛 주소(리다이렉트 대상)면 거절
+    const { data: takenAsCurrent } = await db
       .from('businesses')
       .select('id')
-      .eq('slug', parsedInput.slug)
+      .eq('slug', newSlug)
       .neq('id', profile.business_id)
       .maybeSingle()
+    const { data: takenAsPrevious } = await db
+      .from('businesses')
+      .select('id')
+      .contains('previous_slugs' as never, [newSlug] as never)
+      .neq('id', profile.business_id)
+      .maybeSingle()
+    if (takenAsCurrent || takenAsPrevious) {
+      throw new Error('[APP] 이미 사용 중인 주소입니다. 다른 주소를 입력해주세요')
+    }
 
-    if (existing) throw new Error('[APP] 이미 사용 중인 주소입니다. 다른 주소를 입력해주세요')
+    // 현재 주소·옛 주소 목록 조회 (옛 주소를 보존해 기존 링크가 안 깨지게)
+    const { data: current } = await db
+      .from('businesses')
+      .select('slug, previous_slugs' as never)
+      .eq('id', profile.business_id)
+      .maybeSingle() as unknown as { data: { slug: string | null; previous_slugs: string[] | null } | null }
+
+    const oldSlug = current?.slug ?? null
+    if (oldSlug === newSlug) return { success: true } // 변화 없음
+
+    // 옛 주소를 previous_slugs에 누적(중복 제거), 새 주소가 들어 있으면 제거
+    const prev = new Set(current?.previous_slugs ?? [])
+    prev.delete(newSlug)
+    if (oldSlug) prev.add(oldSlug)
 
     const { error } = await db
       .from('businesses')
-      .update({ slug: parsedInput.slug })
+      .update({ slug: newSlug, previous_slugs: [...prev] } as never)
       .eq('id', profile.business_id)
 
     if (error) throw new Error('[APP] 주소 변경에 실패했습니다')
 
+    // 새 주소를 네이버·빙에 즉시 알림 (옛 주소는 301로 새 주소를 가리킴)
+    await pingIndexNow([`/biz/${newSlug}`, ...(oldSlug ? [`/biz/${oldSlug}`] : [])])
+
     revalidatePath('/dashboard/settings')
+    revalidatePath(`/biz/${newSlug}`)
+    if (oldSlug) revalidatePath(`/biz/${oldSlug}`)
     return { success: true }
   })

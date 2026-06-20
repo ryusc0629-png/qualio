@@ -1,5 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -187,7 +187,16 @@ export default async function PostPage({ params }: Props) {
     .eq('slug', slug)
     .maybeSingle()
 
-  if (!business) notFound()
+  if (!business) {
+    // 옛 업체 주소로 들어왔으면 현재 주소로 영구 이동(301) — 기존 링크 보존
+    const { data: moved } = await db
+      .from('businesses')
+      .select('slug')
+      .contains('previous_slugs' as never, [slug] as never)
+      .maybeSingle() as unknown as { data: { slug: string | null } | null }
+    if (moved?.slug) permanentRedirect(`/biz/${moved.slug}/posts/${postSlug}`)
+    notFound()
+  }
 
   const { data: post } = await db
     .from('biz_posts')
