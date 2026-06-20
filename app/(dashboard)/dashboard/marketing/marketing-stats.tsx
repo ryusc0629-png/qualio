@@ -14,7 +14,7 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
   const sixMonthsAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1)).toISOString()
 
-  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, reviewResult, claimsResult] = await Promise.all([
+  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, reviewResult, claimsResult, pageViewsResult] = await Promise.all([
     // 이번 달 견적 신청 수
     db
       .from('quotes')
@@ -60,6 +60,13 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
       .select('id, claimed_at')
       .eq('business_id', businessId)
       .gte('sent_at', monthStart),
+
+    // 최근 6개월 공개 페이지 방문 (견적 페이지·브랜드 홈) — page_views 타입 미반영이라 단언 사용
+    db
+      .from('page_views' as never)
+      .select('source, page_type' as never)
+      .eq('business_id' as never, businessId)
+      .gte('viewed_at' as never, sixMonthsAgo) as unknown as Promise<{ data: { source: string; page_type: string }[] | null }>,
   ])
 
   const quoteCount = quotesResult.count ?? 0
@@ -73,17 +80,26 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
   const claims = claimsResult.data ?? []
   const claimedCount = claims.filter((c) => c.claimed_at).length
 
-  const views = postViewsResult.data ?? []
-  const totalViews = views.length
-  const aiViews = views.filter((v) => isAiSource(v.source)).length
+  const views = postViewsResult.data ?? []        // 블로그(post_views)
+  const pageViews = pageViewsResult.data ?? []      // 공개 페이지(page_views)
+
+  // 페이지별 방문 수 (최근 6개월)
+  const blogViews = views.length
+  const brandHomeViews = pageViews.filter((p) => p.page_type === 'brand_home').length
+  const quoteViews = pageViews.filter((p) => p.page_type === 'quote').length
+
+  // 유입 경로 — 사이트 전체(블로그+견적+브랜드 홈) 합산
+  const allSources: string[] = [...views.map((v) => v.source), ...pageViews.map((p) => p.source)]
+  const totalViews = allSources.length
+  const aiViews = allSources.filter((s) => isAiSource(s)).length
   // 일반 검색(SEO) 유입 — 네이버·구글·다음
-  const seoViews = views.filter((v) => ['google', 'naver', 'daum'].includes(v.source)).length
+  const seoViews = allSources.filter((s) => ['google', 'naver', 'daum'].includes(s)).length
   // 직접 방문·SNS·기타 (전체에서 AI·검색 제외)
   const directOtherViews = totalViews - aiViews - seoViews
 
-  // 소스별 집계
-  const sourceCounts = views.reduce<Partial<Record<ViewSource, number>>>((acc, v) => {
-    const src = v.source as ViewSource
+  // 소스별 집계 (사이트 전체) — 차트용
+  const sourceCounts = allSources.reduce<Partial<Record<ViewSource, number>>>((acc, s) => {
+    const src = s as ViewSource
     acc[src] = (acc[src] ?? 0) + 1
     return acc
   }, {})
@@ -158,6 +174,31 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
             <p className="text-xl font-bold">{directOtherViews.toLocaleString()}</p>
             <p className="text-xs text-muted-foreground mt-0.5">직접·기타</p>
             <p className="text-[10px] text-muted-foreground/70 mt-0.5">링크·SNS 등</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 페이지별 방문 — 브랜드 홈 / 견적 페이지 / 블로그 글 (최근 6개월) */}
+      <div className="rounded-xl border bg-white overflow-hidden">
+        <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
+          <p className="font-semibold text-sm">페이지별 방문</p>
+          <p className="text-xs text-muted-foreground">최근 6개월</p>
+        </div>
+        <div className="grid grid-cols-3 divide-x">
+          <div className="px-2 py-4 text-center">
+            <p className="text-xl font-bold">{brandHomeViews.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">브랜드 홈</p>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">업체 소개 페이지</p>
+          </div>
+          <div className="px-2 py-4 text-center">
+            <p className="text-xl font-bold text-primary">{quoteViews.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">견적 페이지</p>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">견적 신청 화면</p>
+          </div>
+          <div className="px-2 py-4 text-center">
+            <p className="text-xl font-bold">{blogViews.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">블로그 글</p>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">홍보 포스트</p>
           </div>
         </div>
       </div>

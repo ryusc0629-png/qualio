@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { QuoteForm } from './quote-form'
+import { trackPageView } from '@/lib/utils/track-page-view'
 
 interface Props {
   params: Promise<{ businessId: string }>
@@ -21,15 +22,18 @@ export default async function PublicQuotePage({ params }: Props) {
 
   if (!business) notFound()
 
-  // 견적폼 노출 서비스 목록 조회 (show_in_quote=true인 것만)
-  const { data: services } = await db
-    .from('service_items')
-    .select('id, name, base_price, unit, ac_type_prices, unit_prices, unit_variants')
-    .eq('business_id', businessId)
-    .eq('is_active', true)
-    .is('deleted_at', null)
-    .order('sort_order')
-    .order('created_at')
+  // 견적폼 노출 서비스 목록 조회 + 방문 추적 (병렬 — 추적이 렌더를 지연시키지 않게)
+  const [{ data: services }] = await Promise.all([
+    db
+      .from('service_items')
+      .select('id, name, base_price, unit, ac_type_prices, unit_prices, unit_variants')
+      .eq('business_id', businessId)
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('sort_order')
+      .order('created_at'),
+    trackPageView(db, business.id, 'quote'),
+  ])
 
   // ac_type_prices / unit_prices를 올바른 타입으로 변환
   const typedServices = (services ?? []).map((s) => ({

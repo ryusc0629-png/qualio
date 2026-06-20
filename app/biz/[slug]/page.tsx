@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { FadeIn } from '@/components/ui/fade-in'
 import { ServiceList } from './service-list'
 import { buildBrandStyle, toBrandSettings } from '@/lib/brand'
+import { trackPageView } from '@/lib/utils/track-page-view'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -130,6 +131,8 @@ export default async function BizLandingPage({ params }: Props) {
       .eq('published', true)
       .order('published_at', { ascending: false })
       .limit(3),
+    // 브랜드 홈 방문 추적 (병렬)
+    trackPageView(db, business.id, 'brand_home'),
   ])
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
