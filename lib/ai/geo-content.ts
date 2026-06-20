@@ -342,5 +342,8 @@ export function generateSlug(businessName: string, suffix: string): string {
     .replace(/^-|-$/g, '')       // 앞뒤 하이픈 제거
     .slice(0, 40)                // 최대 40자
 
-  return `${normalized}-${suffix}`
+  // 영문 소문자/숫자/하이픈만 남김 (한글 업체명 등은 제거) — 공유 시 깨짐·NFC 문제 방지.
+  // 영문이 하나도 없으면 suffix만 사용해 항상 유효한 영문 slug를 보장.
+  const ascii = normalized.replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '')
+  return ascii ? `${ascii}-${suffix}` : suffix
 }

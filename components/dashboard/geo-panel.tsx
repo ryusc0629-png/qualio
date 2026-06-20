@@ -125,69 +125,76 @@ export function GeoPanel({
       {slug && (
         <div className="space-y-2">
           <Label>공개 페이지 주소</Label>
-          <div className="flex gap-2">
-            {editingSlug ? (
-              <>
-                <div className="flex-1 flex items-center gap-1 rounded-md border bg-muted px-3 text-sm">
-                  <span className="text-muted-foreground shrink-0">{appUrl}/biz/</span>
-                  <input
-                    value={newSlug}
-                    onChange={(e) => setNewSlug(sanitizeSlug(e.target.value))}
-                    className="flex-1 bg-transparent outline-none py-2"
-                    placeholder="dartclean"
-                  />
-                </div>
+          {editingSlug ? (
+            <div className="space-y-2.5">
+              {/* 주소 입력 — 한 줄 전체 */}
+              <div className="flex items-center gap-1 rounded-lg border bg-muted px-3 text-sm focus-within:ring-2 focus-within:ring-primary/30">
+                <span className="text-muted-foreground shrink-0">{appUrl}/biz/</span>
+                <input
+                  value={newSlug}
+                  onChange={(e) => setNewSlug(sanitizeSlug(e.target.value))}
+                  className="flex-1 min-w-0 bg-transparent outline-none py-2.5 font-medium"
+                  placeholder="dartclean"
+                  autoFocus
+                />
+              </div>
+
+              {/* 추천 주소 한 번에 채우기 */}
+              {suggestedSlug && suggestedSlug.length >= 3 && suggestedSlug !== newSlug && (
+                <button
+                  type="button"
+                  onClick={() => setNewSlug(suggestedSlug)}
+                  className="text-xs text-primary hover:underline text-left"
+                >
+                  추천 주소 쓰기: <span className="font-semibold">{appUrl}/biz/{suggestedSlug}</span>
+                </button>
+              )}
+
+              {/* 저장 / 취소 — 버튼 행 (삐져나가지 않게) */}
+              <div className="flex gap-2 pt-0.5">
                 <Button
                   type="button"
-                  size="sm"
-                  disabled={isUpdatingSlug || newSlug === slug}
+                  className="flex-1 h-10"
+                  disabled={isUpdatingSlug || !newSlug || newSlug === slug}
                   onClick={() => updateSlug({ slug: newSlug })}
                 >
-                  저장
+                  {isUpdatingSlug ? '저장 중...' : '저장'}
                 </Button>
                 <Button
                   type="button"
-                  size="sm"
-                  variant="ghost"
+                  variant="outline"
+                  className="flex-1 h-10"
+                  disabled={isUpdatingSlug}
                   onClick={() => { setEditingSlug(false); setNewSlug(slug) }}
                 >
                   취소
                 </Button>
-              </>
-            ) : (
-              <>
-                <Input
-                  value={publicUrl ?? ''}
-                  readOnly
-                  className="flex-1 text-sm bg-muted cursor-default"
-                />
-                <Button type="button" size="icon" variant="outline" onClick={copyUrl}>
-                  <Copy className="h-4 w-4" />
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Input
+                value={publicUrl ?? ''}
+                readOnly
+                className="flex-1 min-w-0 text-sm bg-muted cursor-default"
+              />
+              <Button type="button" size="icon" variant="outline" onClick={copyUrl}>
+                <Copy className="h-4 w-4" />
+              </Button>
+              <a href={publicUrl ?? '#'} target="_blank" rel="noopener noreferrer">
+                <Button type="button" size="icon" variant="outline">
+                  <ExternalLink className="h-4 w-4" />
                 </Button>
-                <a href={publicUrl ?? '#'} target="_blank" rel="noopener noreferrer">
-                  <Button type="button" size="icon" variant="outline">
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                </a>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setEditingSlug(true)}
-                >
-                  변경
-                </Button>
-              </>
-            )}
-          </div>
-          {editingSlug && suggestedSlug && suggestedSlug.length >= 3 && suggestedSlug !== newSlug && (
-            <button
-              type="button"
-              onClick={() => setNewSlug(suggestedSlug)}
-              className="text-xs text-primary hover:underline text-left"
-            >
-              추천 주소 쓰기: <span className="font-semibold">{appUrl}/biz/{suggestedSlug}</span>
-            </button>
+              </a>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setEditingSlug(true)}
+              >
+                변경
+              </Button>
+            </div>
           )}
           <p className="text-xs text-muted-foreground">
             {editingSlug
