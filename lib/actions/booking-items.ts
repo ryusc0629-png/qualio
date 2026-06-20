@@ -143,6 +143,8 @@ const addSchema = z.object({
   unitPrice: z.coerce.number().int().min(0, '0 이상의 금액을 입력해주세요'),
   amount: z.coerce.number().int().min(0).optional(), // 합산 금액 직접 수정 시 우선
   unit: z.string().optional(),
+  // 첫 항목 추가 시, 기존 단일 금액을 '기본' 항목으로 먼저 깔아 총액 보존 (버튼 없이 자동)
+  seedBaseAmount: z.coerce.number().int().min(0).optional(),
 })
 
 export const addBookingItemAction = action
@@ -150,6 +152,32 @@ export const addBookingItemAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getAuth()
     await assertBookingOwned(db, businessId, parsedInput.bookingId)
+
+    // 아직 항목이 없고 기존 단일 금액이 있으면, '기본 청소 서비스'를 먼저 깔아 총액을 보존한다.
+    // (그냥 열어보기만 할 땐 아무것도 안 만들고, 실제로 첫 항목을 추가할 때만 동작)
+    if (parsedInput.seedBaseAmount && parsedInput.seedBaseAmount > 0) {
+      const { count } = await db
+        .from('booking_items' as never)
+        .select('id' as never, { count: 'exact', head: true })
+        .eq('booking_id' as never, parsedInput.bookingId)
+        .eq('business_id' as never, businessId) as unknown as { count: number | null }
+
+      if ((count ?? 0) === 0) {
+        await db.from('booking_items' as never).insert({
+          business_id: businessId,
+          booking_id: parsedInput.bookingId,
+          name: '기본 청소 서비스',
+          quantity: 1,
+          unit_price: parsedInput.seedBaseAmount,
+          amount: parsedInput.seedBaseAmount,
+          unit: '정액',
+          sort_order: 0,
+        } as never)
+        await logChange(db, businessId, parsedInput.bookingId, {
+          change_type: 'add', item_name: '기본 청소 서비스', old_amount: null, new_amount: parsedInput.seedBaseAmount,
+        })
+      }
+    }
 
     const amount = parsedInput.amount ?? parsedInput.quantity * parsedInput.unitPrice
 

@@ -124,7 +124,9 @@ export function BookingItemsEditor({ bookingId, fallbackTotal, onTotalChange }: 
 
   function handleAdd() {
     if (!newName.trim()) { toast.error('항목 이름을 입력해주세요'); return }
-    addItem({ bookingId, name: newName, quantity: newQty, unitPrice: newPrice || '0', unit: newUnit })
+    // 첫 항목이면 기존 단일 금액을 '기본'으로 먼저 깔아 총액 보존 (서버에서 자동 처리)
+    const seedBaseAmount = items.length === 0 && fallbackTotal > 0 ? String(fallbackTotal) : undefined
+    addItem({ bookingId, name: newName, quantity: newQty, unitPrice: newPrice || '0', unit: newUnit, seedBaseAmount })
   }
 
   return (
@@ -138,22 +140,13 @@ export function BookingItemsEditor({ bookingId, fallbackTotal, onTotalChange }: 
       {!loaded ? (
         <p className="text-xs text-muted-foreground py-2">불러오는 중...</p>
       ) : items.length === 0 ? (
-        <div className="rounded-lg bg-white border border-dashed border-border px-3 py-3 text-center space-y-2.5">
+        <div className="rounded-lg bg-white border border-dashed border-border px-3 py-3 text-center">
           <p className="text-xs text-muted-foreground">
-            아직 항목이 없어요. 금액({won(fallbackTotal)})을 항목으로 나누면<br />할인·현장 조정이 쉬워져요.
-          </p>
-          {fallbackTotal > 0 && (
-            <button
-              type="button"
-              disabled={adding}
-              onClick={() => addItem({ bookingId, name: '청소 서비스', quantity: 1, unitPrice: String(fallbackTotal), amount: String(fallbackTotal), unit: '정액' })}
-              className="w-full h-9 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors disabled:opacity-50"
-            >
-              현재 금액({won(fallbackTotal)})을 항목으로 가져오기
-            </button>
-          )}
-          <p className="text-[11px] text-muted-foreground/70">
-            이렇게 시작하면 총액은 그대로 두고 항목만 더하거나 빼면 돼요.
+            {fallbackTotal > 0 ? (
+              <>아래에서 항목을 추가하면, 현재 금액({won(fallbackTotal)})은<br />‘기본 청소 서비스’로 자동 보존되고 항목만 더해져요.</>
+            ) : (
+              <>아래에서 항목을 추가해 금액을 항목별로 나눠보세요.</>
+            )}
           </p>
         </div>
       ) : (
