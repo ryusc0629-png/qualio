@@ -183,3 +183,19 @@
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* 버튼 누름 피드백 — 탭하면 살짝 줄어들어 '눌렸다'가 분명히 보이게 (모바일 중복 클릭 방지).
+   shadcn Button은 자체 클래스로, 그 외 모든 raw <button>은 이 규칙으로 동일한 느낌을 준다. */
+button, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.08s ease;
+}
+button:not(:disabled):active,
+[role="button"]:not([aria-disabled="true"]):active {
+  transform: scale(0.96);
+}
+@media (prefers-reduced-motion: reduce) {
+  button, [role="button"] { transition: none; }
+  button:not(:disabled):active,
+  [role="button"]:not([aria-disabled="true"]):active { transform: none; }
+}
