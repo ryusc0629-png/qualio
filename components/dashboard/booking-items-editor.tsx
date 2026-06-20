@@ -8,9 +8,13 @@ import {
   addBookingItemAction,
   updateBookingItemAction,
   deleteBookingItemAction,
-  seedBaseBookingItemAction,
 } from '@/lib/actions/booking-items'
-import { Plus, Trash2, History, ChevronDown, Pencil } from 'lucide-react'
+import { Plus, Trash2, History, ChevronDown } from 'lucide-react'
+
+// 확정 견적으로 만든 예약은 금액이 단일(final_price)로만 저장됨.
+// 항목이 하나도 없을 때, 그 금액을 '기본 청소 서비스' 편집 행으로 처음부터 보여주기 위한 가짜 id.
+// (실제 저장/수정 전까지는 DB에 없는 로컬 전용 행 — 버튼·추가 로딩 없이 바로 편집 가능)
+const SEED_ID = '__base__'
 
 interface Item {
   id: string
@@ -68,7 +72,13 @@ export function BookingItemsEditor({ bookingId, fallbackTotal, onTotalChange }: 
     onSuccess: ({ data }) => {
       if (!data) return
       const loadedItems = data.items as Item[]
-      setItems(loadedItems)
+      // 저장된 항목이 없고 기존 단일 금액이 있으면, 그 금액을 '기본 청소 서비스' 편집 행으로
+      // 처음부터 보여준다(로컬 전용). 사용자가 저장/수정할 때 비로소 DB에 반영됨.
+      if (loadedItems.length === 0 && fallbackTotal > 0) {
+        setItems([{ id: SEED_ID, name: '기본 청소 서비스', quantity: 1, unit_price: fallbackTotal, amount: fallbackTotal, unit: '정액' }])
+      } else {
+        setItems(loadedItems)
+      }
       setChanges(data.changes as Change[])
       setServices(data.services ?? [])
       setLoaded(true)
@@ -93,9 +103,9 @@ export function BookingItemsEditor({ bookingId, fallbackTotal, onTotalChange }: 
     onSuccess: () => { toast.success('항목을 뺐어요'); reload() },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
-  // 기존 단일 금액을 편집 가능한 '기본 청소 서비스' 항목으로 전환
-  const { execute: seedBase, isPending: seeding } = useAction(seedBaseBookingItemAction, {
-    onSuccess: () => { toast.success('이제 항목별로 수정할 수 있어요'); reload() },
+  // 가짜 '기본 청소 서비스' 행을 처음 저장할 때 — 실제 첫 항목으로 DB에 기록
+  const { execute: saveBase } = useAction(addBookingItemAction, {
+    onSuccess: () => { toast.success('저장했어요'); reload() },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
@@ -125,13 +135,19 @@ export function BookingItemsEditor({ bookingId, fallbackTotal, onTotalChange }: 
 
   function saveRow(it: Item) {
     if (!it.name.trim()) { toast.error('항목 이름을 입력해주세요'); return }
+    // 가짜 기본 행이면 update가 아니라 add로 실제 첫 항목을 만든다
+    if (it.id === SEED_ID) {
+      saveBase({ bookingId, name: it.name, quantity: it.quantity, unitPrice: it.unit_price, amount: it.amount, unit: it.unit })
+      return
+    }
     updateItem({ itemId: it.id, bookingId, name: it.name, quantity: it.quantity, unitPrice: it.unit_price, amount: it.amount, unit: it.unit })
   }
 
   function handleAdd() {
     if (!newName.trim()) { toast.error('항목 이름을 입력해주세요'); return }
-    // 첫 항목이면 기존 단일 금액을 '기본'으로 먼저 깔아 총액 보존 (서버에서 자동 처리)
-    const seedBaseAmount = items.length === 0 && fallbackTotal > 0 ? String(fallbackTotal) : undefined
+    // 기본 행이 아직 DB에 없으면, 기존 단일 금액을 '기본'으로 먼저 깔아 총액 보존 (서버에서 자동 처리)
+    const baseRow = items.find((it) => it.id === SEED_ID)
+    const seedBaseAmount = baseRow ? String(baseRow.amount) : undefined
     addItem({ bookingId, name: newName, quantity: newQty, unitPrice: newPrice || '0', unit: newUnit, seedBaseAmount })
   }
 
@@ -146,26 +162,10 @@ export function BookingItemsEditor({ bookingId, fallbackTotal, onTotalChange }: 
       {!loaded ? (
         <p className="text-xs text-muted-foreground py-2">불러오는 중...</p>
       ) : items.length === 0 ? (
-        <div className="rounded-lg bg-white border border-dashed border-border px-3 py-3 text-center space-y-2.5">
+        <div className="rounded-lg bg-white border border-dashed border-border px-3 py-3 text-center">
           <p className="text-xs text-muted-foreground">
-            {fallbackTotal > 0 ? (
-              <>아래에서 항목을 추가하면, 현재 금액({won(fallbackTotal)})은<br />‘기본 청소 서비스’로 자동 보존되고 항목만 더해져요.</>
-            ) : (
-              <>아래에서 항목을 추가해 금액을 항목별로 나눠보세요.</>
-            )}
+            아래에서 항목을 추가해 금액을 항목별로 나눠보세요.
           </p>
-          {/* 기존 확정 금액을 항목으로 전환해 직접 수정할 수 있게 함 */}
-          {fallbackTotal > 0 && (
-            <button
-              type="button"
-              disabled={seeding}
-              onClick={() => seedBase({ bookingId, baseAmount: fallbackTotal })}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-semibold hover:bg-primary/10 transition-colors disabled:opacity-50"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-              {seeding ? '준비 중...' : '기존 금액 항목별로 수정하기'}
-            </button>
-          )}
         </div>
       ) : (
         <div className="space-y-2">
@@ -178,14 +178,17 @@ export function BookingItemsEditor({ bookingId, fallbackTotal, onTotalChange }: 
                   placeholder="항목명 (예: 에어컨 청소)"
                   className="flex-1 h-9 rounded-lg border border-border px-2.5 text-sm"
                 />
-                <button
-                  type="button"
-                  onClick={() => { if (confirm(`'${it.name}' 항목을 뺄까요?`)) deleteItem({ itemId: it.id, bookingId }) }}
-                  className="shrink-0 w-9 h-9 rounded-lg border border-border flex items-center justify-center text-destructive hover:bg-destructive/10"
-                  aria-label="항목 빼기"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                {/* 아직 저장 안 된 기본 행은 삭제 숨김 — 삭제해도 다시 생김 */}
+                {it.id !== SEED_ID && (
+                  <button
+                    type="button"
+                    onClick={() => { if (confirm(`'${it.name}' 항목을 뺄까요?`)) deleteItem({ itemId: it.id, bookingId }) }}
+                    className="shrink-0 w-9 h-9 rounded-lg border border-border flex items-center justify-center text-destructive hover:bg-destructive/10"
+                    aria-label="항목 빼기"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <input
