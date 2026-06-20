@@ -70,6 +70,7 @@ interface Props {
   prevNav: string
   nextNav: string
   view: 'day' | 'week' | 'month'
+  initialBookingId?: string | null // 푸시 알림 딥링크로 들어왔을 때 자동으로 열 예약 시트
 }
 
 const WORKER_COLORS = [
@@ -384,11 +385,13 @@ export function ScheduleBoard({
   prevNav,
   nextNav,
   view,
+  initialBookingId = null,
 }: Props) {
   const [bookings, setBookings] = useState(initialBookings)
   const [activeBooking, setActiveBooking] = useState<Booking | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
-  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null)
+  // 푸시 딥링크(?booking=...)로 들어오면 해당 예약 시트를 바로 연다
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(initialBookingId)
 
   const selectedBooking = bookings.find((b) => b.id === selectedBookingId) ?? null
 

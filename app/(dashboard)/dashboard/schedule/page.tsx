@@ -5,11 +5,11 @@ import { ko } from 'date-fns/locale'
 import { ScheduleBoard } from '@/components/dashboard/schedule-board'
 
 interface PageProps {
-  searchParams: Promise<{ week?: string; view?: string; date?: string }>
+  searchParams: Promise<{ week?: string; view?: string; date?: string; booking?: string }>
 }
 
 export default async function SchedulePage({ searchParams }: PageProps) {
-  const { week, view: viewParam, date: dateParam } = await searchParams
+  const { week, view: viewParam, date: dateParam, booking: bookingParam } = await searchParams
   const view = (['day', 'week', 'month'].includes(viewParam ?? '') ? viewParam! : 'week') as 'day' | 'week' | 'month'
 
   const authClient = await createClient()
@@ -199,6 +199,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
         prevNav={prevNav}
         nextNav={nextNav}
         view={view}
+        initialBookingId={bookingParam ?? null}
       />
     </div>
   )

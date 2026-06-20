@@ -319,10 +319,11 @@ export const calculateAndCreateQuoteAction = publicAction
       }
 
       // 대표에게 앱 푸시 — "새 견적이 들어왔어요" (실패해도 견적 표시는 정상)
+      // 알림 클릭 시 견적 대기 목록(개인 고객 탭)으로 바로 이동
       await sendPushToBusiness(parsedInput.business_id, {
         title: '새 견적이 들어왔어요! 🧾',
         body: `${parsedInput.customer_name}님 · ${service.name}${parsedInput.space_size ? ` · ${parsedInput.space_size}평` : ''}`,
-        url: '/dashboard',
+        url: '/dashboard/clients?type=individual',
         tag: `quote-${quote.id}`,
       })
     }
@@ -386,7 +387,7 @@ export const createBookingAction = publicAction
       ? new Date(quote.preferred_date).toISOString()
       : new Date().toISOString()
 
-    const { error: bookingError } = await db.from('bookings').insert({
+    const { data: newBooking, error: bookingError } = await db.from('bookings').insert({
       business_id: quote.business_id,
       quote_id: quote.id,
       customer_name: parsedInput.customer_name,
@@ -396,16 +397,18 @@ export const createBookingAction = publicAction
       selected_tier: parsedInput.selected_tier,
       final_price: finalPrice,
       status: 'confirmed',
-    })
+    }).select('id').single()
 
-    if (bookingError) throw new Error('[APP] 예약 생성에 실패했습니다')
+    if (bookingError || !newBooking) throw new Error('[APP] 예약 생성에 실패했습니다')
 
     // 대표에게 앱 푸시 — "새 예약이 잡혔어요" (실패해도 예약 처리는 정상)
+    // 알림 클릭 시 해당 예약 날짜의 일정으로 이동 + 예약 상세 시트 자동 오픈
+    const bookingDate = scheduledAt.slice(0, 10) // UTC 날짜 (일정 보드도 UTC 기준 매칭)
     await sendPushToBusiness(quote.business_id, {
       title: '새 예약이 잡혔어요! 📅',
       body: `${parsedInput.customer_name}님 · ${quote.cleaning_type}`,
-      url: '/dashboard',
-      tag: `booking-${quote.id}`,
+      url: `/dashboard/schedule?view=day&date=${bookingDate}&booking=${newBooking.id}`,
+      tag: `booking-${newBooking.id}`,
     })
 
     // 견적 상태를 'booked'로 업데이트
@@ -434,14 +437,7 @@ export const createBookingAction = publicAction
       }
     }
 
-    // 예약 ID 조회 (reports 저장 및 알림톡 발송용)
-    const { data: newBooking } = await db
-      .from('bookings')
-      .select('id')
-      .eq('quote_id', quote.id)
-      .maybeSingle()
-
-    // 업체 정보 조회 (알림톡 발송용)
+    // 업체 정보 조회 (알림톡 발송용) — newBooking은 위 insert에서 이미 확보됨
     const { data: business } = await db
       .from('businesses')
       .select('name, phone')
