@@ -1,12 +1,13 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, Calendar, Receipt, ChevronRight, FileText, User, Star, ShieldAlert, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { ChevronLeft, Calendar, Receipt, ChevronRight, FileText, User, Star, ShieldAlert, AlertTriangle, CheckCircle2, ClipboardList } from 'lucide-react'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { ContactActions } from '@/components/dashboard/contact-actions'
 import { AddClaimForm } from '@/components/dashboard/add-claim-form'
 import { ClaimActions } from '@/components/dashboard/claim-actions'
 import { contractAccruedRevenue, type ContractLike } from '@/lib/utils/ltv'
+import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
 
 interface Props {
   params: Promise<{ customerId: string }>
@@ -21,6 +22,7 @@ interface CustomerClaimRow {
   resolution: string | null
   created_at: string
   resolved_at: string | null
+  booking_id: string | null
 }
 
 const fmtClaimDate = (iso: string) =>
@@ -123,7 +125,7 @@ export default async function CustomerDetailPage({ params }: Props) {
   const { data: claimsData } = customer.phone
     ? await db
         .from('claims' as never)
-        .select('id, title, content, is_urgent, status, resolution, created_at, resolved_at' as never)
+        .select('id, title, content, is_urgent, status, resolution, created_at, resolved_at, booking_id' as never)
         .eq('business_id' as never, profile.business_id)
         .eq('customer_phone' as never, customer.phone)
         .order('is_urgent' as never, { ascending: false })
@@ -132,6 +134,7 @@ export default async function CustomerDetailPage({ params }: Props) {
 
   const customerClaims = claimsData ?? []
   const openClaimCount = customerClaims.filter((c) => c.status !== 'resolved').length
+  const claimBookingLabels = await getClaimBookingLabels(db, profile.business_id, customerClaims.map((c) => c.booking_id))
 
   const oneOffTotal = bookingList
     .filter((b) => b.status === 'completed')
@@ -277,6 +280,12 @@ export default async function CustomerDetailPage({ params }: Props) {
                       {fmtClaimDate(resolved && claim.resolved_at ? claim.resolved_at : claim.created_at)}
                     </span>
                   </div>
+                  {claim.booking_id && claimBookingLabels.get(claim.booking_id) && (
+                    <p className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 rounded-md px-2 py-1">
+                      <ClipboardList className="h-3 w-3 shrink-0" />
+                      관련 작업: {claimBookingLabels.get(claim.booking_id)}
+                    </p>
+                  )}
                   {claim.content && !resolved && (
                     <p className="text-sm text-muted-foreground whitespace-pre-wrap border-t border-border pt-2">
                       {claim.content}

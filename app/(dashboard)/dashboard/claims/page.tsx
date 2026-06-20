@@ -1,8 +1,9 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { ShieldAlert, Phone, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { ShieldAlert, Phone, CheckCircle2, AlertTriangle, ClipboardList } from 'lucide-react'
 import { AddClaimForm } from '@/components/dashboard/add-claim-form'
 import { ClaimActions } from '@/components/dashboard/claim-actions'
+import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
 
 interface ClaimRow {
   id: string
@@ -15,6 +16,7 @@ interface ClaimRow {
   resolution: string | null
   created_at: string
   resolved_at: string | null
+  booking_id: string | null
 }
 
 const fmtDate = (iso: string) =>
@@ -37,7 +39,7 @@ export default async function ClaimsPage() {
   const [{ data }, { data: customerRows }] = await Promise.all([
     db
       .from('claims' as never)
-      .select('id, customer_name, customer_phone, title, content, is_urgent, status, resolution, created_at, resolved_at' as never)
+      .select('id, customer_name, customer_phone, title, content, is_urgent, status, resolution, created_at, resolved_at, booking_id' as never)
       .eq('business_id' as never, profile.business_id)
       .order('is_urgent' as never, { ascending: false })
       .order('created_at' as never, { ascending: false }) as unknown as Promise<{ data: ClaimRow[] | null }>,
@@ -53,6 +55,9 @@ export default async function ClaimsPage() {
   const customers = (customerRows ?? []).map((c) => ({ id: c.id, name: c.name, phone: c.phone, address: c.address }))
   const openClaims = claims.filter((c) => c.status !== 'resolved')
   const resolvedClaims = claims.filter((c) => c.status === 'resolved')
+
+  // 클레임에 연결된 작업(서비스·날짜) 라벨
+  const bookingLabels = await getClaimBookingLabels(db, profile.business_id, claims.map((c) => c.booking_id))
 
   return (
     <div className="max-w-xl mx-auto space-y-6">
@@ -110,6 +115,13 @@ export default async function ClaimsPage() {
                   <span className="shrink-0 text-xs text-muted-foreground">{fmtDate(claim.created_at)}</span>
                 </div>
 
+                {claim.booking_id && bookingLabels.get(claim.booking_id) && (
+                  <p className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 rounded-md px-2 py-1">
+                    <ClipboardList className="h-3 w-3 shrink-0" />
+                    관련 작업: {bookingLabels.get(claim.booking_id)}
+                  </p>
+                )}
+
                 {claim.content && (
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap border-t border-border pt-2">
                     {claim.content}
@@ -144,6 +156,12 @@ export default async function ClaimsPage() {
                     {claim.resolved_at ? fmtDate(claim.resolved_at) : '해결'}
                   </span>
                 </div>
+                {claim.booking_id && bookingLabels.get(claim.booking_id) && (
+                  <p className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <ClipboardList className="h-3 w-3 shrink-0" />
+                    관련 작업: {bookingLabels.get(claim.booking_id)}
+                  </p>
+                )}
                 {claim.resolution && (
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap border-t border-border pt-2">
                     해결: {claim.resolution}

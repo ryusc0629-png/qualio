@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useAction } from 'next-safe-action/hooks'
-import { ShieldAlert, ChevronRight, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { ShieldAlert, ChevronRight, AlertTriangle, CheckCircle2, ClipboardList } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -22,6 +22,7 @@ interface Claim {
   resolution: string | null
   created_at: string
   resolved_at: string | null
+  relatedBooking?: string | null
 }
 
 interface Props {
@@ -102,6 +103,12 @@ export function ClaimsStatusButton({ customerId, customerName, customerPhone, bo
                     </div>
                     <span className="shrink-0 text-xs text-muted-foreground">{fmt(claim.created_at)}</span>
                   </div>
+                  {claim.relatedBooking && (
+                    <p className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted/50 rounded-md px-2 py-1">
+                      <ClipboardList className="h-3 w-3 shrink-0" />
+                      관련 작업: {claim.relatedBooking}
+                    </p>
+                  )}
                   {claim.content && (
                     <p className="text-sm text-muted-foreground whitespace-pre-wrap border-t border-border pt-2">
                       {claim.content}

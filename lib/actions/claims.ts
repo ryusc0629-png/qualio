@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
 import { revalidatePath } from 'next/cache'
 
 // 인증 + business_id 조회 헬퍼 (crm.ts와 동일 패턴)
@@ -34,7 +35,7 @@ export const getClaimsByPhoneAction = action
 
     const { data } = await db
       .from('claims' as never)
-      .select('id, title, content, is_urgent, status, resolution, created_at, resolved_at' as never)
+      .select('id, title, content, is_urgent, status, resolution, created_at, resolved_at, booking_id' as never)
       .eq('business_id' as never, businessId)
       .eq('customer_phone' as never, parsedInput.customerPhone)
       .order('is_urgent' as never, { ascending: false })
@@ -42,10 +43,19 @@ export const getClaimsByPhoneAction = action
         data: {
           id: string; title: string; content: string | null; is_urgent: boolean
           status: string; resolution: string | null; created_at: string; resolved_at: string | null
+          booking_id: string | null
         }[] | null
       }
 
-    return { claims: data ?? [] }
+    const rows = data ?? []
+    // 연결된 작업(서비스·날짜) 라벨 붙이기
+    const labels = await getClaimBookingLabels(db, businessId, rows.map((r) => r.booking_id))
+    const claims = rows.map((r) => ({
+      ...r,
+      relatedBooking: r.booking_id ? labels.get(r.booking_id) ?? null : null,
+    }))
+
+    return { claims }
   })
 
 // 클레임 등록 스키마
