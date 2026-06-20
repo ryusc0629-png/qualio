@@ -33,6 +33,7 @@ import {
   updateBookingWorkersAction,
   updateBookingTimeAction,
   cancelBookingFromScheduleAction,
+  restoreBookingFromScheduleAction,
   updateBookingStatusAction,
 } from '@/lib/actions/workers'
 import { sendReviewRequestAction } from '@/lib/actions/reports'
@@ -189,6 +190,17 @@ export function BookingDetailSheet({
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
+  // 취소된 예약 다시 살리기 (재예약)
+  const { execute: restoreBooking, isPending: restorePending } = useAction(restoreBookingFromScheduleAction, {
+    onSuccess: () => {
+      if (!booking) return
+      onStatusChange?.(booking.id, 'confirmed') // 보드에서 카드 즉시 복구(흐림 해제)
+      toast.success('다시 예약을 잡았어요')
+      onClose()
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
   // 상태 변경 액션
   const { execute: updateStatus, isPending: statusPending } = useAction(updateBookingStatusAction, {
     onSuccess: ({ data }) => {
@@ -311,7 +323,7 @@ export function BookingDetailSheet({
         </SheetHeader>
 
         {/* 본문 */}
-        <div className="flex-1 overflow-y-auto px-5 py-2">
+        <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden px-5 py-2">
 
           {/* 전화하기 — 연락처 있을 때만 */}
           {booking?.customer_phone && (
@@ -533,7 +545,7 @@ export function BookingDetailSheet({
           )}
 
           {/* 서비스 정보 */}
-          <div className="rounded-xl border border-border bg-card px-4 mb-4">
+          <div className="rounded-xl border border-border bg-card px-4 mb-4 overflow-hidden">
             {booking?.cleaning_type && (
               <Row icon={<span className="text-base">🧹</span>} label="서비스">
                 <span className="font-medium">{booking.cleaning_type}</span>
@@ -688,6 +700,22 @@ export function BookingDetailSheet({
                 {cancelPending ? '취소 중...' : '예약 취소하기'}
               </Button>
             )}
+          </div>
+        )}
+
+        {/* 취소·노쇼 예약 — 다시 예약 잡기 (고객 재예약 대비) */}
+        {isCancelled && booking && (
+          <div className="px-5 pb-5 pt-3 border-t border-border">
+            <Button
+              className="w-full h-12 font-semibold gap-2 bg-emerald-600 hover:bg-emerald-700"
+              disabled={restorePending}
+              onClick={() => restoreBooking({ bookingId: booking.id })}
+            >
+              {restorePending ? '처리 중...' : '다시 예약 잡기'}
+            </Button>
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              이 고객이 다시 예약하면 눌러서 일정에 되살릴 수 있어요
+            </p>
           </div>
         )}
 

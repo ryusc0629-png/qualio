@@ -148,6 +148,36 @@ export const cancelBookingFromScheduleAction = action
     return { success: true }
   })
 
+// 취소(또는 노쇼)된 예약 다시 살리기 — 고객이 재예약했을 때 빠르게 복구
+export const restoreBookingFromScheduleAction = action
+  .schema(z.object({ bookingId: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { data: booking } = await db
+      .from('bookings')
+      .select('status')
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+      .maybeSingle()
+
+    if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
+    if (!['cancelled', 'no_show'].includes(booking.status as string)) {
+      throw new Error('[APP] 취소된 예약만 다시 잡을 수 있어요')
+    }
+
+    const { error } = await db
+      .from('bookings')
+      .update({ status: 'confirmed', cancelled_at: null, cancellation_reason: null } as never)
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+
+    if (error) throw new Error('[APP] 다시 예약 잡기에 실패했어요')
+    revalidatePath('/dashboard/schedule')
+    revalidatePath('/dashboard/work')
+    return { success: true }
+  })
+
 // 예약 드래그앤드롭 — 날짜 + 담당자(단일) 동시 변경
 // 드래그로 배정하면 해당 담당자 1명으로 교체됨 (다중 배정은 상세 시트에서)
 export const assignBookingAction = action
