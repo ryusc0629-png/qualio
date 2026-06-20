@@ -135,6 +135,52 @@ export const getBookingItemsAction = action
     return { items: itemsRes.data ?? [], changes: changesRes.data ?? [], services }
   })
 
+// ── 기존 단일 금액을 편집 가능한 '기본 청소 서비스' 항목으로 전환 ──
+// 확정 견적으로 만든 예약은 금액이 단일로만 저장돼 항목별 편집이 안 됨.
+// 이 액션으로 그 금액을 '기본 청소 서비스' 항목으로 깔면 이름·수량·단가·금액을 항목별로 수정할 수 있다.
+const seedSchema = z.object({
+  bookingId: z.string().uuid(),
+  baseAmount: z.coerce.number().int().min(0),
+})
+
+export const seedBaseBookingItemAction = action
+  .schema(seedSchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuth()
+    await assertBookingOwned(db, businessId, parsedInput.bookingId)
+
+    // 이미 항목이 있으면 중복 생성하지 않음
+    const { count } = await db
+      .from('booking_items' as never)
+      .select('id' as never, { count: 'exact', head: true })
+      .eq('booking_id' as never, parsedInput.bookingId)
+      .eq('business_id' as never, businessId) as unknown as { count: number | null }
+    if ((count ?? 0) > 0) return { success: true }
+
+    if (parsedInput.baseAmount > 0) {
+      const { error } = await db.from('booking_items' as never).insert({
+        business_id: businessId,
+        booking_id: parsedInput.bookingId,
+        name: '기본 청소 서비스',
+        quantity: 1,
+        unit_price: parsedInput.baseAmount,
+        amount: parsedInput.baseAmount,
+        unit: '정액',
+        sort_order: 0,
+      } as never)
+      if (error) throw new Error('[APP] 항목 편집 준비에 실패했습니다')
+
+      await logChange(db, businessId, parsedInput.bookingId, {
+        change_type: 'add', item_name: '기본 청소 서비스', old_amount: null, new_amount: parsedInput.baseAmount,
+      })
+      await syncBookingTotal(db, businessId, parsedInput.bookingId)
+    }
+
+    revalidatePath('/dashboard/schedule')
+    revalidatePath('/dashboard/bookings')
+    return { success: true }
+  })
+
 // ── 항목 추가 ───────────────────────────────────────────
 const addSchema = z.object({
   bookingId: z.string().uuid(),

@@ -8,8 +8,9 @@ import {
   addBookingItemAction,
   updateBookingItemAction,
   deleteBookingItemAction,
+  seedBaseBookingItemAction,
 } from '@/lib/actions/booking-items'
-import { Plus, Trash2, History, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, History, ChevronDown, Pencil } from 'lucide-react'
 
 interface Item {
   id: string
@@ -92,6 +93,11 @@ export function BookingItemsEditor({ bookingId, fallbackTotal, onTotalChange }: 
     onSuccess: () => { toast.success('항목을 뺐어요'); reload() },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
+  // 기존 단일 금액을 편집 가능한 '기본 청소 서비스' 항목으로 전환
+  const { execute: seedBase, isPending: seeding } = useAction(seedBaseBookingItemAction, {
+    onSuccess: () => { toast.success('이제 항목별로 수정할 수 있어요'); reload() },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
 
   const total = items.reduce((s, it) => s + it.amount, 0)
 
@@ -140,7 +146,7 @@ export function BookingItemsEditor({ bookingId, fallbackTotal, onTotalChange }: 
       {!loaded ? (
         <p className="text-xs text-muted-foreground py-2">불러오는 중...</p>
       ) : items.length === 0 ? (
-        <div className="rounded-lg bg-white border border-dashed border-border px-3 py-3 text-center">
+        <div className="rounded-lg bg-white border border-dashed border-border px-3 py-3 text-center space-y-2.5">
           <p className="text-xs text-muted-foreground">
             {fallbackTotal > 0 ? (
               <>아래에서 항목을 추가하면, 현재 금액({won(fallbackTotal)})은<br />‘기본 청소 서비스’로 자동 보존되고 항목만 더해져요.</>
@@ -148,6 +154,18 @@ export function BookingItemsEditor({ bookingId, fallbackTotal, onTotalChange }: 
               <>아래에서 항목을 추가해 금액을 항목별로 나눠보세요.</>
             )}
           </p>
+          {/* 기존 확정 금액을 항목으로 전환해 직접 수정할 수 있게 함 */}
+          {fallbackTotal > 0 && (
+            <button
+              type="button"
+              disabled={seeding}
+              onClick={() => seedBase({ bookingId, baseAmount: fallbackTotal })}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-semibold hover:bg-primary/10 transition-colors disabled:opacity-50"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              {seeding ? '준비 중...' : '기존 금액 항목별로 수정하기'}
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
