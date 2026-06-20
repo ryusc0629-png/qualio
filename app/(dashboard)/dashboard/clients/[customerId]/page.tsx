@@ -35,6 +35,7 @@ const STATUS_META: Record<string, { label: string; className: string }> = {
   in_progress: { label: '진행중',    className: 'bg-amber-100 text-amber-700' },
   completed:   { label: '완료',      className: 'bg-emerald-100 text-emerald-700' },
   no_show:     { label: '노쇼',      className: 'bg-red-100 text-red-600' },
+  cancelled:   { label: '취소',      className: 'bg-gray-100 text-gray-500' },
 }
 
 export default async function CustomerDetailPage({ params }: Props) {
@@ -69,8 +70,7 @@ export default async function CustomerDetailPage({ params }: Props) {
         .select('id, scheduled_at, final_price, status, memo, quotes!quote_id(cleaning_type, space_size)')
         .eq('business_id', profile.business_id)
         .eq('customer_phone', customer.phone)
-        .neq('status', 'cancelled')
-        .is('deleted_at', null)
+        .is('deleted_at', null) // 취소 건은 이력에 '취소'로 남김(매출·완료 집계엔 미포함). 완전 삭제만 제외.
         .order('scheduled_at', { ascending: false })
     : { data: null }
 
@@ -335,6 +335,7 @@ export default async function CustomerDetailPage({ params }: Props) {
               const serviceName = quote?.cleaning_type ?? booking.memo ?? '직접 예약'
               const spaceLabel = quote?.space_size ? ` · ${quote.space_size}평` : ''
               const statusMeta = STATUS_META[booking.status] ?? { label: booking.status, className: 'bg-gray-100 text-gray-600' }
+              const isCancelled = booking.status === 'cancelled'
               const hasReport = reportMap.has(booking.id)
               const reportLink = hasReport ? `/dashboard/bookings/${booking.id}/report` : null
               const workerName = booking.worker_id ? workerMap.get(booking.worker_id) : null
@@ -346,7 +347,7 @@ export default async function CustomerDetailPage({ params }: Props) {
                     </Link>
                   )
                 : ({ children }: { children: React.ReactNode }) => (
-                    <div className="bg-white rounded-xl border border-border p-4">
+                    <div className={`rounded-xl border p-4 ${isCancelled ? 'bg-muted/30 border-dashed border-border' : 'bg-white border-border'}`}>
                       {children}
                     </div>
                   )
@@ -356,7 +357,7 @@ export default async function CustomerDetailPage({ params }: Props) {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-medium">{serviceName}{spaceLabel}</p>
+                        <p className={`font-medium ${isCancelled ? 'line-through text-muted-foreground' : ''}`}>{serviceName}{spaceLabel}</p>
                         <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${statusMeta.className}`}>
                           {statusMeta.label}
                         </span>
@@ -377,7 +378,7 @@ export default async function CustomerDetailPage({ params }: Props) {
                       )}
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-1.5">
-                      <p className="font-bold tabular-nums flex items-center gap-1 text-sm">
+                      <p className={`font-bold tabular-nums flex items-center gap-1 text-sm ${isCancelled ? 'line-through text-muted-foreground font-medium' : ''}`}>
                         <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
                         {(booking.final_price ?? 0).toLocaleString('ko-KR')}원
                       </p>
