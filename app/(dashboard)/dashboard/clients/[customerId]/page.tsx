@@ -6,6 +6,7 @@ import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { ContactActions } from '@/components/dashboard/contact-actions'
 import { AddClaimForm } from '@/components/dashboard/add-claim-form'
 import { ClaimActions } from '@/components/dashboard/claim-actions'
+import { ClaimAssignee } from '@/components/dashboard/claim-assignee'
 import { contractAccruedRevenue, type ContractLike } from '@/lib/utils/ltv'
 import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
 
@@ -23,6 +24,7 @@ interface CustomerClaimRow {
   created_at: string
   resolved_at: string | null
   booking_id: string | null
+  assigned_worker_id: string | null
 }
 
 const fmtClaimDate = (iso: string) =>
@@ -125,7 +127,7 @@ export default async function CustomerDetailPage({ params }: Props) {
   const { data: claimsData } = customer.phone
     ? await db
         .from('claims' as never)
-        .select('id, title, content, is_urgent, status, resolution, created_at, resolved_at, booking_id' as never)
+        .select('id, title, content, is_urgent, status, resolution, created_at, resolved_at, booking_id, assigned_worker_id' as never)
         .eq('business_id' as never, profile.business_id)
         .eq('customer_phone' as never, customer.phone)
         .order('is_urgent' as never, { ascending: false })
@@ -135,6 +137,17 @@ export default async function CustomerDetailPage({ params }: Props) {
   const customerClaims = claimsData ?? []
   const openClaimCount = customerClaims.filter((c) => c.status !== 'resolved').length
   const claimBookingLabels = await getClaimBookingLabels(db, profile.business_id, customerClaims.map((c) => c.booking_id))
+
+  // 담당자 배정용 활성 직원 (클레임이 있을 때만 조회)
+  const { data: claimWorkerRows } = customerClaims.length > 0
+    ? await db
+        .from('workers' as never)
+        .select('id, name' as never)
+        .eq('business_id' as never, profile.business_id)
+        .eq('is_active' as never, true)
+        .order('name' as never) as unknown as { data: { id: string; name: string }[] | null }
+    : { data: null }
+  const claimWorkers = claimWorkerRows ?? []
 
   const oneOffTotal = bookingList
     .filter((b) => b.status === 'completed')
@@ -295,6 +308,9 @@ export default async function CustomerDetailPage({ params }: Props) {
                     <p className="text-sm text-muted-foreground whitespace-pre-wrap border-t border-border pt-2">
                       해결: {claim.resolution}
                     </p>
+                  )}
+                  {!resolved && (
+                    <ClaimAssignee claimId={claim.id} currentWorkerId={claim.assigned_worker_id} workers={claimWorkers} />
                   )}
                   <ClaimActions claimId={claim.id} status={claim.status} />
                 </article>

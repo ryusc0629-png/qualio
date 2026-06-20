@@ -23,6 +23,32 @@ async function getAuthenticatedBusinessId() {
   return { db, businessId: profile.business_id }
 }
 
+// 클레임 담당자 지정/해제
+const assignClaimSchema = z.object({
+  claimId:  z.string().uuid(),
+  workerId: z.string().uuid().nullable(),
+})
+
+export const assignClaimAction = action
+  .schema(assignClaimSchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuthenticatedBusinessId()
+
+    const { error } = await db
+      .from('claims' as never)
+      .update({ assigned_worker_id: parsedInput.workerId } as never)
+      .eq('id' as never, parsedInput.claimId)
+      .eq('business_id' as never, businessId)
+
+    if (error) {
+      console.error('[assignClaimAction] DB 오류:', error)
+      throw new Error('[APP] 담당자 지정에 실패했어요. 다시 시도해주세요')
+    }
+    revalidatePath('/dashboard/claims')
+    revalidatePath('/dashboard/clients/[customerId]', 'page')
+    return { success: true }
+  })
+
 // 특정 고객(전화번호)의 클레임 목록 조회 — 예약 상세에서 모달로 현황 확인용
 const getClaimsByPhoneSchema = z.object({
   customerPhone: z.string().min(1),
@@ -35,7 +61,7 @@ export const getClaimsByPhoneAction = action
 
     const { data } = await db
       .from('claims' as never)
-      .select('id, title, content, is_urgent, status, resolution, created_at, resolved_at, booking_id' as never)
+      .select('id, title, content, is_urgent, status, resolution, created_at, resolved_at, booking_id, assigned_worker_id' as never)
       .eq('business_id' as never, businessId)
       .eq('customer_phone' as never, parsedInput.customerPhone)
       .order('is_urgent' as never, { ascending: false })
@@ -43,7 +69,7 @@ export const getClaimsByPhoneAction = action
         data: {
           id: string; title: string; content: string | null; is_urgent: boolean
           status: string; resolution: string | null; created_at: string; resolved_at: string | null
-          booking_id: string | null
+          booking_id: string | null; assigned_worker_id: string | null
         }[] | null
       }
 
@@ -55,7 +81,15 @@ export const getClaimsByPhoneAction = action
       relatedBooking: r.booking_id ? labels.get(r.booking_id) ?? null : null,
     }))
 
-    return { claims }
+    // 담당자 선택용 활성 직원 목록
+    const { data: workerRows } = await db
+      .from('workers' as never)
+      .select('id, name' as never)
+      .eq('business_id' as never, businessId)
+      .eq('is_active' as never, true)
+      .order('name' as never) as unknown as { data: { id: string; name: string }[] | null }
+
+    return { claims, workers: workerRows ?? [] }
   })
 
 // 클레임 등록 스키마

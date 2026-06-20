@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { ShieldAlert, Phone, CheckCircle2, AlertTriangle, ClipboardList } from 'lucide-react'
 import { AddClaimForm } from '@/components/dashboard/add-claim-form'
 import { ClaimActions } from '@/components/dashboard/claim-actions'
+import { ClaimAssignee } from '@/components/dashboard/claim-assignee'
 import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
 
 interface ClaimRow {
@@ -17,6 +18,7 @@ interface ClaimRow {
   created_at: string
   resolved_at: string | null
   booking_id: string | null
+  assigned_worker_id: string | null
 }
 
 const fmtDate = (iso: string) =>
@@ -36,10 +38,10 @@ export default async function ClaimsPage() {
 
   if (!profile?.business_id) redirect('/onboarding')
 
-  const [{ data }, { data: customerRows }] = await Promise.all([
+  const [{ data }, { data: customerRows }, { data: workerRows }] = await Promise.all([
     db
       .from('claims' as never)
-      .select('id, customer_name, customer_phone, title, content, is_urgent, status, resolution, created_at, resolved_at, booking_id' as never)
+      .select('id, customer_name, customer_phone, title, content, is_urgent, status, resolution, created_at, resolved_at, booking_id, assigned_worker_id' as never)
       .eq('business_id' as never, profile.business_id)
       .order('is_urgent' as never, { ascending: false })
       .order('created_at' as never, { ascending: false }) as unknown as Promise<{ data: ClaimRow[] | null }>,
@@ -49,10 +51,18 @@ export default async function ClaimsPage() {
       .select('id, name, phone, address')
       .eq('business_id', profile.business_id)
       .order('name', { ascending: true }),
+    // 담당자 배정용 활성 직원
+    db
+      .from('workers' as never)
+      .select('id, name' as never)
+      .eq('business_id' as never, profile.business_id)
+      .eq('is_active' as never, true)
+      .order('name' as never) as unknown as Promise<{ data: { id: string; name: string }[] | null }>,
   ])
 
   const claims = data ?? []
   const customers = (customerRows ?? []).map((c) => ({ id: c.id, name: c.name, phone: c.phone, address: c.address }))
+  const workers = workerRows ?? []
   const openClaims = claims.filter((c) => c.status !== 'resolved')
   const resolvedClaims = claims.filter((c) => c.status === 'resolved')
 
@@ -127,6 +137,10 @@ export default async function ClaimsPage() {
                     {claim.content}
                   </p>
                 )}
+
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <ClaimAssignee claimId={claim.id} currentWorkerId={claim.assigned_worker_id} workers={workers} />
+                </div>
 
                 <ClaimActions claimId={claim.id} status={claim.status} />
               </article>

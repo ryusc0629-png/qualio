@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { getClaimsByPhoneAction } from '@/lib/actions/claims'
 import { ClaimActions } from './claim-actions'
+import { ClaimAssignee } from './claim-assignee'
 import { AddClaimForm } from './add-claim-form'
 
 interface Claim {
@@ -23,6 +24,12 @@ interface Claim {
   created_at: string
   resolved_at: string | null
   relatedBooking?: string | null
+  assigned_worker_id?: string | null
+}
+
+interface WorkerOpt {
+  id: string
+  name: string
 }
 
 interface Props {
@@ -39,9 +46,14 @@ const fmt = (iso: string) =>
 export function ClaimsStatusButton({ customerId, customerName, customerPhone, bookingId }: Props) {
   const [open, setOpen] = useState(false)
   const [claims, setClaims] = useState<Claim[]>([])
+  const [workers, setWorkers] = useState<WorkerOpt[]>([])
 
   const { execute, isPending } = useAction(getClaimsByPhoneAction, {
-    onSuccess: ({ data }) => { if (data) setClaims(data.claims as Claim[]) },
+    onSuccess: ({ data }) => {
+      if (!data) return
+      setClaims(data.claims as Claim[])
+      setWorkers(data.workers as WorkerOpt[])
+    },
   })
 
   function load() {
@@ -114,6 +126,12 @@ export function ClaimsStatusButton({ customerId, customerName, customerPhone, bo
                       {claim.content}
                     </p>
                   )}
+                  <ClaimAssignee
+                    claimId={claim.id}
+                    currentWorkerId={claim.assigned_worker_id ?? null}
+                    workers={workers}
+                    onChanged={load}
+                  />
                   <ClaimActions claimId={claim.id} status={claim.status} onChanged={load} />
                 </article>
               ))}
