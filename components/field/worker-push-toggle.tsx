@@ -114,10 +114,10 @@ export function WorkerPushToggle({ workerId }: { workerId: string }) {
           아이폰은 <b>홈 화면에 추가</b>하면 처리할 일(클레임 등) 알림을 폰으로 받을 수 있어요.
         </p>
         <ol className="text-sm space-y-1.5 list-decimal list-inside text-foreground/90">
-          <li>아래쪽 가운데 <Share className="inline h-4 w-4 mb-0.5" /> <b>공유</b> 버튼을 눌러요</li>
-          <li><b>&quot;홈 화면에 추가&quot;</b>를 눌러요</li>
-          <li>홈 화면에 생긴 <b>퀄리오</b> 아이콘으로 다시 들어와요</li>
-          <li>여기서 <b>&quot;알림 켜기&quot;</b>를 누르면 끝!</li>
+          <li>화면 아래 <Share className="inline h-4 w-4 mb-0.5" /> <b>공유</b> 버튼을 눌러요 (안 보이면 <b>···</b> → <b>공유</b>)</li>
+          <li>뜬 목록을 <b>아래로 쭉 내려</b> <b>&quot;홈 화면에 추가&quot;</b>를 눌러요</li>
+          <li>오른쪽 위 <b>추가</b>를 누르면 홈 화면에 <b>퀄리오 현장</b> 아이콘이 생겨요</li>
+          <li>그 아이콘으로 들어와 <b>&quot;알림 켜기&quot;</b>를 누르면 끝!</li>
         </ol>
       </div>
     )

@@ -26,6 +26,16 @@ interface Props {
   params: Promise<{ workerId: string }>
 }
 
+// 홈 화면에 추가했을 때 전역 매니페스트(대시보드)가 아니라 이 직원의 현장 앱으로 열리도록
+// 매니페스트 링크를 현장 전용으로 덮어쓴다.
+export async function generateMetadata({ params }: Props) {
+  const { workerId } = await params
+  return {
+    manifest: `/field/${workerId}/manifest`,
+    appleWebApp: { capable: true, title: '퀄리오 현장', statusBarStyle: 'default' as const },
+  }
+}
+
 export default async function FieldDashboard({ params }: Props) {
   const { workerId } = await params
   const db = createServiceClient()
