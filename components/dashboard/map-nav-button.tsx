@@ -40,7 +40,7 @@ export function MapNavButton({ address }: MapNavButtonProps) {
         className="flex w-full items-center gap-2 px-3 h-11 text-sm active:bg-muted transition-colors"
       >
         <MapPin className="h-4 w-4 shrink-0 text-primary" />
-        <span className="flex-1 truncate text-left font-medium">{address}</span>
+        <span className="flex-1 min-w-0 truncate text-left font-medium">{address}</span>
         <span className="flex items-center gap-1 text-xs font-semibold text-primary shrink-0">
           <Navigation className="h-3.5 w-3.5" />
           길찾기
