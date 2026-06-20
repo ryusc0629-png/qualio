@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, type CSSProperties } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -377,6 +377,15 @@ const VIEW_OPTIONS = [
   { key: 'month', label: '월' },
 ] as const
 
+// 좌측 담당자(직원/도급사) 칸 — 모든 뷰에서 가로 스크롤 시 왼쪽에 고정.
+// 오른쪽 옅은 그림자로 스크롤되는 카드와 경계를 구분.
+const STICKY_LABEL_COL: CSSProperties = {
+  position: 'sticky',
+  left: 0,
+  zIndex: 10,
+  boxShadow: '4px 0 6px -4px rgba(0,0,0,0.1)',
+}
+
 export function ScheduleBoard({
   workers,
   bookings: initialBookings,
@@ -602,7 +611,7 @@ export function ScheduleBoard({
             >
               <div
                 className="bg-background"
-                style={view === 'month' ? { position: 'sticky', left: 0, zIndex: 10 } : undefined}
+                style={STICKY_LABEL_COL}
               />
               {days.map((day) => (
                 <div
@@ -630,10 +639,10 @@ export function ScheduleBoard({
                     alignItems: 'start',
                   }}
                 >
-                  {/* 작업자 레이블 */}
+                  {/* 작업자 레이블 — 가로 스크롤해도 좌측에 고정(어느 담당자 행인지 항상 보이게) */}
                   <div
                     className="flex flex-col gap-1.5 px-2 py-2 min-h-[72px] bg-background"
-                    style={view === 'month' ? { position: 'sticky', left: 0, zIndex: 10 } : undefined}
+                    style={STICKY_LABEL_COL}
                   >
                     <div className="flex items-center gap-1.5">
                       <div
