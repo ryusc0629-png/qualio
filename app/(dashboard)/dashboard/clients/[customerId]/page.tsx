@@ -5,6 +5,7 @@ import { ChevronLeft, Calendar, Receipt, ChevronRight, FileText, User, Star, Shi
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { ContactActions } from '@/components/dashboard/contact-actions'
 import { AddClaimForm } from '@/components/dashboard/add-claim-form'
+import { AddBookingButton } from '@/components/dashboard/add-booking-button'
 import { ClaimActions } from '@/components/dashboard/claim-actions'
 import { ClaimAssignee } from '@/components/dashboard/claim-assignee'
 import { contractAccruedRevenue, type ContractLike } from '@/lib/utils/ltv'
@@ -63,19 +64,29 @@ export default async function CustomerDetailPage({ params }: Props) {
 
   if (!customer) notFound()
 
+  type BookingWithWorker = {
+    id: string
+    scheduled_at: string
+    final_price: number | null
+    status: string
+    memo: string | null
+    cancellation_reason: string | null
+    worker_id?: string | null
+    quotes: { cleaning_type: string | null; space_size: number | null } | null
+  }
+
   // 전화번호 기준으로 해당 고객의 모든 예약 이력 조회
+  // (취소 건도 포함 — 이력에 '취소'로 표시. 매출·완료 집계엔 미포함. 완전 삭제만 제외.)
   const { data: bookings } = customer.phone
     ? await db
         .from('bookings')
-        .select('id, scheduled_at, final_price, status, memo, quotes!quote_id(cleaning_type, space_size)')
+        .select('id, scheduled_at, final_price, status, memo, cancellation_reason, quotes!quote_id(cleaning_type, space_size)' as never)
         .eq('business_id', profile.business_id)
         .eq('customer_phone', customer.phone)
-        .is('deleted_at', null) // 취소 건은 이력에 '취소'로 남김(매출·완료 집계엔 미포함). 완전 삭제만 제외.
-        .order('scheduled_at', { ascending: false })
+        .is('deleted_at', null)
+        .order('scheduled_at', { ascending: false }) as unknown as { data: BookingWithWorker[] | null }
     : { data: null }
 
-  type BookingRow = typeof bookings extends (infer T)[] | null ? T : never
-  type BookingWithWorker = BookingRow & { worker_id?: string | null }
   const bookingList = (bookings ?? []) as BookingWithWorker[]
 
   // 담당자 조회
@@ -322,7 +333,10 @@ export default async function CustomerDetailPage({ params }: Props) {
 
       {/* 서비스 이력 */}
       <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted-foreground">서비스 이력</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-muted-foreground">서비스 이력</h2>
+          <AddBookingButton customer={{ name: customer.name, phone: customer.phone, address: customer.address }} />
+        </div>
 
         {bookingList.length === 0 ? (
           <div className="bg-white rounded-xl border border-dashed border-border p-10 text-center">
@@ -374,6 +388,11 @@ export default async function CustomerDetailPage({ params }: Props) {
                         <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
                           <User className="h-3 w-3 shrink-0" />
                           {workerName}
+                        </p>
+                      )}
+                      {isCancelled && booking.cancellation_reason && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          취소 사유: <span className="text-foreground/80">{booking.cancellation_reason}</span>
                         </p>
                       )}
                     </div>
