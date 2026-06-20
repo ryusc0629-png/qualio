@@ -6,6 +6,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
 import { generatePostImages, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
 import { revalidatePath } from 'next/cache'
+import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
@@ -122,6 +123,9 @@ export const generatePostAction = action
       geoContent: fullContent,
     })
 
+    // 네이버·빙에 새 글 색인 알림 (빠른 검색 노출)
+    await notifyIndexNowForPosts(db, businessId, [post.slug])
+
     revalidatePath('/dashboard/marketing')
     return { success: true, postId: post.id, slug: post.slug, postContent }
   })
@@ -182,6 +186,16 @@ export const savePostAction = action
         .eq('business_id' as never, businessId)
 
       if (error) throw new Error('[APP] 포스트 수정에 실패했습니다')
+
+      // 발행 상태면 색인 알림 (slug는 id로 조회)
+      if (parsedInput.published) {
+        const { data: row } = await db
+          .from('biz_posts' as never)
+          .select('slug' as never)
+          .eq('id' as never, parsedInput.id)
+          .maybeSingle() as unknown as { data: { slug: string } | null }
+        if (row?.slug) await notifyIndexNowForPosts(db, businessId, [row.slug])
+      }
     } else {
       const slug = `${baseSlug}-${suffix}`
       const imgs = parsedInput.imageUrls ?? []
@@ -203,6 +217,9 @@ export const savePostAction = action
         } as never)
 
       if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
+
+      // 발행 상태면 색인 알림
+      if (parsedInput.published) await notifyIndexNowForPosts(db, businessId, [slug])
     }
 
     revalidatePath('/dashboard/marketing')
@@ -357,6 +374,7 @@ export const publishTodayAction = action
     const publishedTitles = (publishedThisMonth ?? []).map((p) => p.title)
 
     const titles: string[] = []
+    const publishedSlugs: string[] = []
 
     for (let i = 0; i < needed; i++) {
       // 주제 추천
@@ -424,7 +442,11 @@ export const publishTodayAction = action
 
       publishedTitles.push(postContent.title)
       titles.push(postContent.title)
+      publishedSlugs.push(slug)
     }
+
+    // 네이버·빙에 새 글 색인 알림 (빠른 검색 노출)
+    await notifyIndexNowForPosts(db, businessId, publishedSlugs)
 
     revalidatePath('/dashboard/marketing')
     return { success: true, published: needed, titles }

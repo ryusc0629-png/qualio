@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
 import { generatePostImages, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
+import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
@@ -112,6 +113,9 @@ async function publishOnePost(
       geoContent: fullContent,
     })
   }
+
+  // 네이버·빙에 새 글 색인 알림 (빠른 검색 노출)
+  await notifyIndexNowForPosts(db, business.id, [slug])
 
   // 다음 반복에서 중복 방지
   publishedTitles.push(postContent.title)

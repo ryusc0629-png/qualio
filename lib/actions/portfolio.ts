@@ -5,6 +5,7 @@ import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generatePortfolioContent } from '@/lib/ai/portfolio-content'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
+import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
 import { revalidatePath } from 'next/cache'
 
 type ServiceDb = ReturnType<typeof createServiceClient>
@@ -170,6 +171,14 @@ export const approvePortfolioAction = action
       .eq('post_type' as never, 'portfolio')
 
     if (error) throw new Error('[APP] 승인에 실패했습니다')
+
+    // 발행된 포트폴리오 글을 네이버·빙에 색인 알림 (slug 조회)
+    const { data: row } = await db
+      .from('biz_posts' as never)
+      .select('slug' as never)
+      .eq('id' as never, parsedInput.postId)
+      .maybeSingle() as unknown as { data: { slug: string } | null }
+    if (row?.slug) await notifyIndexNowForPosts(db, profile.business_id, [row.slug])
 
     revalidatePath('/dashboard/marketing')
     return { success: true }
