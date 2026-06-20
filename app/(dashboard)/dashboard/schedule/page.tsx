@@ -66,9 +66,9 @@ export default async function SchedulePage({ searchParams }: PageProps) {
 
     db
       .from('bookings' as never)
-      .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, worker_id, quotes!quote_id(cleaning_type)')
+      .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, worker_id, cancellation_reason, quotes!quote_id(cleaning_type)')
       .eq('business_id' as never, businessId)
-      .in('status' as never, ['confirmed', 'in_progress', 'completed'])
+      .in('status' as never, ['confirmed', 'in_progress', 'completed', 'cancelled'])
       .gte('scheduled_at' as never, rangeStart.toISOString())
       .lte('scheduled_at' as never, rangeEnd.toISOString())
       .is('deleted_at' as never, null)
@@ -100,7 +100,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   type RawBooking = {
     id: string; customer_name: string; customer_phone: string | null
     service_address: string | null; scheduled_at: string; final_price: number
-    status: string; worker_id: string | null
+    status: string; worker_id: string | null; cancellation_reason: string | null
     quotes: { cleaning_type: string | null } | null
   }
   const bookings = ((bookingsResult as unknown as { data: RawBooking[] | null }).data) ?? []
@@ -188,6 +188,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           worker_id:       b.worker_id,
           workerIds:       bookingWorkersMap.get(b.id) ?? (b.worker_id ? [b.worker_id] : []),
           cleaning_type:   b.quotes?.cleaning_type ?? null,
+          cancellation_reason: b.cancellation_reason ?? null,
           customer_id:     b.customer_phone ? customerMap.get(b.customer_phone) ?? null : null,
           reportId:        reportMap.get(b.id)?.id ?? null,
           reviewSent:      reportMap.get(b.id)?.reviewSent ?? false,

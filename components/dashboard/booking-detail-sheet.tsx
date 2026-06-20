@@ -63,6 +63,7 @@ interface Booking {
   reviewSent?: boolean
   hasReviewHistory?: boolean
   hasOpenClaim?: boolean
+  cancellation_reason?: string | null
 }
 
 interface Props {
@@ -133,6 +134,8 @@ export function BookingDetailSheet({
   const [currentReportId, setCurrentReportId]     = useState<string | null>(null)
   const [currentReviewSent, setCurrentReviewSent] = useState(false)
   const [reviewDialogOpen, setReviewDialogOpen]   = useState(false)
+  const [cancelDialogOpen, setCancelDialogOpen]   = useState(false)
+  const [cancelReason, setCancelReason]           = useState('')
   const [localWorkerIds, setLocalWorkerIds]       = useState<string[]>([])
   // 항목 편집으로 결제 금액이 바뀌면 즉시 반영 (편집기가 onTotalChange로 알려줌)
   const [liveTotal, setLiveTotal]                 = useState(0)
@@ -178,8 +181,9 @@ export function BookingDetailSheet({
     onSuccess: () => {
       const id = pendingCancelId.current ?? booking?.id ?? null
       pendingCancelId.current = null
+      setCancelDialogOpen(false)
       toast.success('예약이 취소됐어요')
-      if (id) onCancel(id) // 보드에서 카드 즉시 제거
+      if (id) onCancel(id) // 보드에서 해당 카드를 '취소'로 표시
       onClose()
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
@@ -229,11 +233,18 @@ export function BookingDetailSheet({
     saveTime({ bookingId: booking.id, newTime: timeValue })
   }
 
+  // 취소 버튼 → 사유 입력 다이얼로그 열기
   const handleCancelBooking = () => {
     if (!booking) return
-    if (!confirm('예약을 취소할까요? 취소 후에는 되돌릴 수 없습니다.')) return
+    setCancelReason('')
+    setCancelDialogOpen(true)
+  }
+
+  // 다이얼로그에서 '예약 취소 확정' → 사유와 함께 취소
+  const confirmCancelBooking = () => {
+    if (!booking) return
     pendingCancelId.current = booking.id
-    cancelBooking({ bookingId: booking.id })
+    cancelBooking({ bookingId: booking.id, reason: cancelReason.trim() || undefined })
   }
 
   // 날짜 변경 저장 (팀원은 유지)
@@ -511,6 +522,16 @@ export function BookingDetailSheet({
             </Row>
           </div>
 
+          {/* 취소된 예약 — 사유 표시 */}
+          {booking?.status === 'cancelled' && (
+            <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-3 mb-4">
+              <p className="text-sm font-semibold text-muted-foreground">취소된 예약이에요</p>
+              {booking.cancellation_reason && (
+                <p className="text-sm text-foreground/80 mt-1">사유: {booking.cancellation_reason}</p>
+              )}
+            </div>
+          )}
+
           {/* 서비스 정보 */}
           <div className="rounded-xl border border-border bg-card px-4 mb-4">
             {booking?.cleaning_type && (
@@ -719,6 +740,38 @@ export function BookingDetailSheet({
           >
             <Star className="h-3.5 w-3.5" />
             {reviewPending ? '발송 중...' : '리뷰 요청 발송'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* 예약 취소 — 사유 입력 Dialog */}
+    <Dialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>예약 취소</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-sm text-muted-foreground">
+            취소 후에는 되돌릴 수 없어요. 사유를 남기면 <span className="font-medium text-foreground">고객 이력</span>에 함께 남아 나중에 참고할 수 있어요.
+          </p>
+          <textarea
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="취소 사유 (선택) — 예: 고객 일정 변경, 단순 변심, 현장 사정"
+            className="w-full min-h-20 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" className="flex-1" onClick={() => setCancelDialogOpen(false)}>
+            닫기
+          </Button>
+          <Button
+            className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+            disabled={cancelPending}
+            onClick={confirmCancelBooking}
+          >
+            {cancelPending ? '취소 중...' : '예약 취소 확정'}
           </Button>
         </DialogFooter>
       </DialogContent>

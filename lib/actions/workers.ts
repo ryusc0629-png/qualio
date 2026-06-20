@@ -113,7 +113,10 @@ export const updateBookingTimeAction = action
 
 // 일정 보드에서 예약 취소
 export const cancelBookingFromScheduleAction = action
-  .schema(z.object({ bookingId: z.string().uuid() }))
+  .schema(z.object({
+    bookingId: z.string().uuid(),
+    reason: z.string().max(300).optional(), // 취소 사유(선택) — 고객 이력에 함께 표시
+  }))
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getBusinessId()
 
@@ -131,7 +134,11 @@ export const cancelBookingFromScheduleAction = action
 
     const { error } = await db
       .from('bookings')
-      .update({ status: 'cancelled', cancelled_at: new Date().toISOString() } as never)
+      .update({
+        status: 'cancelled',
+        cancelled_at: new Date().toISOString(),
+        cancellation_reason: parsedInput.reason?.trim() || null,
+      } as never)
       .eq('id', parsedInput.bookingId)
       .eq('business_id', businessId)
 

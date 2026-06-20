@@ -59,6 +59,7 @@ interface Booking {
   reviewSent?: boolean
   hasReviewHistory?: boolean
   hasOpenClaim?: boolean
+  cancellation_reason?: string | null
 }
 
 interface Props {
@@ -121,6 +122,7 @@ function BookingCard({
   const time = format(new Date(booking.scheduled_at), 'HH:mm')
   const serviceName = booking.cleaning_type ?? '직접 예약'
   const isCompleted = booking.status === 'completed'
+  const isCancelled = booking.status === 'cancelled'
   const isTeam = booking.workerIds.length > 1
 
   return (
@@ -128,12 +130,16 @@ function BookingCard({
       className={[
         'rounded-lg px-2.5 py-2 text-xs shadow-sm select-none',
         isDragging ? 'opacity-50' : 'opacity-100',
-        isCompleted ? 'text-gray-500 border border-gray-200' : 'text-white',
+        isCancelled ? 'text-gray-400 border border-dashed border-gray-300'
+          : isCompleted ? 'text-gray-500 border border-gray-200' : 'text-white',
       ].join(' ')}
-      style={{ backgroundColor: isCompleted ? '#f3f4f6' : color }}
+      style={{ backgroundColor: isCancelled ? '#fafafa' : isCompleted ? '#f3f4f6' : color }}
     >
       <div className="flex items-center gap-1">
-        {booking.hasOpenClaim && (
+        {isCancelled && (
+          <span className="shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-gray-200 text-gray-500 leading-none">취소</span>
+        )}
+        {booking.hasOpenClaim && !isCancelled && (
           <span
             title="미해결 클레임 있음"
             className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] font-bold leading-none"
@@ -142,8 +148,8 @@ function BookingCard({
           </span>
         )}
         {isCompleted && <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />}
-        {booking.hasReviewHistory && !isCompleted && <span className="shrink-0" title="리뷰 작성 고객">⭐</span>}
-        <p className={`font-bold truncate ${isCompleted ? 'line-through' : ''}`}>{booking.customer_name}</p>
+        {booking.hasReviewHistory && !isCompleted && !isCancelled && <span className="shrink-0" title="리뷰 작성 고객">⭐</span>}
+        <p className={`font-bold truncate ${isCompleted || isCancelled ? 'line-through' : ''}`}>{booking.customer_name}</p>
       </div>
       <p className={`truncate ${isCompleted ? 'opacity-60' : 'opacity-80'}`}>{time} · {serviceName}</p>
       {booking.service_address && (
@@ -188,19 +194,21 @@ function DraggableBookingCard({
   onClick: () => void
 }) {
   const isCompleted = booking.status === 'completed'
+  const isCancelled = booking.status === 'cancelled'
+  const noDrag = isCompleted || isCancelled
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: booking.id,
     data: { booking },
-    disabled: isCompleted,
+    disabled: noDrag,
   })
 
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform) }}
-      className={isCompleted ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing touch-none'}
+      className={noDrag ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing touch-none'}
       onClick={onClick}
-      {...(isCompleted ? {} : listeners)}
+      {...(noDrag ? {} : listeners)}
       {...attributes}
     >
       <BookingCard booking={booking} color={color} workers={workers} isDragging={isDragging} />
@@ -470,8 +478,9 @@ export function ScheduleBoard({
     )
   }
 
+  // 취소 시 카드를 제거하지 않고 '취소' 상태로 바꿔 흐리게 남긴다 (일정에서 한눈에 파악)
   const handleSheetCancel = (bookingId: string) => {
-    setBookings((prev) => prev.filter((b) => b.id !== bookingId))
+    setBookings((prev) => prev.map((b) => b.id === bookingId ? { ...b, status: 'cancelled' } : b))
     setSelectedBookingId(null)
   }
 
