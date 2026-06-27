@@ -148,7 +148,7 @@ export function SettingsForm({ business }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5 pb-28">
       {/* 업체 기본 정보 */}
       <div className="rounded-lg border bg-card p-5 space-y-4">
         <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">기본 정보</h2>
@@ -551,11 +551,13 @@ export function SettingsForm({ business }: Props) {
         )}
       </div>
 
-      {/* 저장 버튼 — 스크롤해도 하단에 계속 보이도록 고정 (모바일 탭바 위) */}
-      <div className="sticky bottom-[calc(3.5rem_+_env(safe-area-inset-bottom))] md:bottom-4 z-10 pt-1">
-        <Button type="submit" disabled={isPending} className="w-full h-12 text-base font-bold shadow-xl shadow-black/20">
-          {isPending ? '저장 중...' : '설정 저장하기'}
-        </Button>
+      {/* 저장 버튼 — 화면 하단 고정(fixed). 모바일은 탭바 위, 데스크탑은 사이드바 옆 정렬 */}
+      <div className="fixed left-0 right-0 md:left-56 z-30 bottom-[calc(3.5rem_+_env(safe-area-inset-bottom))] md:bottom-0 border-t bg-background/95 backdrop-blur px-4 py-3 md:px-6">
+        <div className="max-w-xl">
+          <Button type="submit" disabled={isPending} className="w-full h-12 text-base font-bold">
+            {isPending ? '저장 중...' : '설정 저장하기'}
+          </Button>
+        </div>
       </div>
     </form>
   )
