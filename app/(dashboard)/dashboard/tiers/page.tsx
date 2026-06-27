@@ -17,22 +17,36 @@ export default async function TiersPage() {
 
   if (!profile?.business_id) redirect('/onboarding')
 
+  const businessId = profile.business_id
+
   // 서비스 목록 조회
   const { data: services } = await db
     .from('service_items')
     .select('id, name, base_price, unit, category')
-    .eq('business_id', profile.business_id)
+    .eq('business_id', businessId)
     .eq('is_active', true)
     .is('deleted_at', null)
     .order('sort_order')
     .order('created_at')
 
   // 티어 목록 + 현재 연결된 서비스 조회
-  const { data: tiers } = await db
+  const tiersQuery = () => db
     .from('quote_tiers')
-    .select('id, tier, label, highlight, sort_order')
-    .eq('business_id', profile.business_id)
+    .select('id, tier, label, description, highlight, sort_order')
+    .eq('business_id', businessId)
     .order('sort_order')
+
+  let { data: tiers } = await tiersQuery()
+
+  // 티어가 하나도 없으면 기본 3단계 자동 생성 (온보딩 누락된 옛 계정 보정 — idempotent)
+  if (!tiers || tiers.length === 0) {
+    await db.from('quote_tiers').insert([
+      { business_id: businessId, tier: 'good',   label: '기본',     price_multiplier: 1.0, highlight: false, sort_order: 0 },
+      { business_id: businessId, tier: 'better', label: '추천',     price_multiplier: 1.2, highlight: true,  sort_order: 1 },
+      { business_id: businessId, tier: 'best',   label: '프리미엄', price_multiplier: 1.5, highlight: false, sort_order: 2 },
+    ])
+    tiers = (await tiersQuery()).data
+  }
 
   // 각 티어에 연결된 서비스 ID 조회
   const tierIds = tiers?.map((t) => t.id) ?? []

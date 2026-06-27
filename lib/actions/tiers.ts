@@ -6,17 +6,21 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { recommendBundles } from '@/lib/ai/bundle-recommendation'
 import { revalidatePath } from 'next/cache'
 
-// 티어 번들 저장 스키마
+// 티어 번들 저장 스키마 — 서비스 구성 + 플랜 메타(이름·설명·추천)를 함께 저장
 const saveTierBundleSchema = z.object({
+  // 추천(highlight)으로 강조할 플랜 1개 (없으면 null)
+  highlightTierId: z.string().uuid().nullable(),
   bundles: z.array(
     z.object({
       tier_id: z.string().uuid(),
+      label: z.string().trim().min(1, '플랜 이름을 입력해주세요').max(20, '플랜 이름이 너무 깁니다'),
+      description: z.string().trim().max(100, '설명이 너무 깁니다'),
       service_ids: z.array(z.string().uuid()),
     })
   ),
 })
 
-// 티어별 서비스 번들 저장 (기존 연결 교체)
+// 티어별 서비스 번들 + 플랜 메타 저장 (기존 연결 교체)
 export const saveTierBundleAction = action
   .schema(saveTierBundleSchema)
   .action(async ({ parsedInput }) => {
@@ -45,8 +49,20 @@ export const saveTierBundleAction = action
       throw new Error('[APP] 올바르지 않은 티어 정보입니다')
     }
 
-    // 기존 연결 삭제 후 새로 삽입
     for (const bundle of parsedInput.bundles) {
+      // 1) 플랜 메타(이름·설명·추천 배지) 갱신
+      const { error: metaError } = await db
+        .from('quote_tiers')
+        .update({
+          label: bundle.label,
+          description: bundle.description || null,
+          highlight: bundle.tier_id === parsedInput.highlightTierId,
+        })
+        .eq('id', bundle.tier_id)
+        .eq('business_id', profile.business_id)
+      if (metaError) throw new Error('[APP] 플랜 정보 저장에 실패했습니다')
+
+      // 2) 서비스 연결 교체 (기존 삭제 후 새로 삽입)
       await db
         .from('quote_tier_services')
         .delete()
