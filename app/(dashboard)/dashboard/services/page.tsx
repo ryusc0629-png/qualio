@@ -132,7 +132,9 @@ export default async function ServicesPage() {
                       tier_good_items:   service.tier_good_items   ?? [],
                       tier_better_items: service.tier_better_items ?? [],
                       tier_best_items:   service.tier_best_items   ?? [],
-                    }} />
+                    }}
+                    availableServices={(services ?? []).map((s) => ({ id: s.id, name: s.name }))}
+                    />
                     <DeleteServiceButton id={service.id} />
                   </div>
                 </div>

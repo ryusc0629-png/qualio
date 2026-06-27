@@ -129,6 +129,8 @@ interface EditServiceButtonProps {
     tier_better_items: string[]
     tier_best_items: string[]
   }
+  // 같은 업체의 다른 서비스 목록 — 플랜에 끌어올 수 있게
+  availableServices?: { id: string; name: string }[]
 }
 
 // 플랜 항목 입력 컴포넌트
@@ -147,6 +149,7 @@ function TierItemsEditor({
   placeholder,
   items,
   onChange,
+  pullServices = [],
 }: {
   tone: keyof typeof TIER_TONE
   title: string
@@ -155,16 +158,25 @@ function TierItemsEditor({
   placeholder: string
   items: string[]
   onChange: (items: string[]) => void
+  pullServices?: { id: string; name: string }[]   // 끌어올 수 있는 다른 서비스
 }) {
   const [inputVal, setInputVal] = useState('')
   const t = TIER_TONE[tone]
 
-  const add = useCallback(() => {
-    const v = inputVal.trim()
-    if (!v) return
+  // 중복 없이 항목 추가 (직접 입력·다른 서비스 공통)
+  const addItem = useCallback((raw: string) => {
+    const v = raw.trim()
+    if (!v || items.includes(v)) return
     onChange([...items, v])
+  }, [items, onChange])
+
+  const add = useCallback(() => {
+    addItem(inputVal)
     setInputVal('')
-  }, [inputVal, items, onChange])
+  }, [inputVal, addItem])
+
+  // 아직 안 담긴 서비스만 드롭다운에 노출
+  const pickable = pullServices.filter((s) => !items.includes(s.name))
 
   return (
     <div className={`rounded-xl border ${t.card} p-3.5 space-y-2`}>
@@ -195,6 +207,22 @@ function TierItemsEditor({
         </div>
       )}
 
+      {/* 다른 서비스에서 끌어오기 */}
+      {pickable.length > 0 && (
+        <select
+          value=""
+          onChange={(e) => { if (e.target.value) addItem(e.target.value) }}
+          className="w-full h-8 text-xs bg-white border border-zinc-200 rounded-md px-2 text-zinc-600"
+          aria-label="다른 서비스에서 가져오기"
+        >
+          <option value="">＋ 다른 서비스에서 가져오기</option>
+          {pickable.map((s) => (
+            <option key={s.id} value={s.name}>{s.name}</option>
+          ))}
+        </select>
+      )}
+
+      {/* 직접 작성 */}
       <div className="flex gap-1.5">
         <Input
           placeholder={placeholder}
@@ -211,7 +239,9 @@ function TierItemsEditor({
   )
 }
 
-export function EditServiceButton({ service }: EditServiceButtonProps) {
+export function EditServiceButton({ service, availableServices = [] }: EditServiceButtonProps) {
+  // 현재 서비스를 제외한 나머지 — 플랜에 끌어올 수 있는 후보
+  const otherServices = availableServices.filter((s) => s.id !== service.id)
   const [open, setOpen] = useState(false)
   const [photos, setPhotos] = useState<string[]>(service.photos ?? [])
   const [uploading, setUploading] = useState(false)
@@ -655,6 +685,7 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
                   placeholder="예: 필터 세척"
                   items={tierGood}
                   onChange={setTierGood}
+                  pullServices={otherServices}
                 />
                 <div className="flex items-center justify-center">
                   <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-2 py-0.5">＋ 위 기본 플랜 전부 포함</span>
@@ -667,6 +698,7 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
                   placeholder="예: 열교환기 세척"
                   items={tierBetter}
                   onChange={setTierBetter}
+                  pullServices={otherServices}
                 />
                 <div className="flex items-center justify-center">
                   <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-2 py-0.5">＋ 위 추천 플랜 전부 포함</span>
@@ -679,6 +711,7 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
                   placeholder="예: 항균 코팅"
                   items={tierBest}
                   onChange={setTierBest}
+                  pullServices={otherServices}
                 />
               </div>
             </div>
