@@ -83,3 +83,16 @@ export const KOREA_REGIONS: KoreaRegion[] = [
 export function toAreaValue(region: KoreaRegion, sigungu: string | null): string {
   return sigungu ? `${region.short} ${sigungu}` : region.short
 }
+
+// 수도권(서울·경기·인천)은 서로 가깝다고 본다 — 출장 정상 범위.
+const CAPITAL_AREA = new Set(['서울', '경기', '인천'])
+
+// 업체 시/도(full)와 추가하려는 시/도(full)가 '먼' 관계인지 판단.
+// 다른 시/도이고 수도권 묶음도 아니면 먼 지역 → 경고 대상.
+export function isFarSido(homeSido: string | null, targetSido: string): boolean {
+  if (!homeSido || homeSido === targetSido) return false
+  const a = KOREA_REGIONS.find((r) => r.sido === homeSido)?.short
+  const b = KOREA_REGIONS.find((r) => r.sido === targetSido)?.short
+  if (a && b && CAPITAL_AREA.has(a) && CAPITAL_AREA.has(b)) return false
+  return true
+}

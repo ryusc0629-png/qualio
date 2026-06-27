@@ -12,7 +12,7 @@ import { BrandDesignSection } from './brand-design-section'
 import { ServiceAreaPicker } from './service-area-picker'
 import { BaseAddressPicker } from './base-address-picker'
 import { normalizeHex, type HeroStyle } from '@/lib/brand'
-import { buildAreaServed } from '@/lib/address/parse-region'
+import { buildAreaServed, parseKoreanRegion } from '@/lib/address/parse-region'
 
 interface Testimonial {
   quote: string
@@ -219,7 +219,11 @@ export function SettingsForm({ business }: Props) {
         {/* 더 출장 가는 지역 — 시/도 → 시군구 선택 */}
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">더 출장 가는 지역 (선택)</Label>
-          <ServiceAreaPicker value={serviceAreas} onChange={setServiceAreas} />
+          <ServiceAreaPicker
+            value={serviceAreas}
+            onChange={setServiceAreas}
+            homeSido={parseKoreanRegion(address).sido}
+          />
         </div>
       </div>
 
