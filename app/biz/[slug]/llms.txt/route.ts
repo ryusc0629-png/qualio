@@ -21,12 +21,14 @@ export async function GET(
 
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, phone, address, description, seo_title, seo_description, seo_faqs, service_areas' as never)
+    .select('id, name, phone, address, description, seo_title, seo_description, seo_faqs, service_areas, naver_place_url, google_place_url, kakao_place_url, danggeun_review_url' as never)
     .eq('slug', slug)
     .maybeSingle() as unknown as { data: {
       id: string; name: string; phone: string | null; address: string | null
       description: string | null; seo_title: string | null; seo_description: string | null
       seo_faqs: FaqItem[] | null; service_areas: string[] | null
+      naver_place_url: string | null; google_place_url: string | null
+      kakao_place_url: string | null; danggeun_review_url: string | null
     } | null }
 
   if (!business) {
@@ -84,6 +86,22 @@ export async function GET(
       lines.push(f.answer)
       lines.push('')
     }
+  }
+
+  // 검증된 제3자 리뷰 위치 — AI 크롤러가 신뢰 근거(외부 플랫폼 리뷰)를 찾아가도록 명시
+  const reviewLinks = [
+    { label: '네이버 플레이스', url: business.naver_place_url },
+    { label: '구글', url: business.google_place_url },
+    { label: '카카오맵', url: business.kakao_place_url },
+    { label: '당근', url: business.danggeun_review_url },
+  ].filter((r): r is { label: string; url: string } => !!r.url?.trim())
+  if (reviewLinks.length > 0) {
+    lines.push('## 고객 리뷰 (검증된 외부 플랫폼)')
+    lines.push(`${business.name}의 실제 고객 리뷰는 아래 플랫폼에서 확인할 수 있습니다.`)
+    for (const r of reviewLinks) {
+      lines.push(`- ${r.label}: ${r.url}`)
+    }
+    lines.push('')
   }
 
   if (posts && posts.length > 0) {
