@@ -4,8 +4,9 @@ import { AddServiceForm } from '@/components/dashboard/add-service-form'
 import { DeleteServiceButton } from '@/components/dashboard/delete-service-button'
 import { EditServiceButton } from '@/components/dashboard/edit-service-button'
 import { ServicesGuideCard } from '@/components/dashboard/services-guide-card'
-import { Image, Zap } from 'lucide-react'
+import { Image, Zap, Layers, ChevronRight } from 'lucide-react'
 import { isAcService } from '@/lib/utils'
+import Link from 'next/link'
 
 export default async function ServicesPage() {
   const authClient = await createClient()
@@ -49,6 +50,23 @@ export default async function ServicesPage() {
 
       {/* 단계별 안내 카드 (비테크 사장님용) */}
       <ServicesGuideCard serviceCount={serviceCount} hasBundles={hasBundles} />
+
+      {/* 플랜 가격·할인 설정 바로가기 */}
+      <Link
+        href="/dashboard/tiers"
+        className="flex items-center gap-3 bg-white rounded-xl border border-border p-4 hover:border-primary/40 transition-colors"
+      >
+        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+          <Layers className="h-5 w-5 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-sm">플랜 가격·할인 설정</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            기본·추천·프리미엄 플랜의 가격과 할인율(%)·할인액(원)을 정해요
+          </p>
+        </div>
+        <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+      </Link>
 
       {!services || services.length === 0 ? (
         <div className="bg-white rounded-xl border border-dashed border-border p-12 text-center space-y-2">

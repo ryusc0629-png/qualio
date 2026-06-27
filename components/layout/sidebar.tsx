@@ -13,6 +13,7 @@ import {
   Megaphone,
   Handshake,
   CalendarDays,
+  Layers,
   X,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -30,6 +31,7 @@ const navItems = [
   { href: '/dashboard/clients',  label: '고객 관리',   desc: '견적·예약·거래처', icon: Users },
   { href: '/dashboard/schedule', label: '일정·배정',   desc: undefined,        icon: CalendarDays },
   { href: '/dashboard/services', label: '서비스',      desc: undefined,        icon: Wrench },
+  { href: '/dashboard/tiers',    label: '견적 플랜',   desc: '가격·할인 설정',  icon: Layers },
   { href: '/dashboard/marketing',label: '마케팅',      desc: undefined,        icon: Megaphone },
   { href: '/dashboard/settings', label: '설정',        desc: undefined,        icon: Settings },
 ]
