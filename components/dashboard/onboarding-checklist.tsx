@@ -15,6 +15,7 @@ export async function OnboardingChecklist({ businessId }: { businessId: string }
     { count: quotes },
     { count: bookings },
     { count: completedBookings },
+    geoResult,
   ] = await Promise.all([
     db.from('service_items').select('id', { count: 'exact', head: true }).eq('business_id', businessId),
     db.from('quote_tiers').select('id', { count: 'exact', head: true }).eq('business_id', businessId),
@@ -22,10 +23,14 @@ export async function OnboardingChecklist({ businessId }: { businessId: string }
     db.from('bookings').select('id', { count: 'exact', head: true }).eq('business_id', businessId).is('deleted_at', null),
     db.from('bookings').select('id', { count: 'exact', head: true })
       .eq('business_id', businessId).eq('status', 'completed').is('deleted_at', null),
+    // AI 홍보 페이지 생성 여부 — seo_generated_at이 있으면 완료
+    db.from('businesses').select('seo_generated_at' as never).eq('id', businessId)
+      .maybeSingle() as unknown as Promise<{ data: { seo_generated_at: string | null } | null }>,
   ])
 
   const steps = buildOnboardingSteps({
     serviceItems: serviceItems ?? 0,
+    hasPublicPage: !!geoResult.data?.seo_generated_at,
     quoteTiers: quoteTiers ?? 0,
     quotes: quotes ?? 0,
     bookings: bookings ?? 0,

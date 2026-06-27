@@ -3,6 +3,7 @@
 
 export interface OnboardingCounts {
   serviceItems: number
+  hasPublicPage: boolean   // AI 홍보 페이지(GEO) 생성 완료 여부
   quoteTiers: number
   quotes: number
   bookings: number
@@ -36,6 +37,14 @@ export function buildOnboardingSteps(c: OnboardingCounts): OnboardingStep[] {
       href: '/dashboard/services',
       cta: '서비스 등록하기',
       done: c.serviceItems > 0,
+    },
+    {
+      key: 'geo',
+      label: 'AI 홍보 페이지 만들기',
+      description: '등록한 서비스로 검색·AI 추천에 노출되는 페이지를 자동으로 만들어요',
+      href: '/dashboard/settings',
+      cta: '홍보 페이지 만들기',
+      done: c.hasPublicPage,
     },
     {
       key: 'tier',

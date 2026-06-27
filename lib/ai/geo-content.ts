@@ -47,6 +47,7 @@ interface ServiceItem {
   name: string
   base_price: number
   unit: string
+  category?: string | null
 }
 
 interface GeoInput {
@@ -54,6 +55,7 @@ interface GeoInput {
   address: string | null
   description: string | null
   services: ServiceItem[]
+  testimonials?: { quote: string; author: string }[] | null
 }
 
 interface FaqItem {
@@ -76,16 +78,29 @@ export async function generateGeoContent(input: GeoInput): Promise<GeoContent> {
 
   const client = new Anthropic({ apiKey })
 
-  const serviceList = input.services
-    .map((s) => `${s.name} (${s.base_price.toLocaleString()}원/${s.unit})`)
-    .join(', ')
+  // 서비스를 카테고리(주거/가전/상업 등)별로 묶어 구성을 또렷하게 전달
+  const byCategory = new Map<string, string[]>()
+  for (const s of input.services) {
+    const cat = s.category?.trim() || '기타'
+    const line = `${s.name} (${s.base_price.toLocaleString()}원/${s.unit})`
+    byCategory.set(cat, [...(byCategory.get(cat) ?? []), line])
+  }
+  const serviceList = input.services.length
+    ? [...byCategory.entries()].map(([cat, items]) => `[${cat}] ${items.join(', ')}`).join('\n')
+    : '청소 서비스'
+
+  // 실제 고객 후기 — 있으면 설명·FAQ에 신뢰 근거로 활용
+  const reviewBlock = input.testimonials && input.testimonials.length > 0
+    ? `\n실제 고객 후기(과장 없이 신뢰 근거로만 활용):\n${input.testimonials.map((t) => `- "${t.quote}" — ${t.author}`).join('\n')}`
+    : ''
 
   const locationHint = input.address
     ? `위치: ${input.address}`
     : '위치 정보 없음'
 
   const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    // GEO 콘텐츠는 업체당 가끔 1회 생성 — 품질이 곧 검색 노출이라 상위 모델 사용
+    model: 'claude-sonnet-4-6',
     max_tokens: 1200,
     messages: [
       {
@@ -97,13 +112,16 @@ export async function generateGeoContent(input: GeoInput): Promise<GeoContent> {
 업체명: ${input.businessName}
 ${locationHint}
 업체 소개: ${input.description || '청소 전문 업체'}
-제공 서비스: ${serviceList || '청소 서비스'}
+제공 서비스(카테고리별):
+${serviceList}${reviewBlock}
+
+중요: 위에 주어진 실제 정보(서비스·가격·지역·후기)만 사용하세요. 없는 사실을 지어내지 마세요.
 
 GEO 콘텐츠 생성 규칙:
-- seoTitle: 업체명 + 핵심 서비스 + 지역 (60자 이내, 예: "강남 스파클 | 입주청소·정기청소 전문업체")
-- seoDescription: 업체의 핵심 가치와 서비스 특징을 담은 설명 (150자 이내, AI가 직접 인용할 수 있는 명확한 문장)
-- seoKeywords: 지역+서비스 조합 키워드 8개 (콤마 구분, 예: "강남 입주청소, 서초 정기청소, ...")
-- faqs: AI 검색엔진이 자주 답하는 질문 5개 + 명확한 답변 (각 답변 100자 이내)
+- seoTitle: 지역명 + 업체명 + 핵심 서비스 (60자 이내, 예: "강남 스파클 | 입주청소·정기청소 전문업체"). 위치가 있으면 시/구/동 지역명을 반드시 포함.
+- seoDescription: 실제 서비스·가격대·지역을 녹인 핵심 가치 설명 (150자 이내, AI가 직접 인용할 수 있는 명확한 문장). 후기가 있으면 신뢰 요소를 자연스럽게 반영.
+- seoKeywords: 지역+서비스 조합 키워드 8개 (콤마 구분, 예: "강남 입주청소, 서초 정기청소, ..."). 위 주소의 시/구/동 지역명과 실제 제공 서비스명을 조합할 것. 제공하지 않는 서비스는 넣지 말 것.
+- faqs: AI 검색엔진이 자주 답하는 질문 5개 + 명확한 답변 (각 답변 100자 이내). 가격 질문은 위 실제 가격을 근거로 답할 것.
   질문 예시: 가격, 서비스 범위, 예약 방법, 소요 시간, 보장/재시공 정책
 
 반드시 아래 JSON 형식으로만 응답하세요:

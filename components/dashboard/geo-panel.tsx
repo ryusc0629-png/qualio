@@ -6,8 +6,9 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { generateGeoContentAction, updateSlugAction } from '@/lib/actions/geo'
-import { Sparkles, Copy, ExternalLink, RefreshCw } from 'lucide-react'
+import { generateGeoContentAction, updateSlugAction, updateGeoKeywordsAction } from '@/lib/actions/geo'
+import { Sparkles, Copy, ExternalLink, RefreshCw, ListPlus, Check } from 'lucide-react'
+import Link from 'next/link'
 
 interface FaqItem {
   question: string
@@ -17,6 +18,8 @@ interface FaqItem {
 interface Props {
   businessId: string
   businessName?: string | null
+  serviceCount: number   // 등록된 활성 서비스 수 — 0개면 AI 생성을 막아 추측성 글 방지
+  hasAddress: boolean    // 업체 지역(주소) 입력 여부 — 지역 GEO 최적화에 필수
   slug: string | null
   seoTitle: string | null
   seoDescription: string | null
@@ -43,6 +46,8 @@ const sanitizeSlug = (v: string) => v.toLowerCase().replace(/[^a-z0-9-]/g, '')
 
 export function GeoPanel({
   businessName,
+  serviceCount,
+  hasAddress,
   slug: initialSlug,
   seoTitle: initialTitle,
   seoDescription: initialDescription,
@@ -52,6 +57,9 @@ export function GeoPanel({
 }: Props) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
   const suggestedSlug = slugify(businessName ?? '')
+  // 서비스·지역(주소)이 모두 있어야 팩트 기반 생성이 가능 — 하나라도 없으면 막는다
+  const hasServices = serviceCount > 0
+  const canGenerate = hasServices && hasAddress
 
   const [slug, setSlug]               = useState(initialSlug ?? '')
   const [editingSlug, setEditingSlug] = useState(false)
@@ -60,6 +68,10 @@ export function GeoPanel({
   const [seoDesc, setSeoDesc]         = useState(initialDescription ?? '')
   const [keywords, setKeywords]       = useState(initialKeywords ?? '')
   const [faqs, setFaqs]               = useState<FaqItem[]>(initialFaqs)
+
+  // 검색 키워드 직접 수정
+  const [editingKeywords, setEditingKeywords] = useState(false)
+  const [draftKeywords, setDraftKeywords]     = useState(initialKeywords ?? '')
 
   const publicUrl = slug ? `${appUrl}/biz/${slug}` : null
 
@@ -72,10 +84,22 @@ export function GeoPanel({
       setSeoTitle(data.geoContent.seoTitle)
       setSeoDesc(data.geoContent.seoDescription)
       setKeywords(data.geoContent.seoKeywords)
+      setDraftKeywords(data.geoContent.seoKeywords)
+      setEditingKeywords(false)
       setFaqs(data.geoContent.faqs)
       toast.success('GEO 콘텐츠가 생성되었습니다!')
     },
     onError: ({ error }) => toast.error(error.serverError ?? 'GEO 콘텐츠 생성에 실패했습니다'),
+  })
+
+  // 검색 키워드 저장
+  const { execute: saveKeywords, isPending: isSavingKeywords } = useAction(updateGeoKeywordsAction, {
+    onSuccess: ({ data }) => {
+      if (data?.keywords) setKeywords(data.keywords)
+      setEditingKeywords(false)
+      toast.success('검색 키워드를 저장했어요')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '저장 못 했어요. 다시 눌러주세요'),
   })
 
   // slug 변경
@@ -109,7 +133,7 @@ export function GeoPanel({
           type="button"
           size="sm"
           onClick={() => generate({})}
-          disabled={isGenerating}
+          disabled={isGenerating || !canGenerate}
           className="gap-2 shrink-0"
         >
           {isGenerating ? (
@@ -150,20 +174,20 @@ export function GeoPanel({
                 </button>
               )}
 
-              {/* 저장 / 취소 — 버튼 행 (삐져나가지 않게) */}
-              <div className="flex gap-2 pt-0.5">
+              {/* 저장 / 취소 — 버튼 행 (저장이 주 액션, 취소는 보조) */}
+              <div className="flex gap-2 pt-1">
                 <Button
                   type="button"
-                  className="flex-1 h-10"
+                  className="flex-[2] h-12 text-base font-semibold"
                   disabled={isUpdatingSlug || !newSlug || newSlug === slug}
                   onClick={() => updateSlug({ slug: newSlug })}
                 >
-                  {isUpdatingSlug ? '저장 중...' : '저장'}
+                  {isUpdatingSlug ? '저장 중...' : '저장하기'}
                 </Button>
                 <Button
                   type="button"
-                  variant="outline"
-                  className="flex-1 h-10"
+                  variant="ghost"
+                  className="flex-1 h-12 text-muted-foreground"
                   disabled={isUpdatingSlug}
                   onClick={() => { setEditingSlug(false); setNewSlug(slug) }}
                 >
@@ -224,9 +248,57 @@ export function GeoPanel({
           )}
 
           {keywords && (
-            <div className="space-y-1">
-              <Label className="text-xs">타겟 키워드</Label>
-              <p className="text-sm rounded bg-muted px-3 py-2 text-muted-foreground">{keywords}</p>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-xs">검색 키워드</Label>
+                {!editingKeywords && (
+                  <button
+                    type="button"
+                    onClick={() => { setDraftKeywords(keywords); setEditingKeywords(true) }}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    수정
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                고객이 검색할 때 쓰는 말이에요. AI가 자동으로 채워주고, 직접 고칠 수도 있어요. (쉼표로 구분)
+              </p>
+              {editingKeywords ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={draftKeywords}
+                    onChange={(e) => setDraftKeywords(e.target.value)}
+                    rows={3}
+                    autoFocus
+                    placeholder="예: 강남 입주청소, 서초 정기청소, 역삼동 에어컨청소"
+                    className="w-full text-sm rounded-md border bg-background px-3 py-2 outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="h-9"
+                      disabled={isSavingKeywords || !draftKeywords.trim() || draftKeywords.trim() === keywords}
+                      onClick={() => saveKeywords({ keywords: draftKeywords.trim() })}
+                    >
+                      {isSavingKeywords ? '저장 중...' : '저장하기'}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-9 text-muted-foreground"
+                      disabled={isSavingKeywords}
+                      onClick={() => { setEditingKeywords(false); setDraftKeywords(keywords) }}
+                    >
+                      취소
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm rounded bg-muted px-3 py-2 text-muted-foreground">{keywords}</p>
+              )}
             </div>
           )}
 
@@ -252,10 +324,51 @@ export function GeoPanel({
         </div>
       )}
 
-      {!slug && !isGenerating && (
+      {/* 준비가 안 됐으면 — 무엇을 채워야 하는지 안내 (추측 대신 팩트 기반 생성) */}
+      {!canGenerate && !isGenerating && (
+        <div className="rounded-lg border border-dashed bg-muted/40 px-4 py-5 space-y-3">
+          <p className="text-sm font-medium">
+            아래를 먼저 채우면 더 정확한 홍보 페이지를 만들어 드려요
+          </p>
+          <ul className="space-y-2.5 text-sm">
+            <li className="flex items-start gap-2">
+              <Check className={`h-4 w-4 mt-0.5 shrink-0 ${hasServices ? 'text-primary' : 'text-muted-foreground/40'}`} />
+              <div className="flex-1">
+                <span className={hasServices ? 'line-through text-muted-foreground' : ''}>
+                  서비스와 가격 등록
+                </span>
+                {!hasServices && (
+                  <Link href="/dashboard/services" className="block mt-1">
+                    <Button type="button" variant="outline" size="sm" className="gap-1.5 h-9">
+                      <ListPlus className="h-4 w-4" />
+                      서비스 등록하러 가기
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            </li>
+            <li className="flex items-start gap-2">
+              <Check className={`h-4 w-4 mt-0.5 shrink-0 ${hasAddress ? 'text-primary' : 'text-muted-foreground/40'}`} />
+              <div className="flex-1">
+                <span className={hasAddress ? 'line-through text-muted-foreground' : ''}>
+                  업체 지역(주소) 입력
+                </span>
+                {!hasAddress && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    아래 <span className="font-medium text-foreground">업체 정보</span>에서 주소를 입력해 주세요. 지역 검색 노출에 꼭 필요해요.
+                  </p>
+                )}
+              </div>
+            </li>
+          </ul>
+        </div>
+      )}
+
+      {/* 준비는 됐는데 아직 생성 전 */}
+      {canGenerate && !slug && !isGenerating && (
         <div className="text-center py-4 text-sm text-muted-foreground">
           <p>아직 공개 페이지가 없습니다.</p>
-          <p className="mt-1">"AI로 생성하기" 버튼을 누르면 자동으로 만들어집니다.</p>
+          <p className="mt-1">&quot;AI로 생성하기&quot; 버튼을 누르면 자동으로 만들어집니다.</p>
         </div>
       )}
     </div>

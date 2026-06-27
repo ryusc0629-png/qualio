@@ -27,7 +27,7 @@ export default async function SettingsPage() {
 
   if (!profile?.business_id) redirect('/onboarding')
 
-  const [businessResult, subscriptionResult] = await Promise.all([
+  const [businessResult, subscriptionResult, serviceCountResult] = await Promise.all([
     db
       .from('businesses')
       .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials' as never)
@@ -38,7 +38,16 @@ export default async function SettingsPage() {
       .select('plan, status, current_period_end, next_plan' as never)
       .eq('business_id', profile.business_id)
       .maybeSingle() as unknown as Promise<{ data: { plan: string; status: string; current_period_end: string | null; next_plan: string | null } | null; error: unknown }>,
+    // GEO 생성 게이트용 — 등록된 활성 서비스 개수 (0개면 추측성 생성 방지)
+    db
+      .from('service_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', profile.business_id)
+      .eq('is_active', true)
+      .is('deleted_at', null),
   ])
+
+  const serviceCount = serviceCountResult.count ?? 0
 
   if (!businessResult.data) redirect('/onboarding')
 
@@ -60,6 +69,9 @@ export default async function SettingsPage() {
     current_period_end: null,
     next_plan: null,
   }
+
+  // 지역 GEO 최적화엔 주소가 필수 — 비어 있으면 생성 게이트로 막는다
+  const hasAddress = !!business.address?.trim()
 
   const baseUrl  = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   // 읽기 좋은 주소(slug)가 있으면 그걸로, 없으면 옛 UUID로 — 둘 다 /q 라우트가 받음
@@ -106,6 +118,8 @@ export default async function SettingsPage() {
       <GeoPanel
         businessId={business.id}
         businessName={business.name ?? null}
+        serviceCount={serviceCount}
+        hasAddress={hasAddress}
         slug={business.slug ?? null}
         seoTitle={business.seo_title ?? null}
         seoDescription={business.seo_description ?? null}
