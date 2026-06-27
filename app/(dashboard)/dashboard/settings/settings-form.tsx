@@ -551,9 +551,12 @@ export function SettingsForm({ business }: Props) {
         )}
       </div>
 
-      <Button type="submit" disabled={isPending} className="w-full">
-        {isPending ? '저장 중...' : '설정 저장'}
-      </Button>
+      {/* 저장 버튼 — 스크롤해도 하단에 계속 보이도록 고정 (모바일 탭바 위) */}
+      <div className="sticky bottom-[calc(3.5rem_+_env(safe-area-inset-bottom))] md:bottom-4 z-10 pt-1">
+        <Button type="submit" disabled={isPending} className="w-full h-12 text-base font-bold shadow-xl shadow-black/20">
+          {isPending ? '저장 중...' : '설정 저장하기'}
+        </Button>
+      </div>
     </form>
   )
 }
