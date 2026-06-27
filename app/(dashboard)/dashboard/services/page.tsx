@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { AddServiceForm } from '@/components/dashboard/add-service-form'
 import { DeleteServiceButton } from '@/components/dashboard/delete-service-button'
 import { EditServiceButton } from '@/components/dashboard/edit-service-button'
+import { ServicesGuideCard } from '@/components/dashboard/services-guide-card'
 import { Image, Zap } from 'lucide-react'
 import { isAcService } from '@/lib/utils'
 
@@ -29,6 +30,10 @@ export default async function ServicesPage() {
     .order('sort_order')
     .order('created_at')
 
+  // 온보딩 안내용 — 서비스 등록 여부 / 플랜 구성 여부
+  const serviceCount = services?.length ?? 0
+  const hasBundles = (services ?? []).some((s) => (s.tier_good_items?.length ?? 0) > 0)
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
 
@@ -41,6 +46,9 @@ export default async function ServicesPage() {
         </div>
         <AddServiceForm />
       </div>
+
+      {/* 단계별 안내 카드 (비테크 사장님용) */}
+      <ServicesGuideCard serviceCount={serviceCount} hasBundles={hasBundles} />
 
       {!services || services.length === 0 ? (
         <div className="bg-white rounded-xl border border-dashed border-border p-12 text-center space-y-2">

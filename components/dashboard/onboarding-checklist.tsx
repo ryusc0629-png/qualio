@@ -11,14 +11,15 @@ export async function OnboardingChecklist({ businessId }: { businessId: string }
 
   const [
     { count: serviceItems },
-    { count: quoteTiers },
+    bundlesResult,
     { count: quotes },
     { count: bookings },
     { count: completedBookings },
     geoResult,
   ] = await Promise.all([
     db.from('service_items').select('id', { count: 'exact', head: true }).eq('business_id', businessId),
-    db.from('quote_tiers').select('id', { count: 'exact', head: true }).eq('business_id', businessId),
+    // 플랜 구성 여부 — 서비스 중 하나라도 기본 플랜 항목이 채워졌으면 완료
+    db.from('service_items').select('tier_good_items').eq('business_id', businessId).is('deleted_at', null),
     db.from('quotes').select('id', { count: 'exact', head: true }).eq('business_id', businessId),
     db.from('bookings').select('id', { count: 'exact', head: true }).eq('business_id', businessId).is('deleted_at', null),
     db.from('bookings').select('id', { count: 'exact', head: true })
@@ -28,10 +29,14 @@ export async function OnboardingChecklist({ businessId }: { businessId: string }
       .maybeSingle() as unknown as Promise<{ data: { seo_generated_at: string | null } | null }>,
   ])
 
+  const hasBundles = (bundlesResult.data ?? []).some(
+    (s) => ((s.tier_good_items as string[] | null)?.length ?? 0) > 0
+  )
+
   const steps = buildOnboardingSteps({
     serviceItems: serviceItems ?? 0,
     hasPublicPage: !!geoResult.data?.seo_generated_at,
-    quoteTiers: quoteTiers ?? 0,
+    hasBundles,
     quotes: quotes ?? 0,
     bookings: bookings ?? 0,
     completedBookings: completedBookings ?? 0,

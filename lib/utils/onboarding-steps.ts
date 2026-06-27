@@ -4,7 +4,7 @@
 export interface OnboardingCounts {
   serviceItems: number
   hasPublicPage: boolean   // AI 홍보 페이지(GEO) 생성 완료 여부
-  quoteTiers: number
+  hasBundles: boolean      // 서비스 플랜(기본/추천/프리미엄) 항목 구성 여부
   quotes: number
   bookings: number
   completedBookings: number
@@ -48,11 +48,11 @@ export function buildOnboardingSteps(c: OnboardingCounts): OnboardingStep[] {
     },
     {
       key: 'tier',
-      label: '가격 묶음 만들기',
-      description: '기본·고급·프리미엄처럼 고를 수 있는 견적 묶음이에요',
-      href: '/dashboard/tiers',
-      cta: '가격 묶음 만들기',
-      done: c.quoteTiers > 0,
+      label: '플랜(번들) 구성하기',
+      description: '각 서비스의 기본·추천·프리미엄 항목을 정해요 (AI 추천 가능)',
+      href: '/dashboard/services',
+      cta: '플랜 구성하기',
+      done: c.hasBundles,
     },
     {
       key: 'quote',
