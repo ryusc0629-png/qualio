@@ -32,7 +32,7 @@ export default async function TiersPage() {
   // 티어 목록 + 현재 연결된 서비스 조회
   const tiersQuery = () => db
     .from('quote_tiers')
-    .select('id, tier, label, description, highlight, sort_order')
+    .select('id, tier, label, description, highlight, sort_order, price_multiplier')
     .eq('business_id', businessId)
     .order('sort_order')
 
@@ -83,6 +83,13 @@ export default async function TiersPage() {
     discount_amount: discountMap[t.id]?.amount ?? 0,
   }))
 
+  // 가격 심리 가이드용 기준가 — 정액 서비스 가격의 중앙값(없으면 10만원)
+  const flatBases = (services ?? [])
+    .filter((s) => s.unit !== '평당')
+    .map((s) => s.base_price)
+    .sort((a, b) => a - b)
+  const referenceBase = flatBases.length > 0 ? flatBases[Math.floor(flatBases.length / 2)] : 100000
+
   return (
     <div className="space-y-6">
       <div>
@@ -103,6 +110,7 @@ export default async function TiersPage() {
         <TierBundleEditor
           services={services ?? []}
           tiers={tiersWithDiscount}
+          referenceBase={referenceBase}
           currentBundles={currentBundles}
         />
       )}

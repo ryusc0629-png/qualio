@@ -7,6 +7,8 @@ import { GeoPanel } from '@/components/dashboard/geo-panel'
 import { CopyLinkButton } from '@/components/dashboard/copy-link-button'
 import { PushNotificationToggle } from '@/components/dashboard/push-notification-toggle'
 import type { PlanId } from '@/lib/config/plans'
+import Link from 'next/link'
+import { Layers, ChevronRight } from 'lucide-react'
 
 interface FaqItem {
   question: string
@@ -87,6 +89,23 @@ export default async function SettingsPage() {
 
       {/* 폰 알림 받기 (앱 푸시) */}
       <PushNotificationToggle />
+
+      {/* 견적 플랜 가격·할인 설정 바로가기 */}
+      <Link
+        href="/dashboard/tiers"
+        className="flex items-center gap-3 bg-white rounded-xl border border-border p-5 hover:border-primary/40 transition-colors"
+      >
+        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+          <Layers className="h-5 w-5 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="font-semibold text-sm">견적 플랜 가격·할인 설정</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            기본·추천·프리미엄 플랜 구성과 가격·할인을 정하고, 추천 가격대 가이드를 확인해요
+          </p>
+        </div>
+        <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+      </Link>
 
       {/* 고객 견적 요청 링크 */}
       <div className="bg-white rounded-xl border border-border p-5 space-y-3">

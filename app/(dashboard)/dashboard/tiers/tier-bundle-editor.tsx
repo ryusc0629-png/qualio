@@ -7,7 +7,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { saveTierBundleAction, aiSuggestBundleAction } from '@/lib/actions/tiers'
-import { Sparkles, Save, Star, Wrench } from 'lucide-react'
+import { Sparkles, Save, Star, Wrench, TrendingUp } from 'lucide-react'
 
 interface Service {
   id: string
@@ -24,6 +24,7 @@ interface Tier {
   description: string | null
   highlight: boolean
   sort_order: number
+  price_multiplier: number  // 기본가 대비 배수 (good 1.0 / better 1.2 / best 1.5)
   discount_rate: number     // 할인율 %
   discount_amount: number   // 할인액 원
 }
@@ -31,6 +32,7 @@ interface Tier {
 interface Props {
   services: Service[]
   tiers: Tier[]
+  referenceBase: number     // 가격 심리 가이드 예시용 기준가
   currentBundles: Record<string, string[]>  // tier_id → service_id[]
 }
 
@@ -41,7 +43,7 @@ const TIER_COLOR: Record<string, string> = {
   best:   'border-purple-300 bg-purple-50',
 }
 
-export function TierBundleEditor({ services, tiers, currentBundles }: Props) {
+export function TierBundleEditor({ services, tiers, referenceBase, currentBundles }: Props) {
   // 티어별 선택된 서비스 ID 세트 (tier_id → Set<service_id>)
   const [selected, setSelected] = useState<Record<string, Set<string>>>(() => {
     const init: Record<string, Set<string>> = {}
@@ -146,6 +148,35 @@ export function TierBundleEditor({ services, tiers, currentBundles }: Props) {
     (a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier)
   )
 
+  // ── 가격 심리 가이드 ── 기준가 × 배수 × 할인으로 예시 가격을 실시간 계산
+  const roundK = (n: number) => Math.round(n / 1000) * 1000
+  const examplePrice = (tier: Tier) => {
+    const rate = Math.min(100, Math.max(0, Number(discountRates[tier.id]) || 0))
+    const amt = Math.max(0, Number(discountAmounts[tier.id]) || 0)
+    const base = referenceBase * Number(tier.price_multiplier || 1)
+    return Math.max(0, roundK(base * (1 - rate / 100) - amt))
+  }
+  const tierByKey = Object.fromEntries(tiers.map((t) => [t.tier, t])) as Record<string, Tier>
+  const exG = tierByKey.good   ? examplePrice(tierByKey.good)   : 0
+  const exB = tierByKey.better ? examplePrice(tierByKey.better) : 0
+  const exP = tierByKey.best   ? examplePrice(tierByKey.best)   : 0
+  // 추천 플랜 권장 가격대: 기본의 1.25배 ~ (기본+프리미엄)/2 (중간값보다 낮게 두면 '합리적'으로 보임)
+  const recoLo = roundK(exG * 1.25)
+  const recoHi = roundK((exG + exP) / 2)
+  // 한도 알림 — 중간(추천) 선택을 유도하는 가격 구조인지 점검
+  const nudge: { level: 'good' | 'tip' | 'warn'; msg: string } = (() => {
+    if (!(exG > 0 && exB > 0 && exP > 0)) return { level: 'tip', msg: '서비스를 등록하면 예시 가격이 더 정확해져요' }
+    if (!(exG < exB && exB < exP)) return { level: 'warn', msg: '가격이 기본 < 추천 < 프리미엄 순서가 되도록 맞춰주세요' }
+    if (exB < recoLo) return { level: 'tip', msg: '추천이 기본과 너무 비슷해요. 추천에 항목을 더하거나 기본 할인을 줄여 차이를 키우면 업그레이드처럼 보여요' }
+    if (exB > recoHi) return { level: 'tip', msg: '추천이 프리미엄에 너무 가까워요. 추천에 할인을 더 주면 가장 합리적인 선택으로 보여요' }
+    return { level: 'good', msg: '좋아요! 추천 플랜이 중간에서 가장 합리적으로 보여 가장 많이 선택될 구조예요' }
+  })()
+  const nudgeStyle = {
+    good: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    tip:  'border-amber-200 bg-amber-50 text-amber-900',
+    warn: 'border-red-200 bg-red-50 text-red-900',
+  }[nudge.level]
+
   return (
     <div className="space-y-5">
       {/* 액션 버튼 */}
@@ -170,6 +201,50 @@ export function TierBundleEditor({ services, tiers, currentBundles }: Props) {
           <Wrench className="h-3.5 w-3.5" />
           서비스 항목 관리
         </Link>
+      </div>
+
+      {/* 가격 심리 가이드 — 중간(추천) 플랜이 가장 많이 선택되게 */}
+      <div className="rounded-xl border bg-card p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-primary" />
+          <p className="font-semibold text-sm">가격 가이드 — 중간(추천) 플랜이 많이 선택되게</p>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          기준가 <span className="font-medium text-foreground">{referenceBase.toLocaleString()}원</span> 예시 (할인 반영). 실제 견적은 서비스 구성에 따라 달라져요.
+        </p>
+        {/* 예시 가격 3단 — 추천 강조 */}
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: '기본', price: exG, hl: false },
+            { label: '추천', price: exB, hl: true },
+            { label: '프리미엄', price: exP, hl: false },
+          ].map((c) => (
+            <div
+              key={c.label}
+              className={`rounded-lg border p-2.5 text-center ${c.hl ? 'border-emerald-300 bg-emerald-50' : 'border-border bg-muted/40'}`}
+            >
+              <p className="text-[11px] text-muted-foreground">{c.label}{c.hl && ' ⭐'}</p>
+              <p className={`text-sm font-bold tabular-nums ${c.hl ? 'text-emerald-700' : 'text-foreground'}`}>
+                {c.price.toLocaleString()}원
+              </p>
+            </div>
+          ))}
+        </div>
+        {/* 추천 가격대 */}
+        {exG > 0 && exP > 0 && recoHi > recoLo && (
+          <p className="text-xs text-muted-foreground">
+            추천 플랜 권장 가격대:{' '}
+            <span className="font-semibold text-foreground tabular-nums">
+              {recoLo.toLocaleString()}~{recoHi.toLocaleString()}원
+            </span>{' '}
+            (이 사이에 두면 가장 합리적으로 보여요)
+          </p>
+        )}
+        {/* 한도 알림 */}
+        <div className={`rounded-lg border px-3 py-2 text-xs leading-relaxed ${nudgeStyle}`}>
+          {nudge.level === 'good' ? '✓ ' : nudge.level === 'warn' ? '⚠️ ' : '💡 '}
+          {nudge.msg}
+        </div>
       </div>
 
       {aiReason && (
