@@ -62,7 +62,8 @@ export default async function SettingsPage() {
   }
 
   const baseUrl  = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-  const quoteUrl = `${baseUrl}/q/${profile.business_id}`
+  // 읽기 좋은 주소(slug)가 있으면 그걸로, 없으면 옛 UUID로 — 둘 다 /q 라우트가 받음
+  const quoteUrl = `${baseUrl}/q/${business.slug ?? profile.business_id}`
 
   return (
     <div className="max-w-xl space-y-6">

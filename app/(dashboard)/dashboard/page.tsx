@@ -29,14 +29,15 @@ export default async function DashboardPage() {
   const db = createServiceClient()
   const { data: profile } = await db
     .from('profiles')
-    .select('business_id, businesses!business_id(name)')
+    .select('business_id, businesses!business_id(name, slug)')
     .eq('id', user.id)
     .maybeSingle()
 
   const businessId = profile?.business_id
   if (!businessId) redirect('/onboarding')
 
-  const businessName = (profile?.businesses as { name: string } | null)?.name ?? '내 업체'
+  const businessInfo = profile?.businesses as { name: string; slug: string | null } | null
+  const businessName = businessInfo?.name ?? '내 업체'
   const now = new Date()
 
   // 날짜 범위 계산 (KST 기준)
@@ -246,7 +247,8 @@ export default async function DashboardPage() {
   const weeklyTotal = weeklyData.reduce((s, d) => s + d.revenue, 0)
 
   const baseUrl  = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-  const quoteUrl = `${baseUrl}/q/${businessId}`
+  // 읽기 좋은 주소(slug)가 있으면 그걸로, 없으면 옛 UUID로 — 둘 다 /q 라우트가 받음
+  const quoteUrl = `${baseUrl}/q/${businessInfo?.slug ?? businessId}`
 
   const dateLabel = now.toLocaleDateString('ko-KR', {
     year: 'numeric', month: 'long', day: 'numeric', weekday: 'long',
