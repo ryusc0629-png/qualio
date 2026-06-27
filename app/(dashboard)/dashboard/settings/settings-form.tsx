@@ -6,9 +6,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Plus, Trash2, Quote, X } from 'lucide-react'
+import { Plus, Trash2, Quote } from 'lucide-react'
 import { updateBusinessAction } from '@/lib/actions/settings'
 import { BrandDesignSection } from './brand-design-section'
+import { ServiceAreaPicker } from './service-area-picker'
 import { normalizeHex, type HeroStyle } from '@/lib/brand'
 import { buildAreaServed } from '@/lib/address/parse-region'
 
@@ -96,20 +97,9 @@ export function SettingsForm({ business }: Props) {
     business.testimonials ?? []
   )
 
-  // 출장 지역 — 주소 기준 자동 노출 지역 + 사장님이 더하는 추가 지역
+  // 출장 지역 — 주소 기준 자동 노출 지역 + 사장님이 선택하는 추가 지역
   const autoAreas = buildAreaServed(business.address, [])
   const [serviceAreas, setServiceAreas] = useState<string[]>(business.service_areas ?? [])
-  const [areaInput, setAreaInput] = useState('')
-
-  const addServiceAreas = () => {
-    const next = areaInput
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-    if (next.length === 0) return
-    setServiceAreas((prev) => [...new Set([...prev, ...next])])
-    setAreaInput('')
-  }
 
   const { execute, isPending } = useAction(updateBusinessAction, {
     onSuccess: () => toast.success('설정이 저장됐어요!'),
@@ -228,43 +218,10 @@ export function SettingsForm({ business }: Props) {
           <p className="text-xs text-muted-foreground">위에 주소를 입력하고 저장하면 지역이 자동으로 잡혀요.</p>
         )}
 
-        {/* 추가 출장 지역 */}
-        <div className="space-y-1.5">
-          <Label htmlFor="area_input" className="text-xs text-muted-foreground">더 출장 가는 지역 (선택)</Label>
-          <div className="flex gap-2">
-            <Input
-              id="area_input"
-              value={areaInput}
-              onChange={(e) => setAreaInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  addServiceAreas()
-                }
-              }}
-              placeholder="예: 수원, 안산 (쉼표로 여러 개)"
-            />
-            <Button type="button" variant="outline" onClick={addServiceAreas} className="shrink-0">
-              추가
-            </Button>
-          </div>
-          {serviceAreas.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {serviceAreas.map((a) => (
-                <span key={a} className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2.5 py-1 text-xs">
-                  {a}
-                  <button
-                    type="button"
-                    onClick={() => setServiceAreas((prev) => prev.filter((x) => x !== a))}
-                    aria-label={`${a} 삭제`}
-                    className="hover:text-destructive"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
+        {/* 더 출장 가는 지역 — 시/도 → 시군구 선택 */}
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">더 출장 가는 지역 (선택)</Label>
+          <ServiceAreaPicker value={serviceAreas} onChange={setServiceAreas} />
         </div>
       </div>
 
