@@ -10,9 +10,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { updateServiceItemAction } from '@/lib/actions/services'
+import { updateServiceItemAction, aiSuggestServiceTierItemsAction } from '@/lib/actions/services'
 import { createClient } from '@/lib/supabase/client'
-import { Pencil, X, ImagePlus, Loader2, Zap, ListPlus, Trash2, Plus } from 'lucide-react'
+import { Pencil, X, ImagePlus, Loader2, Zap, ListPlus, Trash2, Plus, Sparkles } from 'lucide-react'
 import { isAcService } from '@/lib/utils'
 
 const VARIANT_PRESETS = ['신축', '구축', '아파트', '빌라', '오피스텔', '상가']
@@ -284,6 +284,18 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
       setOpen(false)
     },
     onError: ({ error }) => toast.error(error.serverError ?? '수정에 실패했습니다'),
+  })
+
+  // 이 서비스 한 항목의 플랜 구성 항목을 AI가 추천 → 그 자리에서 수정 가능
+  const { execute: suggestTierItems, isPending: isSuggesting } = useAction(aiSuggestServiceTierItemsAction, {
+    onSuccess: ({ data }) => {
+      if (!data) return
+      setTierGood(data.good)
+      setTierBetter(data.better)
+      setTierBest(data.best)
+      toast.success('AI 추천을 채웠어요. 필요하면 수정한 뒤 저장하세요')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? 'AI 추천에 실패했어요'),
   })
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -583,7 +595,22 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
             {/* 플랜 구성 항목 */}
             <div className="space-y-4 border-t pt-4">
               <div>
-                <p className="text-sm font-semibold">플랜 구성 항목 설정</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold">플랜 구성 항목 설정</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 shrink-0 gap-1.5 text-xs"
+                    disabled={isSuggesting}
+                    onClick={() => suggestTierItems({ id: service.id })}
+                  >
+                    {isSuggesting
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Sparkles className="h-3.5 w-3.5" />}
+                    {isSuggesting ? '추천 중...' : 'AI로 추천받기'}
+                  </Button>
+                </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   입력하시면 견적서에 정확한 포함 항목이 표시됩니다. 비워두면 AI가 자동으로 채웁니다.
                 </p>

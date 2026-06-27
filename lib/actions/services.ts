@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { recommendServiceTierItems } from '@/lib/ai/service-tier-items'
 import { revalidatePath } from 'next/cache'
 
 const VALID_UNITS = ['정액', '평당', '시간', '개'] as const
@@ -71,6 +72,43 @@ async function invalidateBundleCache(db: ReturnType<typeof createServiceClient>,
   const tierIds = tiers.map((t) => t.id)
   await db.from('quote_tier_services').delete().in('tier_id', tierIds)
 }
+
+// 서비스 한 항목의 플랜(기본/추천/프리미엄) 구성 항목을 AI가 개별 추천
+export const aiSuggestServiceTierItemsAction = action
+  .schema(z.object({ id: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    // 본인 업체의 서비스인지 확인하며 정보 조회
+    const { data: service } = await db
+      .from('service_items')
+      .select('name, category, base_price, unit')
+      .eq('id', parsedInput.id)
+      .eq('business_id', profile.business_id)
+      .maybeSingle()
+
+    if (!service) throw new Error('[APP] 서비스를 찾을 수 없습니다')
+
+    const items = await recommendServiceTierItems({
+      name: service.name,
+      category: service.category,
+      basePrice: service.base_price,
+      unit: service.unit,
+    })
+
+    return items
+  })
 
 // 서비스 항목 생성 액션
 export const createServiceItemAction = action
