@@ -171,6 +171,7 @@ interface PostInput {
   imageUrl?: string     // 업로드한 이미지 URL — Claude가 직접 분석
   serviceAreas?: string[] | null // 추가 출장 지역
   model?: string        // 본문 생성 모델 (플랜별 — 미지정 시 기본 Haiku)
+  realCases?: string[]  // 실제 작업 사례(익명) — 본문 고유성·신뢰도용 근거
 }
 
 // 업체 블로그 포스트 자동 생성
@@ -192,6 +193,11 @@ export async function generatePostContent(input: PostInput): Promise<PostContent
   // 지역 사다리 — 핵심 동/구에 집중하되 상위 지역을 가끔 언급
   const regionHint = buildRegionPromptHint(input.address, input.serviceAreas)
 
+  // 실제 작업 사례(익명) — 있으면 본문에 근거로 녹여 복제 불가능한 고유성 확보
+  const realCasesBlock = input.realCases && input.realCases.length > 0
+    ? `\n[실제 작업 사례 — 이 업체가 실제로 수행한 익명 사례다. 아래 중 1개를 골라 본문 스토리텔링에 자연스럽게(고객 식별정보 없이) 녹여 고유성을 높일 것. 사례에 없는 사실·수치는 절대 지어내지 말 것]\n${input.realCases.map((c, i) => `${i + 1}. ${c}`).join('\n')}`
+    : ''
+
   const textPrompt = `당신은 한국 청소 서비스 업체의 GEO 블로그 포스팅 전문가입니다.
 ChatGPT, Gemini, Perplexity 등 AI 검색엔진이 "청소 관련 질문"에 이 업체를 인용하도록
 아래 구조에 맞게 포스트를 작성하세요.
@@ -202,11 +208,12 @@ ${regionHint}
 업체 소개: ${input.description ?? '청소 전문 업체'}
 서비스: ${serviceList || '청소 서비스'}
 ${topicHint}
-${input.imageUrl ? '위 첨부 이미지를 분석하여 이미지 내용을 포스트에 자연스럽게 반영하세요.' : ''}
+${input.imageUrl ? '위 첨부 이미지를 분석하여 이미지 내용을 포스트에 자연스럽게 반영하세요.' : ''}${realCasesBlock}
 
 [지역·고유성 규칙 — 검색 노출에 매우 중요]
 - 본문·소제목에 핵심 지역(동/구)을 자연스럽게 2~4회 녹일 것. 상위 지역(시·도·권역)은 1~2회만 언급해 "핵심 지역 전문"이라는 신호를 흐리지 말 것.
 - 이 업체만의 실제 정보(위 서비스명·가격·소개·지역)를 구체적으로 반영할 것. 어느 업체에나 통하는 일반론·복붙형 문장은 금지 — 다른 업체 글과 절대 비슷하면 안 됨(중복 콘텐츠로 검색에서 누락됨).
+- 위 [실제 작업 사례]가 제공됐다면 본문(주로 소제목3 또는 업체 연결 단락)에 1개를 익명으로 녹여 "실제로 해본 곳"이라는 신뢰·고유성을 줄 것. 단, 사례에 없는 수치·상호·실명은 만들지 말 것.
 
 === 작성 구조 (Inblog GEO 최적화 포맷) ===
 

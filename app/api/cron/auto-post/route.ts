@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
+import { fetchRecentJobCases } from '@/lib/ai/job-cases'
 import { generatePostImages, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
@@ -45,6 +46,7 @@ async function publishOnePost(
   // 플랜별 능력 — 본문 생성 모델, SNS 채널 원고 생성 여부
   model: string,
   channelsEnabled: boolean,
+  realCases: string[],
 ): Promise<string> {
   // AI로 주제 추천
   let selectedTopic: string | undefined
@@ -72,6 +74,7 @@ async function publishOnePost(
     topic: selectedTopic,
     serviceAreas: business.serviceAreas,
     model,
+    realCases,
   })
 
   // slug 중복 방지
@@ -215,10 +218,12 @@ export async function GET(request: NextRequest) {
       // 플랜별 능력 — 심층 글 모델 / SNS 채널 원고 포함 여부
       const model = getPostModel(planId)
       const channelsEnabled = isChannelContentEnabled(planId)
+      // 실제 작업 사례(익명) — 글 고유성 근거 (업체당 1회 조회)
+      const realCases = await fetchRecentJobCases(db, business.id)
 
       const publishedTitlesThisRun: string[] = []
       for (let i = 0; i < needed; i++) {
-        const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas, autoImageGeneration: business.auto_image_generation ?? true }, services ?? [], publishedTitles, month, model, channelsEnabled)
+        const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas, autoImageGeneration: business.auto_image_generation ?? true }, services ?? [], publishedTitles, month, model, channelsEnabled, realCases)
         publishedTitlesThisRun.push(title)
         console.log(`[Cron] 자동 발행 완료 (${i + 1}/${needed}): ${business.name} — "${title}"`)
       }

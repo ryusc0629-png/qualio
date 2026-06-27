@@ -9,6 +9,7 @@ import { revalidatePath } from 'next/cache'
 import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
 import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContentEnabled } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
+import { fetchRecentJobCases } from '@/lib/ai/job-cases'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 
 // 공통: 현재 유저의 business_id 조회
@@ -67,6 +68,8 @@ export const generatePostAction = action
     const planId = ((subResult.data?.plan as PlanId) ?? 'beta')
     const model = getPostModel(planId)
     const channelsEnabled = isChannelContentEnabled(planId)
+    // 실제 작업 사례(익명) — 글 고유성 근거
+    const realCases = await fetchRecentJobCases(db, businessId)
 
     // AI 포스트 생성
     const postContent = await generatePostContent({
@@ -78,6 +81,7 @@ export const generatePostAction = action
       imageUrl: parsedInput.imageUrl,
       serviceAreas: business.service_areas,
       model,
+      realCases,
     })
 
     // 추천 카드에서 발행한 경우 → 기획 단계 제목 그대로 사용
@@ -393,6 +397,9 @@ export const publishTodayAction = action
     const titles: string[] = []
     const publishedSlugs: string[] = []
 
+    // 실제 작업 사례(익명) — 글 고유성 근거 (1회 조회)
+    const realCases = await fetchRecentJobCases(db, businessId)
+
     for (let i = 0; i < needed; i++) {
       // 주제 추천
       let topic: string | undefined
@@ -416,6 +423,7 @@ export const publishTodayAction = action
         topic,
         serviceAreas: business.service_areas,
         model,
+        realCases,
       })
 
       // slug 중복 방지
