@@ -7,7 +7,7 @@ import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-cont
 import { generatePostImages, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
 import { revalidatePath } from 'next/cache'
 import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
-import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
+import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContentEnabled } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 
@@ -38,8 +38,8 @@ export const generatePostAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getBusinessId()
 
-    // 업체 정보 + 서비스 조회
-    const [businessResult, servicesResult] = await Promise.all([
+    // 업체 정보 + 서비스 + 구독 플랜 조회
+    const [businessResult, servicesResult, subResult] = await Promise.all([
       db
         .from('businesses')
         .select('name, address, description, service_areas' as never)
@@ -51,12 +51,22 @@ export const generatePostAction = action
         .eq('business_id', businessId)
         .eq('is_active', true)
         .is('deleted_at', null),
+      db
+        .from('subscriptions')
+        .select('plan')
+        .eq('business_id', businessId)
+        .eq('status', 'active')
+        .maybeSingle(),
     ])
 
     if (!businessResult.data) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
     const business = businessResult.data
     const services = servicesResult.data ?? []
+    // 플랜별 능력 — 심층 글 모델 / SNS 채널 원고 포함 여부
+    const planId = ((subResult.data?.plan as PlanId) ?? 'beta')
+    const model = getPostModel(planId)
+    const channelsEnabled = isChannelContentEnabled(planId)
 
     // AI 포스트 생성
     const postContent = await generatePostContent({
@@ -67,6 +77,7 @@ export const generatePostAction = action
       topic: parsedInput.topic,
       imageUrl: parsedInput.imageUrl,
       serviceAreas: business.service_areas,
+      model,
     })
 
     // 추천 카드에서 발행한 경우 → 기획 단계 제목 그대로 사용
@@ -116,13 +127,15 @@ export const generatePostAction = action
 
     if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
 
-    // 네이버·당근·인스타 채널 텍스트 자동 생성 (실패해도 GEO 발행은 유지)
-    await generateAndSaveChannelContent(db, post.id, {
-      businessName: business.name,
-      address: business.address,
-      geoTitle: postContent.title,
-      geoContent: fullContent,
-    })
+    // 네이버·당근·인스타 채널 텍스트 자동 생성 (플랜에 포함된 경우만, 실패해도 GEO 발행은 유지)
+    if (channelsEnabled) {
+      await generateAndSaveChannelContent(db, post.id, {
+        businessName: business.name,
+        address: business.address,
+        geoTitle: postContent.title,
+        geoContent: fullContent,
+      })
+    }
 
     // 네이버·빙에 새 글 색인 알림 (빠른 검색 노출)
     await notifyIndexNowForPosts(db, businessId, [post.slug])
@@ -333,6 +346,9 @@ export const publishTodayAction = action
     const planId = ((sub?.plan as PlanId) ?? 'beta')
     const planLimit = getAutoPostLimit(planId)
     const dailyLimit = getAutoDailyPostLimit(planId)
+    // 플랜별 능력 — 심층 글 모델 / SNS 채널 원고 포함 여부
+    const model = getPostModel(planId)
+    const channelsEnabled = isChannelContentEnabled(planId)
 
     // 달력 월 기준 발행 건수 집계
     const monthStart = new Date(Date.UTC(year, month - 1, 1)).toISOString()
@@ -399,6 +415,7 @@ export const publishTodayAction = action
         services,
         topic,
         serviceAreas: business.service_areas,
+        model,
       })
 
       // slug 중복 방지
@@ -432,8 +449,8 @@ export const publishTodayAction = action
 
       if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
 
-      // 네이버·당근·인스타 채널 텍스트 자동 생성 (실패해도 GEO 발행은 유지)
-      if (savedPost?.id) {
+      // 네이버·당근·인스타 채널 텍스트 자동 생성 (플랜에 포함된 경우만, 실패해도 GEO 발행은 유지)
+      if (channelsEnabled && savedPost?.id) {
         await generateAndSaveChannelContent(db, savedPost.id, {
           businessName: business.name,
           address: business.address,

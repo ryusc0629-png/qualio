@@ -4,7 +4,7 @@ import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-cont
 import { generatePostImages, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
-import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
+import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContentEnabled } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
 // Vercel Cron: 매일 00:00 UTC (한국 오전 9시) 실행
@@ -42,6 +42,9 @@ async function publishOnePost(
   services: { name: string; base_price: number; unit: string }[],
   publishedTitles: string[],
   month: number,
+  // 플랜별 능력 — 본문 생성 모델, SNS 채널 원고 생성 여부
+  model: string,
+  channelsEnabled: boolean,
 ): Promise<string> {
   // AI로 주제 추천
   let selectedTopic: string | undefined
@@ -68,6 +71,7 @@ async function publishOnePost(
     services,
     topic: selectedTopic,
     serviceAreas: business.serviceAreas,
+    model,
   })
 
   // slug 중복 방지
@@ -105,8 +109,8 @@ async function publishOnePost(
 
   if (error) throw new Error(error.message)
 
-  // 네이버·당근·인스타 채널 텍스트 자동 생성 (실패해도 GEO 발행은 유지)
-  if (saved?.id) {
+  // 네이버·당근·인스타 채널 텍스트 자동 생성 (플랜에 포함된 경우만, 실패해도 GEO 발행은 유지)
+  if (channelsEnabled && saved?.id) {
     await generateAndSaveChannelContent(db, saved.id, {
       businessName: business.name,
       address: business.address,
@@ -208,9 +212,13 @@ export async function GET(request: NextRequest) {
 
       // 오늘 필요한 건수만큼 순차 발행 (AI 주제 추천 방식)
       // 포트폴리오(시공 사례)는 자동 발행에서 제외 — 사장님이 직접 승인해 게시
+      // 플랜별 능력 — 심층 글 모델 / SNS 채널 원고 포함 여부
+      const model = getPostModel(planId)
+      const channelsEnabled = isChannelContentEnabled(planId)
+
       const publishedTitlesThisRun: string[] = []
       for (let i = 0; i < needed; i++) {
-        const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas, autoImageGeneration: business.auto_image_generation ?? true }, services ?? [], publishedTitles, month)
+        const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas, autoImageGeneration: business.auto_image_generation ?? true }, services ?? [], publishedTitles, month, model, channelsEnabled)
         publishedTitlesThisRun.push(title)
         console.log(`[Cron] 자동 발행 완료 (${i + 1}/${needed}): ${business.name} — "${title}"`)
       }

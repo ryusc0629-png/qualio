@@ -170,6 +170,7 @@ interface PostInput {
   topic?: string        // 작성할 주제 (없으면 AI가 선택)
   imageUrl?: string     // 업로드한 이미지 URL — Claude가 직접 분석
   serviceAreas?: string[] | null // 추가 출장 지역
+  model?: string        // 본문 생성 모델 (플랜별 — 미지정 시 기본 Haiku)
 }
 
 // 업체 블로그 포스트 자동 생성
@@ -274,7 +275,8 @@ imagePrompt: 이 포스트 주제에 정확히 맞는 AI 이미지 생성용 영
     : [{ type: 'text', text: textPrompt }]
 
   const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    // 플랜별 모델 — 상위 플랜은 심층 글(Sonnet), 미지정 시 기본 Haiku
+    model: input.model ?? 'claude-haiku-4-5-20251001',
     // 본문 1500~2000자 + 요약·keyPoints·FAQ JSON까지 담아야 함.
     // 한국어 1자≈1.5토큰이라 전체 출력이 클 수 있어, 중간 잘림 방지용으로 넉넉히 확보
     max_tokens: 6000,
