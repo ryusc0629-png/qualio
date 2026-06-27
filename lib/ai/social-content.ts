@@ -97,9 +97,11 @@ ${pureContent.slice(0, 1200)}
   "instagramHashtags": ["태그1", "태그2", "태그3", "태그4", "태그5", "태그6", "태그7", "태그8", "태그9", "태그10", "태그11", "태그12"]
 }`
 
+  // max_tokens는 넉넉히 — 네이버 본문(~1,400자)+당근+인스타+태그 22개를 한 JSON으로 받으므로
+  // 2,000으로는 응답이 중간에 잘려 JSON 파싱이 실패(채널 원고가 조용히 누락)했음. 8,000으로 상향.
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 2000,
+    max_tokens: 8000,
     messages: [{ role: 'user', content: prompt }],
   })
 
