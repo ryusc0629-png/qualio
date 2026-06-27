@@ -32,7 +32,7 @@ export default async function TiersPage() {
   // 티어 목록 + 현재 연결된 서비스 조회
   const tiersQuery = () => db
     .from('quote_tiers')
-    .select('id, tier, label, description, highlight, sort_order, price_multiplier')
+    .select('id, tier, label, description, highlight, sort_order')
     .eq('business_id', businessId)
     .order('sort_order')
 
@@ -64,32 +64,6 @@ export default async function TiersPage() {
     currentBundles[ts.tier_id].push(ts.service_id)
   }
 
-  // 플랜별 할인 조회 (컬럼 없으면 무시 — 마이그레이션 적용 전 안전)
-  const discountMap: Record<string, { rate: number; amount: number }> = {}
-  {
-    const { data: dRows, error: dErr } = await db
-      .from('quote_tiers')
-      .select('id, discount_rate, discount_amount' as never)
-      .eq('business_id', businessId)
-    if (!dErr && dRows) {
-      for (const r of dRows as unknown as Array<{ id: string; discount_rate: number | null; discount_amount: number | null }>) {
-        discountMap[r.id] = { rate: Number(r.discount_rate) || 0, amount: Number(r.discount_amount) || 0 }
-      }
-    }
-  }
-  const tiersWithDiscount = (tiers ?? []).map((t) => ({
-    ...t,
-    discount_rate: discountMap[t.id]?.rate ?? 0,
-    discount_amount: discountMap[t.id]?.amount ?? 0,
-  }))
-
-  // 가격 심리 가이드용 기준가 — 정액 서비스 가격의 중앙값(없으면 10만원)
-  const flatBases = (services ?? [])
-    .filter((s) => s.unit !== '평당')
-    .map((s) => s.base_price)
-    .sort((a, b) => a - b)
-  const referenceBase = flatBases.length > 0 ? flatBases[Math.floor(flatBases.length / 2)] : 100000
-
   return (
     <div className="space-y-6">
       <div>
@@ -109,8 +83,7 @@ export default async function TiersPage() {
       ) : (
         <TierBundleEditor
           services={services ?? []}
-          tiers={tiersWithDiscount}
-          referenceBase={referenceBase}
+          tiers={tiers ?? []}
           currentBundles={currentBundles}
         />
       )}

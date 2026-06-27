@@ -53,6 +53,13 @@ const updateServiceItemSchema = z.object({
   tier_good_items:   z.array(z.string()).optional(),
   tier_better_items: z.array(z.string()).optional(),
   tier_best_items:   z.array(z.string()).optional(),
+  // 서비스별 플랜 할인 (선택)
+  tier_good_discount_rate:     z.number().min(0).max(100).optional(),
+  tier_good_discount_amount:   z.number().min(0).optional(),
+  tier_better_discount_rate:   z.number().min(0).max(100).optional(),
+  tier_better_discount_amount: z.number().min(0).optional(),
+  tier_best_discount_rate:     z.number().min(0).max(100).optional(),
+  tier_best_discount_amount:   z.number().min(0).optional(),
 })
 
 // 서비스 항목 삭제 스키마
@@ -186,6 +193,21 @@ export const updateServiceItemAction = action
       .eq('business_id', profile.business_id)
 
     if (error) throw new Error('[APP] 서비스 수정에 실패했습니다')
+
+    // 플랜 할인 저장 — 컬럼이 아직 없으면(마이그레이션 전) 조용히 건너뜀
+    const { error: discountError } = await db
+      .from('service_items')
+      .update({
+        tier_good_discount_rate:     parsedInput.tier_good_discount_rate     ?? 0,
+        tier_good_discount_amount:   parsedInput.tier_good_discount_amount   ?? 0,
+        tier_better_discount_rate:   parsedInput.tier_better_discount_rate   ?? 0,
+        tier_better_discount_amount: parsedInput.tier_better_discount_amount ?? 0,
+        tier_best_discount_rate:     parsedInput.tier_best_discount_rate     ?? 0,
+        tier_best_discount_amount:   parsedInput.tier_best_discount_amount   ?? 0,
+      } as never)
+      .eq('id', parsedInput.id)
+      .eq('business_id', profile.business_id)
+    if (discountError) console.error('[Services] 플랜 할인 저장 건너뜀(컬럼 미적용?):', discountError.message)
 
     await invalidateBundleCache(db, profile.business_id)
     revalidatePath('/dashboard/services')

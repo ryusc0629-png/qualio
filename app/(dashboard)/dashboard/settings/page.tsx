@@ -99,9 +99,9 @@ export default async function SettingsPage() {
           <Layers className="h-5 w-5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <h2 className="font-semibold text-sm">견적 플랜 가격·할인 설정</h2>
+          <h2 className="font-semibold text-sm">견적 플랜 이름·구성</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            기본·추천·프리미엄 플랜 구성과 가격·할인을 정하고, 추천 가격대 가이드를 확인해요
+            플랜 이름(기본·추천·프리미엄)과 강조 표시, 묶음 구성을 정해요. 가격·할인은 각 서비스 편집에서 설정해요
           </p>
         </div>
         <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />

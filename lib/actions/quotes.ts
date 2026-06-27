@@ -62,12 +62,18 @@ export const calculateAndCreateQuoteAction = publicAction
     // 선택한 서비스 조회 (에어컨·항목별 단가 포함)
     const { data: service } = await db
       .from('service_items')
-      .select('id, name, base_price, unit, ac_type_prices, unit_prices, unit_variants')
+      .select('id, name, base_price, unit, ac_type_prices, unit_prices, unit_variants, tier_good_discount_rate, tier_good_discount_amount, tier_better_discount_rate, tier_better_discount_amount, tier_best_discount_rate, tier_best_discount_amount' as never)
       .eq('id', parsedInput.service_id)
       .eq('business_id', parsedInput.business_id)
       .eq('is_active', true)
       .is('deleted_at', null)
-      .maybeSingle()
+      .maybeSingle() as unknown as { data: {
+        id: string; name: string; base_price: number; unit: string
+        ac_type_prices: unknown; unit_prices: unknown; unit_variants: unknown
+        tier_good_discount_rate?: number | null;   tier_good_discount_amount?: number | null
+        tier_better_discount_rate?: number | null; tier_better_discount_amount?: number | null
+        tier_best_discount_rate?: number | null;   tier_best_discount_amount?: number | null
+      } | null }
 
     if (!service) throw new Error('[APP] 선택한 서비스를 찾을 수 없습니다')
 
@@ -120,23 +126,16 @@ export const calculateAndCreateQuoteAction = publicAction
     const tiers = dbTiers && dbTiers.length > 0 ? dbTiers : DEFAULT_TIERS
     const roundToThousand = (n: number) => Math.round(n / 1000) * 1000
 
-    // 플랜별 할인 설정 조회 (컬럼이 아직 없으면 무시 — 마이그레이션 적용 전 안전)
-    const discountMap: Record<string, { rate: number; amount: number }> = {}
-    {
-      const { data: dRows, error: dErr } = await db
-        .from('quote_tiers')
-        .select('id, discount_rate, discount_amount' as never)
-        .eq('business_id', parsedInput.business_id)
-      if (!dErr && dRows) {
-        for (const r of dRows as unknown as Array<{ id: string; discount_rate: number | null; discount_amount: number | null }>) {
-          discountMap[r.id] = { rate: Number(r.discount_rate) || 0, amount: Number(r.discount_amount) || 0 }
-        }
-      }
+    // 서비스별 플랜 할인 (컬럼이 아직 없으면 0 — 마이그레이션 적용 전 안전)
+    const tierDiscount: Record<'good' | 'better' | 'best', { rate: number; amount: number }> = {
+      good:   { rate: Number(service.tier_good_discount_rate)   || 0, amount: Number(service.tier_good_discount_amount)   || 0 },
+      better: { rate: Number(service.tier_better_discount_rate) || 0, amount: Number(service.tier_better_discount_amount) || 0 },
+      best:   { rate: Number(service.tier_best_discount_rate)   || 0, amount: Number(service.tier_best_discount_amount)   || 0 },
     }
     // 자동 계산된 가격에 할인 적용: 가격 × (1 - 할인율/100) - 할인액, 0 미만 방지
-    const applyDiscount = (price: number, tierId: string | null) => {
-      const d = tierId ? discountMap[tierId] : null
-      if (!d || (d.rate === 0 && d.amount === 0)) return price
+    const applyDiscount = (price: number, tierKey: 'good' | 'better' | 'best') => {
+      const d = tierDiscount[tierKey]
+      if (d.rate === 0 && d.amount === 0) return price
       const discounted = price * (1 - d.rate / 100) - d.amount
       return Math.max(0, roundToThousand(discounted))
     }
@@ -250,10 +249,10 @@ export const calculateAndCreateQuoteAction = publicAction
       bestId   ? calcBundlePrice(bestId)   : Promise.resolve(null),
     ])
 
-    // 번들 가격 없으면 multiplier 방식 fallback → 이후 플랜별 할인 적용
-    const goodPrice   = applyDiscount(bundleGood   ?? roundToThousand(baseCalc * Number(goodTier?.price_multiplier   ?? 1.0)), goodId)
-    const betterPrice = applyDiscount(bundleBetter ?? roundToThousand(baseCalc * Number(betterTier?.price_multiplier ?? 1.2)), betterId)
-    const bestPrice   = applyDiscount(bundleBest   ?? roundToThousand(baseCalc * Number(bestTier?.price_multiplier   ?? 1.5)), bestId)
+    // 번들 가격 없으면 multiplier 방식 fallback → 이후 서비스별 플랜 할인 적용
+    const goodPrice   = applyDiscount(bundleGood   ?? roundToThousand(baseCalc * Number(goodTier?.price_multiplier   ?? 1.0)), 'good')
+    const betterPrice = applyDiscount(bundleBetter ?? roundToThousand(baseCalc * Number(betterTier?.price_multiplier ?? 1.2)), 'better')
+    const bestPrice   = applyDiscount(bundleBest   ?? roundToThousand(baseCalc * Number(bestTier?.price_multiplier   ?? 1.5)), 'best')
 
     // AI 설명에 전달할 번들 서비스 목록
     const getBundleServiceNames = async (tierId: string | null): Promise<string[]> => {

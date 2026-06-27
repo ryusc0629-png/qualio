@@ -128,9 +128,17 @@ interface EditServiceButtonProps {
     tier_good_items: string[]
     tier_better_items: string[]
     tier_best_items: string[]
+    tier_good_discount_rate?: number | null
+    tier_good_discount_amount?: number | null
+    tier_better_discount_rate?: number | null
+    tier_better_discount_amount?: number | null
+    tier_best_discount_rate?: number | null
+    tier_best_discount_amount?: number | null
   }
   // 같은 업체의 다른 서비스 목록 — 플랜에 끌어올 수 있게
   availableServices?: { id: string; name: string }[]
+  // 플랜 배수 (기본가 대비) — 예시 가격 계산용
+  tierMultipliers?: { good: number; better: number; best: number }
 }
 
 // 플랜 항목 입력 컴포넌트
@@ -150,6 +158,11 @@ function TierItemsEditor({
   items,
   onChange,
   pullServices = [],
+  examplePrice,
+  discountRate,
+  discountAmount,
+  onDiscountRate,
+  onDiscountAmount,
 }: {
   tone: keyof typeof TIER_TONE
   title: string
@@ -159,6 +172,11 @@ function TierItemsEditor({
   items: string[]
   onChange: (items: string[]) => void
   pullServices?: { id: string; name: string }[]   // 끌어올 수 있는 다른 서비스
+  examplePrice?: number                            // 이 플랜 예시 가격 (할인 반영)
+  discountRate: string
+  discountAmount: string
+  onDiscountRate: (v: string) => void
+  onDiscountAmount: (v: string) => void
 }) {
   const [inputVal, setInputVal] = useState('')
   const t = TIER_TONE[tone]
@@ -185,8 +203,38 @@ function TierItemsEditor({
         <span className={`h-2.5 w-2.5 rounded-full ${t.dot}`} />
         <p className="text-sm font-bold text-zinc-800">{title}</p>
         <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${t.badge}`}>{badge}</span>
+        {examplePrice !== undefined && examplePrice > 0 && (
+          <span className="ml-auto text-sm font-bold text-zinc-800 tabular-nums">
+            {examplePrice.toLocaleString()}원~
+          </span>
+        )}
       </div>
       {hint && <p className="text-[11px] text-muted-foreground -mt-0.5">{hint}</p>}
+
+      {/* 할인 (선택) — 이 플랜 가격에서 차감 */}
+      <div className="flex items-center gap-1.5">
+        <span className="text-[11px] text-muted-foreground shrink-0">할인</span>
+        <div className="flex items-center gap-0.5">
+          <Input
+            type="number" inputMode="numeric" min={0} max={100}
+            value={discountRate}
+            onChange={(e) => onDiscountRate(e.target.value)}
+            placeholder="0"
+            className="h-8 w-14 text-xs text-right bg-white px-1.5"
+          />
+          <span className="text-[11px] text-muted-foreground">%</span>
+        </div>
+        <div className="flex items-center gap-0.5">
+          <Input
+            type="number" inputMode="numeric" min={0}
+            value={discountAmount}
+            onChange={(e) => onDiscountAmount(e.target.value)}
+            placeholder="0"
+            className="h-8 w-24 text-xs text-right bg-white px-1.5"
+          />
+          <span className="text-[11px] text-muted-foreground">원</span>
+        </div>
+      </div>
 
       {/* 항목 칩 (흰 배경으로 채도 대비) */}
       {items.length > 0 && (
@@ -239,7 +287,11 @@ function TierItemsEditor({
   )
 }
 
-export function EditServiceButton({ service, availableServices = [] }: EditServiceButtonProps) {
+export function EditServiceButton({
+  service,
+  availableServices = [],
+  tierMultipliers = { good: 1.0, better: 1.2, best: 1.5 },
+}: EditServiceButtonProps) {
   // 현재 서비스를 제외한 나머지 — 플랜에 끌어올 수 있는 후보
   const otherServices = availableServices.filter((s) => s.id !== service.id)
   const [open, setOpen] = useState(false)
@@ -249,6 +301,14 @@ export function EditServiceButton({ service, availableServices = [] }: EditServi
   const [tierGood,   setTierGood]   = useState<string[]>(service.tier_good_items)
   const [tierBetter, setTierBetter] = useState<string[]>(service.tier_better_items)
   const [tierBest,   setTierBest]   = useState<string[]>(service.tier_best_items)
+  // 플랜별 할인 (문자열로 입력 받음)
+  const numStr = (v: number | null | undefined) => (v ? String(v) : '')
+  const [discGoodRate,   setDiscGoodRate]   = useState(numStr(service.tier_good_discount_rate))
+  const [discGoodAmt,    setDiscGoodAmt]    = useState(numStr(service.tier_good_discount_amount))
+  const [discBetterRate, setDiscBetterRate] = useState(numStr(service.tier_better_discount_rate))
+  const [discBetterAmt,  setDiscBetterAmt]  = useState(numStr(service.tier_better_discount_amount))
+  const [discBestRate,   setDiscBestRate]   = useState(numStr(service.tier_best_discount_rate))
+  const [discBestAmt,    setDiscBestAmt]    = useState(numStr(service.tier_best_discount_amount))
   // 에어컨 유형별 단가 상태 (기존 값으로 초기화)
   const [acPrices, setAcPrices] = useState<Partial<Record<string, string>>>(() => {
     const init: Partial<Record<string, string>> = {}
@@ -297,6 +357,33 @@ export function EditServiceButton({ service, availableServices = [] }: EditServi
 
   const currentName  = watch('name') ?? ''
   const isAcByName   = isAcService(currentName)
+
+  // ── 가격 가이드 ── 기본가 × 배수 × 할인으로 플랜별 예시 가격 실시간 계산
+  const currentBase = Number(watch('base_price')) || service.base_price
+  const roundK = (n: number) => Math.round(n / 1000) * 1000
+  const exPrice = (mult: number, rateStr: string, amtStr: string) => {
+    const rate = Math.min(100, Math.max(0, Number(rateStr) || 0))
+    const amt = Math.max(0, Number(amtStr) || 0)
+    return Math.max(0, roundK(currentBase * mult * (1 - rate / 100) - amt))
+  }
+  const exG = exPrice(tierMultipliers.good,   discGoodRate,   discGoodAmt)
+  const exB = exPrice(tierMultipliers.better, discBetterRate, discBetterAmt)
+  const exP = exPrice(tierMultipliers.best,   discBestRate,   discBestAmt)
+  const perUnit = service.unit === '평당' ? '/평' : ''
+  const recoLo = roundK(exG * 1.25)
+  const recoHi = roundK((exG + exP) / 2)
+  const priceNudge: { level: 'good' | 'tip' | 'warn'; msg: string } = (() => {
+    if (!(exG > 0 && exB > 0 && exP > 0)) return { level: 'tip', msg: '기본 가격을 입력하면 추천 가격대가 표시돼요' }
+    if (!(exG < exB && exB < exP)) return { level: 'warn', msg: '가격이 기본 < 추천 < 프리미엄 순서가 되도록 할인을 조정하세요' }
+    if (exB < recoLo) return { level: 'tip', msg: '추천이 기본과 너무 비슷해요. 추천 할인을 줄이거나 기본 할인을 늘려 차이를 키우면 업그레이드처럼 보여요' }
+    if (exB > recoHi) return { level: 'tip', msg: '추천이 프리미엄에 너무 가까워요. 추천에 할인을 더 주면 가장 합리적으로 보여요' }
+    return { level: 'good', msg: '좋아요! 추천 플랜이 중간에서 가장 합리적으로 보여 가장 많이 선택될 구조예요' }
+  })()
+  const priceNudgeStyle = {
+    good: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    tip:  'border-amber-200 bg-amber-50 text-amber-900',
+    warn: 'border-red-200 bg-red-50 text-red-900',
+  }[priceNudge.level]
   const isUnitByName = !isAcByName && showUnitPrices
 
   const handleVariantsChange = (next: string[]) => {
@@ -451,6 +538,12 @@ export function EditServiceButton({ service, availableServices = [] }: EditServi
                 tier_good_items:   tierGood.filter(Boolean),
                 tier_better_items: tierBetter.filter(Boolean),
                 tier_best_items:   tierBest.filter(Boolean),
+                tier_good_discount_rate:     Math.min(100, Math.max(0, Number(discGoodRate)   || 0)),
+                tier_good_discount_amount:   Math.max(0, Number(discGoodAmt)   || 0),
+                tier_better_discount_rate:   Math.min(100, Math.max(0, Number(discBetterRate) || 0)),
+                tier_better_discount_amount: Math.max(0, Number(discBetterAmt) || 0),
+                tier_best_discount_rate:     Math.min(100, Math.max(0, Number(discBestRate)   || 0)),
+                tier_best_discount_amount:   Math.max(0, Number(discBestAmt)   || 0),
               })
             })}
             className="space-y-4"
@@ -686,6 +779,11 @@ export function EditServiceButton({ service, availableServices = [] }: EditServi
                   items={tierGood}
                   onChange={setTierGood}
                   pullServices={otherServices}
+                  examplePrice={exG}
+                  discountRate={discGoodRate}
+                  discountAmount={discGoodAmt}
+                  onDiscountRate={setDiscGoodRate}
+                  onDiscountAmount={setDiscGoodAmt}
                 />
                 <div className="flex items-center justify-center">
                   <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-2 py-0.5">＋ 위 기본 플랜 전부 포함</span>
@@ -699,6 +797,11 @@ export function EditServiceButton({ service, availableServices = [] }: EditServi
                   items={tierBetter}
                   onChange={setTierBetter}
                   pullServices={otherServices}
+                  examplePrice={exB}
+                  discountRate={discBetterRate}
+                  discountAmount={discBetterAmt}
+                  onDiscountRate={setDiscBetterRate}
+                  onDiscountAmount={setDiscBetterAmt}
                 />
                 <div className="flex items-center justify-center">
                   <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-2 py-0.5">＋ 위 추천 플랜 전부 포함</span>
@@ -712,7 +815,32 @@ export function EditServiceButton({ service, availableServices = [] }: EditServi
                   items={tierBest}
                   onChange={setTierBest}
                   pullServices={otherServices}
+                  examplePrice={exP}
+                  discountRate={discBestRate}
+                  discountAmount={discBestAmt}
+                  onDiscountRate={setDiscBestRate}
+                  onDiscountAmount={setDiscBestAmt}
                 />
+              </div>
+
+              {/* 가격 가이드 — 추천 가격대 + 한도 알림 */}
+              <div className="rounded-xl border bg-card p-3.5 space-y-2">
+                <p className="text-sm font-semibold">💡 가격 가이드 — 중간(추천) 플랜이 많이 선택되게</p>
+                <p className="text-[11px] text-muted-foreground">
+                  기본가 {currentBase.toLocaleString()}원{perUnit} 기준 예시 (할인 반영). 실제 견적은 옵션·평수에 따라 달라져요.
+                </p>
+                {exG > 0 && exP > 0 && recoHi > recoLo && (
+                  <p className="text-xs text-muted-foreground">
+                    추천 플랜 권장 가격대:{' '}
+                    <span className="font-semibold text-foreground tabular-nums">
+                      {recoLo.toLocaleString()}~{recoHi.toLocaleString()}원{perUnit}
+                    </span>
+                  </p>
+                )}
+                <div className={`rounded-lg border px-3 py-2 text-xs leading-relaxed ${priceNudgeStyle}`}>
+                  {priceNudge.level === 'good' ? '✓ ' : priceNudge.level === 'warn' ? '⚠️ ' : '💡 '}
+                  {priceNudge.msg}
+                </div>
               </div>
             </div>
 

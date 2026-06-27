@@ -4,9 +4,8 @@ import { AddServiceForm } from '@/components/dashboard/add-service-form'
 import { DeleteServiceButton } from '@/components/dashboard/delete-service-button'
 import { EditServiceButton } from '@/components/dashboard/edit-service-button'
 import { ServicesGuideCard } from '@/components/dashboard/services-guide-card'
-import { Image, Zap, Layers, ChevronRight } from 'lucide-react'
+import { Image, Zap } from 'lucide-react'
 import { isAcService } from '@/lib/utils'
-import Link from 'next/link'
 
 export default async function ServicesPage() {
   const authClient = await createClient()
@@ -35,6 +34,37 @@ export default async function ServicesPage() {
   const serviceCount = services?.length ?? 0
   const hasBundles = (services ?? []).some((s) => (s.tier_good_items?.length ?? 0) > 0)
 
+  // 플랜 배수 (예시 가격 계산용) — quote_tiers에서
+  const tierMultipliers = { good: 1.0, better: 1.2, best: 1.5 }
+  {
+    const { data: tierRows } = await db
+      .from('quote_tiers')
+      .select('tier, price_multiplier')
+      .eq('business_id', profile.business_id)
+    for (const t of tierRows ?? []) {
+      if (t.tier === 'good' || t.tier === 'better' || t.tier === 'best') {
+        tierMultipliers[t.tier] = Number(t.price_multiplier) || tierMultipliers[t.tier]
+      }
+    }
+  }
+
+  // 서비스별 플랜 할인 (컬럼 없으면 빈 맵 — 마이그레이션 전 안전)
+  type DiscRow = {
+    id: string
+    tier_good_discount_rate: number | null; tier_good_discount_amount: number | null
+    tier_better_discount_rate: number | null; tier_better_discount_amount: number | null
+    tier_best_discount_rate: number | null; tier_best_discount_amount: number | null
+  }
+  const discMap: Record<string, DiscRow> = {}
+  {
+    const { data, error } = await db
+      .from('service_items')
+      .select('id, tier_good_discount_rate, tier_good_discount_amount, tier_better_discount_rate, tier_better_discount_amount, tier_best_discount_rate, tier_best_discount_amount' as never)
+      .eq('business_id', profile.business_id)
+      .is('deleted_at', null)
+    if (!error && data) for (const r of data as unknown as DiscRow[]) discMap[r.id] = r
+  }
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
 
@@ -50,23 +80,6 @@ export default async function ServicesPage() {
 
       {/* 단계별 안내 카드 (비테크 사장님용) */}
       <ServicesGuideCard serviceCount={serviceCount} hasBundles={hasBundles} />
-
-      {/* 플랜 가격·할인 설정 바로가기 */}
-      <Link
-        href="/dashboard/tiers"
-        className="flex items-center gap-3 bg-white rounded-xl border border-border p-4 hover:border-primary/40 transition-colors"
-      >
-        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-          <Layers className="h-5 w-5 text-primary" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm">플랜 가격·할인 설정</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            기본·추천·프리미엄 플랜의 가격과 할인율(%)·할인액(원)을 정해요
-          </p>
-        </div>
-        <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
-      </Link>
 
       {!services || services.length === 0 ? (
         <div className="bg-white rounded-xl border border-dashed border-border p-12 text-center space-y-2">
@@ -150,8 +163,15 @@ export default async function ServicesPage() {
                       tier_good_items:   service.tier_good_items   ?? [],
                       tier_better_items: service.tier_better_items ?? [],
                       tier_best_items:   service.tier_best_items   ?? [],
+                      tier_good_discount_rate:     discMap[service.id]?.tier_good_discount_rate     ?? 0,
+                      tier_good_discount_amount:   discMap[service.id]?.tier_good_discount_amount   ?? 0,
+                      tier_better_discount_rate:   discMap[service.id]?.tier_better_discount_rate   ?? 0,
+                      tier_better_discount_amount: discMap[service.id]?.tier_better_discount_amount ?? 0,
+                      tier_best_discount_rate:     discMap[service.id]?.tier_best_discount_rate     ?? 0,
+                      tier_best_discount_amount:   discMap[service.id]?.tier_best_discount_amount   ?? 0,
                     }}
                     availableServices={(services ?? []).map((s) => ({ id: s.id, name: s.name }))}
+                    tierMultipliers={tierMultipliers}
                     />
                     <DeleteServiceButton id={service.id} />
                   </div>
