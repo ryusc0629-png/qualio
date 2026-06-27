@@ -132,18 +132,32 @@ interface EditServiceButtonProps {
 }
 
 // 플랜 항목 입력 컴포넌트
+// 플랜 단계별 색상 — tier-bundle-editor와 통일 (기본=회색, 추천=에메랄드, 프리미엄=보라)
+const TIER_TONE = {
+  good:   { card: 'border-slate-200 bg-slate-50',     dot: 'bg-slate-400',   badge: 'bg-slate-200 text-slate-700' },
+  better: { card: 'border-emerald-200 bg-emerald-50', dot: 'bg-emerald-500', badge: 'bg-emerald-200 text-emerald-800' },
+  best:   { card: 'border-purple-200 bg-purple-50',   dot: 'bg-purple-500',  badge: 'bg-purple-200 text-purple-800' },
+} as const
+
 function TierItemsEditor({
-  label,
+  tone,
+  title,
+  badge,
+  hint,
   placeholder,
   items,
   onChange,
 }: {
-  label: string
+  tone: keyof typeof TIER_TONE
+  title: string
+  badge: string
+  hint?: string
   placeholder: string
   items: string[]
   onChange: (items: string[]) => void
 }) {
   const [inputVal, setInputVal] = useState('')
+  const t = TIER_TONE[tone]
 
   const add = useCallback(() => {
     const v = inputVal.trim()
@@ -153,29 +167,43 @@ function TierItemsEditor({
   }, [inputVal, items, onChange])
 
   return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-semibold text-zinc-700">{label}</p>
-      {items.map((item, i) => (
-        <div key={i} className="flex items-center gap-1.5">
-          <div className="flex-1 bg-zinc-50 border rounded-lg px-3 py-1.5 text-xs text-zinc-700">{item}</div>
-          <button
-            type="button"
-            onClick={() => onChange(items.filter((_, j) => j !== i))}
-            className="shrink-0 p-1 hover:text-destructive transition-colors"
-          >
-            <X className="h-3.5 w-3.5 text-zinc-400" />
-          </button>
+    <div className={`rounded-xl border ${t.card} p-3.5 space-y-2`}>
+      {/* 단계 헤더 */}
+      <div className="flex items-center gap-2">
+        <span className={`h-2.5 w-2.5 rounded-full ${t.dot}`} />
+        <p className="text-sm font-bold text-zinc-800">{title}</p>
+        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${t.badge}`}>{badge}</span>
+      </div>
+      {hint && <p className="text-[11px] text-muted-foreground -mt-0.5">{hint}</p>}
+
+      {/* 항목 칩 (흰 배경으로 채도 대비) */}
+      {items.length > 0 && (
+        <div className="space-y-1.5">
+          {items.map((item, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <div className="flex-1 bg-white border border-zinc-200 rounded-lg px-3 py-1.5 text-xs text-zinc-700 shadow-sm">{item}</div>
+              <button
+                type="button"
+                onClick={() => onChange(items.filter((_, j) => j !== i))}
+                className="shrink-0 p-1 hover:text-destructive transition-colors"
+                aria-label="항목 삭제"
+              >
+                <X className="h-3.5 w-3.5 text-zinc-400" />
+              </button>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
+
       <div className="flex gap-1.5">
         <Input
           placeholder={placeholder}
           value={inputVal}
           onChange={(e) => setInputVal(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
-          className="h-8 text-xs"
+          className="h-8 text-xs bg-white"
         />
-        <Button type="button" variant="outline" size="sm" onClick={add} className="h-8 shrink-0 text-xs px-3">
+        <Button type="button" variant="outline" size="sm" onClick={add} className="h-8 shrink-0 text-xs px-3 bg-white">
           추가
         </Button>
       </div>
@@ -618,24 +646,41 @@ export function EditServiceButton({ service }: EditServiceButtonProps) {
                   ✏️ 짧은 명사형으로 입력해주세요 — &ldquo;필터 세척&rdquo; O, &ldquo;필터를 세척해드립니다&rdquo; X
                 </p>
               </div>
-              <TierItemsEditor
-                label="기본 플랜 항목"
-                placeholder="예: 필터 세척"
-                items={tierGood}
-                onChange={setTierGood}
-              />
-              <TierItemsEditor
-                label="추천 플랜 추가 항목 (기본 포함 + 이것만 추가)"
-                placeholder="예: 열교환기 세척"
-                items={tierBetter}
-                onChange={setTierBetter}
-              />
-              <TierItemsEditor
-                label="프리미엄 플랜 추가 항목 (추천 포함 + 이것만 추가)"
-                placeholder="예: 항균 코팅"
-                items={tierBest}
-                onChange={setTierBest}
-              />
+              <div className="space-y-2">
+                <TierItemsEditor
+                  tone="good"
+                  title="기본 플랜"
+                  badge="가장 저렴"
+                  hint="이 서비스의 핵심 작업"
+                  placeholder="예: 필터 세척"
+                  items={tierGood}
+                  onChange={setTierGood}
+                />
+                <div className="flex items-center justify-center">
+                  <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-2 py-0.5">＋ 위 기본 플랜 전부 포함</span>
+                </div>
+                <TierItemsEditor
+                  tone="better"
+                  title="추천 플랜"
+                  badge="가장 많이 선택"
+                  hint="기본에 더해서 제공할 작업만 적어요"
+                  placeholder="예: 열교환기 세척"
+                  items={tierBetter}
+                  onChange={setTierBetter}
+                />
+                <div className="flex items-center justify-center">
+                  <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-2 py-0.5">＋ 위 추천 플랜 전부 포함</span>
+                </div>
+                <TierItemsEditor
+                  tone="best"
+                  title="프리미엄 플랜"
+                  badge="최고급"
+                  hint="추천에 더해서 제공할 작업만 적어요"
+                  placeholder="예: 항균 코팅"
+                  items={tierBest}
+                  onChange={setTierBest}
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
