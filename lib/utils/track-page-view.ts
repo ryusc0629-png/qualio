@@ -1,7 +1,7 @@
 import 'server-only'
 import { headers } from 'next/headers'
 import { detectViewSource } from '@/lib/utils/detect-view-source'
-import type { createServiceClient } from '@/lib/supabase/server'
+import { createClient, type createServiceClient } from '@/lib/supabase/server'
 
 type PageType = 'quote' | 'brand_home'
 
@@ -14,6 +14,18 @@ export async function trackPageView(
   pageType: PageType,
 ): Promise<void> {
   try {
+    // 로그인한 업체 주인이 자기 페이지를 보는 경우는 통계에서 제외 — 가짜 '직접 방문' 방지
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (user) {
+      const { data: profile } = await db
+        .from('profiles')
+        .select('business_id')
+        .eq('id', user.id)
+        .maybeSingle()
+      if (profile?.business_id === businessId) return
+    }
+
     const h = await headers()
     const referer = h.get('referer') ?? ''
     const userAgent = h.get('user-agent') ?? ''

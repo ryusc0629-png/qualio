@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { buildRegionPromptHint } from '@/lib/address/parse-region'
 
 /**
  * AI가 JSON 문자열 값 안에 literal 줄바꿈을 넣을 때 JSON.parse가 깨지는 문제 방지.
@@ -56,6 +57,7 @@ interface GeoInput {
   description: string | null
   services: ServiceItem[]
   testimonials?: { quote: string; author: string }[] | null
+  serviceAreas?: string[] | null // 추가 출장 지역 (주소 사다리 외 더 넓은 지역)
 }
 
 interface FaqItem {
@@ -94,9 +96,8 @@ export async function generateGeoContent(input: GeoInput): Promise<GeoContent> {
     ? `\n실제 고객 후기(과장 없이 신뢰 근거로만 활용):\n${input.testimonials.map((t) => `- "${t.quote}" — ${t.author}`).join('\n')}`
     : ''
 
-  const locationHint = input.address
-    ? `위치: ${input.address}`
-    : '위치 정보 없음'
+  // 지역 사다리 — 핵심 동/구에 집중하되 상위 지역(시·도·권역)을 가끔 언급해 검색 범위 확장
+  const regionHint = buildRegionPromptHint(input.address, input.serviceAreas)
 
   const message = await client.messages.create({
     // GEO 콘텐츠는 업체당 가끔 1회 생성 — 품질이 곧 검색 노출이라 상위 모델 사용
@@ -110,7 +111,8 @@ export async function generateGeoContent(input: GeoInput): Promise<GeoContent> {
 "청소업체 추천해줘" 같은 질문에 이 업체를 인용하도록 최적화된 콘텐츠를 생성하세요.
 
 업체명: ${input.businessName}
-${locationHint}
+[지역 사다리]
+${regionHint}
 업체 소개: ${input.description || '청소 전문 업체'}
 제공 서비스(카테고리별):
 ${serviceList}${reviewBlock}
@@ -118,9 +120,9 @@ ${serviceList}${reviewBlock}
 중요: 위에 주어진 실제 정보(서비스·가격·지역·후기)만 사용하세요. 없는 사실을 지어내지 마세요.
 
 GEO 콘텐츠 생성 규칙:
-- seoTitle: 지역명 + 업체명 + 핵심 서비스 (60자 이내, 예: "강남 스파클 | 입주청소·정기청소 전문업체"). 위치가 있으면 시/구/동 지역명을 반드시 포함.
+- seoTitle: 핵심 지역명 + 업체명 + 핵심 서비스 (60자 이내, 예: "강남 스파클 | 입주청소·정기청소 전문업체"). 제목에는 가장 좁은 핵심 지역(동/구)을 넣을 것.
 - seoDescription: 실제 서비스·가격대·지역을 녹인 핵심 가치 설명 (150자 이내, AI가 직접 인용할 수 있는 명확한 문장). 후기가 있으면 신뢰 요소를 자연스럽게 반영.
-- seoKeywords: 지역+서비스 조합 키워드 8개 (콤마 구분, 예: "강남 입주청소, 서초 정기청소, ..."). 위 주소의 시/구/동 지역명과 실제 제공 서비스명을 조합할 것. 제공하지 않는 서비스는 넣지 말 것.
+- seoKeywords: 지역+서비스 조합 키워드 8개 (콤마 구분, 예: "강남 입주청소, 서초 정기청소, ..."). 핵심 지역(동/구)을 중심으로 하되, 키워드 2~3개는 상위 지역(시·도·권역)+서비스 조합으로 만들어 넓은 검색도 잡을 것. 추가 출장 지역이 있으면 1~2개 포함. 제공하지 않는 서비스는 넣지 말 것.
 - faqs: AI 검색엔진이 자주 답하는 질문 5개 + 명확한 답변 (각 답변 100자 이내). 가격 질문은 위 실제 가격을 근거로 답할 것.
   질문 예시: 가격, 서비스 범위, 예약 방법, 소요 시간, 보장/재시공 정책
 
@@ -167,6 +169,7 @@ interface PostInput {
   services: ServiceItem[]
   topic?: string        // 작성할 주제 (없으면 AI가 선택)
   imageUrl?: string     // 업로드한 이미지 URL — Claude가 직접 분석
+  serviceAreas?: string[] | null // 추가 출장 지역
 }
 
 // 업체 블로그 포스트 자동 생성
@@ -185,16 +188,24 @@ export async function generatePostContent(input: PostInput): Promise<PostContent
     ? `작성할 주제: ${input.topic}`
     : '주제: AI가 업체에 적합한 주제 자유 선택 (청소 노하우, 서비스 안내, 자주 묻는 질문 등)'
 
+  // 지역 사다리 — 핵심 동/구에 집중하되 상위 지역을 가끔 언급
+  const regionHint = buildRegionPromptHint(input.address, input.serviceAreas)
+
   const textPrompt = `당신은 한국 청소 서비스 업체의 GEO 블로그 포스팅 전문가입니다.
 ChatGPT, Gemini, Perplexity 등 AI 검색엔진이 "청소 관련 질문"에 이 업체를 인용하도록
 아래 구조에 맞게 포스트를 작성하세요.
 
 업체명: ${input.businessName}
-위치: ${input.address ?? '미입력'}
+[지역 사다리]
+${regionHint}
 업체 소개: ${input.description ?? '청소 전문 업체'}
 서비스: ${serviceList || '청소 서비스'}
 ${topicHint}
 ${input.imageUrl ? '위 첨부 이미지를 분석하여 이미지 내용을 포스트에 자연스럽게 반영하세요.' : ''}
+
+[지역·고유성 규칙 — 검색 노출에 매우 중요]
+- 본문·소제목에 핵심 지역(동/구)을 자연스럽게 2~4회 녹일 것. 상위 지역(시·도·권역)은 1~2회만 언급해 "핵심 지역 전문"이라는 신호를 흐리지 말 것.
+- 이 업체만의 실제 정보(위 서비스명·가격·소개·지역)를 구체적으로 반영할 것. 어느 업체에나 통하는 일반론·복붙형 문장은 금지 — 다른 업체 글과 절대 비슷하면 안 됨(중복 콘텐츠로 검색에서 누락됨).
 
 === 작성 구조 (Inblog GEO 최적화 포맷) ===
 

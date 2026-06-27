@@ -6,10 +6,11 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Plus, Trash2, Quote } from 'lucide-react'
+import { Plus, Trash2, Quote, X } from 'lucide-react'
 import { updateBusinessAction } from '@/lib/actions/settings'
 import { BrandDesignSection } from './brand-design-section'
 import { normalizeHex, type HeroStyle } from '@/lib/brand'
+import { buildAreaServed } from '@/lib/address/parse-region'
 
 interface Testimonial {
   quote: string
@@ -46,6 +47,8 @@ interface Business {
   kakao_place_url: string | null
   active_review_platform: string
   youtube_url: string | null
+  instagram_url: string | null
+  service_areas: string[] | null
   review_reward_type: string
   review_reward_description: string | null
   logo_url: string | null
@@ -93,6 +96,21 @@ export function SettingsForm({ business }: Props) {
     business.testimonials ?? []
   )
 
+  // 출장 지역 — 주소 기준 자동 노출 지역 + 사장님이 더하는 추가 지역
+  const autoAreas = buildAreaServed(business.address, [])
+  const [serviceAreas, setServiceAreas] = useState<string[]>(business.service_areas ?? [])
+  const [areaInput, setAreaInput] = useState('')
+
+  const addServiceAreas = () => {
+    const next = areaInput
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+    if (next.length === 0) return
+    setServiceAreas((prev) => [...new Set([...prev, ...next])])
+    setAreaInput('')
+  }
+
   const { execute, isPending } = useAction(updateBusinessAction, {
     onSuccess: () => toast.success('설정이 저장됐어요!'),
     onError: ({ error }) => toast.error(error.serverError ?? '저장 못 했어요. 다시 눌러주세요'),
@@ -119,6 +137,8 @@ export function SettingsForm({ business }: Props) {
       kakao_place_url:           data.get('kakao_place_url') as string,
       active_review_platform:    activePlatform,
       youtube_url:               data.get('youtube_url') as string,
+      instagram_url:             data.get('instagram_url') as string,
+      service_areas:             serviceAreas.join(','),
       review_reward_type:        rewardType,
       review_reward_description: rewardCategory === 'none' ? '' : rewardValue,
       brand_color:               normalizeHex(brandColor) ?? '',
@@ -180,6 +200,71 @@ export function SettingsForm({ business }: Props) {
             placeholder="10년 경력의 청소 전문 업체입니다"
           />
           <p className="text-xs text-muted-foreground">고객 견적 폼 상단에 표시됩니다</p>
+        </div>
+      </div>
+
+      {/* 출장 지역 (검색 노출) */}
+      <div className="rounded-lg border bg-card p-5 space-y-4">
+        <div>
+          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">출장 지역</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            위 주소를 기준으로 검색에 노출될 지역이 자동 설정돼요. 더 멀리까지 출장 가시면 지역을 추가하세요.
+          </p>
+        </div>
+
+        {/* 주소 기준 자동 설정 지역 */}
+        {autoAreas.length > 0 ? (
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">자동 설정된 지역 (주소 기준)</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {autoAreas.map((a) => (
+                <span key={a} className="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+                  {a}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">위에 주소를 입력하고 저장하면 지역이 자동으로 잡혀요.</p>
+        )}
+
+        {/* 추가 출장 지역 */}
+        <div className="space-y-1.5">
+          <Label htmlFor="area_input" className="text-xs text-muted-foreground">더 출장 가는 지역 (선택)</Label>
+          <div className="flex gap-2">
+            <Input
+              id="area_input"
+              value={areaInput}
+              onChange={(e) => setAreaInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  addServiceAreas()
+                }
+              }}
+              placeholder="예: 수원, 안산 (쉼표로 여러 개)"
+            />
+            <Button type="button" variant="outline" onClick={addServiceAreas} className="shrink-0">
+              추가
+            </Button>
+          </div>
+          {serviceAreas.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {serviceAreas.map((a) => (
+                <span key={a} className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2.5 py-1 text-xs">
+                  {a}
+                  <button
+                    type="button"
+                    onClick={() => setServiceAreas((prev) => prev.filter((x) => x !== a))}
+                    aria-label={`${a} 삭제`}
+                    className="hover:text-destructive"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -292,11 +377,16 @@ export function SettingsForm({ business }: Props) {
         </div>
       </div>
 
-      {/* 유튜브 연동 */}
+      {/* SNS·영상 연동 */}
       <div className="rounded-lg border bg-card p-5 space-y-4">
-        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">유튜브 연동</h2>
+        <div>
+          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">SNS·영상 연동</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            SNS 채널을 연결하면 홍보 페이지 하단에 노출되고, 검색·AI가 같은 업체로 인식해 신뢰도가 올라가요.
+          </p>
+        </div>
         <div className="space-y-2">
-          <Label htmlFor="youtube_url">시공 영상 URL</Label>
+          <Label htmlFor="youtube_url">유튜브 시공 영상 URL</Label>
           <Input
             id="youtube_url"
             name="youtube_url"
@@ -304,6 +394,15 @@ export function SettingsForm({ business }: Props) {
             placeholder="https://www.youtube.com/watch?v=..."
           />
           <p className="text-xs text-muted-foreground">등록 시 고객 견적서에 시공 영상이 자동 표시됩니다</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="instagram_url">인스타그램 URL</Label>
+          <Input
+            id="instagram_url"
+            name="instagram_url"
+            defaultValue={business.instagram_url ?? ''}
+            placeholder="https://www.instagram.com/내계정"
+          />
         </div>
       </div>
 

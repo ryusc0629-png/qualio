@@ -38,7 +38,7 @@ function getDaysInMonth(year: number, month: number): number {
 // 포스트 1건 생성 및 저장
 async function publishOnePost(
   db: ReturnType<typeof createServiceClient>,
-  business: { id: string; name: string; address: string | null; description: string | null; autoImageGeneration: boolean },
+  business: { id: string; name: string; address: string | null; description: string | null; serviceAreas: string[] | null; autoImageGeneration: boolean },
   services: { name: string; base_price: number; unit: string }[],
   publishedTitles: string[],
   month: number,
@@ -67,6 +67,7 @@ async function publishOnePost(
     description: business.description,
     services,
     topic: selectedTopic,
+    serviceAreas: business.serviceAreas,
   })
 
   // slug 중복 방지
@@ -138,9 +139,9 @@ export async function GET(request: NextRequest) {
 
   const { data: businesses, error: bizError } = await db
     .from('businesses' as never)
-    .select('id, name, address, description, monthly_post_target, auto_image_generation' as never)
+    .select('id, name, address, description, service_areas, monthly_post_target, auto_image_generation' as never)
     .gt('monthly_post_target' as never, 0) as unknown as {
-      data: { id: string; name: string; address: string | null; description: string | null; monthly_post_target: number; auto_image_generation: boolean }[] | null
+      data: { id: string; name: string; address: string | null; description: string | null; service_areas: string[] | null; monthly_post_target: number; auto_image_generation: boolean }[] | null
       error: { message: string } | null
     }
 
@@ -209,7 +210,7 @@ export async function GET(request: NextRequest) {
       // 포트폴리오(시공 사례)는 자동 발행에서 제외 — 사장님이 직접 승인해 게시
       const publishedTitlesThisRun: string[] = []
       for (let i = 0; i < needed; i++) {
-        const title = await publishOnePost(db, { ...business, autoImageGeneration: business.auto_image_generation ?? true }, services ?? [], publishedTitles, month)
+        const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas, autoImageGeneration: business.auto_image_generation ?? true }, services ?? [], publishedTitles, month)
         publishedTitlesThisRun.push(title)
         console.log(`[Cron] 자동 발행 완료 (${i + 1}/${needed}): ${business.name} — "${title}"`)
       }

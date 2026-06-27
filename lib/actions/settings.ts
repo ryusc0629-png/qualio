@@ -23,6 +23,9 @@ const updateBusinessSchema = z.object({
   kakao_place_url:           z.string().max(300).optional(),
   active_review_platform:    z.string().max(20).optional(),
   youtube_url:               z.string().max(300).optional(),
+  instagram_url:             z.string().max(300).optional(),
+  service_areas:             z.string().max(500).optional(), // 쉼표 구분 지역명
+
   review_reward_type:        z.string().max(20).optional(),
   review_reward_description: z.string().max(200).optional(),
   // 웹사이트 브랜드 커스터마이징 — 빈 문자열은 "미설정"으로 처리
@@ -74,6 +77,10 @@ export const updateBusinessAction = action
         kakao_place_url:           (parsedInput.kakao_place_url           || null) as never,
         active_review_platform:    (parsedInput.active_review_platform    || 'naver') as never,
         youtube_url:               parsedInput.youtube_url               || null,
+        instagram_url:             (parsedInput.instagram_url             || null) as never,
+        service_areas:             (parsedInput.service_areas
+          ? parsedInput.service_areas.split(',').map((s) => s.trim()).filter(Boolean)
+          : []) as never,
         review_reward_type:        parsedInput.review_reward_type        || 'none',
         review_reward_description: parsedInput.review_reward_description || null,
         brand_color:               parsedInput.brand_color           || null,

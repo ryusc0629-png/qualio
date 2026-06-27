@@ -42,9 +42,9 @@ export const generatePostAction = action
     const [businessResult, servicesResult] = await Promise.all([
       db
         .from('businesses')
-        .select('name, address, description')
+        .select('name, address, description, service_areas' as never)
         .eq('id', businessId)
-        .maybeSingle(),
+        .maybeSingle() as unknown as Promise<{ data: { name: string; address: string | null; description: string | null; service_areas: string[] | null } | null }>,
       db
         .from('service_items')
         .select('name, base_price, unit')
@@ -66,6 +66,7 @@ export const generatePostAction = action
       services,
       topic: parsedInput.topic,
       imageUrl: parsedInput.imageUrl,
+      serviceAreas: business.service_areas,
     })
 
     // 추천 카드에서 발행한 경우 → 기획 단계 제목 그대로 사용
@@ -355,7 +356,7 @@ export const publishTodayAction = action
 
     // 업체 정보 + 서비스 조회
     const [businessResult, servicesResult] = await Promise.all([
-      db.from('businesses').select('name, address, description').eq('id', businessId).maybeSingle(),
+      db.from('businesses').select('name, address, description, service_areas' as never).eq('id', businessId).maybeSingle() as unknown as Promise<{ data: { name: string; address: string | null; description: string | null; service_areas: string[] | null } | null }>,
       db.from('service_items').select('name, base_price, unit')
         .eq('business_id', businessId).eq('is_active', true).is('deleted_at', null),
     ])
@@ -397,6 +398,7 @@ export const publishTodayAction = action
         description: business.description,
         services,
         topic,
+        serviceAreas: business.service_areas,
       })
 
       // slug 중복 방지

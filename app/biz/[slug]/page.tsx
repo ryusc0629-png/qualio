@@ -24,6 +24,7 @@ import { FadeIn } from '@/components/ui/fade-in'
 import { ServiceList } from './service-list'
 import { buildBrandStyle, toBrandSettings } from '@/lib/brand'
 import { trackPageView } from '@/lib/utils/track-page-view'
+import { buildAreaServed } from '@/lib/address/parse-region'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -76,13 +77,15 @@ export default async function BizLandingPage({ params }: Props) {
 
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, youtube_url, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials' as never)
+    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, instagram_url, youtube_url, service_areas, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials' as never)
     .eq('slug', slug)
     .maybeSingle() as { data: {
       id: string; name: string; phone: string | null; address: string | null
       description: string | null; seo_title: string | null; seo_description: string | null
       seo_keywords: string | null; seo_faqs: unknown; naver_place_url: string | null
-      youtube_url: string | null
+      google_place_url: string | null; danggeun_review_url: string | null
+      kakao_place_url: string | null; instagram_url: string | null
+      youtube_url: string | null; service_areas: string[] | null
       logo_url: string | null; hero_image_url: string | null
       brand_color: string | null; brand_color_secondary: string | null
       hero_style: string | null; hero_title: string | null; hero_subtitle: string | null
@@ -160,6 +163,20 @@ export default async function BizLandingPage({ params }: Props) {
     ? Math.min(...services.map((s) => s.base_price))
     : null
 
+  // 지역 사다리 — 주소(동→구→시→도→권역) + 추가 출장 지역. AI 검색의 지역 매칭 신호.
+  const areaServed = buildAreaServed(business.address, business.service_areas)
+
+  // SNS·외부 채널 링크 — 엔티티 통합(sameAs) + 하단 노출용
+  const snsLinks = [
+    { url: business.instagram_url, label: '인스타그램' },
+    { url: business.youtube_url, label: '유튜브' },
+    { url: business.naver_place_url, label: '네이버 플레이스' },
+    { url: business.google_place_url, label: '구글 플레이스' },
+    { url: business.kakao_place_url, label: '카카오맵' },
+    { url: business.danggeun_review_url, label: '당근' },
+  ].filter((s): s is { url: string; label: string } => !!s.url?.trim())
+  const sameAs = snsLinks.map((s) => s.url)
+
   // JSON-LD 구조화 데이터 (GEO 최적화)
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -173,6 +190,10 @@ export default async function BizLandingPage({ params }: Props) {
         address: business.address
           ? { '@type': 'PostalAddress', streetAddress: business.address, addressCountry: 'KR' }
           : undefined,
+        areaServed: areaServed.length > 0
+          ? areaServed.map((name) => ({ '@type': 'AdministrativeArea', name }))
+          : undefined,
+        sameAs: sameAs.length > 0 ? sameAs : undefined,
         url: `${appUrl}/biz/${slug}`,
         image: `${appUrl}/og-image.png`,
         priceRange: minPrice ? `${minPrice.toLocaleString()}원~` : undefined,
@@ -787,12 +808,30 @@ export default async function BizLandingPage({ params }: Props) {
 
         {/* ── 푸터 ── */}
         <footer className="border-t bg-white pb-20 sm:pb-0">
-          <div className="max-w-5xl mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
-            <span>{business.name}</span>
-            <span>
-              Powered by{' '}
-              <a href={appUrl} className="underline hover:text-foreground">퀄리오</a>
-            </span>
+          <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
+            {/* SNS·외부 채널 — 엔티티 통합으로 검색·AI 신뢰도 향상 */}
+            {snsLinks.length > 0 && (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {snsLinks.map((sns) => (
+                  <a
+                    key={sns.url}
+                    href={sns.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
+                  >
+                    {sns.label}
+                  </a>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>{business.name}</span>
+              <span>
+                Powered by{' '}
+                <a href={appUrl} className="underline hover:text-foreground">퀄리오</a>
+              </span>
+            </div>
           </div>
         </footer>
 

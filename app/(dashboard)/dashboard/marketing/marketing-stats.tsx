@@ -153,28 +153,29 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
         </div>
       </div>
 
-      {/* 유입 경로 — AI 검색 / 일반 검색(SEO) / 직접·기타 */}
+      {/* 유입 경로 — 검색·AI 유입을 핵심 지표로 강조, 직접·기타는 보조로 */}
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
-          <p className="font-semibold text-sm">유입 경로</p>
-          <p className="text-xs text-muted-foreground">총 {totalViews.toLocaleString()}회 · 최근 6개월</p>
+          <p className="font-semibold text-sm">검색·AI 유입</p>
+          <p className="text-xs text-muted-foreground">최근 6개월</p>
         </div>
-        <div className="grid grid-cols-3 divide-x">
-          <div className="px-2 py-4 text-center">
-            <p className="text-xl font-bold text-emerald-600">{aiViews.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">AI 검색</p>
+        {/* 핵심: AI 검색 + 일반 검색 (검색으로 새로 찾아온 고객) */}
+        <div className="grid grid-cols-2 divide-x">
+          <div className="px-2 py-5 text-center">
+            <p className="text-2xl font-bold text-emerald-600">{aiViews.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-1">AI 검색</p>
             <p className="text-[10px] text-muted-foreground/70 mt-0.5">ChatGPT·Perplexity</p>
           </div>
-          <div className="px-2 py-4 text-center">
-            <p className="text-xl font-bold text-blue-600">{seoViews.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">일반 검색</p>
+          <div className="px-2 py-5 text-center">
+            <p className="text-2xl font-bold text-blue-600">{seoViews.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-1">일반 검색</p>
             <p className="text-[10px] text-muted-foreground/70 mt-0.5">네이버·구글·다음</p>
           </div>
-          <div className="px-2 py-4 text-center">
-            <p className="text-xl font-bold">{directOtherViews.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">직접·기타</p>
-            <p className="text-[10px] text-muted-foreground/70 mt-0.5">링크·SNS 등</p>
-          </div>
+        </div>
+        {/* 보조: 직접·링크·SNS 유입 (작게) */}
+        <div className="px-5 py-2.5 border-t bg-slate-50/50 flex items-center justify-between text-xs text-muted-foreground">
+          <span>그 외 직접·링크·SNS 방문</span>
+          <span className="font-medium">{directOtherViews.toLocaleString()}회</span>
         </div>
       </div>
 
