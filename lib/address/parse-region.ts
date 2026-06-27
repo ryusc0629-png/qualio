@@ -14,24 +14,26 @@ export interface RegionParts {
 }
 
 // 시/도 별칭 → 표준명 + 권역 매핑. 긴 별칭을 먼저 둬 부분 매칭 오류를 막는다.
+// 권역(region)은 소비자가 실제로 검색하는 '수도권'만 사용. 동남권/대경권 등은
+// 행정·학술 용어라 검색 매칭에 무의미해 빈 값으로 둔다(사다리에서 자동 제외됨).
 const SIDO_TABLE: { aliases: string[]; full: string; region: string }[] = [
   { aliases: ['서울특별시', '서울시', '서울'], full: '서울특별시', region: '수도권' },
   { aliases: ['인천광역시', '인천시', '인천'], full: '인천광역시', region: '수도권' },
   { aliases: ['경기도', '경기'], full: '경기도', region: '수도권' },
-  { aliases: ['부산광역시', '부산시', '부산'], full: '부산광역시', region: '동남권' },
-  { aliases: ['울산광역시', '울산시', '울산'], full: '울산광역시', region: '동남권' },
-  { aliases: ['경상남도', '경남'], full: '경상남도', region: '동남권' },
-  { aliases: ['대구광역시', '대구시', '대구'], full: '대구광역시', region: '대경권' },
-  { aliases: ['경상북도', '경북'], full: '경상북도', region: '대경권' },
-  { aliases: ['광주광역시', '광주시', '광주'], full: '광주광역시', region: '호남권' },
-  { aliases: ['전라남도', '전남'], full: '전라남도', region: '호남권' },
-  { aliases: ['전북특별자치도', '전라북도', '전북'], full: '전북특별자치도', region: '호남권' },
-  { aliases: ['대전광역시', '대전시', '대전'], full: '대전광역시', region: '충청권' },
-  { aliases: ['세종특별자치시', '세종시', '세종'], full: '세종특별자치시', region: '충청권' },
-  { aliases: ['충청남도', '충남'], full: '충청남도', region: '충청권' },
-  { aliases: ['충청북도', '충북'], full: '충청북도', region: '충청권' },
-  { aliases: ['강원특별자치도', '강원도', '강원'], full: '강원특별자치도', region: '강원권' },
-  { aliases: ['제주특별자치도', '제주도', '제주시', '제주'], full: '제주특별자치도', region: '제주권' },
+  { aliases: ['부산광역시', '부산시', '부산'], full: '부산광역시', region: '' },
+  { aliases: ['울산광역시', '울산시', '울산'], full: '울산광역시', region: '' },
+  { aliases: ['경상남도', '경남'], full: '경상남도', region: '' },
+  { aliases: ['대구광역시', '대구시', '대구'], full: '대구광역시', region: '' },
+  { aliases: ['경상북도', '경북'], full: '경상북도', region: '' },
+  { aliases: ['광주광역시', '광주시', '광주'], full: '광주광역시', region: '' },
+  { aliases: ['전라남도', '전남'], full: '전라남도', region: '' },
+  { aliases: ['전북특별자치도', '전라북도', '전북'], full: '전북특별자치도', region: '' },
+  { aliases: ['대전광역시', '대전시', '대전'], full: '대전광역시', region: '' },
+  { aliases: ['세종특별자치시', '세종시', '세종'], full: '세종특별자치시', region: '' },
+  { aliases: ['충청남도', '충남'], full: '충청남도', region: '' },
+  { aliases: ['충청북도', '충북'], full: '충청북도', region: '' },
+  { aliases: ['강원특별자치도', '강원도', '강원'], full: '강원특별자치도', region: '' },
+  { aliases: ['제주특별자치도', '제주도', '제주시', '제주'], full: '제주특별자치도', region: '' },
 ]
 
 // 동/구/시/군이 아닌 도로명·건물 토큰을 가려내기 위한 접미사
@@ -54,7 +56,7 @@ export function parseKoreanRegion(rawAddress: string | null | undefined): Region
     const hit = entry.aliases.find((a) => address.startsWith(a))
     if (hit) {
       sido = entry.full
-      region = entry.region
+      region = entry.region || null // 수도권만 값이 있고 나머지는 null
       address = address.slice(hit.length).trim()
       break
     }
