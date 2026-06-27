@@ -10,6 +10,7 @@ import { Plus, Trash2, Quote } from 'lucide-react'
 import { updateBusinessAction } from '@/lib/actions/settings'
 import { BrandDesignSection } from './brand-design-section'
 import { ServiceAreaPicker } from './service-area-picker'
+import { BaseAddressPicker } from './base-address-picker'
 import { normalizeHex, type HeroStyle } from '@/lib/brand'
 import { buildAreaServed } from '@/lib/address/parse-region'
 
@@ -97,8 +98,10 @@ export function SettingsForm({ business }: Props) {
     business.testimonials ?? []
   )
 
+  // 업체 주소 — 시/도·시군구 선택 기반 (상태로 들고 자동 지역 즉시 반영)
+  const [address, setAddress] = useState(business.address ?? '')
   // 출장 지역 — 주소 기준 자동 노출 지역 + 사장님이 선택하는 추가 지역
-  const autoAreas = buildAreaServed(business.address, [])
+  const autoAreas = buildAreaServed(address, [])
   const [serviceAreas, setServiceAreas] = useState<string[]>(business.service_areas ?? [])
 
   const { execute, isPending } = useAction(updateBusinessAction, {
@@ -119,7 +122,7 @@ export function SettingsForm({ business }: Props) {
     execute({
       name:                      data.get('name') as string,
       phone:                     data.get('phone') as string,
-      address:                   data.get('address') as string,
+      address:                   address,
       description:               data.get('description') as string,
       naver_place_url:           data.get('naver_place_url') as string,
       google_place_url:          data.get('google_place_url') as string,
@@ -172,13 +175,8 @@ export function SettingsForm({ business }: Props) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="address">주소</Label>
-          <Input
-            id="address"
-            name="address"
-            defaultValue={business.address ?? ''}
-            placeholder="서울시 강남구 테헤란로 123"
-          />
+          <Label>주소</Label>
+          <BaseAddressPicker value={address} onChange={setAddress} />
         </div>
 
         <div className="space-y-2">
