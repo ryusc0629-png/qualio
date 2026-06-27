@@ -24,6 +24,8 @@ interface Tier {
   description: string | null
   highlight: boolean
   sort_order: number
+  discount_rate: number     // 할인율 %
+  discount_amount: number   // 할인액 원
 }
 
 interface Props {
@@ -56,6 +58,13 @@ export function TierBundleEditor({ services, tiers, currentBundles }: Props) {
   )
   const [highlightTierId, setHighlightTierId] = useState<string | null>(
     () => tiers.find((t) => t.highlight)?.id ?? null
+  )
+  // 플랜별 할인 — 자동 계산 가격에서 차감 (업체 전체 공통)
+  const [discountRates, setDiscountRates] = useState<Record<string, string>>(
+    () => Object.fromEntries(tiers.map((t) => [t.id, t.discount_rate ? String(t.discount_rate) : '']))
+  )
+  const [discountAmounts, setDiscountAmounts] = useState<Record<string, string>>(
+    () => Object.fromEntries(tiers.map((t) => [t.id, t.discount_amount ? String(t.discount_amount) : '']))
   )
   const [aiReason, setAiReason] = useState<string | null>(null)
 
@@ -115,6 +124,8 @@ export function TierBundleEditor({ services, tiers, currentBundles }: Props) {
       label: (labels[tier.id] ?? tier.label).trim(),
       description: (descriptions[tier.id] ?? '').trim(),
       service_ids: Array.from(selected[tier.id] ?? []),
+      discount_rate: Math.min(100, Math.max(0, Number(discountRates[tier.id]) || 0)),
+      discount_amount: Math.max(0, Number(discountAmounts[tier.id]) || 0),
     }))
     if (bundles.some((b) => !b.label)) {
       toast.error('플랜 이름을 모두 입력해주세요')
@@ -217,6 +228,38 @@ export function TierBundleEditor({ services, tiers, currentBundles }: Props) {
                   className="h-9 bg-white"
                   maxLength={100}
                 />
+              </div>
+
+              {/* 할인 설정 — 자동 계산된 견적가에서 차감 (업체 전체 공통) */}
+              <div className="space-y-1 rounded-lg bg-white/70 p-2.5">
+                <label className="text-[11px] text-muted-foreground">할인 (선택) — 견적가에서 자동 차감</label>
+                <div className="flex gap-2">
+                  <div className="flex-1 flex items-center gap-1">
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={100}
+                      value={discountRates[tier.id] ?? ''}
+                      onChange={(e) => setDiscountRates((p) => ({ ...p, [tier.id]: e.target.value }))}
+                      placeholder="0"
+                      className="h-9 bg-white text-right"
+                    />
+                    <span className="text-xs text-muted-foreground shrink-0">%</span>
+                  </div>
+                  <div className="flex-1 flex items-center gap-1">
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      value={discountAmounts[tier.id] ?? ''}
+                      onChange={(e) => setDiscountAmounts((p) => ({ ...p, [tier.id]: e.target.value }))}
+                      placeholder="0"
+                      className="h-9 bg-white text-right"
+                    />
+                    <span className="text-xs text-muted-foreground shrink-0">원</span>
+                  </div>
+                </div>
               </div>
 
               {/* 가격 요약 */}

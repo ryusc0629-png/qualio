@@ -16,6 +16,8 @@ const saveTierBundleSchema = z.object({
       label: z.string().trim().min(1, '플랜 이름을 입력해주세요').max(20, '플랜 이름이 너무 깁니다'),
       description: z.string().trim().max(100, '설명이 너무 깁니다'),
       service_ids: z.array(z.string().uuid()),
+      discount_rate: z.number().min(0).max(100).default(0),
+      discount_amount: z.number().min(0).default(0),
     })
   ),
 })
@@ -61,6 +63,14 @@ export const saveTierBundleAction = action
         .eq('id', bundle.tier_id)
         .eq('business_id', profile.business_id)
       if (metaError) throw new Error('[APP] 플랜 정보 저장에 실패했습니다')
+
+      // 할인 저장 — 컬럼이 아직 없으면(마이그레이션 전) 조용히 건너뜀
+      const { error: discountError } = await db
+        .from('quote_tiers')
+        .update({ discount_rate: bundle.discount_rate, discount_amount: bundle.discount_amount } as never)
+        .eq('id', bundle.tier_id)
+        .eq('business_id', profile.business_id)
+      if (discountError) console.error('[Tiers] 할인 저장 건너뜀(컬럼 미적용?):', discountError.message)
 
       // 2) 서비스 연결 교체 (기존 삭제 후 새로 삽입)
       await db

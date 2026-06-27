@@ -120,6 +120,27 @@ export const calculateAndCreateQuoteAction = publicAction
     const tiers = dbTiers && dbTiers.length > 0 ? dbTiers : DEFAULT_TIERS
     const roundToThousand = (n: number) => Math.round(n / 1000) * 1000
 
+    // 플랜별 할인 설정 조회 (컬럼이 아직 없으면 무시 — 마이그레이션 적용 전 안전)
+    const discountMap: Record<string, { rate: number; amount: number }> = {}
+    {
+      const { data: dRows, error: dErr } = await db
+        .from('quote_tiers')
+        .select('id, discount_rate, discount_amount' as never)
+        .eq('business_id', parsedInput.business_id)
+      if (!dErr && dRows) {
+        for (const r of dRows as unknown as Array<{ id: string; discount_rate: number | null; discount_amount: number | null }>) {
+          discountMap[r.id] = { rate: Number(r.discount_rate) || 0, amount: Number(r.discount_amount) || 0 }
+        }
+      }
+    }
+    // 자동 계산된 가격에 할인 적용: 가격 × (1 - 할인율/100) - 할인액, 0 미만 방지
+    const applyDiscount = (price: number, tierId: string | null) => {
+      const d = tierId ? discountMap[tierId] : null
+      if (!d || (d.rate === 0 && d.amount === 0)) return price
+      const discounted = price * (1 - d.rate / 100) - d.amount
+      return Math.max(0, roundToThousand(discounted))
+    }
+
     // 업체의 전체 활성 서비스 목록 (AI 번들 추천용)
     const { data: allServices } = await db
       .from('service_items')
@@ -229,10 +250,10 @@ export const calculateAndCreateQuoteAction = publicAction
       bestId   ? calcBundlePrice(bestId)   : Promise.resolve(null),
     ])
 
-    // 번들 가격 없으면 multiplier 방식 fallback
-    const goodPrice   = bundleGood   ?? roundToThousand(baseCalc * Number(goodTier?.price_multiplier   ?? 1.0))
-    const betterPrice = bundleBetter ?? roundToThousand(baseCalc * Number(betterTier?.price_multiplier ?? 1.2))
-    const bestPrice   = bundleBest   ?? roundToThousand(baseCalc * Number(bestTier?.price_multiplier   ?? 1.5))
+    // 번들 가격 없으면 multiplier 방식 fallback → 이후 플랜별 할인 적용
+    const goodPrice   = applyDiscount(bundleGood   ?? roundToThousand(baseCalc * Number(goodTier?.price_multiplier   ?? 1.0)), goodId)
+    const betterPrice = applyDiscount(bundleBetter ?? roundToThousand(baseCalc * Number(betterTier?.price_multiplier ?? 1.2)), betterId)
+    const bestPrice   = applyDiscount(bundleBest   ?? roundToThousand(baseCalc * Number(bestTier?.price_multiplier   ?? 1.5)), bestId)
 
     // AI 설명에 전달할 번들 서비스 목록
     const getBundleServiceNames = async (tierId: string | null): Promise<string[]> => {
