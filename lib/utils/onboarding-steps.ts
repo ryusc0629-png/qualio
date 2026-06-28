@@ -5,6 +5,7 @@ export interface OnboardingCounts {
   serviceItems: number
   hasPublicPage: boolean   // AI 홍보 페이지(GEO) 생성 완료 여부
   hasBundles: boolean      // 서비스 플랜(기본/추천/프리미엄) 항목 구성 여부
+  hasReviewUrl: boolean    // 네이버/구글 플레이스 등 리뷰 받을 곳 연결 여부
   quotes: number
   bookings: number
   completedBookings: number
@@ -53,6 +54,14 @@ export function buildOnboardingSteps(c: OnboardingCounts): OnboardingStep[] {
       href: '/dashboard/settings',
       cta: '홍보 페이지 만들기',
       done: c.hasPublicPage,
+    },
+    {
+      key: 'review_url',
+      label: '리뷰 받을 곳 연결하기',
+      description: '네이버·구글 주소를 연결하면 작업 끝난 고객에게 리뷰 요청이 자동으로 가고, AI 검색에도 같은 업체로 잡혀요',
+      href: '/dashboard/settings',
+      cta: '주소 연결하기',
+      done: c.hasReviewUrl,
     },
     {
       key: 'quote',

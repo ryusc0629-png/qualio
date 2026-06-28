@@ -24,19 +24,23 @@ export async function OnboardingChecklist({ businessId }: { businessId: string }
     db.from('bookings').select('id', { count: 'exact', head: true }).eq('business_id', businessId).is('deleted_at', null),
     db.from('bookings').select('id', { count: 'exact', head: true })
       .eq('business_id', businessId).eq('status', 'completed').is('deleted_at', null),
-    // AI 홍보 페이지 생성 여부 — seo_generated_at이 있으면 완료
-    db.from('businesses').select('seo_generated_at' as never).eq('id', businessId)
-      .maybeSingle() as unknown as Promise<{ data: { seo_generated_at: string | null } | null }>,
+    // AI 홍보 페이지 생성 여부(seo_generated_at) + 리뷰 받을 곳 연결 여부(네이버/구글 URL)
+    db.from('businesses').select('seo_generated_at, naver_place_url, google_place_url' as never).eq('id', businessId)
+      .maybeSingle() as unknown as Promise<{ data: { seo_generated_at: string | null; naver_place_url: string | null; google_place_url: string | null } | null }>,
   ])
 
   const hasBundles = (bundlesResult.data ?? []).some(
     (s) => ((s.tier_good_items as string[] | null)?.length ?? 0) > 0
   )
 
+  const hasReviewUrl =
+    !!geoResult.data?.naver_place_url?.trim() || !!geoResult.data?.google_place_url?.trim()
+
   const steps = buildOnboardingSteps({
     serviceItems: serviceItems ?? 0,
     hasPublicPage: !!geoResult.data?.seo_generated_at,
     hasBundles,
+    hasReviewUrl,
     quotes: quotes ?? 0,
     bookings: bookings ?? 0,
     completedBookings: completedBookings ?? 0,

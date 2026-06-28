@@ -257,6 +257,13 @@ export function SettingsForm({ business }: Props) {
           <p className="text-xs text-muted-foreground mt-1">
             리뷰 요청 알림톡에 연결할 채널을 선택하세요. 한 채널에 리뷰가 모이면 다른 채널로 전환할 수 있어요.
           </p>
+          <div className="mt-2.5 rounded-lg bg-primary/5 border border-primary/15 px-3 py-2.5">
+            <p className="text-xs text-foreground/80 leading-relaxed">
+              <span className="font-semibold text-primary">네이버·구글 주소를 연결하면</span> 작업이 끝난 고객에게
+              리뷰 요청 알림톡이 자동으로 나가고, 검색·AI가 우리 업체를 같은 곳으로 인식해
+              <span className="font-semibold"> AI 검색 노출</span>에도 도움이 돼요. 한 곳만 연결해도 켜집니다.
+            </p>
+          </div>
         </div>
 
         {/* 활성 채널 선택 */}
