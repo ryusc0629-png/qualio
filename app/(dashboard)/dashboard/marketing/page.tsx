@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { PostList } from './post-list'
 import { MarketingStats } from './marketing-stats'
+import { SearchTrafficTrend } from '@/components/dashboard/search-traffic-trend'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
@@ -128,6 +129,14 @@ export default async function MarketingPage() {
           <MarketingStats businessId={profile.business_id} />
         </Suspense>
       </div>
+
+      <Suspense fallback={
+        <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
+          검색·AI 유입 추이를 불러오는 중...
+        </div>
+      }>
+        <SearchTrafficTrend businessId={profile.business_id} />
+      </Suspense>
     </div>
   )
 }
