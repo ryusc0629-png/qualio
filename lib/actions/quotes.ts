@@ -8,6 +8,7 @@ import { generateTierDescriptions } from '@/lib/ai/tier-descriptions'
 import { recommendBundles } from '@/lib/ai/bundle-recommendation'
 import { sendBookingConfirmAlimtalk, sendQuoteAlimtalk } from '@/lib/kakao/alimtalk'
 import { sendPushToBusiness } from '@/lib/push/web-push'
+import { detectBundleReview } from '@/lib/utils/booking-review'
 
 // 공개 폼용 액션 클라이언트 (인증 불필요)
 const publicAction = createSafeActionClient({
@@ -407,6 +408,9 @@ export const createBookingAction = publicAction
       ? new Date(quote.preferred_date).toISOString()
       : new Date().toISOString()
 
+    // 선택한 번들에 변동형 서비스(에어컨 대수·줄눈 개수 등)가 있으면 '검토 필요'로 표시
+    const review = await detectBundleReview(db, quote.business_id, parsedInput.selected_tier)
+
     const { data: newBooking, error: bookingError } = await db.from('bookings').insert({
       business_id: quote.business_id,
       quote_id: quote.id,
@@ -417,7 +421,9 @@ export const createBookingAction = publicAction
       selected_tier: parsedInput.selected_tier,
       final_price: finalPrice,
       status: 'confirmed',
-    }).select('id').single()
+      needs_review: review.needsReview,
+      review_reason: review.reason,
+    } as never).select('id').single()
 
     if (bookingError || !newBooking) throw new Error('[APP] 예약 생성에 실패했습니다')
 
@@ -425,8 +431,10 @@ export const createBookingAction = publicAction
     // 알림 클릭 시 해당 예약 날짜의 일정으로 이동 + 예약 상세 시트 자동 오픈
     const bookingDate = scheduledAt.slice(0, 10) // UTC 날짜 (일정 보드도 UTC 기준 매칭)
     await sendPushToBusiness(quote.business_id, {
-      title: '새 예약이 잡혔어요! 📅',
-      body: `${parsedInput.customer_name}님 · ${quote.cleaning_type}`,
+      title: review.needsReview ? '새 예약 — 금액 확인이 필요해요 📞' : '새 예약이 잡혔어요! 📅',
+      body: review.needsReview
+        ? `${parsedInput.customer_name}님 · ${quote.cleaning_type} · 통화로 금액 확인`
+        : `${parsedInput.customer_name}님 · ${quote.cleaning_type}`,
       url: `/dashboard/schedule?view=day&date=${bookingDate}&booking=${newBooking.id}`,
       tag: `booking-${newBooking.id}`,
     })
@@ -600,6 +608,9 @@ export const confirmBookingFromQuoteAction = authAction
 
     if (!quote) throw new Error('[APP] 견적 정보를 찾을 수 없거나 이미 처리된 견적입니다')
 
+    // 선택한 번들에 변동형 서비스가 있으면 '검토 필요'로 표시
+    const review = await detectBundleReview(db, quote.business_id, parsedInput.selected_tier)
+
     // 예약 생성
     const { error: bookingError } = await db.from('bookings').insert({
       business_id:     quote.business_id,
@@ -611,7 +622,9 @@ export const confirmBookingFromQuoteAction = authAction
       selected_tier:   parsedInput.selected_tier,
       final_price:     parsedInput.final_price,
       status:          'confirmed',
-    })
+      needs_review:    review.needsReview,
+      review_reason:   review.reason,
+    } as never)
 
     if (bookingError) throw new Error('[APP] 예약 생성에 실패했습니다')
 

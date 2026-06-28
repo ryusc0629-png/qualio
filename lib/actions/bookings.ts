@@ -113,6 +113,38 @@ export const addBookingAction = action
     return { success: true }
   })
 
+// 검토 완료 처리 — 변동형 항목(에어컨 대수 등)을 통화로 확인하고 금액을 맞춘 뒤 호출
+const clearBookingReviewSchema = z.object({ id: z.string().uuid() })
+
+export const clearBookingReviewAction = action
+  .schema(clearBookingReviewSchema)
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const { error } = await db
+      .from('bookings')
+      .update({ needs_review: false, review_reason: null } as never)
+      .eq('id', parsedInput.id)
+      .eq('business_id', profile.business_id)
+
+    if (error) throw new Error('[APP] 검토 완료 처리에 실패했습니다')
+
+    revalidatePath('/dashboard/schedule')
+    revalidatePath('/dashboard')
+    return { success: true }
+  })
+
 // 예약 상태 변경 액션 (사장님 전용)
 export const updateBookingStatusAction = action
   .schema(updateBookingStatusSchema)

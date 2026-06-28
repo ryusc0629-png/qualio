@@ -6,7 +6,7 @@ import { ko } from 'date-fns/locale'
 import Link from 'next/link'
 import {
   Phone, Clock, User, ChevronRight,
-  Pencil, Check, X, CalendarDays, CheckCircle2, Send, Star, Users,
+  Pencil, Check, X, CalendarDays, CheckCircle2, Send, Star, Users, PhoneCall,
 } from 'lucide-react'
 import { MapNavButton } from '@/components/dashboard/map-nav-button'
 import { toast } from 'sonner'
@@ -36,6 +36,7 @@ import {
   restoreBookingFromScheduleAction,
   updateBookingStatusAction,
 } from '@/lib/actions/workers'
+import { clearBookingReviewAction } from '@/lib/actions/bookings'
 import { sendReviewRequestAction } from '@/lib/actions/reports'
 
 // ── 타입 ──────────────────────────────────────────────────
@@ -64,6 +65,8 @@ interface Booking {
   reviewSent?: boolean
   hasReviewHistory?: boolean
   hasOpenClaim?: boolean
+  needsReview?: boolean
+  reviewReason?: string | null
   cancellation_reason?: string | null
 }
 
@@ -77,6 +80,8 @@ interface Props {
   onStatusChange?: (bookingId: string, newStatus: string) => void
   // 클레임 등록/해결 시 캘린더 배지를 즉시 갱신 (새로고침 없이)
   onClaimChange?:  (bookingId: string, hasOpenClaim: boolean) => void
+  // 검토 완료 처리 시 캘린더 배지를 즉시 갱신
+  onReviewChange?: (bookingId: string, needsReview: boolean) => void
 }
 
 // ── 상태 배지 ────────────────────────────────────────────
@@ -127,6 +132,7 @@ export function BookingDetailSheet({
   onCancel,
   onStatusChange,
   onClaimChange,
+  onReviewChange,
 }: Props) {
   const [editingTime, setEditingTime] = useState(false)
   const [editingDate, setEditingDate] = useState(false)
@@ -140,6 +146,8 @@ export function BookingDetailSheet({
   const [localWorkerIds, setLocalWorkerIds]       = useState<string[]>([])
   // 항목 편집으로 결제 금액이 바뀌면 즉시 반영 (편집기가 onTotalChange로 알려줌)
   const [liveTotal, setLiveTotal]                 = useState(0)
+  // 검토 필요 여부 — '검토 완료' 누르면 즉시 숨김
+  const [localNeedsReview, setLocalNeedsReview]   = useState(false)
 
   // booking이 바뀔 때마다 상태 초기화
   useEffect(() => {
@@ -147,6 +155,7 @@ export function BookingDetailSheet({
     setCurrentReviewSent(booking?.reviewSent ?? false)
     setLocalWorkerIds(booking?.workerIds ?? [])
     setLiveTotal(booking?.final_price ?? 0)
+    setLocalNeedsReview(booking?.needsReview ?? false)
   }, [booking?.id])
 
   const isCancelled = !booking ||
@@ -207,6 +216,17 @@ export function BookingDetailSheet({
       if (!booking || !data?.newStatus) return
       onStatusChange?.(booking.id, data.newStatus)
       toast.success('상태가 변경됐어요!')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 검토 완료 처리 액션 (변동형 금액 확인 후 플래그 해제)
+  const { execute: clearReview, isPending: clearReviewPending } = useAction(clearBookingReviewAction, {
+    onSuccess: () => {
+      if (!booking) return
+      setLocalNeedsReview(false)
+      onReviewChange?.(booking.id, false)
+      toast.success('검토 완료로 표시했어요!')
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -562,6 +582,31 @@ export function BookingDetailSheet({
               </Row>
             )}
           </div>
+
+          {/* 금액 확인 필요 안내 — 변동형 항목(에어컨 대수·줄눈 개수 등) 포함 */}
+          {booking && localNeedsReview && !isCancelled && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5 mb-4 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <PhoneCall className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-amber-800">금액 확인이 필요한 예약이에요</p>
+                  <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                    {booking.reviewReason ??
+                      '수량·형태에 따라 금액이 달라지는 항목이 포함돼 있어요. 고객과 통화로 확인한 뒤 아래에서 금액을 맞춰주세요.'}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                className="w-full h-11 gap-2 border-amber-300 text-amber-800 hover:bg-amber-100 hover:text-amber-900"
+                disabled={clearReviewPending}
+                onClick={() => clearReview({ id: booking.id })}
+              >
+                <Check className="h-4 w-4" />
+                {clearReviewPending ? '처리 중...' : '통화로 확인했어요 (검토 완료)'}
+              </Button>
+            </div>
+          )}
 
           {/* 항목별 견적 편집 — 통화·현장 조정 + 변경 이력 */}
           {booking && (

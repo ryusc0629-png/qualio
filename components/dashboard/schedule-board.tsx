@@ -59,6 +59,8 @@ interface Booking {
   reviewSent?: boolean
   hasReviewHistory?: boolean
   hasOpenClaim?: boolean
+  needsReview?: boolean
+  reviewReason?: string | null
   cancellation_reason?: string | null
 }
 
@@ -145,6 +147,14 @@ function BookingCard({
             className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] font-bold leading-none"
           >
             !
+          </span>
+        )}
+        {booking.needsReview && !isCancelled && !isCompleted && (
+          <span
+            title="금액 확인 필요 (변동형 항목 포함)"
+            className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] font-bold leading-none"
+          >
+            ₩
           </span>
         )}
         {isCompleted && <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />}
@@ -503,6 +513,13 @@ export function ScheduleBoard({
     })
   }
 
+  // 검토 완료 시 해당 예약의 '금액 확인' 배지 즉시 제거
+  const handleSheetReviewChange = (bookingId: string, needsReview: boolean) => {
+    setBookings((prev) =>
+      prev.map((b) => b.id === bookingId ? { ...b, needsReview } : b)
+    )
+  }
+
   const handleDragStart = (event: DragStartEvent) => {
     const booking = bookings.find((b) => b.id === event.active.id)
     setActiveBooking(booking ?? null)
@@ -750,6 +767,7 @@ export function ScheduleBoard({
         onCancel={handleSheetCancel}
         onStatusChange={handleSheetStatusChange}
         onClaimChange={handleSheetClaimChange}
+        onReviewChange={handleSheetReviewChange}
       />
     </div>
   )

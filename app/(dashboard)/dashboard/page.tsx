@@ -80,6 +80,7 @@ export default async function DashboardPage() {
     { count: pendingChannelCount },
     { data: fieldPriceChanges },
     { count: openClaimCount },
+    { count: needsReviewCount },
   ] = await Promise.all([
     // 이번 달 완료 예약
     db.from('bookings').select('final_price')
@@ -201,6 +202,14 @@ export default async function DashboardPage() {
       .select('id' as never, { count: 'exact', head: true })
       .eq('business_id' as never, businessId)
       .neq('status' as never, 'resolved') as unknown as Promise<{ count: number | null }>,
+
+    // 금액 확인이 필요한 예약 수 (변동형 항목 포함, 아직 완료·취소 전)
+    db.from('bookings' as never)
+      .select('id' as never, { count: 'exact', head: true })
+      .eq('business_id' as never, businessId)
+      .eq('needs_review' as never, true)
+      .not('status' as never, 'in', '("completed","cancelled","no_show")')
+      .is('deleted_at' as never, null) as unknown as Promise<{ count: number | null }>,
   ])
 
   // ── 계산 ──────────────────────────────────────────────
@@ -261,7 +270,7 @@ export default async function DashboardPage() {
   const hasAlerts = (pendingQuoteCount ?? 0) > 0 || unreportedCount > 0 ||
     (unreviewedCount ?? 0) > 0 || (unassignedCount ?? 0) > 0 || todayFollowUpCount > 0 ||
     (doneReelCount ?? 0) > 0 || (pendingPortfolioCount ?? 0) > 0 || (pendingChannelCount ?? 0) > 0 ||
-    fieldPriceChangedCount > 0 || (openClaimCount ?? 0) > 0
+    fieldPriceChangedCount > 0 || (openClaimCount ?? 0) > 0 || (needsReviewCount ?? 0) > 0
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
@@ -295,6 +304,20 @@ export default async function DashboardPage() {
                   <p className="text-xs text-rose-600 mt-0.5">고객 불만이 쌓이기 전에 눌러서 해결하세요</p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-rose-400 shrink-0" />
+              </div>
+            </Link>
+          )}
+          {(needsReviewCount ?? 0) > 0 && (
+            <Link href="/dashboard/schedule">
+              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 hover:bg-amber-100 transition-colors">
+                <PhoneCall className="h-4 w-4 text-amber-500 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-amber-800">
+                    금액 확인이 필요한 예약이 {needsReviewCount}건 있어요
+                  </p>
+                  <p className="text-xs text-amber-600 mt-0.5">에어컨 대수·줄눈 개수처럼 수량에 따라 금액이 달라져요. 통화로 확인 후 금액을 맞춰주세요</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-amber-400 shrink-0" />
               </div>
             </Link>
           )}
