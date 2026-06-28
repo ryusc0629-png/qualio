@@ -147,10 +147,25 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
+  // 상태 변경을 누르는 즉시 화면에 반영(낙관적 업데이트) — 저장은 백그라운드.
+  // leadId별로 임시 상태를 덮어써서 서버 응답을 기다리는 딜레이 착각을 없앤다.
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, string>>({})
+
   const { execute: executeStatus } = useAction(updateLeadStatusAction, {
-    onSuccess: () => startTransition(() => router.refresh()),
-    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+    onSuccess: () => {
+      setStatusOverrides({}) // 새 서버 데이터로 동기화되므로 임시값 비움
+      startTransition(() => router.refresh())
+    },
+    onError: ({ error }) => {
+      setStatusOverrides({}) // 실패 시 서버 상태(원래대로)로 되돌림
+      toast.error(error.serverError ?? '다시 시도해주세요')
+    },
   })
+
+  const handleStatusChange = (leadId: string, status: string) => {
+    setStatusOverrides((prev) => ({ ...prev, [leadId]: status })) // 즉시 반영
+    executeStatus({ leadId, status })
+  }
 
   const { execute: executeDelete, isPending: deleting } = useAction(deleteLeadAction, {
     onSuccess: () => {
@@ -294,7 +309,8 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
       {/* 거래처 목록 */}
       <div className="space-y-2">
         {filtered.map((lead) => {
-          const stage = STAGE_CONFIG[lead.status] ?? { text: lead.status, color: 'bg-gray-100 text-gray-600' }
+          const effectiveStatus = statusOverrides[lead.id] ?? lead.status
+          const stage = STAGE_CONFIG[effectiveStatus] ?? { text: effectiveStatus, color: 'bg-gray-100 text-gray-600' }
           const isCompany = lead.customer_type === 'company'
           const isContracted = lead.status === 'contracted'
           const isConverted = convertedSet.has(lead.id)
@@ -349,7 +365,7 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
                 <div className="shrink-0 flex flex-col items-end gap-2">
                   {isCompany ? (
                     // 거래처: 수동 단계 선택
-                    <Select value={lead.status} onValueChange={(v) => executeStatus({ leadId: lead.id, status: v })}>
+                    <Select value={effectiveStatus} onValueChange={(v) => handleStatusChange(lead.id, v)}>
                       <SelectTrigger className={`h-7 text-xs px-2 border-0 font-medium w-auto ${stage.color}`}>
                         <SelectValue />
                       </SelectTrigger>

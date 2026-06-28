@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -94,10 +94,24 @@ export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, 
   const [activityContent, setActivityContent] = useState('')
   const [activityDate, setActivityDate] = useState(new Date().toISOString().slice(0, 10))
 
+  // 상태는 누르는 즉시 화면에 반영(낙관적 업데이트) — 저장은 백그라운드.
+  // 서버 응답/재패칭을 기다리지 않아 "안 먹히나?" 하는 딜레이 착각을 없앤다.
+  const [optimisticStatus, setOptimisticStatus] = useState(lead.status)
+  // 재패칭 등으로 서버값이 바뀌면 동기화 (보관 해제·전환 등 다른 경로 반영)
+  useEffect(() => setOptimisticStatus(lead.status), [lead.status])
+
   const { execute: executeStatus } = useAction(updateLeadStatusAction, {
     onSuccess: () => startTransition(() => router.refresh()),
-    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+    onError: ({ error }) => {
+      setOptimisticStatus(lead.status) // 실패 시 이전 상태로 되돌림
+      toast.error(error.serverError ?? '다시 시도해주세요')
+    },
   })
+
+  const handleStatusChange = (status: string) => {
+    setOptimisticStatus(status) // 즉시 반영
+    executeStatus({ leadId: lead.id, status })
+  }
 
   const { execute: executeArchive, isPending: archiving } = useAction(updateLeadStatusAction, {
     onSuccess: () => {
@@ -123,7 +137,7 @@ export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, 
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
-  const stage = STAGE_CONFIG[lead.status] ?? { text: lead.status, color: 'bg-gray-100 text-gray-700' }
+  const stage = STAGE_CONFIG[optimisticStatus] ?? { text: optimisticStatus, color: 'bg-gray-100 text-gray-700' }
   const isCompany = lead.customer_type === 'company'
 
   const handleAddActivity = () => {
@@ -217,7 +231,7 @@ export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, 
                 )}
               </div>
             ) : (
-              <Select value={lead.status} onValueChange={(v) => executeStatus({ leadId: lead.id, status: v })}>
+              <Select value={optimisticStatus} onValueChange={handleStatusChange}>
                 <SelectTrigger className={`h-8 text-xs px-2.5 border-0 font-medium w-auto ${stage.color}`}>
                   <SelectValue />
                 </SelectTrigger>
@@ -243,8 +257,8 @@ export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, 
         {/* 단계 진행 바 */}
         <div className="flex gap-1">
           {['new', 'contacted', 'follow_up', 'quoted', 'negotiating', 'contracted'].map((s, i) => {
-            const currentIdx = STAGE_ORDER.indexOf(lead.status)
-            const isRejected = lead.status === 'rejected'
+            const currentIdx = STAGE_ORDER.indexOf(optimisticStatus)
+            const isRejected = optimisticStatus === 'rejected'
             const stepIdx = STAGE_ORDER.indexOf(s)
             const isPast = !isRejected && currentIdx >= stepIdx
             return (
