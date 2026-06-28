@@ -333,6 +333,51 @@ export async function sendReceiptAlimtalk(params: ReceiptParams): Promise<void> 
   })
 }
 
+// 기사 출발 알림 파라미터 ("기사가 곧 도착해요" — 방문 직전 발송)
+export interface OnMyWayParams {
+  customerPhone: string
+  customerName:  string
+  businessName:  string
+  businessPhone: string | null
+  cleaningType:  string
+  scheduledAt:   string  // ISO 문자열
+}
+
+// 기사 출발 알림톡 발송. 실제 발송되면 true, 템플릿 미설정(심사 전 등)이면 false 반환.
+// 호출부가 "보냈어요"를 거짓으로 표시하지 않도록 발송 여부를 알려준다.
+export async function sendOnMyWayAlimtalk(params: OnMyWayParams): Promise<boolean> {
+  const apiKey     = process.env.SOLAPI_API_KEY
+  const apiSecret  = process.env.SOLAPI_API_SECRET
+  const sender     = process.env.SOLAPI_SENDER_PHONE
+  const templateId = process.env.SOLAPI_TEMPLATE_ID_ON_MY_WAY
+  const pfId       = process.env.SOLAPI_KAKAO_PF_ID
+
+  if (!apiKey || !apiSecret || !sender || !templateId || !pfId) {
+    console.warn('[Alimtalk] ON_MY_WAY 템플릿 미설정 — 발송 생략')
+    return false
+  }
+
+  const service = new SolapiMessageService(apiKey, apiSecret)
+
+  await service.sendOne({
+    to:   params.customerPhone,
+    from: sender,
+    type: 'ATA',
+    kakaoOptions: {
+      pfId,
+      templateId,
+      variables: {
+        '#{고객명}':     params.customerName,
+        '#{업체명}':     params.businessName,
+        '#{서비스명}':   params.cleaningType,
+        '#{예약일시}':   formatKoreanDate(params.scheduledAt),
+        '#{업체연락처}': params.businessPhone ?? '업체에 문의해 주세요',
+      },
+    },
+  })
+  return true
+}
+
 // 예약 확정 알림톡 발송 (퀄리오 채널로 고객사 대신 발송)
 export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): Promise<void> {
   const apiKey     = process.env.SOLAPI_API_KEY

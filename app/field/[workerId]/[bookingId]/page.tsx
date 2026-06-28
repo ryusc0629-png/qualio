@@ -49,7 +49,7 @@ export default async function FieldBookingPage({ params }: Props) {
   // 예약 상세 조회 (메모 최종 저장자 포함)
   const { data: booking } = await db
     .from('bookings')
-    .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, customer_request, quote_id, memo_updated_by, memo_updated_at' as never)
+    .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, customer_request, quote_id, memo_updated_by, memo_updated_at, on_my_way_sent_at' as never)
     .eq('id', bookingId)
     .eq('business_id', worker.business_id)
     .maybeSingle() as { data: {
@@ -57,6 +57,7 @@ export default async function FieldBookingPage({ params }: Props) {
       service_address: string | null; scheduled_at: string; final_price: number
       status: string; memo: string | null; customer_request: string | null; quote_id: string | null
       memo_updated_by: string | null; memo_updated_at: string | null
+      on_my_way_sent_at: string | null
     } | null }
 
   if (!booking) notFound()
@@ -84,15 +85,18 @@ export default async function FieldBookingPage({ params }: Props) {
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((p) => p.url)
 
-  // 다음 방문 참고사항 로드 (customers.notes에서 이 예약 날짜의 마지막 기록)
+  // 다음 방문 참고사항 + 출발 알림 수신 설정 로드
   let savedNextVisitNote = ''
+  let notifyOnMyWay = true
   if (booking.customer_phone) {
     const { data: customer } = await db
       .from('customers')
-      .select('notes')
+      .select('notes, notify_on_my_way' as never)
       .eq('business_id', worker.business_id)
       .eq('phone', booking.customer_phone)
-      .maybeSingle()
+      .maybeSingle() as { data: { notes: string | null; notify_on_my_way: boolean | null } | null }
+
+    if (customer && customer.notify_on_my_way === false) notifyOnMyWay = false
 
     if (customer?.notes) {
       // 오늘 날짜로 저장된 마지막 메모를 추출
@@ -122,6 +126,8 @@ export default async function FieldBookingPage({ params }: Props) {
       }}
       reportId={report?.id ?? null}
       reportSentAt={report?.kakao_sent_at ?? null}
+      notifyOnMyWay={notifyOnMyWay}
+      onMyWaySentAt={booking.on_my_way_sent_at}
       existingBeforeUrls={beforeUrls}
       existingCustomerRequest={(booking.customer_request as string) ?? ''}
       existingNextVisitNote={savedNextVisitNote}

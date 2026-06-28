@@ -1,10 +1,12 @@
 'use server'
 
 import { z } from 'zod'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { sendRescheduleAlimtalk } from '@/lib/kakao/alimtalk'
+import { sendOnMyWayForBooking } from '@/lib/kakao/on-my-way'
 
 // 한국 전화번호 검증
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
@@ -143,6 +145,36 @@ export const clearBookingReviewAction = action
     revalidatePath('/dashboard/schedule')
     revalidatePath('/dashboard')
     return { success: true }
+  })
+
+// 기사 출발 알림 (대표가 예약 상세에서 발송) — 고객 수신 설정 확인 후 발송
+export const sendOnMyWayAction = action
+  .schema(z.object({ id: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const { data: booking } = await db
+      .from('bookings')
+      .select('id, customer_name, customer_phone, scheduled_at, quote_id')
+      .eq('id', parsedInput.id)
+      .eq('business_id', profile.business_id)
+      .maybeSingle()
+    if (!booking) throw new Error('[APP] 예약을 찾을 수 없습니다')
+
+    const result = await sendOnMyWayForBooking(db as unknown as SupabaseClient, profile.business_id, booking)
+
+    revalidatePath('/dashboard/schedule')
+    return { success: true, sent: result.sent, skipped: result.skipped }
   })
 
 // 예약 상태 변경 액션 (사장님 전용)

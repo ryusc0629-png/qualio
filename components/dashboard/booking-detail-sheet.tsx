@@ -36,7 +36,7 @@ import {
   restoreBookingFromScheduleAction,
   updateBookingStatusAction,
 } from '@/lib/actions/workers'
-import { clearBookingReviewAction } from '@/lib/actions/bookings'
+import { clearBookingReviewAction, sendOnMyWayAction } from '@/lib/actions/bookings'
 import { sendReviewRequestAction } from '@/lib/actions/reports'
 
 // ── 타입 ──────────────────────────────────────────────────
@@ -148,6 +148,8 @@ export function BookingDetailSheet({
   const [liveTotal, setLiveTotal]                 = useState(0)
   // 검토 필요 여부 — '검토 완료' 누르면 즉시 숨김
   const [localNeedsReview, setLocalNeedsReview]   = useState(false)
+  // 기사 출발 알림 발송 여부
+  const [onMyWaySent, setOnMyWaySent]             = useState(false)
 
   // booking이 바뀔 때마다 상태 초기화
   useEffect(() => {
@@ -156,6 +158,7 @@ export function BookingDetailSheet({
     setLocalWorkerIds(booking?.workerIds ?? [])
     setLiveTotal(booking?.final_price ?? 0)
     setLocalNeedsReview(booking?.needsReview ?? false)
+    setOnMyWaySent(false)
   }, [booking?.id])
 
   const isCancelled = !booking ||
@@ -216,6 +219,21 @@ export function BookingDetailSheet({
       if (!booking || !data?.newStatus) return
       onStatusChange?.(booking.id, data.newStatus)
       toast.success('상태가 변경됐어요!')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 기사 출발 알림 발송 액션
+  const { execute: sendOnMyWay, isPending: onMyWayPending } = useAction(sendOnMyWayAction, {
+    onSuccess: ({ data }) => {
+      if (data?.skipped) {
+        toast.info('이 고객은 출발 알림을 꺼두셨어요')
+      } else if (data?.sent) {
+        setOnMyWaySent(true)
+        toast.success('고객에게 출발 알림을 보냈어요!')
+      } else {
+        toast.info('출발 알림은 준비 중이에요 (곧 사용 가능)')
+      }
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -658,6 +676,25 @@ export function BookingDetailSheet({
         {/* 하단 — 상태 변경 + 취소 */}
         {!isCancelled && (
           <div className="px-5 pb-5 pt-3 border-t border-border space-y-2">
+            {/* 기사 출발 알림 — 방문 전(확정/진행) + 연락처 있을 때 */}
+            {booking && booking.customer_phone && ['confirmed', 'in_progress'].includes(booking.status) && (
+              onMyWaySent ? (
+                <div className="flex items-center justify-center gap-1.5 text-sm text-emerald-600 font-medium py-1.5">
+                  <CheckCircle2 className="h-4 w-4" />
+                  출발 알림을 보냈어요
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="w-full h-12 font-semibold gap-2"
+                  disabled={onMyWayPending}
+                  onClick={() => sendOnMyWay({ id: booking.id })}
+                >
+                  <Send className="h-4 w-4" />
+                  {onMyWayPending ? '보내는 중...' : '기사 출발 알림 보내기'}
+                </Button>
+              )
+            )}
             {/* 상태 변경 버튼 */}
             {booking?.status === 'confirmed' && (
               <Button

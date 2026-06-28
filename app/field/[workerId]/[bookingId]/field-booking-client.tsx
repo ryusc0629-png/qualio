@@ -14,6 +14,7 @@ import {
   fieldSaveBeforePhotosAction,
   fieldCompletePaymentAction,
   fieldRequestPaymentAction,
+  fieldSendOnMyWayAction,
 } from '@/lib/actions/field'
 import { FieldBookingItemsEditor } from '@/components/field/field-booking-items-editor'
 import { ContactActions } from '@/components/dashboard/contact-actions'
@@ -31,6 +32,7 @@ import {
   ChevronDown,
   ChevronUp,
   Film,
+  Send,
 } from 'lucide-react'
 
 interface BookingData {
@@ -53,6 +55,8 @@ interface Props {
   booking: BookingData
   reportId: string | null
   reportSentAt: string | null
+  notifyOnMyWay: boolean
+  onMyWaySentAt: string | null
   existingBeforeUrls: string[]
   existingCustomerRequest: string
   existingNextVisitNote: string
@@ -69,8 +73,9 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(diff / 86400)}일 전`
 }
 
-export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, existingBeforeUrls, existingCustomerRequest, existingNextVisitNote, memoUpdatedById, memoUpdatedByName, memoUpdatedAt }: Props) {
+export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, notifyOnMyWay, onMyWaySentAt, existingBeforeUrls, existingCustomerRequest, existingNextVisitNote, memoUpdatedById, memoUpdatedByName, memoUpdatedAt }: Props) {
   const [currentStatus, setCurrentStatus] = useState(booking.status)
+  const [onMyWaySent, setOnMyWaySent] = useState(!!onMyWaySentAt)
   // 현장에서 항목을 조정하면 결제 금액도 실시간으로 따라간다
   const [liveTotal, setLiveTotal] = useState(booking.finalPrice)
   const [siteMemo, setSiteMemo] = useState(booking.memo ?? '')
@@ -92,6 +97,21 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
     onSuccess: () => {
       setCurrentStatus('in_progress')
       toast.success('작업을 시작했어요!')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 기사 출발 알림 — 고객에게 "곧 도착해요" 알림톡
+  const { execute: sendOnMyWay, isPending: isSendingOnMyWay } = useAction(fieldSendOnMyWayAction, {
+    onSuccess: ({ data }) => {
+      if (data?.skipped) {
+        toast.info('이 고객은 출발 알림을 꺼두셨어요')
+      } else if (data?.sent) {
+        setOnMyWaySent(true)
+        toast.success('고객에게 출발 알림을 보냈어요!')
+      } else {
+        toast.info('출발 알림은 준비 중이에요 (곧 사용 가능)')
+      }
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -492,15 +512,37 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
       {currentStatus !== 'completed' && currentStatus !== 'cancelled' && currentStatus !== 'no_show' && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 pb-safe">
           {currentStatus === 'confirmed' && (
-            <Button
-              size="lg"
-              className="w-full h-14 text-base gap-2"
-              disabled={isStarting}
-              onClick={() => startWork({ workerId, bookingId: booking.id })}
-            >
-              <Play className="h-5 w-5" />
-              {isStarting ? '처리 중...' : '작업 시작하기'}
-            </Button>
+            <div className="space-y-2">
+              {/* 출발 알림 — 이동 중 탭. 고객이 끄지 않았고 연락처가 있을 때만 */}
+              {notifyOnMyWay && booking.customerPhone && (
+                onMyWaySent ? (
+                  <div className="flex items-center justify-center gap-1.5 text-sm text-emerald-700 font-medium py-1.5">
+                    <CheckCircle2 className="h-4 w-4" />
+                    고객에게 출발 알림을 보냈어요
+                  </div>
+                ) : (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="w-full h-12 text-base gap-2"
+                    disabled={isSendingOnMyWay}
+                    onClick={() => sendOnMyWay({ workerId, bookingId: booking.id })}
+                  >
+                    <Send className="h-5 w-5" />
+                    {isSendingOnMyWay ? '보내는 중...' : '고객에게 출발 알림 보내기'}
+                  </Button>
+                )
+              )}
+              <Button
+                size="lg"
+                className="w-full h-14 text-base gap-2"
+                disabled={isStarting}
+                onClick={() => startWork({ workerId, bookingId: booking.id })}
+              >
+                <Play className="h-5 w-5" />
+                {isStarting ? '처리 중...' : '작업 시작하기'}
+              </Button>
+            </div>
           )}
 
           {currentStatus === 'in_progress' && !paymentRequested && (

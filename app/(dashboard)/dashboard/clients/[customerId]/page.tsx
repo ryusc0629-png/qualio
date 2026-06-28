@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft, Calendar, Receipt, ChevronRight, FileText, User, Star, ShieldAlert, AlertTriangle, CheckCircle2, ClipboardList } from 'lucide-react'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
+import { CustomerOnMyWayToggle } from '@/components/dashboard/customer-on-my-way-toggle'
 import { ContactActions } from '@/components/dashboard/contact-actions'
 import { AddClaimForm } from '@/components/dashboard/add-claim-form'
 import { AddBookingButton } from '@/components/dashboard/add-booking-button'
@@ -63,6 +64,14 @@ export default async function CustomerDetailPage({ params }: Props) {
     .maybeSingle()
 
   if (!customer) notFound()
+
+  // 기사 출발 알림 수신 설정 (새 컬럼 — 타입 미반영이라 단언, 기본 켜짐)
+  const { data: notifyRow } = await db
+    .from('customers' as never)
+    .select('notify_on_my_way' as never)
+    .eq('id' as never, customerId)
+    .maybeSingle() as { data: { notify_on_my_way: boolean | null } | null }
+  const onMyWayOn = notifyRow?.notify_on_my_way !== false
 
   type BookingWithWorker = {
     id: string
@@ -215,6 +224,11 @@ export default async function CustomerDetailPage({ params }: Props) {
 
         {/* 전화·문자·길찾기 바로가기 (탭 한 번으로 전화/지도) */}
         <ContactActions phone={customer.phone} address={customer.address} />
+
+        {/* 기사 출발 알림 수신 설정 (고객별 on/off) */}
+        {customer.phone && (
+          <CustomerOnMyWayToggle customerId={customer.id} initialOn={onMyWayOn} />
+        )}
 
         {customer.notes && (
           <p className="text-sm text-muted-foreground border-t border-border pt-3">

@@ -3,11 +3,13 @@
 import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createServiceClient } from '@/lib/supabase/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   sendReceiptAlimtalk,
   sendReviewRequestAlimtalk,
   sendWorkCompleteAlimtalk,
 } from '@/lib/kakao/alimtalk'
+import { sendOnMyWayForBooking } from '@/lib/kakao/on-my-way'
 import { generateAiReport } from '@/lib/ai/report-writer'
 
 // workers 테이블 타입 (Supabase 타입 아직 미생성)
@@ -108,6 +110,27 @@ export const fieldStartWorkAction = action
     if (error) throw new Error('[APP] 상태 변경에 실패했어요')
 
     return { success: true }
+  })
+
+// 기사 출발 알림 (현장 직원이 이동 중 탭) — 고객 수신 설정 확인 후 발송
+export const fieldSendOnMyWayAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    const result = await sendOnMyWayForBooking(db as unknown as SupabaseClient, worker.business_id, {
+      id: booking.id,
+      customer_name: booking.customer_name,
+      customer_phone: booking.customer_phone,
+      scheduled_at: booking.scheduled_at,
+      quote_id: booking.quote_id,
+    })
+
+    return { success: true, sent: result.sent, skipped: result.skipped }
   })
 
 // 메모 저장 (3종 메모를 한 번에 저장)

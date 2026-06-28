@@ -64,6 +64,7 @@ const updateCustomerSchema = z.object({
   category: z.string().optional(),
   type: z.string().refine((v) => ['recurring', 'one_time'].includes(v), '유효하지 않은 고객 유형입니다'),
   notes: z.string().optional(),
+  notify_on_my_way: z.boolean().optional(),
 })
 
 export const updateCustomerAction = action
@@ -89,7 +90,10 @@ export const updateCustomerAction = action
         category: parsedInput.category || null,
         type: parsedInput.type,
         notes: parsedInput.notes || null,
-      })
+        ...(parsedInput.notify_on_my_way !== undefined
+          ? { notify_on_my_way: parsedInput.notify_on_my_way }
+          : {}),
+      } as never)
       .eq('id', parsedInput.customerId)
       .eq('business_id', businessId)
 
@@ -134,6 +138,29 @@ export const updateCustomerAction = action
     revalidatePath('/dashboard/claims')
     revalidatePath('/dashboard')
     return { success: true }
+  })
+
+// 기사 출발 알림 수신 설정 토글 (고객별)
+const setOnMyWaySchema = z.object({
+  customerId: z.string().uuid(),
+  enabled: z.boolean(),
+})
+
+export const setCustomerOnMyWayAction = action
+  .schema(setOnMyWaySchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuthenticatedBusinessId()
+
+    const { error } = await db
+      .from('customers')
+      .update({ notify_on_my_way: parsedInput.enabled } as never)
+      .eq('id', parsedInput.customerId)
+      .eq('business_id', businessId)
+
+    if (error) throw new Error('[APP] 설정 변경에 실패했습니다')
+
+    revalidatePath(`/dashboard/clients/${parsedInput.customerId}`)
+    return { success: true, enabled: parsedInput.enabled }
   })
 
 // 활성 고객 등록 — 고객유형별 분기
