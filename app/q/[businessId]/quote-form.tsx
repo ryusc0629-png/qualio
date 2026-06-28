@@ -7,6 +7,7 @@ import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { calculateAndCreateQuoteAction } from '@/lib/actions/quotes'
 import { isAcService } from '@/lib/utils'
+import { trackFunnel } from '@/lib/utils/track-funnel'
 
 // 서비스 유형에 따라 스텝 분기
 const STEP_SEQUENCE_DEFAULT      = ['service', 'space', 'context', 'date', 'notes', 'name', 'phone'] as const
@@ -461,6 +462,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
       : STEP_SEQUENCE_DEFAULT
 
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const startedRef = useRef(false) // 폼 시작(form_started) 1회만 기록
 
   useEffect(() => {
     setTimeout(() => {
@@ -471,6 +473,7 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   const { execute, isPending } = useAction(calculateAndCreateQuoteAction, {
     onSuccess: ({ data }) => {
       if (!data) return
+      trackFunnel(businessId, 'quote_submitted') // 견적 제출 완료 기록(이동 전 sendBeacon)
       window.location.replace(`/q/${businessId}/quote/${data.quoteId}`)
     },
     onError: ({ error }) => toast.error(error.serverError ?? '견적 계산에 실패했습니다'),
@@ -510,6 +513,12 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   }
 
   const advance = (from: Step, to: Step) => {
+    // 첫 단계 완료 = 폼 시작 (1회만), 이후 각 단계 완료를 기록 → 이탈 지점 파악
+    if (!startedRef.current) {
+      startedRef.current = true
+      trackFunnel(businessId, 'form_started')
+    }
+    trackFunnel(businessId, 'step_completed', { step: from })
     setCompletedSteps(prev => [...prev, from])
     setIsTyping(true)
     setTimeout(() => {

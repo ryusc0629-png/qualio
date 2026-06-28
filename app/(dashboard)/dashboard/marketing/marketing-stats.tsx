@@ -14,7 +14,7 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
   const sixMonthsAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1)).toISOString()
 
-  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, reviewResult, claimsResult, pageViewsResult] = await Promise.all([
+  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, reviewResult, claimsResult, pageViewsResult, funnelResult, quotes6moResult, bookings6moResult] = await Promise.all([
     // 이번 달 견적 신청 수
     db
       .from('quotes')
@@ -67,6 +67,28 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
       .select('source, page_type' as never)
       .eq('business_id' as never, businessId)
       .gte('viewed_at' as never, sixMonthsAgo) as unknown as Promise<{ data: { source: string; page_type: string }[] | null }>,
+
+    // 최근 6개월 견적 퍼널 이벤트 (전체 여정) — 타입 미반영이라 단언 사용
+    db
+      .from('quote_funnel_events' as never)
+      .select('session_id, event_type, step, meta' as never)
+      .eq('business_id' as never, businessId)
+      .gte('created_at' as never, sixMonthsAgo) as unknown as Promise<{ data: { session_id: string; event_type: string; step: string | null; meta: Record<string, string | number> | null }[] | null }>,
+
+    // 최근 6개월 견적 신청 수 (퍼널 '견적 받기' 단계)
+    db
+      .from('quotes')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .gte('created_at', sixMonthsAgo),
+
+    // 최근 6개월 예약 수 (퍼널 '예약 완료' 단계 — quote_id 있는 것만)
+    db
+      .from('bookings')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .not('quote_id', 'is', null)
+      .gte('created_at', sixMonthsAgo),
   ])
 
   const quoteCount = quotesResult.count ?? 0
@@ -87,6 +109,70 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
   const blogViews = views.length
   const brandHomeViews = pageViews.filter((p) => p.page_type === 'brand_home').length
   const quoteViews = pageViews.filter((p) => p.page_type === 'quote').length
+
+  // ── 견적 퍼널 (최근 6개월) — 방문 → 작성 시작 → 견적 → 열람 → 플랜 선택 → 예약 ──
+  const funnelEvents = funnelResult.data ?? []
+  // 이벤트별 고유 세션 수 (한 사람의 여정 = 1로 집계)
+  const sessionsOf = (type: string) =>
+    new Set(funnelEvents.filter((e) => e.event_type === type).map((e) => e.session_id)).size
+  const startedSessions = sessionsOf('form_started')
+  const quoteViewedSessions = sessionsOf('quote_viewed')
+  const planSelectedSessions = sessionsOf('plan_selected')
+  const addressSessions = sessionsOf('address_entered')
+  const quote6moCount = quotes6moResult.count ?? 0
+  const booking6moCount = bookings6moResult.count ?? 0
+
+  // 거의 예약할 뻔한 고객 — 주소까지 입력했지만 예약 확정 안 한 세션 수 (재접촉 기회)
+  const bookedSessions = new Set(
+    funnelEvents.filter((e) => e.event_type === 'booking_submitted').map((e) => e.session_id),
+  )
+  const addressNotBooked = funnelEvents
+    .filter((e) => e.event_type === 'address_entered' && !bookedSessions.has(e.session_id))
+    .reduce<Set<string>>((set, e) => set.add(e.session_id), new Set()).size
+
+  // 플랜 선호도 — plan_selected 이벤트의 meta.tier 분포 (전환 안 돼도 끌린 플랜)
+  const TIER_LABELS: Record<string, string> = { good: '기본', better: '추천', best: '프리미엄' }
+  const planPick = funnelEvents
+    .filter((e) => e.event_type === 'plan_selected')
+    .reduce<Record<string, number>>((acc, e) => {
+      const tier = String(e.meta?.tier ?? '')
+      if (tier) acc[tier] = (acc[tier] ?? 0) + 1
+      return acc
+    }, {})
+  const planPickTotal = Object.values(planPick).reduce((a, b) => a + b, 0)
+  const planStats = ['good', 'better', 'best']
+    .map((tier) => ({ tier, label: TIER_LABELS[tier], count: planPick[tier] ?? 0 }))
+    .filter((p) => p.count > 0)
+
+  // 채팅 단계별 통과 고유 세션 수 — "어느 질문에서 멈추나" 이탈 분석
+  const STEP_ORDER = ['service', 'space', 'ac_detail', 'unit_variant', 'unit_detail', 'context', 'date', 'notes', 'name', 'phone'] as const
+  const STEP_LABELS: Record<string, string> = {
+    service: '서비스 선택', space: '평수 입력', ac_detail: '에어컨 선택',
+    unit_variant: '구분 선택', unit_detail: '항목 선택', context: '주거 형태',
+    date: '날짜 선택', notes: '요청사항', name: '이름 입력', phone: '연락처 입력',
+  }
+  const stepSessionSets = new Map<string, Set<string>>()
+  for (const e of funnelEvents) {
+    if (e.event_type !== 'step_completed' || !e.step) continue
+    if (!stepSessionSets.has(e.step)) stepSessionSets.set(e.step, new Set())
+    stepSessionSets.get(e.step)!.add(e.session_id)
+  }
+  const stepStats = STEP_ORDER
+    .map((step) => ({ step, label: STEP_LABELS[step], count: stepSessionSets.get(step)?.size ?? 0 }))
+    .filter((s) => s.count > 0)
+  const stepMax = stepStats.reduce((m, s) => Math.max(m, s.count), 0)
+
+  // 퍼널 전체 여정 — 방문 → 작성 시작 → 견적 받기 → 견적서 열람 → 플랜 선택 → 예약
+  const funnelStages = [
+    { label: '견적 페이지 방문', sub: '견적 화면을 열어본 횟수',   count: quoteViews,           tone: 'text-foreground' },
+    { label: '견적 작성 시작',   sub: '첫 질문에 답하기 시작',     count: startedSessions,      tone: 'text-blue-600' },
+    { label: '견적 받기 완료',   sub: '견적서까지 받음',           count: quote6moCount,        tone: 'text-blue-600' },
+    { label: '견적서 열람',      sub: '받은 견적서를 다시 열어봄', count: quoteViewedSessions,  tone: 'text-emerald-600' },
+    { label: '플랜 선택',        sub: '플랜을 눌러봄(구매 직전)',   count: planSelectedSessions, tone: 'text-emerald-600' },
+    { label: '예약 완료',        sub: '실제 예약으로 전환',         count: booking6moCount,      tone: 'text-primary' },
+  ]
+  const funnelTop = funnelStages[0].count
+  const hasFunnelData = funnelStages.some((s) => s.count > 0)
 
   // 유입 경로 — 사이트 전체(블로그+견적+브랜드 홈) 합산
   const allSources: string[] = [...views.map((v) => v.source), ...pageViews.map((p) => p.source)]
@@ -152,6 +238,115 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
           <p className="text-xs text-muted-foreground">견적 → 예약 전환율</p>
         </div>
       </div>
+
+      {/* 견적 퍼널 — 방문 → 작성 시작 → 견적 받기 → 예약, 단계마다 얼마나 남는지 */}
+      <div className="rounded-xl border bg-white overflow-hidden">
+        <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
+          <p className="font-semibold text-sm">견적 신청 단계별 흐름</p>
+          <p className="text-xs text-muted-foreground">최근 6개월</p>
+        </div>
+
+        {hasFunnelData ? (
+          <div className="p-4 space-y-2.5">
+            {funnelStages.map((stage, i) => {
+              // 막대 너비: 1단계(방문) 대비 비율. 직전 단계 대비 전환율도 함께 표시
+              const widthPct = funnelTop > 0 ? Math.max((stage.count / funnelTop) * 100, stage.count > 0 ? 8 : 0) : 0
+              const prev = i > 0 ? funnelStages[i - 1].count : null
+              const stepRate = prev && prev > 0 ? Math.round((stage.count / prev) * 100) : null
+              return (
+                <div key={stage.label} className="space-y-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="flex items-baseline gap-2 min-w-0">
+                      <span className="text-sm font-semibold truncate">{stage.label}</span>
+                      {stepRate !== null && (
+                        <span className="text-[11px] text-muted-foreground shrink-0">
+                          이전 단계의 {stepRate}%
+                        </span>
+                      )}
+                    </div>
+                    <span className={`text-sm font-bold tabular-nums shrink-0 ${stage.tone}`}>
+                      {stage.count.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary/80 rounded-full transition-all"
+                      style={{ width: `${widthPct}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground/80">{stage.sub}</p>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="px-5 py-8 text-center space-y-1">
+            <p className="text-sm text-muted-foreground">아직 견적 신청 흐름 데이터가 없어요</p>
+            <p className="text-xs text-muted-foreground/70">
+              고객이 견적 페이지에서 신청을 시작하면 단계별로 쌓여요
+            </p>
+          </div>
+        )}
+
+        {/* 거의 예약할 뻔한 고객 — 재접촉하면 전환 가능 */}
+        {addressNotBooked > 0 && (
+          <div className="border-t px-5 py-3 bg-amber-50/60 flex items-start gap-2">
+            <span className="text-base shrink-0">📞</span>
+            <p className="text-xs text-amber-900 leading-relaxed">
+              주소까지 입력하고 예약은 안 한 고객이 <b>{addressNotBooked}명</b> 있어요.
+              조금만 더 안내하면 예약으로 이어질 수 있어요.
+            </p>
+          </div>
+        )}
+
+        {/* 채팅 단계별 이탈 — 어느 질문에서 많이 멈추는지 */}
+        {stepStats.length > 0 && (
+          <div className="border-t px-4 py-4 space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground mb-1">
+              질문별 진행 — 막대가 줄어드는 곳이 이탈 지점이에요
+            </p>
+            {stepStats.map((s) => {
+              const widthPct = stepMax > 0 ? Math.max((s.count / stepMax) * 100, 8) : 0
+              return (
+                <div key={s.step} className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground w-20 shrink-0 truncate">{s.label}</span>
+                  <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-400 rounded-full" style={{ width: `${widthPct}%` }} />
+                  </div>
+                  <span className="text-xs font-medium tabular-nums w-7 text-right shrink-0">{s.count}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 플랜 선호도 — 고객이 어떤 플랜에 끌리는지(예약 전환 전 클릭 기준) */}
+      {planStats.length > 0 && (
+        <div className="rounded-xl border bg-white overflow-hidden">
+          <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
+            <p className="font-semibold text-sm">플랜 선호도</p>
+            <p className="text-xs text-muted-foreground">고객이 눌러본 플랜 · 최근 6개월</p>
+          </div>
+          <div className="p-4 space-y-2.5">
+            {planStats.map((p) => {
+              const pct = planPickTotal > 0 ? Math.round((p.count / planPickTotal) * 100) : 0
+              return (
+                <div key={p.tier} className="flex items-center gap-2">
+                  <span className="text-xs font-medium w-12 shrink-0">{p.label}</span>
+                  <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.max(pct, p.count > 0 ? 6 : 0)}%` }} />
+                  </div>
+                  <span className="text-xs font-medium tabular-nums w-14 text-right shrink-0">{p.count}회 ({pct}%)</span>
+                </div>
+              )
+            })}
+            <p className="text-[11px] text-muted-foreground/80 pt-1">
+              많이 눌리는 플랜의 구성·가격이 고객 눈높이에 맞다는 신호예요
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* 유입 경로 — 검색·AI 유입을 핵심 지표로 강조, 직접·기타는 보조로 */}
       <div className="rounded-xl border bg-white overflow-hidden">

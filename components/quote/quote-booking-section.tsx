@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { createBookingAction } from '@/lib/actions/quotes'
 import { Check, Plus, Lightbulb, Search } from 'lucide-react'
 import { openAddressSearch } from '@/lib/address/postcode'
+import { trackFunnel } from '@/lib/utils/track-funnel'
 
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
 
@@ -35,6 +36,7 @@ interface Tier {
 
 interface QuoteBookingSectionProps {
   quoteId: string
+  businessId: string
   tiers: Tier[]
   defaultName?: string
   defaultPhone?: string
@@ -52,6 +54,7 @@ interface QuoteBookingSectionProps {
 
 export function QuoteBookingSection({
   quoteId,
+  businessId,
   tiers,
   defaultName,
   defaultPhone,
@@ -61,6 +64,12 @@ export function QuoteBookingSection({
   const [selectedTier, setSelectedTier] = useState<string | null>(null)
   const [done, setDone] = useState(false)
   const formRef = useRef<HTMLDivElement>(null)
+  const addressTrackedRef = useRef(false) // 주소 입력은 1회만 기록
+
+  // 견적서 열람 기록 (마운트 시 1회) — quoteId를 함께 보내 대표 핫리드 푸시에 활용
+  useEffect(() => {
+    trackFunnel(businessId, 'quote_viewed', { meta: { quoteId } })
+  }, [businessId, quoteId])
 
   const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<BookingInput>({
     resolver: zodResolver(bookingSchema),
@@ -72,6 +81,11 @@ export function QuoteBookingSection({
 
   const { execute, isPending } = useAction(createBookingAction, {
     onSuccess: () => {
+      // 예약 확정 기록 — 선택 플랜·금액 함께 남김
+      const booked = tiers.find((t) => t.tier === selectedTier)
+      trackFunnel(businessId, 'booking_submitted', {
+        meta: { tier: selectedTier ?? '', price: booked?.price ?? 0 },
+      })
       setDone(true)
       // 예약 완료 후 페이지 최상단으로 — 폼이 짧은 완료 화면으로 바뀌며 스크롤이 중간에 걸리던 문제 방지
       window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -127,6 +141,8 @@ export function QuoteBookingSection({
               key={tier.tier}
               type="button"
               onClick={() => {
+                // 플랜 선택 기록 — 어떤 플랜에 끌리는지(전환 안 돼도) 파악
+                trackFunnel(businessId, 'plan_selected', { meta: { tier: tier.tier } })
                 setSelectedTier(tier.tier)
                 setTimeout(() => {
                   formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -283,7 +299,14 @@ export function QuoteBookingSection({
               {/* 기본 주소 — 검색 버튼으로 실제 주소만 입력 가능 */}
               <button
                 type="button"
-                onClick={() => openAddressSearch((addr) => setValue('service_address', addr, { shouldValidate: true }))}
+                onClick={() => openAddressSearch((addr) => {
+                  setValue('service_address', addr, { shouldValidate: true })
+                  // 주소 입력 = 강한 구매 의도 신호 (1회만 기록)
+                  if (!addressTrackedRef.current) {
+                    addressTrackedRef.current = true
+                    trackFunnel(businessId, 'address_entered')
+                  }
+                })}
                 className="w-full h-11 rounded-xl border border-border bg-white px-3 flex items-center justify-between text-sm text-left hover:bg-slate-50 transition-colors"
               >
                 <span className={watch('service_address') ? 'text-foreground' : 'text-muted-foreground'}>

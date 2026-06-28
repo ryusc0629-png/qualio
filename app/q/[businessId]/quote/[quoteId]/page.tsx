@@ -227,6 +227,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
           ) : (
             <QuoteBookingSection
               quoteId={quoteId}
+              businessId={businessId}
               tiers={tiers}
               defaultName={quote.customer_name ?? undefined}
               defaultPhone={quote.customer_phone ?? undefined}
