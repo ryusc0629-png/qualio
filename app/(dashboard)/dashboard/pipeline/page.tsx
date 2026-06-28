@@ -1,6 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { PipelineList } from './pipeline-list'
+import { PipelineStageReport } from '@/components/dashboard/pipeline-stage-report'
 import { buildLiveStatusMap, normalizePhone, type LiveStatus } from '@/lib/utils/lead-live-status'
 
 export default async function PipelinePage({
@@ -86,6 +87,8 @@ export default async function PipelinePage({
           상담 중인 거래처와 일반 고객을 단계별로 관리해요
         </p>
       </div>
+
+      <PipelineStageReport leads={(leads ?? []) as { status: string; customer_type: string; monthly_budget: number | null }[]} />
 
       <PipelineList
         leads={leads ?? []}
