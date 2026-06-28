@@ -19,6 +19,7 @@ const SUB_TASKS = [
   'quote-followup',
   'reengagement',
   'followup-reminder', // 오늘 연락할 B2B 거래처 대표 폰 푸시 알림
+  'generate-recurring-visits', // 정기계약 → 향후 방문 자동 생성(롤링 60일)
   'metrics-snapshot', // 본사 지표 월별 스냅샷(NRR/코호트 기반)
 ] as const
 

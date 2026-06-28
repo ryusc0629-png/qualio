@@ -67,7 +67,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
 
     db
       .from('bookings' as never)
-      .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, worker_id, cancellation_reason, needs_review, review_reason, quotes!quote_id(cleaning_type)')
+      .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, worker_id, cancellation_reason, needs_review, review_reason, contract_id, quotes!quote_id(cleaning_type)')
       .eq('business_id' as never, businessId)
       .in('status' as never, ['confirmed', 'in_progress', 'completed', 'cancelled'])
       .gte('scheduled_at' as never, rangeStart.toISOString())
@@ -120,6 +120,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     service_address: string | null; scheduled_at: string; final_price: number
     status: string; worker_id: string | null; cancellation_reason: string | null
     needs_review: boolean | null; review_reason: string | null
+    contract_id: string | null
     quotes: { cleaning_type: string | null } | null
   }
   const bookings = ((bookingsResult as unknown as { data: RawBooking[] | null }).data) ?? []
@@ -219,6 +220,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           hasOpenClaim:     b.customer_phone ? claimPhones.has(b.customer_phone) : false,
           needsReview:      b.needs_review ?? false,
           reviewReason:     b.review_reason ?? null,
+          isRecurring:      !!b.contract_id,
         }))}
         weekStart={rangeStart.toISOString()}
         weekLabel={rangeLabel}

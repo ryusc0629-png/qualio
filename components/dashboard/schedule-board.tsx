@@ -61,6 +61,7 @@ interface Booking {
   hasOpenClaim?: boolean
   needsReview?: boolean
   reviewReason?: string | null
+  isRecurring?: boolean
   cancellation_reason?: string | null
 }
 
@@ -155,6 +156,14 @@ function BookingCard({
             className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] font-bold leading-none"
           >
             ₩
+          </span>
+        )}
+        {booking.isRecurring && !isCancelled && (
+          <span
+            title="정기계약 방문"
+            className="shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-emerald-600 text-white leading-none"
+          >
+            정기
           </span>
         )}
         {isCompleted && <CheckCircle2 className="h-3 w-3 text-emerald-500 shrink-0" />}
