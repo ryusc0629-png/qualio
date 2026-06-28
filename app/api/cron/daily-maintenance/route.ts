@@ -18,6 +18,7 @@ const SUB_TASKS = [
   'review-request',
   'quote-followup',
   'reengagement',
+  'followup-reminder', // 오늘 연락할 B2B 거래처 대표 폰 푸시 알림
   'metrics-snapshot', // 본사 지표 월별 스냅샷(NRR/코호트 기반)
 ] as const
 
