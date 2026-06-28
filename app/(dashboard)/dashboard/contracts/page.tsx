@@ -38,6 +38,34 @@ export default async function ContractsPage() {
     .eq('business_id', profile.business_id)
     .order('name')
 
+  // 계약별 자동 생성 방문 집계 — 다음 예정일 + 완료 횟수
+  const contractIds = (contracts ?? []).map((c) => c.id)
+  const visitInfo = new Map<string, { nextVisit: string | null; completed: number }>()
+  if (contractIds.length > 0) {
+    const { data: visits } = await db
+      .from('bookings' as never)
+      .select('contract_id, scheduled_at, status' as never)
+      .in('contract_id' as never, contractIds)
+      .is('deleted_at' as never, null) as unknown as {
+        data: { contract_id: string | null; scheduled_at: string; status: string }[] | null
+      }
+    const nowIso = new Date().toISOString()
+    for (const v of visits ?? []) {
+      if (!v.contract_id) continue
+      const cur = visitInfo.get(v.contract_id) ?? { nextVisit: null, completed: 0 }
+      if (v.status === 'completed') cur.completed++
+      // 다음 예정 방문: 아직 안 끝났고 미래인 것 중 가장 빠른 날짜
+      if (
+        ['confirmed', 'in_progress'].includes(v.status) &&
+        v.scheduled_at > nowIso &&
+        (cur.nextVisit === null || v.scheduled_at < cur.nextVisit)
+      ) {
+        cur.nextVisit = v.scheduled_at
+      }
+      visitInfo.set(v.contract_id, cur)
+    }
+  }
+
   // 확정 정기 매출 (활성 계약 합산)
   const monthlyRevenue = (contracts ?? [])
     .filter((c) => c.status === 'active')
@@ -97,6 +125,7 @@ export default async function ContractsPage() {
                 <th className="text-right px-4 py-3 font-medium">월 금액</th>
                 <th className="text-left px-4 py-3 font-medium">시작일</th>
                 <th className="text-left px-4 py-3 font-medium">종료일</th>
+                <th className="text-left px-4 py-3 font-medium">다음 방문</th>
                 <th className="text-center px-4 py-3 font-medium">상태</th>
               </tr>
             </thead>
@@ -105,6 +134,7 @@ export default async function ContractsPage() {
                 const customer = Array.isArray(contract.customers)
                   ? contract.customers[0]
                   : contract.customers
+                const visits = visitInfo.get(contract.id)
 
                 return (
                   <tr key={contract.id} className="border-b last:border-0 hover:bg-muted/30">
@@ -128,6 +158,18 @@ export default async function ContractsPage() {
                       {contract.end_date
                         ? new Date(contract.end_date + 'T00:00:00').toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' })
                         : <span className="text-xs">무기한</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {visits?.nextVisit ? (
+                        <span className="text-emerald-700 font-medium">
+                          {new Date(visits.nextVisit).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', timeZone: 'Asia/Seoul' })}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{contract.status === 'active' ? '예정 없음' : '—'}</span>
+                      )}
+                      {visits && visits.completed > 0 && (
+                        <p className="text-[11px] text-muted-foreground font-normal mt-0.5">{visits.completed}회 완료</p>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <ContractStatusSelect
