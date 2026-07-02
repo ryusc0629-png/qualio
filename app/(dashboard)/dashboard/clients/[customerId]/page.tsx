@@ -1,7 +1,8 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, Calendar, Receipt, ChevronRight, FileText, User, Star, ShieldAlert, AlertTriangle, CheckCircle2, ClipboardList } from 'lucide-react'
+import { ChevronLeft, Calendar, Receipt, ChevronRight, FileText, User, Star, ShieldAlert, AlertTriangle, CheckCircle2, ClipboardList, Repeat, PhoneCall, StickyNote, Mic } from 'lucide-react'
+import { formatFrequency } from '@/lib/utils/frequency'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { CustomerOnMyWayToggle } from '@/components/dashboard/customer-on-my-way-toggle'
 import { ContactActions } from '@/components/dashboard/contact-actions'
@@ -40,6 +41,22 @@ const STATUS_META: Record<string, { label: string; className: string }> = {
   cancelled:   { label: '취소',      className: 'bg-gray-100 text-gray-500' },
 }
 
+// 계약 상태 배지
+const CONTRACT_STATUS: Record<string, { label: string; className: string }> = {
+  active:     { label: '진행중', className: 'bg-emerald-100 text-emerald-700' },
+  paused:     { label: '중단',  className: 'bg-yellow-100 text-yellow-700' },
+  terminated: { label: '해지',  className: 'bg-gray-100 text-gray-500' },
+}
+
+// 영업 기록(잠재고객 시절) 타입별 라벨·아이콘 — 파이프라인 상세와 동일 규칙
+const ACTIVITY_CONFIG: Record<string, { text: string; icon: typeof PhoneCall; color: string }> = {
+  call:    { text: '전화',     icon: PhoneCall, color: 'bg-blue-100 text-blue-700' },
+  visit:   { text: '방문',     icon: User,      color: 'bg-indigo-100 text-indigo-700' },
+  quote:   { text: '견적 발송', icon: FileText,  color: 'bg-amber-100 text-amber-700' },
+  note:    { text: '메모',     icon: StickyNote,color: 'bg-gray-100 text-gray-700' },
+  meeting: { text: '미팅',     icon: Mic,       color: 'bg-rose-100 text-rose-700' },
+}
+
 export default async function CustomerDetailPage({ params }: Props) {
   const { customerId } = await params
 
@@ -58,7 +75,7 @@ export default async function CustomerDetailPage({ params }: Props) {
 
   const { data: customer } = await db
     .from('customers')
-    .select('id, name, phone, address, category, type, notes, created_at')
+    .select('id, name, phone, address, category, type, notes, lead_id, created_at')
     .eq('id', customerId)
     .eq('business_id', profile.business_id)
     .maybeSingle()
@@ -81,20 +98,23 @@ export default async function CustomerDetailPage({ params }: Props) {
     memo: string | null
     cancellation_reason: string | null
     worker_id?: string | null
+    contract_id?: string | null
     quotes: { cleaning_type: string | null; space_size: number | null } | null
   }
 
-  // 전화번호 기준으로 해당 고객의 모든 예약 이력 조회
+  // 이 고객의 모든 예약 이력 조회 — customer_id(FK) 또는 전화번호로 연결된 것 모두.
+  // (정기계약 자동생성 방문은 customer_id로 연결되므로 전화번호만으론 누락됨 → 두 키를 함께 조회)
   // (취소 건도 포함 — 이력에 '취소'로 표시. 매출·완료 집계엔 미포함. 완전 삭제만 제외.)
-  const { data: bookings } = customer.phone
-    ? await db
-        .from('bookings')
-        .select('id, scheduled_at, final_price, status, memo, cancellation_reason, quotes!quote_id(cleaning_type, space_size)' as never)
-        .eq('business_id', profile.business_id)
-        .eq('customer_phone', customer.phone)
-        .is('deleted_at', null)
-        .order('scheduled_at', { ascending: false }) as unknown as { data: BookingWithWorker[] | null }
-    : { data: null }
+  const bookingOrFilter = customer.phone
+    ? `customer_id.eq.${customerId},customer_phone.eq.${customer.phone}`
+    : `customer_id.eq.${customerId}`
+  const { data: bookings } = await db
+    .from('bookings')
+    .select('id, scheduled_at, final_price, status, memo, cancellation_reason, worker_id, contract_id, quotes!quote_id(cleaning_type, space_size)' as never)
+    .eq('business_id', profile.business_id)
+    .or(bookingOrFilter as never)
+    .is('deleted_at', null)
+    .order('scheduled_at', { ascending: false }) as unknown as { data: BookingWithWorker[] | null }
 
   const bookingList = (bookings ?? []) as BookingWithWorker[]
 
@@ -136,12 +156,24 @@ export default async function CustomerDetailPage({ params }: Props) {
     reviewCount = count ?? 0
   }
 
-  // 이 고객의 계약 조회 — LTV에 계약 누적 매출을 더하기 위해
+  // 이 고객의 계약 조회 — 카드 표시 + LTV 계약 누적 매출 계산
   const { data: customerContracts } = await db
     .from('contracts')
-    .select('contract_price, start_date, end_date, status')
+    .select('id, service_type, frequency, contract_price, start_date, end_date, status')
     .eq('business_id', profile.business_id)
     .eq('customer_id', customerId)
+    .order('created_at', { ascending: false })
+
+  // 잠재고객(리드) 시절 영업 기록 — 전환된 고객이면 상담·통화·견적 이력을 이어서 보여줌
+  type LeadActivity = { id: string; type: string; content: string | null; activity_at: string }
+  const { data: leadActivities } = customer.lead_id
+    ? await db
+        .from('lead_activities' as never)
+        .select('id, type, content, activity_at' as never)
+        .eq('lead_id' as never, customer.lead_id)
+        .order('activity_at' as never, { ascending: false }) as unknown as { data: LeadActivity[] | null }
+    : { data: null }
+  const salesActivities = leadActivities ?? []
 
   // 이 고객의 클레임 조회 (전화번호로 연결 — 예약/리뷰와 동일 방식)
   const { data: claimsData } = customer.phone
@@ -178,6 +210,23 @@ export default async function CustomerDetailPage({ params }: Props) {
   const totalLTV = oneOffTotal + contractTotal
 
   const completedCount = bookingList.filter((b) => b.status === 'completed').length
+
+  // 계약별 방문 요약 (다음 예정 방문 · 완료·예정 횟수) — bookingList를 contract_id로 그룹
+  const nowIso = new Date().toISOString()
+  const contractVisits = new Map<string, { next: string | null; completed: number; upcoming: number }>()
+  for (const b of bookingList) {
+    if (!b.contract_id) continue
+    const cur = contractVisits.get(b.contract_id) ?? { next: null, completed: 0, upcoming: 0 }
+    if (b.status === 'completed') cur.completed++
+    if (['confirmed', 'in_progress'].includes(b.status) && b.scheduled_at > nowIso) {
+      cur.upcoming++
+      if (cur.next === null || b.scheduled_at < cur.next) cur.next = b.scheduled_at
+    }
+    contractVisits.set(b.contract_id, cur)
+  }
+  const contractList = (customerContracts ?? []) as Array<
+    ContractLike & { id: string; service_type: string | null; frequency: string }
+  >
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -268,6 +317,52 @@ export default async function CustomerDetailPage({ params }: Props) {
           </p>
         </div>
       </div>
+
+      {/* 정기계약 — 계약을 고객 허브에 직접 표시 (주기·월금액·다음 방문·완료/예정 횟수) */}
+      {contractList.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
+            <Repeat className="h-4 w-4 text-emerald-600" />
+            정기계약
+          </h2>
+          <div className="space-y-2">
+            {contractList.map((contract) => {
+              const meta = CONTRACT_STATUS[contract.status] ?? { label: contract.status, className: 'bg-gray-100 text-gray-500' }
+              const visits = contractVisits.get(contract.id)
+              return (
+                <div key={contract.id} className="bg-white rounded-xl border border-emerald-100 p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold">{contract.service_type ?? '정기 청소'}</p>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${meta.className}`}>{meta.label}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{formatFrequency(contract.frequency)}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-bold tabular-nums text-emerald-700">{contract.contract_price.toLocaleString('ko-KR')}<span className="text-xs font-normal text-muted-foreground ml-0.5">원/월</span></p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground border-t border-border pt-2">
+                    <span className="inline-flex items-center gap-1">
+                      <Calendar className="h-3 w-3 shrink-0" />
+                      {visits?.next
+                        ? `다음 방문 ${new Date(visits.next).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' })}`
+                        : contract.status === 'active' ? '예정된 방문 없음' : '—'}
+                    </span>
+                    <span>완료 {visits?.completed ?? 0}회</span>
+                    {(visits?.upcoming ?? 0) > 0 && <span>예정 {visits!.upcoming}회</span>}
+                    <span className="text-muted-foreground/70">
+                      {new Date(contract.start_date + 'T00:00:00').toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' })} 시작
+                      {contract.end_date ? ` · ${new Date(contract.end_date + 'T00:00:00').toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' })} 종료` : ' · 무기한'}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 클레임 — 이 고객으로 바로 등록(같은 모달 재사용) */}
       <div className="space-y-3">
@@ -430,6 +525,52 @@ export default async function CustomerDetailPage({ params }: Props) {
           </div>
         )}
       </div>
+
+      {/* 영업 기록 — 잠재고객(리드) 시절의 통화·미팅·견적 이력을 고객 허브에서 이어서 확인 */}
+      {customer.lead_id && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-muted-foreground">영업 기록</h2>
+            <Link
+              href={`/dashboard/pipeline/${customer.lead_id}`}
+              className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              영업 상세<ChevronRight className="h-3 w-3" />
+            </Link>
+          </div>
+
+          {salesActivities.length === 0 ? (
+            <div className="bg-white rounded-xl border border-dashed border-border px-4 py-6 text-center">
+              <p className="text-sm text-muted-foreground">이 고객으로 전환되기 전 영업 기록이 없어요</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {salesActivities.map((activity) => {
+                const cfg = ACTIVITY_CONFIG[activity.type] ?? ACTIVITY_CONFIG.note!
+                const Icon = cfg.icon
+                return (
+                  <div key={activity.id} className="bg-white rounded-xl border border-border p-4 flex items-start gap-3">
+                    <span className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${cfg.color}`}>
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-medium">{cfg.text}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(activity.activity_at).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' })}
+                        </span>
+                      </div>
+                      {activity.content && (
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap mt-1">{activity.content}</p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
     </div>
   )
