@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendPushToBusiness } from '@/lib/push/web-push'
+import { isBusinessInsiderViewing } from '@/lib/utils/track-page-view'
+import { normalizeChannel } from '@/lib/utils/marketing-channels'
 
 // 견적 퍼널 이벤트 기록 — 고객 공개 페이지에서 호출(인증 없음)
 // 추적 실패가 고객 경험을 막지 않도록 항상 200/4xx로 가볍게 응답
@@ -21,18 +23,26 @@ interface FunnelBody {
   event?: string
   step?: string
   meta?: Record<string, string | number>
+  channel?: string
 }
 
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as FunnelBody
-    const { businessId, sessionId, event, step, meta } = body
+    const { businessId, sessionId, event, step, meta, channel } = body
 
     if (!businessId || !sessionId || !event || !ALLOWED_EVENTS.includes(event)) {
       return NextResponse.json({ ok: false }, { status: 400 })
     }
 
     const db = createServiceClient()
+
+    // 로그인한 업체 주인이 자기 견적폼을 테스트하는 경우는 퍼널 통계에서 제외
+    // (sendBeacon은 같은 출처 쿠키를 함께 보내므로 서버에서 로그인 세션 확인 가능)
+    if (await isBusinessInsiderViewing(db, businessId)) {
+      return NextResponse.json({ ok: true, skipped: true })
+    }
+
     // quote_funnel_events 타입이 database.ts에 아직 없어 단언 사용
     await db.from('quote_funnel_events' as never).insert({
       business_id: businessId,
@@ -40,6 +50,7 @@ export async function POST(req: Request) {
       event_type: event,
       step: step ?? null,
       meta: meta && typeof meta === 'object' ? meta : {},
+      channel: normalizeChannel(channel),
     } as never)
 
     // Jobber/HCP 방식 — 고객이 견적서를 "다시 열람"하면 대표에게 핫리드 푸시

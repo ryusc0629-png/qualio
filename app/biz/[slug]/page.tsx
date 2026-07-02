@@ -28,6 +28,7 @@ import { buildAreaServed } from '@/lib/address/parse-region'
 
 interface Props {
   params: Promise<{ slug: string }>
+  searchParams: Promise<{ ch?: string }>
 }
 
 interface FaqItem {
@@ -70,8 +71,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 
-export default async function BizLandingPage({ params }: Props) {
+export default async function BizLandingPage({ params, searchParams }: Props) {
   const { slug: rawSlug } = await params
+  const { ch } = await searchParams
   const slug = rawSlug.normalize('NFC') // 한글 주소 NFC/NFD 불일치로 인한 매칭 실패 방지
   const db = createServiceClient()
 
@@ -146,7 +148,7 @@ export default async function BizLandingPage({ params }: Props) {
       .order('published_at', { ascending: false })
       .limit(3),
     // 브랜드 홈 방문 추적 (병렬)
-    trackPageView(db, business.id, 'brand_home'),
+    trackPageView(db, business.id, 'brand_home', ch),
   ])
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'

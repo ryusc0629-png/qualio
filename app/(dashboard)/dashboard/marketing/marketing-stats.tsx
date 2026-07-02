@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { SOURCE_LABELS, isAiSource } from '@/lib/utils/detect-view-source'
 import type { ViewSource } from '@/lib/utils/detect-view-source'
+import { MARKETING_CHANNELS } from '@/lib/utils/marketing-channels'
 import { StatsCharts } from './stats-charts'
 
 interface MarketingStatsProps {
@@ -64,9 +65,9 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
     // 최근 6개월 공개 페이지 방문 (견적 페이지·브랜드 홈) — page_views 타입 미반영이라 단언 사용
     db
       .from('page_views' as never)
-      .select('source, page_type' as never)
+      .select('source, page_type, channel' as never)
       .eq('business_id' as never, businessId)
-      .gte('viewed_at' as never, sixMonthsAgo) as unknown as Promise<{ data: { source: string; page_type: string }[] | null }>,
+      .gte('viewed_at' as never, sixMonthsAgo) as unknown as Promise<{ data: { source: string; page_type: string; channel: string | null }[] | null }>,
 
     // 최근 6개월 견적 퍼널 이벤트 (전체 여정) — 타입 미반영이라 단언 사용
     db
@@ -109,6 +110,19 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
   const blogViews = views.length
   const brandHomeViews = pageViews.filter((p) => p.page_type === 'brand_home').length
   const quoteViews = pageViews.filter((p) => p.page_type === 'quote').length
+
+  // ── 채널별 유입 (최근 6개월) — ?ch= 태그가 붙은 홍보 링크로 들어온 방문만 채널별 집계 ──
+  const channelCounts = pageViews.reduce<Record<string, number>>((acc, p) => {
+    if (!p.channel) return acc // 태그 없는 직접·검색 유입은 위 '검색·AI 유입'에서 다룸
+    acc[p.channel] = (acc[p.channel] ?? 0) + 1
+    return acc
+  }, {})
+  const channelStats = MARKETING_CHANNELS
+    .map((c) => ({ key: c.key, label: c.label, emoji: c.emoji, count: channelCounts[c.key] ?? 0 }))
+    .filter((c) => c.count > 0)
+    .sort((a, b) => b.count - a.count)
+  const channelTaggedTotal = channelStats.reduce((s, c) => s + c.count, 0)
+  const channelMax = channelStats.reduce((m, c) => Math.max(m, c.count), 0)
 
   // ── 견적 퍼널 (최근 6개월) — 방문 → 작성 시작 → 견적 → 열람 → 플랜 선택 → 예약 ──
   const funnelEvents = funnelResult.data ?? []
@@ -372,6 +386,44 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
           <span>그 외 직접·링크·SNS 방문</span>
           <span className="font-medium">{directOtherViews.toLocaleString()}회</span>
         </div>
+      </div>
+
+      {/* 채널별 유입 — 홍보 링크(?ch=)로 들어온 방문을 채널별로 분리 (네이버·당근·인스타 등) */}
+      <div className="rounded-xl border bg-white overflow-hidden">
+        <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
+          <p className="font-semibold text-sm">채널별 유입</p>
+          <p className="text-xs text-muted-foreground">홍보 링크 기준 · 최근 6개월</p>
+        </div>
+        {channelStats.length > 0 ? (
+          <div className="p-4 space-y-2.5">
+            {channelStats.map((c) => {
+              const pct = channelTaggedTotal > 0 ? Math.round((c.count / channelTaggedTotal) * 100) : 0
+              const widthPct = channelMax > 0 ? Math.max((c.count / channelMax) * 100, 8) : 0
+              return (
+                <div key={c.key} className="flex items-center gap-2">
+                  <span className="text-base shrink-0" aria-hidden>{c.emoji}</span>
+                  <span className="text-xs font-medium w-24 shrink-0 truncate">{c.label}</span>
+                  <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-primary/80 rounded-full" style={{ width: `${widthPct}%` }} />
+                  </div>
+                  <span className="text-xs font-medium tabular-nums w-16 text-right shrink-0">
+                    {c.count}회 ({pct}%)
+                  </span>
+                </div>
+              )
+            })}
+            <p className="text-[11px] text-muted-foreground/80 pt-1">
+              가장 많이 들어온 채널에 홍보를 집중하면 효율이 올라가요
+            </p>
+          </div>
+        ) : (
+          <div className="px-5 py-8 text-center space-y-1">
+            <p className="text-sm text-muted-foreground">아직 채널 링크로 들어온 방문이 없어요</p>
+            <p className="text-xs text-muted-foreground/70">
+              위 &lsquo;채널별 홍보 링크&rsquo;를 복사해 네이버·당근·인스타에 올리면 채널별로 쌓여요
+            </p>
+          </div>
+        )}
       </div>
 
       {/* 페이지별 방문 — 브랜드 홈 / 견적 페이지 / 블로그 글 (최근 6개월) */}

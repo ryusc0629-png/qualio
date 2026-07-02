@@ -5,6 +5,7 @@ import { trackPageView } from '@/lib/utils/track-page-view'
 
 interface Props {
   params: Promise<{ businessId: string }>
+  searchParams: Promise<{ ch?: string }>
 }
 
 // UUID 형식인지 판별 — 옛 링크(UUID)와 읽기 좋은 주소(slug)를 구분
@@ -12,8 +13,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 // 고객용 공개 견적 요청 페이지 — 로그인 불필요
 // [businessId] 세그먼트는 UUID(옛 링크) 또는 slug(읽기 좋은 주소) 둘 다 받음
-export default async function PublicQuotePage({ params }: Props) {
+export default async function PublicQuotePage({ params, searchParams }: Props) {
   const { businessId: raw } = await params
+  const { ch } = await searchParams
   const idOrSlug = raw.normalize('NFC') // 한글 주소 NFC/NFD 불일치 매칭 실패 방지
 
   const db = createServiceClient()
@@ -49,7 +51,7 @@ export default async function PublicQuotePage({ params }: Props) {
       .is('deleted_at', null)
       .order('sort_order')
       .order('created_at'),
-    trackPageView(db, business.id, 'quote'),
+    trackPageView(db, business.id, 'quote', ch),
   ])
 
   // ac_type_prices / unit_prices를 올바른 타입으로 변환

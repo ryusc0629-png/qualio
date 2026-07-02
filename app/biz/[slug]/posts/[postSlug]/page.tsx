@@ -7,6 +7,7 @@ import { ArrowLeft, Calendar, Clock, MapPin, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { BeforeAfterSlider } from '@/components/ui/before-after-slider'
 import { detectViewSource } from '@/lib/utils/detect-view-source'
+import { isBusinessInsiderViewing } from '@/lib/utils/track-page-view'
 
 interface Props {
   params: Promise<{ slug: string; postSlug: string }>
@@ -216,12 +217,15 @@ export default async function PostPage({ params }: Props) {
 
   if (!post) notFound()
 
-  // 조회 기록 — fire-and-forget (렌더링 지연 없음)
-  const headersList = await headers()
-  const referer = headersList.get('referer') ?? ''
-  const userAgent = headersList.get('user-agent') ?? ''
-  const viewSource = detectViewSource(referer, userAgent)
-  void db.from('post_views').insert({ post_id: post.id, business_id: business.id, source: viewSource })
+  // 조회 기록 — 업체 주인 본인 조회는 제외(테스트로 조회수 부풀림 방지)
+  if (!(await isBusinessInsiderViewing(db, business.id))) {
+    const headersList = await headers()
+    const referer = headersList.get('referer') ?? ''
+    const userAgent = headersList.get('user-agent') ?? ''
+    const viewSource = detectViewSource(referer, userAgent)
+    // fire-and-forget (렌더링 지연 없음)
+    void db.from('post_views').insert({ post_id: post.id, business_id: business.id, source: viewSource })
+  }
 
   const { data: relatedPosts } = await db
     .from('biz_posts')

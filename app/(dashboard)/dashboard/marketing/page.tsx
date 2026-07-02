@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { PostList } from './post-list'
 import { MarketingStats } from './marketing-stats'
+import { ChannelLinksCard } from './channel-links-card'
 import { SearchTrafficTrend } from '@/components/dashboard/search-traffic-trend'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
@@ -120,7 +121,12 @@ export default async function MarketingPage() {
         autoImageGeneration={business?.auto_image_generation ?? true}
       />
 
-      <div className="border-t pt-6">
+      <div className="border-t pt-6 space-y-5">
+        {business?.slug && (
+          <ChannelLinksCard
+            baseUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'}/q/${business.slug}`}
+          />
+        )}
         <Suspense fallback={
           <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
             성과 데이터를 불러오는 중...

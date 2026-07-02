@@ -4,6 +4,7 @@
 // 추적 실패가 폼 동작을 막지 않도록 모든 호출은 fire-and-forget(예외 무시)
 
 const SESSION_KEY = 'qualio_funnel_sid'
+const CHANNEL_KEY = 'qualio_funnel_ch'
 
 // 잠재 고객의 전체 여정 이벤트
 // 견적 폼: form_started / step_completed / quote_submitted
@@ -32,6 +33,20 @@ function getSessionId(): string {
   }
 }
 
+// 유입 채널(?ch=) — 첫 방문 때 URL에서 읽어 저장, 이후 여정 전체(견적서 이동 후 포함)에 붙임
+function resolveChannel(): string | null {
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get('ch')
+    if (fromUrl) {
+      localStorage.setItem(CHANNEL_KEY, fromUrl)
+      return fromUrl
+    }
+    return localStorage.getItem(CHANNEL_KEY)
+  } catch {
+    return null
+  }
+}
+
 export function trackFunnel(
   businessId: string,
   event: FunnelEvent,
@@ -41,7 +56,8 @@ export function trackFunnel(
   const sessionId = getSessionId()
   if (!sessionId) return
 
-  const payload = JSON.stringify({ businessId, sessionId, event, step: opts?.step, meta: opts?.meta })
+  const channel = resolveChannel()
+  const payload = JSON.stringify({ businessId, sessionId, event, step: opts?.step, meta: opts?.meta, channel })
   try {
     // sendBeacon: 페이지 이탈(견적서로 이동) 중에도 끊기지 않고 전송
     if (navigator.sendBeacon) {
