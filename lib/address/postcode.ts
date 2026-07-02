@@ -72,11 +72,13 @@ export async function openAddressSearch(onSelect: (address: string) => void): Pr
   if (!window.daum?.Postcode) return
 
   // 오버레이(배경) — 모달(z-50) 위에 오도록 매우 높은 z-index
+  // pointer-events:auto — Radix Dialog가 열려 있으면 body에 pointer-events:none을 걸어
+  // 바깥 요소(=이 오버레이) 클릭을 막는다. 명시적으로 auto를 줘 클릭이 먹도록 복구.
   const overlay = document.createElement('div')
   overlay.setAttribute('role', 'dialog')
   overlay.setAttribute('aria-label', '주소 검색')
   overlay.style.cssText =
-    'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,0.45);'
+    'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,0.45);pointer-events:auto;'
 
   // 검색 패널
   const panel = document.createElement('div')
@@ -107,18 +109,31 @@ export async function openAddressSearch(onSelect: (address: string) => void): Pr
   const cleanup = () => {
     document.body.style.overflow = prevOverflow
     overlay.remove()
-    document.removeEventListener('keydown', onKeyDown)
+    document.removeEventListener('keydown', onKeyDown, true)
   }
 
+  // ESC로 이 레이어만 닫는다. Radix Dialog도 document에서 ESC를 듣고 부모 모달을 닫으므로,
+  // 캡처 단계에서 전파를 끊어 부모 모달까지 함께 닫히는 것을 막는다.
   function onKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Escape') cleanup()
+    if (e.key === 'Escape') {
+      e.stopImmediatePropagation()
+      cleanup()
+    }
+  }
+
+  // Radix Dialog의 문서 레벨 리스너(포커스 트랩=FocusScope, 바깥 클릭 닫기=DismissableLayer)가
+  // 이 레이어 상호작용에 반응하지 않도록 전파를 여기서 끊는다.
+  // (안 끊으면: 포커스가 계속 부모 모달로 회수되어 입력 불가 + 클릭 시 부모 모달이 닫힘)
+  const stopBubble = (e: Event) => e.stopPropagation()
+  for (const type of ['pointerdown', 'mousedown', 'click', 'touchstart', 'focusin']) {
+    overlay.addEventListener(type, stopBubble)
   }
 
   closeBtn.addEventListener('click', cleanup)
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) cleanup()
   })
-  document.addEventListener('keydown', onKeyDown)
+  document.addEventListener('keydown', onKeyDown, true)
 
   new window.daum.Postcode({
     oncomplete: (data) => {
