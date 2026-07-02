@@ -95,6 +95,22 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
   const [jobType, setJobType] = useState<JobType>(existingQuote?.job_type === 'one_off' ? 'one_off' : 'recurring')
   const isOneOff = jobType === 'one_off'
 
+  // 금액 입력 방식: itemized(수량×단가) vs lump(총액 직접 — 월 정기 등 정액 계약)
+  // 저장 구조는 동일(항목 배열+총액). lump은 각 줄 수량을 1로 두고 '금액'만 입력.
+  // 기존 견적은 모든 수량이 1이면 총액 방식으로 복원(숫자는 어느 쪽이든 동일)
+  const [amountMode, setAmountMode] = useState<'itemized' | 'lump'>(
+    existingQuote && (existingQuote.items as QuoteItem[] | undefined)?.length
+      && (existingQuote.items as QuoteItem[]).every((it) => (it.qty ?? 1) === 1)
+      ? 'lump'
+      : 'itemized'
+  )
+  const isLump = amountMode === 'lump'
+  // 총액 방식으로 바꾸면 각 줄 수량을 1로 고정(금액=단가로 그대로 합산됨)
+  const switchAmountMode = (mode: 'itemized' | 'lump') => {
+    if (mode === 'lump') setItems((prev) => prev.map((it) => ({ ...it, qty: 1 })))
+    setAmountMode(mode)
+  }
+
   const subtotal = items.reduce((s, it) => s + it.qty * it.unit_price, 0)
   const tax = taxIncluded ? Math.floor(subtotal * 0.1) : 0
   const total = subtotal + tax
@@ -214,15 +230,35 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">견적 항목</h3>
 
+            {/* 금액 입력 방식 — 항목별(수량×단가) vs 총액 직접(월 정기 등 정액) */}
+            <div className="flex gap-1 rounded-lg bg-muted/50 p-1">
+              {([
+                ['itemized', '항목별 계산', '수량 × 단가'],
+                ['lump', '총액 직접 입력', '월 정기 등 정액'],
+              ] as ['itemized' | 'lump', string, string][]).map(([mode, label, desc]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => switchAmountMode(mode)}
+                  className={`flex-1 rounded-md px-2 py-1.5 text-center text-xs transition-colors ${
+                    amountMode === mode ? 'bg-white shadow-sm font-semibold' : 'text-muted-foreground'
+                  }`}
+                >
+                  {label}
+                  <span className="block text-[10px] text-muted-foreground/70">{desc}</span>
+                </button>
+              ))}
+            </div>
+
             <div className="space-y-2">
               {items.map((item, idx) => (
                 <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                  <div className="col-span-4">
+                  <div className={isLump ? 'col-span-5' : 'col-span-4'}>
                     {idx === 0 && <Label className="text-xs">서비스 내용</Label>}
                     <Input
                       value={item.name}
                       onChange={(e) => updateItem(idx, 'name', e.target.value)}
-                      placeholder="예: 사무실 정기청소"
+                      placeholder={isLump ? '예: 월 정기 미화관리' : '예: 사무실 정기청소'}
                       className="mt-1 h-9"
                     />
                   </div>
@@ -235,25 +271,27 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
                       className="mt-1 h-9"
                     />
                   </div>
-                  <div className="col-span-2">
-                    {idx === 0 && <Label className="text-xs">수량</Label>}
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      value={item.qty || ''}
-                      onChange={(e) => updateItem(idx, 'qty', Number(e.target.value.replace(/[^0-9]/g, '')))}
-                      placeholder="1"
-                      className="mt-1 h-9"
-                    />
-                  </div>
-                  <div className="col-span-3">
-                    {idx === 0 && <Label className="text-xs">단가 (원)</Label>}
+                  {!isLump && (
+                    <div className="col-span-2">
+                      {idx === 0 && <Label className="text-xs">수량</Label>}
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={item.qty || ''}
+                        onChange={(e) => updateItem(idx, 'qty', Number(e.target.value.replace(/[^0-9]/g, '')))}
+                        placeholder="1"
+                        className="mt-1 h-9"
+                      />
+                    </div>
+                  )}
+                  <div className={isLump ? 'col-span-4' : 'col-span-3'}>
+                    {idx === 0 && <Label className="text-xs">{isLump ? '금액 (원)' : '단가 (원)'}</Label>}
                     <Input
                       type="text"
                       inputMode="numeric"
                       value={item.unit_price || ''}
                       onChange={(e) => updateItem(idx, 'unit_price', Number(e.target.value.replace(/[^0-9]/g, '')))}
-                      placeholder="700000"
+                      placeholder={isLump ? '2500000' : '700000'}
                       className="mt-1 h-9"
                     />
                   </div>
