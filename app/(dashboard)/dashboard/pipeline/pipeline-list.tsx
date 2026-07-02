@@ -56,6 +56,13 @@ const FILTER_TABS = [
   { key: 'rejected',    label: '포기' },
 ]
 
+// 유형(거래처/개인) 필터 — 진행 단계 필터와 별개 축
+const TYPE_FILTER_TABS = [
+  { key: '',           label: '전체' },
+  { key: 'company',    label: '거래처' },
+  { key: 'individual', label: '개인' },
+]
+
 // ── 타입 ──────────────────────────────────────────────────
 
 type Lead = {
@@ -112,6 +119,7 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
   const router = useRouter()
   const convertedSet = new Set(convertedLeadIds)
   const [activeFilter, setActiveFilter] = useState(filterStatus ?? '')
+  const [typeFilter, setTypeFilter] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [editLead, setEditLead] = useState<Lead | null>(null)
   const [form, setForm] = useState(emptyForm)
@@ -121,7 +129,7 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
 
   const { execute: executeCreate, isPending: creating } = useAction(createLeadAction, {
     onSuccess: () => {
-      toast.success('거래처를 추가했어요!')
+      toast.success('고객을 추가했어요!')
       setAddOpen(false)
       setForm(emptyForm)
       startTransition(() => router.refresh())
@@ -189,10 +197,10 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
-  // 필터 적용 (보관된 거래처는 항상 제외)
+  // 필터 적용 (보관된 고객은 항상 제외) — 진행 단계 + 유형(거래처/개인) 두 축 함께 적용
   const filtered = leads.filter((lead) => {
     if (lead.status === 'archived') return false
-    if (activeFilter === '') return true
+    if (typeFilter && lead.customer_type !== typeFilter) return false
     if (activeFilter === 'contracted') return lead.status === 'contracted'
     if (activeFilter === 'rejected') return lead.status === 'rejected'
     if (activeFilter === 'active') return lead.status !== 'contracted' && lead.status !== 'rejected'
@@ -276,12 +284,12 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
           <DialogTrigger asChild>
             <Button size="sm" className="h-9 shrink-0">
               <Plus className="h-4 w-4 mr-1" />
-              거래처 추가
+              고객 추가
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>거래처 추가</DialogTitle>
+              <DialogTitle>고객 추가</DialogTitle>
             </DialogHeader>
             <LeadForm form={form} onChange={handleFormChange} />
             <Button onClick={handleAdd} disabled={creating || !form.company_name} className="w-full h-12">
@@ -289,6 +297,23 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
             </Button>
           </DialogContent>
         </Dialog>
+      </div>
+
+      {/* 유형 필터 (거래처/개인) — 진행 단계와 별개로 골라보기 */}
+      <div className="flex gap-1">
+        {TYPE_FILTER_TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setTypeFilter(tab.key)}
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+              typeFilter === tab.key
+                ? 'border-primary bg-primary/5 text-primary'
+                : 'border-border text-muted-foreground hover:bg-muted'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* 통계 요약 */}
@@ -309,11 +334,11 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
       {filtered.length === 0 && (
         <div className="bg-white rounded-xl border border-dashed p-12 text-center space-y-3">
           <p className="text-sm text-muted-foreground">
-            {activeFilter === '' ? '아직 등록된 거래처가 없어요' : '해당 단계의 거래처가 없어요'}
+            {activeFilter === '' && typeFilter === '' ? '아직 등록된 고객이 없어요' : '조건에 맞는 고객이 없어요'}
           </p>
-          {activeFilter === '' && (
+          {activeFilter === '' && typeFilter === '' && (
             <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
-              첫 번째 거래처 추가하기
+              첫 고객 추가하기
             </Button>
           )}
         </div>
@@ -518,7 +543,7 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
       <Dialog open={!!editLead} onOpenChange={(o) => { if (!o) setEditLead(null) }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>거래처 수정</DialogTitle>
+            <DialogTitle>고객 수정</DialogTitle>
           </DialogHeader>
           <LeadForm
             form={form}
@@ -535,7 +560,7 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
       <Dialog open={!!deletingId} onOpenChange={(o) => { if (!o) setDeletingId(null) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>거래처를 삭제할까요?</DialogTitle>
+            <DialogTitle>이 고객을 삭제할까요?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">삭제하면 상담 기록도 함께 사라져요. 되돌릴 수 없어요.</p>
           <div className="flex gap-2 mt-2">

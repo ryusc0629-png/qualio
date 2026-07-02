@@ -58,6 +58,11 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', public
   const items = (Array.isArray(quote.items) ? quote.items : []) as QuoteItem[]
   // 총액 계약(모든 항목 수량 1) — 수량·단가 열을 숨기고 금액만 보여 깔끔하게
   const isLumpQuote = items.length > 0 && items.every((it) => (it.qty ?? 1) === 1)
+  // 입력된 단위에 맞춰 '횟수' 열 라벨을 자동 조정 (월→개월, 주→주, 회→횟수 …)
+  const UNIT_COUNT_LABEL: Record<string, string> = {
+    월: '개월', 개월: '개월', 주: '주', 일: '일', 년: '년', 회: '횟수', 차: '횟수', 번: '횟수',
+  }
+  const countLabel = UNIT_COUNT_LABEL[(items[0]?.unit ?? '').trim()] ?? '횟수'
   const subtotal = items.reduce((s, it) => s + it.qty * it.unit_price, 0)
   const tax = quote.tax_included ? Math.floor(subtotal * 0.1) : 0
   const total = subtotal + tax
@@ -198,7 +203,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', public
                 <th className="py-2.5 px-3 text-left font-medium w-8">No.</th>
                 <th className="py-2.5 px-3 text-left font-medium">서비스 내용</th>
                 <th className="py-2.5 px-3 text-center font-medium w-16">단위</th>
-                {!isLumpQuote && <th className="py-2.5 px-3 text-center font-medium w-16">수량</th>}
+                {!isLumpQuote && <th className="py-2.5 px-3 text-center font-medium w-16">{countLabel}</th>}
                 {!isLumpQuote && <th className="py-2.5 px-3 text-right font-medium w-28">단가</th>}
                 <th className="py-2.5 px-3 text-right font-medium w-28">금액</th>
               </tr>

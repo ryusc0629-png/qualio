@@ -82,9 +82,9 @@ export default async function PipelinePage({
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div>
-        <h1 className="text-xl font-bold">거래처 관리</h1>
+        <h1 className="text-xl font-bold">영업 관리</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          상담 중인 거래처와 일반 고객을 단계별로 관리해요
+          상담·영업 중인 고객을 단계별로 관리해요
         </p>
       </div>
 

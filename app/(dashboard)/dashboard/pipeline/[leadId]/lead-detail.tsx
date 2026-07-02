@@ -154,13 +154,14 @@ export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, 
     <div className="space-y-5">
       {/* 뒤로가기 + 보관하기 */}
       <div className="flex items-center justify-between">
-        <Link
-          href="/dashboard/clients?type=company"
+        <button
+          type="button"
+          onClick={() => router.back()}
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
-          고객 관리
-        </Link>
+          뒤로
+        </button>
         {lead.status === 'archived' ? (
           <button
             onClick={() => executeUnarchive({ leadId: lead.id, status: 'new' })}

@@ -58,6 +58,13 @@ const defaultItem = (jobType: JobType = 'recurring'): QuoteItem => ({
   name: '', unit: jobType === 'one_off' ? '식' : '월', qty: 1, unit_price: 0,
 })
 
+// 입력된 단위에 맞춰 '횟수' 열 라벨을 자동 조정 (월→개월, 주→주, 회→횟수 …)
+// 매핑에 없는 단위(식·건 등)는 기본값 '횟수'로 통일
+const UNIT_COUNT_LABEL: Record<string, string> = {
+  월: '개월', 개월: '개월', 주: '주', 일: '일', 년: '년', 회: '횟수', 차: '횟수', 번: '횟수',
+}
+const countLabelForUnit = (unit?: string): string => UNIT_COUNT_LABEL[(unit ?? '').trim()] ?? '횟수'
+
 export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -273,7 +280,7 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
                   </div>
                   {!isLump && (
                     <div className="col-span-2">
-                      {idx === 0 && <Label className="text-xs">수량</Label>}
+                      {idx === 0 && <Label className="text-xs">{countLabelForUnit(items[0]?.unit)}</Label>}
                       <Input
                         type="text"
                         inputMode="numeric"
