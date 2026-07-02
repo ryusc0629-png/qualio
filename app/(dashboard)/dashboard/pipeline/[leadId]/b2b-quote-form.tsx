@@ -10,7 +10,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { saveB2bQuoteAction, generateSpecAction } from '@/lib/actions/b2b-quotes'
-import { FileText, Plus, Trash2, Sparkles } from 'lucide-react'
+import { FileText, Plus, Trash2, Sparkles, MapPin } from 'lucide-react'
+import { openAddressSearch } from '@/lib/address/postcode'
 import {
   AREA_UNITS,
   AREA_UNIT_LABELS,
@@ -42,6 +43,7 @@ interface ExistingQuote {
   frequency: string | null
   worker_count: number | null
   spec_content: string | null
+  job_type: string | null
 }
 
 interface Props {
@@ -50,7 +52,11 @@ interface Props {
   existingQuote: ExistingQuote | null
 }
 
-const defaultItem = (): QuoteItem => ({ name: '', unit: '월', qty: 1, unit_price: 0 })
+type JobType = 'recurring' | 'one_off'
+
+const defaultItem = (jobType: JobType = 'recurring'): QuoteItem => ({
+  name: '', unit: jobType === 'one_off' ? '식' : '월', qty: 1, unit_price: 0,
+})
 
 export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
   const router = useRouter()
@@ -86,6 +92,8 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
   const [frequency, setFrequency] = useState(existingQuote?.frequency ?? '')
   const [workerCount, setWorkerCount] = useState(existingQuote?.worker_count?.toString() ?? '')
   const [specContent, setSpecContent] = useState(existingQuote?.spec_content ?? '')
+  const [jobType, setJobType] = useState<JobType>(existingQuote?.job_type === 'one_off' ? 'one_off' : 'recurring')
+  const isOneOff = jobType === 'one_off'
 
   const subtotal = items.reduce((s, it) => s + it.qty * it.unit_price, 0)
   const tax = taxIncluded ? Math.floor(subtotal * 0.1) : 0
@@ -126,9 +134,10 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
       siteName:     siteName || undefined,
       siteAddress:  siteAddress || undefined,
       siteArea:     siteArea || undefined,
-      frequency:    frequency || undefined,
+      frequency:    isOneOff ? undefined : (frequency || undefined),
       workerCount:  workerCount ? Number(workerCount) : undefined,
       specContent:  specContent || undefined,
+      jobType,
     })
   }
 
@@ -139,10 +148,11 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
       siteName:     siteName || undefined,
       siteAddress:  siteAddress || undefined,
       siteArea:     siteArea || undefined,
-      frequency:    frequency || undefined,
+      frequency:    isOneOff ? undefined : (frequency || undefined),
       workerCount:  workerCount ? Number(workerCount) : undefined,
       serviceItems: items.filter((it) => it.name).map((it) => it.name),
       conditions:   conditions || undefined,
+      jobType,
     })
   }
 
@@ -166,6 +176,24 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
         </DialogHeader>
 
         <div className="space-y-6">
+
+          {/* 작업 유형 — 정기 계약 vs 일회성 작업 (청소 주기는 정기에만 해당) */}
+          <section className="space-y-2">
+            <Label className="text-xs">작업 유형</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {([['recurring', '정기 계약', '매주·매월 반복 방문'], ['one_off', '일회성 작업', '준공청소·외벽청소 등 1회']] as [JobType, string, string][]).map(([val, label, desc]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setJobType(val)}
+                  className={`rounded-lg border p-3 text-left transition-colors ${jobType === val ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-border hover:bg-muted'}`}
+                >
+                  <p className="text-sm font-medium">{label}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p>
+                </button>
+              ))}
+            </div>
+          </section>
 
           {/* 견적서 기본 정보 */}
           <section className="space-y-3">
@@ -248,7 +276,7 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
               variant="outline"
               size="sm"
               className="h-8"
-              onClick={() => setItems((prev) => [...prev, defaultItem()])}
+              onClick={() => setItems((prev) => [...prev, defaultItem(jobType)])}
             >
               <Plus className="h-3.5 w-3.5 mr-1" />
               항목 추가
@@ -325,13 +353,27 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
             </div>
             <div>
               <Label className="text-xs">현장 주소</Label>
-              <Input value={siteAddress} onChange={(e) => setSiteAddress(e.target.value)} placeholder="예: 서울시 강남구 역삼동 000" className="mt-1 h-9" />
+              <div className="mt-1 flex gap-2">
+                <Input value={siteAddress} onChange={(e) => setSiteAddress(e.target.value)} placeholder="주소 찾기를 누르거나 직접 입력" className="flex-1 h-9" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 h-9"
+                  onClick={() => openAddressSearch((addr) => setSiteAddress(addr))}
+                >
+                  <MapPin className="h-3.5 w-3.5 mr-1" />
+                  주소 찾기
+                </Button>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">청소 주기</Label>
-                <Input value={frequency} onChange={(e) => setFrequency(e.target.value)} placeholder="예: 주 3회 (월수금)" className="mt-1 h-9" />
-              </div>
+              {!isOneOff && (
+                <div>
+                  <Label className="text-xs">청소 주기</Label>
+                  <Input value={frequency} onChange={(e) => setFrequency(e.target.value)} placeholder="예: 주 3회 (월수금)" className="mt-1 h-9" />
+                </div>
+              )}
               <div>
                 <Label className="text-xs">투입 인원</Label>
                 <Input

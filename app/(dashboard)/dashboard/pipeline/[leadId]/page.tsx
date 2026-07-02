@@ -39,7 +39,8 @@ export default async function LeadDetailPage({
       .order('activity_at', { ascending: false }),
     db
       .from('b2b_quotes')
-      .select('id, quote_number, valid_until, items, total_amount, tax_included, conditions, site_name, site_address, site_area, frequency, worker_count, spec_content')
+      // job_type은 database.ts 타입 미반영 → select 문자열 as never, 결과는 아래서 명시 타입 단언
+      .select('id, quote_number, valid_until, items, total_amount, tax_included, conditions, site_name, site_address, site_area, frequency, worker_count, spec_content, job_type' as never)
       .eq('lead_id', leadId)
       .eq('business_id', profile.business_id)
       .maybeSingle(),
@@ -72,7 +73,22 @@ export default async function LeadDetailPage({
     ? null
     : getLiveStatusForPhone(leadData.phone, publicQuotesResult.data ?? [], bookingsResult.data ?? [])
 
-  const rawQuote = quoteResult.data
+  const rawQuote = quoteResult.data as {
+    id: string
+    quote_number: string | null
+    valid_until: string | null
+    items: unknown
+    total_amount: number
+    tax_included: boolean
+    conditions: string | null
+    site_name: string | null
+    site_address: string | null
+    site_area: string | null
+    frequency: string | null
+    worker_count: number | null
+    spec_content: string | null
+    job_type: string | null
+  } | null
   const existingQuote = rawQuote
     ? {
         ...rawQuote,

@@ -30,6 +30,7 @@ interface Props {
     total_amount: number
     frequency: string | null
     serviceName: string | null
+    jobType?: string | null
   } | null
   alreadyConverted: boolean
 }
@@ -41,7 +42,8 @@ export function ConvertToCustomerButton({ lead, quote, alreadyConverted }: Props
   const [name, setName] = useState(lead.company_name)
   const [phone, setPhone] = useState(lead.phone ?? '')
   const [address, setAddress] = useState(lead.address ?? '')
-  const [hasContract, setHasContract] = useState(true) // 거래처는 정기계약이 기본
+  // 정기 계약이 기본. 단, 견적이 일회성(one_off) 작업이면 정기계약 등록을 기본 해제
+  const [hasContract, setHasContract] = useState(quote?.jobType !== 'one_off')
   const [serviceType, setServiceType] = useState(quote?.serviceName ?? '')
   const [frequency, setFrequency] = useState('')
   const [contractPrice, setContractPrice] = useState(

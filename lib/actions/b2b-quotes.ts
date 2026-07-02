@@ -27,6 +27,10 @@ const saveB2bQuoteSchema = z.object({
   frequency:    z.string().optional(),
   workerCount:  z.number().optional(),
   specContent:  z.string().optional(),
+  jobType:      z.string().refine(
+    (v) => ['recurring', 'one_off'].includes(v),
+    { message: '유효하지 않은 작업 유형입니다' },
+  ).optional(),
 })
 
 const generateSpecSchema = z.object({
@@ -39,6 +43,10 @@ const generateSpecSchema = z.object({
   workerCount:  z.number().optional(),
   serviceItems: z.array(z.string()),
   conditions:   z.string().optional(),
+  jobType:      z.string().refine(
+    (v) => ['recurring', 'one_off'].includes(v),
+    { message: '유효하지 않은 작업 유형입니다' },
+  ).optional(),
 })
 
 async function getAuth() {
@@ -79,6 +87,7 @@ export const generateSpecAction = action
       workerCount:  parsedInput.workerCount ?? null,
       serviceItems: parsedInput.serviceItems,
       conditions:   parsedInput.conditions ?? null,
+      jobType:      parsedInput.jobType === 'one_off' ? 'one_off' : 'recurring',
     })
 
     return { specContent }
@@ -112,17 +121,20 @@ export const saveB2bQuoteAction = action
       frequency:    parsedInput.frequency ?? null,
       worker_count: parsedInput.workerCount ?? null,
       spec_content: parsedInput.specContent ?? null,
+      // 일회성이면 주기는 저장하지 않음 (정기 전제 제거)
+      job_type:     parsedInput.jobType === 'one_off' ? 'one_off' : 'recurring',
       updated_at:   new Date().toISOString(),
     }
 
+    // job_type 컬럼이 database.ts 타입에 아직 반영 안 됨 → as never 단언
     if (existing) {
       const { error } = await db
         .from('b2b_quotes')
-        .update(payload)
+        .update(payload as never)
         .eq('id', existing.id)
       if (error) throw new Error('[APP] 견적서 저장에 실패했습니다')
     } else {
-      const { error } = await db.from('b2b_quotes').insert(payload)
+      const { error } = await db.from('b2b_quotes').insert(payload as never)
       if (error) throw new Error('[APP] 견적서 저장에 실패했습니다')
     }
 

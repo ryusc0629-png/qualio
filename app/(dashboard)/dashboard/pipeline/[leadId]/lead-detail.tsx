@@ -64,6 +64,7 @@ type ExistingQuote = {
   frequency: string | null
   worker_count: number | null
   spec_content: string | null
+  job_type: string | null
 }
 
 type Activity = {
@@ -324,6 +325,7 @@ export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, 
                     total_amount: existingQuote.total_amount,
                     frequency: existingQuote.frequency,
                     serviceName: existingQuote.items[0]?.name ?? null,
+                    jobType: existingQuote.job_type,
                   }
                 : null
             }
