@@ -188,7 +188,7 @@ export function ConvertToCustomerButton({ lead, quote, alreadyConverted }: Props
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <Label>월 계약금액 (원)</Label>
+                    <Label>월 계약금액 (원) <span className="text-xs font-normal text-muted-foreground">· 부가세 별도</span></Label>
                     <Input
                       value={contractPrice ? Number(contractPrice).toLocaleString('ko-KR') : ''}
                       onChange={(e) => setContractPrice(e.target.value.replace(/[^0-9]/g, ''))}

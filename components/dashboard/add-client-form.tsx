@@ -654,7 +654,7 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="contract-price">월 계약금액 (필수)</Label>
+                      <Label htmlFor="contract-price">월 계약금액 (필수) <span className="text-xs font-normal text-muted-foreground">· 부가세 별도</span></Label>
                       <Input
                         id="contract-price"
                         inputMode="numeric"

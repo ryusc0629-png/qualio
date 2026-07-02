@@ -185,7 +185,7 @@ export function RegisterFromLeadButton({ lead, alreadyRegistered }: RegisterFrom
 
                     {/* 월 계약금액 */}
                     <div className="space-y-1">
-                      <Label>월 계약금액 (원)</Label>
+                      <Label>월 계약금액 (원) <span className="text-xs font-normal text-muted-foreground">· 부가세 별도</span></Label>
                       <Input
                         type="number"
                         placeholder="300000"

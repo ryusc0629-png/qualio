@@ -130,7 +130,7 @@ export function AddContractForm({ customers, defaultCustomerId }: AddContractFor
 
           {/* 월 계약금액 */}
           <div className="space-y-1">
-            <Label htmlFor="contract_price">월 계약금액 (원) *</Label>
+            <Label htmlFor="contract_price">월 계약금액 (원) * <span className="text-xs font-normal text-muted-foreground">· 부가세 별도</span></Label>
             <Input
               id="contract_price"
               type="number"
