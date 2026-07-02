@@ -639,7 +639,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
             <p className="text-xs text-muted-foreground">새 릴스·시공 사례·포스트가 생기면 여기에 모아둘게요</p>
           </div>
         ) : (
-          <div className="divide-y">
+          <div className="divide-y max-h-[520px] overflow-y-auto overscroll-contain">
 
             {/* 🎬 완성된 릴스 */}
             {doneReels.length > 0 && (
