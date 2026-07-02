@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { formatAreaWithBoth } from '@/lib/utils/area'
 
 interface QuoteItem {
   name: string
@@ -262,7 +263,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', public
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">현장 정보</p>
                   {quote.site_name && <p><span className="text-gray-500">현장명:</span> <span className="font-medium">{quote.site_name}</span></p>}
                   {quote.site_address && <p><span className="text-gray-500">주소:</span> {quote.site_address}</p>}
-                  {quote.site_area && <p><span className="text-gray-500">면적:</span> {quote.site_area}</p>}
+                  {quote.site_area && <p><span className="text-gray-500">면적:</span> {formatAreaWithBoth(quote.site_area)}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">작업 계획</p>
