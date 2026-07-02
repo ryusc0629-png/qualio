@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useCallback } from 'react'
+import { useState, useTransition, useCallback, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { useRouter } from 'next/navigation'
 import { openAddressSearch } from '@/lib/address/postcode'
@@ -151,11 +151,24 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
   // leadId별로 임시 상태를 덮어써서 서버 응답을 기다리는 딜레이 착각을 없앤다.
   const [statusOverrides, setStatusOverrides] = useState<Record<string, string>>({})
 
+  // 서버 데이터(props)가 임시값과 같아진 항목만 정리한다.
+  // onSuccess에서 곧바로 전부 비우면 router.refresh 완료 전까지 예전 상태로 깜빡여
+  // "안 눌렸나?" 하는 착각을 준다 → props와 일치하는 것만 제거해 깜빡임 없이 동기화.
+  useEffect(() => {
+    setStatusOverrides((prev) => {
+      const keys = Object.keys(prev)
+      if (keys.length === 0) return prev
+      const next: Record<string, string> = {}
+      for (const [id, status] of Object.entries(prev)) {
+        const lead = leads.find((l) => l.id === id)
+        if (lead && lead.status !== status) next[id] = status // 아직 서버 미반영 → 유지
+      }
+      return Object.keys(next).length === keys.length ? prev : next
+    })
+  }, [leads])
+
   const { execute: executeStatus } = useAction(updateLeadStatusAction, {
-    onSuccess: () => {
-      setStatusOverrides({}) // 새 서버 데이터로 동기화되므로 임시값 비움
-      startTransition(() => router.refresh())
-    },
+    onSuccess: () => startTransition(() => router.refresh()), // 임시값은 위 useEffect가 동기화 후 정리
     onError: ({ error }) => {
       setStatusOverrides({}) // 실패 시 서버 상태(원래대로)로 되돌림
       toast.error(error.serverError ?? '다시 시도해주세요')
