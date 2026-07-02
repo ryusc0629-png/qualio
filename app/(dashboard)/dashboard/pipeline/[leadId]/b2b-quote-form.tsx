@@ -11,6 +11,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { toast } from 'sonner'
 import { saveB2bQuoteAction, generateSpecAction } from '@/lib/actions/b2b-quotes'
 import { FileText, Plus, Trash2, Sparkles } from 'lucide-react'
+import {
+  AREA_UNITS,
+  AREA_UNIT_LABELS,
+  parseArea,
+  formatArea,
+  convertArea,
+  areaConversionHint,
+  type AreaUnit,
+} from '@/lib/utils/area'
 
 interface QuoteItem {
   name: string
@@ -62,7 +71,18 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
   const [conditions, setConditions] = useState(existingQuote?.conditions ?? '')
   const [siteName, setSiteName] = useState(existingQuote?.site_name ?? '')
   const [siteAddress, setSiteAddress] = useState(existingQuote?.site_address ?? '')
-  const [siteArea, setSiteArea] = useState(existingQuote?.site_area ?? '')
+  const initialArea = parseArea(existingQuote?.site_area)
+  const [areaValue, setAreaValue] = useState(initialArea.value)
+  const [areaUnit, setAreaUnit] = useState<AreaUnit>(initialArea.unit)
+  // 저장/전송용 합친 문자열 + 다른 단위 환산 안내
+  const siteArea = formatArea(areaValue, areaUnit)
+  const areaHint = areaConversionHint(areaValue, areaUnit)
+
+  // 단위를 바꾸면 입력된 숫자도 함께 환산해 의미 보존 (450평 → 1,488㎡)
+  const handleAreaUnitChange = (next: AreaUnit) => {
+    setAreaValue((v) => convertArea(v, areaUnit, next))
+    setAreaUnit(next)
+  }
   const [frequency, setFrequency] = useState(existingQuote?.frequency ?? '')
   const [workerCount, setWorkerCount] = useState(existingQuote?.worker_count?.toString() ?? '')
   const [specContent, setSpecContent] = useState(existingQuote?.spec_content ?? '')
@@ -190,23 +210,23 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
                   <div className="col-span-2">
                     {idx === 0 && <Label className="text-xs">수량</Label>}
                     <Input
-                      type="number"
-                      value={item.qty}
-                      onChange={(e) => updateItem(idx, 'qty', Number(e.target.value))}
-                      min={1}
-                      className="mt-1 h-9"
+                      type="text"
                       inputMode="numeric"
+                      value={item.qty || ''}
+                      onChange={(e) => updateItem(idx, 'qty', Number(e.target.value.replace(/[^0-9]/g, '')))}
+                      placeholder="1"
+                      className="mt-1 h-9"
                     />
                   </div>
                   <div className="col-span-3">
                     {idx === 0 && <Label className="text-xs">단가 (원)</Label>}
                     <Input
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       value={item.unit_price || ''}
-                      onChange={(e) => updateItem(idx, 'unit_price', Number(e.target.value))}
+                      onChange={(e) => updateItem(idx, 'unit_price', Number(e.target.value.replace(/[^0-9]/g, '')))}
                       placeholder="700000"
                       className="mt-1 h-9"
-                      inputMode="numeric"
                     />
                   </div>
                   <div className="col-span-1 flex justify-end">
@@ -280,7 +300,27 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
               </div>
               <div>
                 <Label className="text-xs">면적</Label>
-                <Input value={siteArea} onChange={(e) => setSiteArea(e.target.value)} placeholder="예: 450평 (15층)" className="mt-1 h-9" />
+                <div className="mt-1 flex gap-2">
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    value={areaValue}
+                    onChange={(e) => setAreaValue(e.target.value)}
+                    placeholder="예: 450"
+                    className="h-9"
+                  />
+                  <select
+                    value={areaUnit}
+                    onChange={(e) => handleAreaUnitChange(e.target.value as AreaUnit)}
+                    className="h-9 shrink-0 rounded-md border border-input bg-white px-2 text-sm"
+                    aria-label="면적 단위"
+                  >
+                    {AREA_UNITS.map((u) => (
+                      <option key={u} value={u}>{AREA_UNIT_LABELS[u]}</option>
+                    ))}
+                  </select>
+                </div>
+                {areaHint && <p className="mt-1 text-[11px] text-muted-foreground">{areaHint}</p>}
               </div>
             </div>
             <div>
