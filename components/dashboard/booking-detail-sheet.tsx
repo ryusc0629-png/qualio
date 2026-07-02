@@ -161,6 +161,13 @@ export function BookingDetailSheet({
     setOnMyWaySent(false)
   }, [booking?.id])
 
+  // 언마운트 시 대기 중인 팀원 저장 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (workersSaveTimer.current) clearTimeout(workersSaveTimer.current)
+    }
+  }, [])
+
   const isCancelled = !booking ||
     ['cancelled', 'no_show'].includes(booking.status)
 
@@ -188,6 +195,9 @@ export function BookingDetailSheet({
 
   // 취소 대상 id를 미리 잡아둔다 — 비동기 완료 시점에 booking이 바뀌어도 정확히 그 예약을 제거
   const pendingCancelId = useRef<string | null>(null)
+
+  // 팀원 배정 저장 디바운스 — 빠르게 여러 명을 눌러도 서버엔 마지막 상태 1번만 전송
+  const workersSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 예약 취소 액션
   const { execute: cancelBooking, isPending: cancelPending } = useAction(cancelBookingFromScheduleAction, {
@@ -259,6 +269,14 @@ export function BookingDetailSheet({
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
+  // 화면은 즉시 바꾸고(로컬 상태), 서버 저장만 디바운스로 묶는다 — 여러 명을 빠르게 눌러도 자유롭게 클릭 가능
+  const queueWorkersSave = (bookingId: string, newIds: string[]) => {
+    if (workersSaveTimer.current) clearTimeout(workersSaveTimer.current)
+    workersSaveTimer.current = setTimeout(() => {
+      updateWorkers({ bookingId, workerIds: newIds })
+    }, 600)
+  }
+
   const toggleWorker = (workerId: string) => {
     if (!booking) return
     const isSelected = localWorkerIds.includes(workerId)
@@ -268,14 +286,14 @@ export function BookingDetailSheet({
 
     setLocalWorkerIds(newIds)
     onWorkersChange(booking.id, newIds)
-    updateWorkers({ bookingId: booking.id, workerIds: newIds })
+    queueWorkersSave(booking.id, newIds)
   }
 
   const clearAllWorkers = () => {
     if (!booking) return
     setLocalWorkerIds([])
     onWorkersChange(booking.id, [])
-    updateWorkers({ bookingId: booking.id, workerIds: [] })
+    queueWorkersSave(booking.id, [])
   }
 
   const handleSaveTime = () => {
@@ -527,7 +545,6 @@ export function BookingDetailSheet({
                           <button
                             key={w.id}
                             type="button"
-                            disabled={workersPending}
                             onClick={() => toggleWorker(w.id)}
                             className={[
                               'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all',
@@ -557,7 +574,6 @@ export function BookingDetailSheet({
                       <button
                         type="button"
                         onClick={clearAllWorkers}
-                        disabled={workersPending}
                         className="text-xs text-muted-foreground hover:text-destructive transition-colors"
                       >
                         배정 취소

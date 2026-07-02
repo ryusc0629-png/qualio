@@ -4,11 +4,20 @@ import { Suspense } from 'react'
 import { PostList } from './post-list'
 import { MarketingStats } from './marketing-stats'
 import { ChannelLinksCard } from './channel-links-card'
+import { MarketingPeriodSelector } from './period-selector'
 import { SearchTrafficTrend } from '@/components/dashboard/search-traffic-trend'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
-export default async function MarketingPage() {
+export default async function MarketingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>
+}) {
+  // 집계 기간(개월) — 기본 3개월. 유입·퍼널 데이터가 적은 초기엔 넓게 볼 수 있도록 1/3/6 지원
+  const { period } = await searchParams
+  const months = period === '1' ? 1 : period === '6' ? 6 : 3
+
   const authClient = await createClient()
   const { data: { user } } = await authClient.auth.getUser()
   if (!user) redirect('/login')
@@ -127,22 +136,29 @@ export default async function MarketingPage() {
             baseUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'}/q/${business.slug}`}
           />
         )}
+
+        {/* 성과 섹션 헤더 + 집계 기간 선택 (아래 두 카드 모두에 적용) */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h2 className="text-base font-bold">마케팅 성과</h2>
+          <MarketingPeriodSelector current={months} />
+        </div>
+
         <Suspense fallback={
           <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
             성과 데이터를 불러오는 중...
           </div>
         }>
-          <MarketingStats businessId={profile.business_id} />
+          <MarketingStats businessId={profile.business_id} months={months} />
+        </Suspense>
+
+        <Suspense fallback={
+          <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
+            검색·AI 유입 추이를 불러오는 중...
+          </div>
+        }>
+          <SearchTrafficTrend businessId={profile.business_id} months={months} />
         </Suspense>
       </div>
-
-      <Suspense fallback={
-        <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
-          검색·AI 유입 추이를 불러오는 중...
-        </div>
-      }>
-        <SearchTrafficTrend businessId={profile.business_id} />
-      </Suspense>
     </div>
   )
 }

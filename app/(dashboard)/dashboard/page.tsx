@@ -160,7 +160,7 @@ export default async function DashboardPage() {
 
     // 거래처 파이프라인 전체
     db.from('leads')
-      .select('id, status, monthly_budget')
+      .select('id, status')
       .eq('business_id', businessId),
 
     // 연락할 거래처 — 오늘 예정 + 지난 일정(놓친 연락)까지 포함
@@ -233,7 +233,8 @@ export default async function DashboardPage() {
   // B2B 거래처 지표
   const activeLeads       = (allLeads ?? []).filter((l) => l.status !== 'contracted' && l.status !== 'rejected')
   const contractedLeads   = (allLeads ?? []).filter((l) => l.status === 'contracted')
-  const pipelineMonthlyRevenue = contractedLeads.reduce((s, l) => s + (l.monthly_budget ?? 0), 0)
+  // 거래처 현황 '월 예상'은 상담 단계의 추정 예산(leads.monthly_budget)이 아니라
+  // 실제 체결된 정기 계약 매출(monthlyContractRevenue)을 그대로 사용해 KPI 카드와 값이 일치하도록 한다
   const todayFollowUpCount = (todayFollowUps ?? []).length
 
   // 주간 매출 차트 데이터 (최근 7일, KST 기준)
@@ -648,8 +649,8 @@ export default async function DashboardPage() {
                   <span className="text-[10px] text-teal-600">월 예상</span>
                 </div>
                 <p className="text-sm font-bold text-teal-700 tabular-nums leading-tight">
-                  {pipelineMonthlyRevenue > 0
-                    ? `${Math.round(pipelineMonthlyRevenue / 10000)}만`
+                  {monthlyContractRevenue > 0
+                    ? `${Math.round(monthlyContractRevenue / 10000)}만`
                     : '—'}
                 </p>
               </div>

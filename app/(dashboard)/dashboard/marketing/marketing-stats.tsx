@@ -6,90 +6,78 @@ import { StatsCharts } from './stats-charts'
 
 interface MarketingStatsProps {
   businessId: string
+  // 집계 기간(개월) — 페이지 상단 선택기에서 전달 (1/3/6)
+  months: number
 }
 
-export async function MarketingStats({ businessId }: MarketingStatsProps) {
+export async function MarketingStats({ businessId, months }: MarketingStatsProps) {
   const db = createServiceClient()
 
   const now = new Date()
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
-  const sixMonthsAgo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1)).toISOString()
+  // 선택한 기간의 시작(개월 수만큼 이전 달의 1일). 모든 지표가 이 창을 공유한다.
+  const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1)).toISOString()
+  const periodLabel = `최근 ${months}개월`
 
-  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, reviewResult, claimsResult, pageViewsResult, funnelResult, quotes6moResult, bookings6moResult] = await Promise.all([
-    // 이번 달 견적 신청 수
+  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, reviewResult, claimsResult, pageViewsResult, funnelResult] = await Promise.all([
+    // 견적 신청 수 (기간 내) — 퍼널 '견적 받기' 단계 겸용
     db
       .from('quotes')
       .select('id', { count: 'exact', head: true })
       .eq('business_id', businessId)
-      .gte('created_at', monthStart),
+      .gte('created_at', periodStart),
 
-    // 이번 달 예약 수 (quote_id 있는 것만 — 마케팅 유입 전환)
+    // 예약 수 (quote_id 있는 것만 — 마케팅 유입 전환) — 퍼널 '예약 완료' 단계 겸용
     db
       .from('bookings')
       .select('id', { count: 'exact', head: true })
       .eq('business_id', businessId)
       .not('quote_id', 'is', null)
-      .gte('created_at', monthStart),
+      .gte('created_at', periodStart),
 
-    // 최근 6개월 조회 기록 (소스 + 포스트 제목)
+    // 조회 기록 (소스 + 포스트 제목)
     db
       .from('post_views')
       .select('source, post_id, viewed_at, biz_posts!post_views_post_id_fkey(title)')
       .eq('business_id', businessId)
-      .gte('viewed_at', sixMonthsAgo)
+      .gte('viewed_at', periodStart)
       .order('viewed_at', { ascending: false }),
 
-    // 최근 6개월 월별 발행 포스트 수
+    // 월별 발행 포스트 수
     db
       .from('biz_posts')
       .select('published_at')
       .eq('business_id', businessId)
       .eq('published', true)
-      .gte('published_at', sixMonthsAgo),
+      .gte('published_at', periodStart),
 
-    // 이번 달 후기 요청 현황
+    // 후기 요청 현황
     db
       .from('bookings')
       .select('id, auto_review_sent_at, auto_review_followup_sent_at')
       .eq('business_id', businessId)
       .eq('status', 'completed')
-      .gte('scheduled_at', monthStart),
+      .gte('scheduled_at', periodStart),
 
-    // 이번 달 후기 인증 클릭 수
+    // 후기 인증 클릭 수
     db
       .from('review_claims')
       .select('id, claimed_at')
       .eq('business_id', businessId)
-      .gte('sent_at', monthStart),
+      .gte('sent_at', periodStart),
 
-    // 최근 6개월 공개 페이지 방문 (견적 페이지·브랜드 홈) — page_views 타입 미반영이라 단언 사용
+    // 공개 페이지 방문 (견적 페이지·브랜드 홈) — page_views 타입 미반영이라 단언 사용
     db
       .from('page_views' as never)
       .select('source, page_type, channel' as never)
       .eq('business_id' as never, businessId)
-      .gte('viewed_at' as never, sixMonthsAgo) as unknown as Promise<{ data: { source: string; page_type: string; channel: string | null }[] | null }>,
+      .gte('viewed_at' as never, periodStart) as unknown as Promise<{ data: { source: string; page_type: string; channel: string | null }[] | null }>,
 
-    // 최근 6개월 견적 퍼널 이벤트 (전체 여정) — 타입 미반영이라 단언 사용
+    // 견적 퍼널 이벤트 (전체 여정) — 타입 미반영이라 단언 사용
     db
       .from('quote_funnel_events' as never)
       .select('session_id, event_type, step, meta' as never)
       .eq('business_id' as never, businessId)
-      .gte('created_at' as never, sixMonthsAgo) as unknown as Promise<{ data: { session_id: string; event_type: string; step: string | null; meta: Record<string, string | number> | null }[] | null }>,
-
-    // 최근 6개월 견적 신청 수 (퍼널 '견적 받기' 단계)
-    db
-      .from('quotes')
-      .select('id', { count: 'exact', head: true })
-      .eq('business_id', businessId)
-      .gte('created_at', sixMonthsAgo),
-
-    // 최근 6개월 예약 수 (퍼널 '예약 완료' 단계 — quote_id 있는 것만)
-    db
-      .from('bookings')
-      .select('id', { count: 'exact', head: true })
-      .eq('business_id', businessId)
-      .not('quote_id', 'is', null)
-      .gte('created_at', sixMonthsAgo),
+      .gte('created_at' as never, periodStart) as unknown as Promise<{ data: { session_id: string; event_type: string; step: string | null; meta: Record<string, string | number> | null }[] | null }>,
   ])
 
   const quoteCount = quotesResult.count ?? 0
@@ -106,12 +94,12 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
   const views = postViewsResult.data ?? []        // 블로그(post_views)
   const pageViews = pageViewsResult.data ?? []      // 공개 페이지(page_views)
 
-  // 페이지별 방문 수 (최근 6개월)
+  // 페이지별 방문 수 (선택 기간)
   const blogViews = views.length
   const brandHomeViews = pageViews.filter((p) => p.page_type === 'brand_home').length
   const quoteViews = pageViews.filter((p) => p.page_type === 'quote').length
 
-  // ── 채널별 유입 (최근 6개월) — ?ch= 태그가 붙은 홍보 링크로 들어온 방문만 채널별 집계 ──
+  // ── 채널별 유입 (선택 기간) — ?ch= 태그가 붙은 홍보 링크로 들어온 방문만 채널별 집계 ──
   const channelCounts = pageViews.reduce<Record<string, number>>((acc, p) => {
     if (!p.channel) return acc // 태그 없는 직접·검색 유입은 위 '검색·AI 유입'에서 다룸
     acc[p.channel] = (acc[p.channel] ?? 0) + 1
@@ -124,7 +112,7 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
   const channelTaggedTotal = channelStats.reduce((s, c) => s + c.count, 0)
   const channelMax = channelStats.reduce((m, c) => Math.max(m, c.count), 0)
 
-  // ── 견적 퍼널 (최근 6개월) — 방문 → 작성 시작 → 견적 → 열람 → 플랜 선택 → 예약 ──
+  // ── 견적 퍼널 (선택 기간) — 방문 → 작성 시작 → 견적 → 열람 → 플랜 선택 → 예약 ──
   const funnelEvents = funnelResult.data ?? []
   // 이벤트별 고유 세션 수 (한 사람의 여정 = 1로 집계)
   const sessionsOf = (type: string) =>
@@ -133,8 +121,6 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
   const quoteViewedSessions = sessionsOf('quote_viewed')
   const planSelectedSessions = sessionsOf('plan_selected')
   const addressSessions = sessionsOf('address_entered')
-  const quote6moCount = quotes6moResult.count ?? 0
-  const booking6moCount = bookings6moResult.count ?? 0
 
   // 거의 예약할 뻔한 고객 — 주소까지 입력했지만 예약 확정 안 한 세션 수 (재접촉 기회)
   const bookedSessions = new Set(
@@ -180,10 +166,10 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
   const funnelStages = [
     { label: '견적 페이지 방문', sub: '견적 화면을 열어본 횟수',   count: quoteViews,           tone: 'text-foreground' },
     { label: '견적 작성 시작',   sub: '첫 질문에 답하기 시작',     count: startedSessions,      tone: 'text-blue-600' },
-    { label: '견적 받기 완료',   sub: '견적서까지 받음',           count: quote6moCount,        tone: 'text-blue-600' },
+    { label: '견적 받기 완료',   sub: '견적서까지 받음',           count: quoteCount,           tone: 'text-blue-600' },
     { label: '견적서 열람',      sub: '받은 견적서를 다시 열어봄', count: quoteViewedSessions,  tone: 'text-emerald-600' },
     { label: '플랜 선택',        sub: '플랜을 눌러봄(구매 직전)',   count: planSelectedSessions, tone: 'text-emerald-600' },
-    { label: '예약 완료',        sub: '실제 예약으로 전환',         count: booking6moCount,      tone: 'text-primary' },
+    { label: '예약 완료',        sub: '실제 예약으로 전환',         count: bookingCount,         tone: 'text-primary' },
   ]
   const funnelTop = funnelStages[0].count
   const hasFunnelData = funnelStages.some((s) => s.count > 0)
@@ -217,7 +203,7 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
     .sort((a, b) => b.count - a.count)
     .slice(0, 5)
 
-  // 월별 발행 추이 (최근 6개월)
+  // 월별 발행 추이 (선택 기간만큼의 월 버킷)
   const posts = monthlyPostsResult.data ?? []
   interface MonthlyCount { month: string; count: number }
   const monthlyMap = posts.reduce<Record<string, number>>((acc, p) => {
@@ -226,7 +212,7 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
     return acc
   }, {})
   const monthlyData: MonthlyCount[] = []
-  for (let i = 5; i >= 0; i--) {
+  for (let i = months - 1; i >= 0; i--) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
     const key = d.toISOString().slice(0, 7)
     const label = `${d.getUTCMonth() + 1}월`
@@ -235,17 +221,11 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
 
   return (
     <div className="space-y-5">
-      {/* 섹션 헤더 */}
-      <div>
-        <h2 className="text-base font-bold">마케팅 성과</h2>
-        <p className="text-xs text-muted-foreground mt-0.5">이번 달 기준 · 조회수는 최근 6개월</p>
-      </div>
-
       {/* 상단 지표 카드 — 견적/전환 */}
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border bg-white p-4 space-y-0.5">
           <p className="text-2xl font-bold text-primary">{quoteCount}</p>
-          <p className="text-xs text-muted-foreground">이번 달 견적 신청</p>
+          <p className="text-xs text-muted-foreground">{periodLabel} 견적 신청</p>
         </div>
         <div className="rounded-xl border bg-white p-4 space-y-0.5">
           <p className="text-2xl font-bold">{conversionRate}%</p>
@@ -257,7 +237,7 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
           <p className="font-semibold text-sm">견적 신청 단계별 흐름</p>
-          <p className="text-xs text-muted-foreground">최근 6개월</p>
+          <p className="text-xs text-muted-foreground">{periodLabel}</p>
         </div>
 
         {hasFunnelData ? (
@@ -340,7 +320,7 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
         <div className="rounded-xl border bg-white overflow-hidden">
           <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
             <p className="font-semibold text-sm">플랜 선호도</p>
-            <p className="text-xs text-muted-foreground">고객이 눌러본 플랜 · 최근 6개월</p>
+            <p className="text-xs text-muted-foreground">고객이 눌러본 플랜 · {periodLabel}</p>
           </div>
           <div className="p-4 space-y-2.5">
             {planStats.map((p) => {
@@ -366,7 +346,7 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
           <p className="font-semibold text-sm">검색·AI 유입</p>
-          <p className="text-xs text-muted-foreground">최근 6개월</p>
+          <p className="text-xs text-muted-foreground">{periodLabel}</p>
         </div>
         {/* 핵심: AI 검색 + 일반 검색 (검색으로 새로 찾아온 고객) */}
         <div className="grid grid-cols-2 divide-x">
@@ -392,7 +372,7 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
           <p className="font-semibold text-sm">채널별 유입</p>
-          <p className="text-xs text-muted-foreground">홍보 링크 기준 · 최근 6개월</p>
+          <p className="text-xs text-muted-foreground">홍보 링크 기준 · {periodLabel}</p>
         </div>
         {channelStats.length > 0 ? (
           <div className="p-4 space-y-2.5">
@@ -426,11 +406,11 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
         )}
       </div>
 
-      {/* 페이지별 방문 — 브랜드 홈 / 견적 페이지 / 블로그 글 (최근 6개월) */}
+      {/* 페이지별 방문 — 브랜드 홈 / 견적 페이지 / 블로그 글 */}
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
           <p className="font-semibold text-sm">페이지별 방문</p>
-          <p className="text-xs text-muted-foreground">최근 6개월</p>
+          <p className="text-xs text-muted-foreground">{periodLabel}</p>
         </div>
         <div className="grid grid-cols-3 divide-x">
           <div className="px-2 py-4 text-center">
@@ -454,7 +434,7 @@ export async function MarketingStats({ businessId }: MarketingStatsProps) {
       {/* 후기 요청 현황 */}
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-5 py-3.5 border-b bg-slate-50">
-          <p className="font-semibold text-sm">이번 달 후기 요청 현황</p>
+          <p className="font-semibold text-sm">{periodLabel} 후기 요청 현황</p>
         </div>
         <div className="grid grid-cols-4 divide-x">
           <div className="px-3 py-4 text-center">

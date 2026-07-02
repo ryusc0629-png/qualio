@@ -3,10 +3,12 @@ import { isAiSource } from '@/lib/utils/detect-view-source'
 
 // "GEO가 먹히는지"를 시간축으로 증명하는 카드.
 // 검색·AI로 들어온 방문이 달이 갈수록 느는지(=글을 낼수록 검색·AI 노출이 쌓이는 플라이휠)를 보여준다.
-// marketing-stats의 6개월 '합산' 스냅샷과 달리 이 카드는 '추이'에 집중한다.
+// marketing-stats의 '합산' 스냅샷과 달리 이 카드는 월별 '추이'에 집중한다(집계 기간은 상단 선택기 공유).
 
 interface Props {
   businessId: string
+  // 집계 기간(개월) — 페이지 상단 선택기에서 전달 (1/3/6)
+  months: number
 }
 
 // 일반 검색(SEO) 소스 — 네이버·구글·다음
@@ -16,13 +18,14 @@ function isSearchOrAi(source: string): boolean {
   return isAiSource(source) || SEARCH_SOURCES.includes(source)
 }
 
-export async function SearchTrafficTrend({ businessId }: Props) {
+export async function SearchTrafficTrend({ businessId, months }: Props) {
   const db = createServiceClient()
 
   const now = new Date()
-  const sixMonthsAgo = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1),
+  const periodStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1),
   ).toISOString()
+  const periodLabel = `최근 ${months}개월`
 
   const [postViewsResult, pageViewsResult, postsResult] = await Promise.all([
     // 블로그 글 조회 (소스 + 시각)
@@ -30,14 +33,14 @@ export async function SearchTrafficTrend({ businessId }: Props) {
       .from('post_views')
       .select('source, viewed_at')
       .eq('business_id', businessId)
-      .gte('viewed_at', sixMonthsAgo),
+      .gte('viewed_at', periodStart),
 
     // 공개 페이지(견적·브랜드 홈) 방문 — 타입 미반영이라 단언 사용
     db
       .from('page_views' as never)
       .select('source, viewed_at' as never)
       .eq('business_id' as never, businessId)
-      .gte('viewed_at' as never, sixMonthsAgo) as unknown as Promise<{
+      .gte('viewed_at' as never, periodStart) as unknown as Promise<{
         data: { source: string; viewed_at: string }[] | null
       }>,
 
@@ -47,7 +50,7 @@ export async function SearchTrafficTrend({ businessId }: Props) {
       .select('published_at' as never)
       .eq('business_id' as never, businessId)
       .eq('published' as never, true)
-      .gte('published_at' as never, sixMonthsAgo) as unknown as Promise<{
+      .gte('published_at' as never, periodStart) as unknown as Promise<{
         data: { published_at: string | null }[] | null
       }>,
   ])
@@ -56,18 +59,18 @@ export async function SearchTrafficTrend({ businessId }: Props) {
   const pageViews = pageViewsResult.data ?? []
   const posts = postsResult.data ?? []
 
-  // 최근 6개월 버킷 구성 ('YYYY-MM')
-  const months: { key: string; label: string; searchAi: number; published: number }[] = []
-  for (let i = 5; i >= 0; i--) {
+  // 선택 기간만큼의 월 버킷 구성 ('YYYY-MM')
+  const monthBuckets: { key: string; label: string; searchAi: number; published: number }[] = []
+  for (let i = months - 1; i >= 0; i--) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
-    months.push({
+    monthBuckets.push({
       key: d.toISOString().slice(0, 7),
       label: `${d.getUTCMonth() + 1}월`,
       searchAi: 0,
       published: 0,
     })
   }
-  const monthIndex = new Map(months.map((m, i) => [m.key, i]))
+  const monthIndex = new Map(monthBuckets.map((m, i) => [m.key, i]))
 
   // 검색·AI 방문을 월별로 집계 (블로그 + 공개 페이지 합산)
   const allViews = [
@@ -77,23 +80,24 @@ export async function SearchTrafficTrend({ businessId }: Props) {
   for (const v of allViews) {
     if (!v.at || !isSearchOrAi(v.source)) continue
     const idx = monthIndex.get(v.at.slice(0, 7))
-    if (idx !== undefined) months[idx].searchAi++
+    if (idx !== undefined) monthBuckets[idx].searchAi++
   }
 
   // 월별 발행 글 수
   for (const p of posts) {
     if (!p.published_at) continue
     const idx = monthIndex.get(p.published_at.slice(0, 7))
-    if (idx !== undefined) months[idx].published++
+    if (idx !== undefined) monthBuckets[idx].published++
   }
 
-  const totalSearchAi = months.reduce((s, m) => s + m.searchAi, 0)
-  const maxBar = months.reduce((m, x) => Math.max(m, x.searchAi), 0)
+  const totalSearchAi = monthBuckets.reduce((s, m) => s + m.searchAi, 0)
+  const maxBar = monthBuckets.reduce((m, x) => Math.max(m, x.searchAi), 0)
 
-  // 증감 판정 — 최근 3개월 vs 이전 3개월
-  const firstHalf = months.slice(0, 3).reduce((s, m) => s + m.searchAi, 0)
-  const secondHalf = months.slice(3).reduce((s, m) => s + m.searchAi, 0)
-  const growing = totalSearchAi > 0 && secondHalf > firstHalf
+  // 증감 판정 — 기간을 반으로 나눠 앞·뒤 비교 (버킷이 2개 미만이면 추이 비교 불가)
+  const splitAt = Math.floor(monthBuckets.length / 2)
+  const firstHalf = monthBuckets.slice(0, splitAt).reduce((s, m) => s + m.searchAi, 0)
+  const secondHalf = monthBuckets.slice(splitAt).reduce((s, m) => s + m.searchAi, 0)
+  const growing = monthBuckets.length >= 2 && totalSearchAi > 0 && secondHalf > firstHalf
 
   // 헤드라인 문구 (비테크 사장님 언어)
   let verdict: { text: string; tone: string }
@@ -118,7 +122,7 @@ export async function SearchTrafficTrend({ businessId }: Props) {
     <div className="rounded-xl border bg-white overflow-hidden">
       <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
         <p className="font-semibold text-sm">검색·AI 유입 추이</p>
-        <p className="text-xs text-muted-foreground">월별 · 최근 6개월</p>
+        <p className="text-xs text-muted-foreground">월별 · {periodLabel}</p>
       </div>
 
       <div className="p-4 space-y-3">
@@ -127,7 +131,7 @@ export async function SearchTrafficTrend({ businessId }: Props) {
 
         {/* 월별 막대 — 검색·AI 방문 수 + 그 달 발행 글 수 보조 표기 */}
         <div className="flex items-end justify-between gap-2 pt-1">
-          {months.map((m) => {
+          {monthBuckets.map((m) => {
             const heightPct = maxBar > 0 ? Math.max((m.searchAi / maxBar) * 100, m.searchAi > 0 ? 8 : 0) : 0
             return (
               <div key={m.key} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
