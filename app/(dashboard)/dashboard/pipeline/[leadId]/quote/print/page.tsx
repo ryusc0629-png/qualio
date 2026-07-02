@@ -44,11 +44,16 @@ export default async function QuotePrintPage({
 
   if (!leadResult.data || !quoteResult.data) notFound()
 
+  // public_token은 마이그레이션으로 추가된 새 컬럼이라 타입에 아직 없음
+  const publicToken = (quoteResult.data as unknown as { public_token: string | null }).public_token
+
   return (
     <PrintQuote
       lead={leadResult.data}
       quote={quoteResult.data}
       business={businessResult.data}
+      variant="internal"
+      publicToken={publicToken}
     />
   )
 }

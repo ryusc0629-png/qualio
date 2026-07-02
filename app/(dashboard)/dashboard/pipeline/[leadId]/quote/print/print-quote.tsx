@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 interface QuoteItem {
   name: string
@@ -38,47 +38,120 @@ interface Business {
   address: string | null
 }
 
+// both = 견적서+시방서 함께 / quote = 견적서만 / spec = 시방서만
+type DocMode = 'both' | 'quote' | 'spec'
+
 interface Props {
   lead: Lead
   quote: Quote
   business: Business | null
+  // 'internal' = 사장님 미리보기(링크 복사·닫기 있음) / 'public' = 고객 공개(조회 추적)
+  variant?: 'internal' | 'public'
+  // 공개 링크 토큰 — 링크 복사·공개 조회 추적에 사용
+  publicToken?: string | null
+  // 처음 보여줄 문서 (공개 링크의 ?doc= 로 지정 가능)
+  initialMode?: DocMode
 }
 
-export function PrintQuote({ lead, quote, business }: Props) {
+export function PrintQuote({ lead, quote, business, variant = 'internal', publicToken, initialMode = 'both' }: Props) {
   const items = (Array.isArray(quote.items) ? quote.items : []) as QuoteItem[]
   const subtotal = items.reduce((s, it) => s + it.qty * it.unit_price, 0)
   const tax = quote.tax_included ? Math.floor(subtotal * 0.1) : 0
   const total = subtotal + tax
 
+  const hasSpec = !!quote.spec_content
+  // 시방서가 없으면 견적서만 가능
+  const [mode, setMode] = useState<DocMode>(hasSpec ? initialMode : 'quote')
+  const [copied, setCopied] = useState(false)
+
+  const showQuote = mode !== 'spec'
+  const showSpec = hasSpec && mode !== 'quote'
+
   const today = new Date().toLocaleDateString('ko-KR', {
     year: 'numeric', month: 'long', day: 'numeric',
   })
 
+  const docLabel = mode === 'quote' ? '견적서' : mode === 'spec' ? '시방서' : '견적서·시방서'
+
   useEffect(() => {
-    document.title = `견적서_${lead.company_name}_${quote.quote_number ?? ''}`
-  }, [lead.company_name, quote.quote_number])
+    document.title = `${docLabel}_${lead.company_name}_${quote.quote_number ?? ''}`
+  }, [docLabel, lead.company_name, quote.quote_number])
+
+  // 공개 링크로 고객이 열람하면 조회 기록 → 재열람 시 대표에게 알림
+  useEffect(() => {
+    if (variant !== 'public' || !publicToken) return
+    try {
+      const payload = JSON.stringify({ token: publicToken })
+      const blob = new Blob([payload], { type: 'application/json' })
+      navigator.sendBeacon('/api/track/b2b-quote-view', blob)
+    } catch {
+      // 추적 실패가 고객 열람을 막지 않도록 무시
+    }
+  }, [variant, publicToken])
+
+  const handleCopyLink = async () => {
+    if (!publicToken) return
+    const base = `${window.location.origin}/quote/${publicToken}`
+    // 특정 문서만 보내고 싶으면 ?doc= 를 붙임 (둘 다는 파라미터 없음)
+    const url = mode === 'both' ? base : `${base}?doc=${mode}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      window.prompt('아래 링크를 복사해서 고객에게 보내세요', url)
+    }
+  }
 
   return (
     <>
-      {/* 인쇄 버튼 (화면에서만 보임) */}
-      <div className="print:hidden fixed top-4 right-4 z-50 flex gap-2">
+      {/* 상단 툴바 (화면에서만 보임, 인쇄 시 숨김) */}
+      <div className="print:hidden fixed top-4 right-4 z-50 flex flex-wrap items-center gap-2 justify-end max-w-[calc(100vw-2rem)]">
+        {/* 문서 선택 토글 */}
+        {hasSpec && (
+          <div className="flex rounded-lg border bg-white shadow-lg overflow-hidden text-sm font-medium">
+            {([['both', '둘 다'], ['quote', '견적서'], ['spec', '시방서']] as [DocMode, string][]).map(([m, label]) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`px-3 py-2 transition-colors ${mode === m ? 'bg-primary text-primary-foreground' : 'text-gray-600 hover:bg-muted'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <button
           onClick={() => window.print()}
           className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium shadow-lg hover:bg-primary/90"
         >
           PDF로 저장
         </button>
-        <button
-          onClick={() => window.close()}
-          className="bg-white border px-4 py-2 rounded-lg text-sm font-medium shadow-lg hover:bg-muted"
-        >
-          닫기
-        </button>
+
+        {variant === 'internal' && publicToken && (
+          <button
+            onClick={handleCopyLink}
+            className="bg-white border px-4 py-2 rounded-lg text-sm font-medium shadow-lg hover:bg-muted"
+          >
+            {copied ? '✓ 복사됐어요' : '고객 링크 복사'}
+          </button>
+        )}
+
+        {variant === 'internal' && (
+          <button
+            onClick={() => window.close()}
+            className="bg-white border px-4 py-2 rounded-lg text-sm font-medium shadow-lg hover:bg-muted"
+          >
+            닫기
+          </button>
+        )}
       </div>
 
       <div className="max-w-[210mm] mx-auto bg-white p-[20mm] text-[14px] leading-relaxed print:p-[15mm] print:max-w-none font-sans">
 
         {/* ── 견적서 ─────────────────────────────── */}
+        {showQuote && (
         <div className="mb-12 print:mb-10">
 
           {/* 헤더 */}
@@ -172,10 +245,11 @@ export function PrintQuote({ lead, quote, business }: Props) {
             </div>
           )}
         </div>
+        )}
 
-        {/* ── 시방서 (페이지 구분) ─────────────────────── */}
-        {quote.spec_content && (
-          <div className="print:break-before-page">
+        {/* ── 시방서 (둘 다 보기일 때만 페이지 구분) ─────────────────────── */}
+        {showSpec && (
+          <div className={mode === 'both' ? 'print:break-before-page' : ''}>
             <div className="border-b-2 border-gray-800 pb-4 mb-6">
               <h1 className="text-3xl font-bold tracking-tight">시 방 서</h1>
               <p className="text-sm text-gray-500 mt-1">SPECIFICATION</p>
