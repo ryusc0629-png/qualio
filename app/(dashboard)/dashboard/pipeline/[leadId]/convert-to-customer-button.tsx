@@ -48,6 +48,8 @@ export function ConvertToCustomerButton({ lead, quote, alreadyConverted }: Props
     quote?.total_amount ? String(quote.total_amount) : ''
   )
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10))
+  const [endDate, setEndDate] = useState('')
+  const [contractNotes, setContractNotes] = useState('')
 
   const { execute, isPending } = useAction(createCustomerWithContractAction, {
     onSuccess: () => {
@@ -76,6 +78,8 @@ export function ConvertToCustomerButton({ lead, quote, alreadyConverted }: Props
       frequency: frequency || undefined,
       contract_price: contractPrice || undefined,
       start_date: startDate || undefined,
+      end_date: endDate || undefined,
+      contract_notes: contractNotes || undefined,
     })
   }
 
@@ -206,6 +210,26 @@ export function ConvertToCustomerButton({ lead, quote, alreadyConverted }: Props
                       className="mt-1"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <Label>계약 종료일 <span className="text-xs font-normal text-muted-foreground">(미입력 = 무기한)</span></Label>
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+
+                <div>
+                  <Label>계약 메모</Label>
+                  <textarea
+                    value={contractNotes}
+                    onChange={(e) => setContractNotes(e.target.value)}
+                    placeholder="계약 조건, 특이사항..."
+                    className="mt-1 w-full min-h-[60px] rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none"
+                  />
                 </div>
               </div>
             )}

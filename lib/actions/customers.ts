@@ -1,9 +1,11 @@
 'use server'
 
 import { z } from 'zod'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { action } from '@/lib/safe-action'
+import { generateVisitsForContract } from '@/lib/recurring/generate'
 
 // 공통 인증 헬퍼
 async function getAuthenticatedBusinessId() {
@@ -318,6 +320,8 @@ const createCustomerWithContractSchema = z.object({
   frequency: z.string().optional(),
   contract_price: z.string().optional(),
   start_date: z.string().optional(),
+  end_date: z.string().optional(), // 미입력=무기한
+  contract_notes: z.string().optional(), // 계약 메모 (customers.notes와 구분)
 })
 
 export const createCustomerWithContractAction = action
@@ -355,19 +359,44 @@ export const createCustomerWithContractAction = action
       const price = parseInt(parsedInput.contract_price, 10)
       if (isNaN(price) || price < 1) throw new Error('[APP] 올바른 계약금액을 입력해주세요')
 
-      const { error: contractError } = await db.from('contracts').insert({
+      // 기존 계약 등록(createContractAction)과 동일한 필드로 저장
+      const { data: contract, error: contractError } = await db.from('contracts').insert({
         business_id: businessId,
         customer_id: customer.id,
         service_type: parsedInput.service_type,
         frequency: parsedInput.frequency,
         contract_price: price,
         start_date: parsedInput.start_date,
-      })
+        end_date: parsedInput.end_date || null,
+        notes: parsedInput.contract_notes || null,
+      }).select('id').single()
 
-      if (contractError) throw new Error('[APP] 계약 등록에 실패했습니다')
+      if (contractError || !contract) throw new Error('[APP] 계약 등록에 실패했습니다')
+
+      // 기존 계약 등록과 동일하게 향후 정기 방문을 일정에 자동 생성
+      // (이게 없으면 계약만 생기고 일정에는 방문이 안 잡힘)
+      try {
+        await generateVisitsForContract(db as unknown as SupabaseClient, {
+          id: contract.id,
+          business_id: businessId,
+          customer_id: customer.id,
+          service_type: parsedInput.service_type,
+          frequency: parsedInput.frequency,
+          start_date: parsedInput.start_date,
+          end_date: parsedInput.end_date || null,
+          status: 'active',
+          last_generated_until: null,
+        })
+      } catch (e) {
+        console.error('[Customers] 정기 방문 자동 생성 실패 — 계약은 정상 등록됨', e)
+      }
     }
 
+    // 기존 계약 등록과 동일한 화면들을 함께 갱신
     revalidatePath('/dashboard/clients')
+    revalidatePath('/dashboard/customers')
+    revalidatePath('/dashboard/contracts')
+    revalidatePath('/dashboard/schedule')
     revalidatePath('/dashboard')
     return { success: true }
   })
