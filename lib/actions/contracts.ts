@@ -126,7 +126,7 @@ export const updateContractStatusAction = action
       // 다시 활성화 → 향후 방문 재생성
       const { data: contract } = await db
         .from('contracts')
-        .select('id, business_id, customer_id, service_type, frequency, start_date, end_date, status, last_generated_until' as never)
+        .select('id, business_id, customer_id, service_type, frequency, start_date, end_date, status, last_generated_until, default_worker_id' as never)
         .eq('id', parsedInput.contractId)
         .eq('business_id', businessId)
         .maybeSingle() as unknown as { data: import('@/lib/recurring/generate').ContractForGen | null }

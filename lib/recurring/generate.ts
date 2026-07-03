@@ -19,6 +19,7 @@ export interface ContractForGen {
   end_date: string | null
   status: string
   last_generated_until: string | null
+  default_worker_id?: string | null // 거래처 고정 담당자 — 있으면 새 방문을 이 사람에게 바로 배정
 }
 
 function ymd(d: Date): string {
@@ -83,6 +84,7 @@ export async function generateVisitsForContract(
   )
 
   const hour = String(VISIT_HOUR_KST).padStart(2, '0')
+  const defaultWorkerId = contract.default_worker_id ?? null
   const rows = dates
     .filter((d) => !existingDates.has(d))
     .map((d) => ({
@@ -97,10 +99,25 @@ export async function generateVisitsForContract(
       status: 'confirmed',
       memo: `정기계약 · ${contract.service_type ?? '청소'}`,
       contract_id: contract.id,
+      worker_id: defaultWorkerId, // 고정 담당자가 있으면 새 방문을 바로 배정
     }))
 
   if (rows.length > 0) {
-    await db.from('bookings').insert(rows)
+    const { data: inserted } = await db
+      .from('bookings')
+      .insert(rows)
+      .select('id')
+
+    // 고정 담당자가 있으면 booking_workers도 함께 채워 다중배정 UI와 정합성 유지
+    if (defaultWorkerId && inserted && inserted.length > 0) {
+      await db.from('booking_workers').insert(
+        (inserted as { id: string }[]).map((b) => ({
+          booking_id: b.id,
+          worker_id: defaultWorkerId,
+          is_lead: true,
+        })),
+      )
+    }
   }
 
   // 커서 전진

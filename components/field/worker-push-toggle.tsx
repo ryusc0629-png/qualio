@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Bell, BellOff, Smartphone, Share } from 'lucide-react'
+import { Bell, BellOff, Smartphone, Share, MoreHorizontal } from 'lucide-react'
 import {
   saveWorkerPushSubscriptionAction,
   deleteWorkerPushSubscriptionAction,
@@ -114,8 +114,8 @@ export function WorkerPushToggle({ workerId }: { workerId: string }) {
           아이폰은 <b>홈 화면에 추가</b>하면 처리할 일(클레임 등) 알림을 폰으로 받을 수 있어요.
         </p>
         <ol className="text-sm space-y-1.5 list-decimal list-inside text-foreground/90">
-          <li>화면 아래 <Share className="inline h-4 w-4 mb-0.5" /> <b>공유</b> 버튼을 눌러요 (안 보이면 <b>···</b> → <b>공유</b>)</li>
-          <li>뜬 목록을 <b>아래로 쭉 내려</b> <b>&quot;홈 화면에 추가&quot;</b>를 눌러요</li>
+          <li>오른쪽 아래 <MoreHorizontal className="inline h-4 w-4 mb-0.5" /> <b>· · ·</b>(점 3개)를 눌러요 <span className="text-muted-foreground">(<Share className="inline h-3.5 w-3.5 mb-0.5" /> 공유가 바로 보이면 그걸 눌러요)</span></li>
+          <li><Share className="inline h-4 w-4 mb-0.5" /> <b>공유</b> → 목록을 <b>아래로 쭉 내려</b> <b>&quot;홈 화면에 추가&quot;</b>를 눌러요</li>
           <li>오른쪽 위 <b>추가</b>를 누르면 홈 화면에 <b>퀄리오 현장</b> 아이콘이 생겨요</li>
           <li>그 아이콘으로 들어와 <b>&quot;알림 켜기&quot;</b>를 누르면 끝!</li>
         </ol>

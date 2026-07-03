@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, Share, Plus, Download, Smartphone } from 'lucide-react'
+import { X, Share, Plus, Download, Smartphone, MoreHorizontal } from 'lucide-react'
 
 // 사용자가 닫으면 다시 안 띄움 (기기별 localStorage)
 const DISMISS_KEY = 'qualio-install-dismissed'
@@ -82,10 +82,11 @@ export function InstallPrompt() {
               {showIOSGuide ? (
                 <ol className="text-xs space-y-1.5 list-decimal list-inside text-foreground/90">
                   <li>
-                    아래쪽 가운데 <Share className="inline h-3.5 w-3.5 mb-0.5" /> <b>공유</b> 버튼을 눌러요
+                    오른쪽 아래 <MoreHorizontal className="inline h-3.5 w-3.5 mb-0.5" /> <b>· · ·</b>(점 3개)를 눌러요{' '}
+                    <span className="text-muted-foreground">(<Share className="inline h-3 w-3 mb-0.5" /> 공유 아이콘이 바로 보이면 그걸 눌러요)</span>
                   </li>
                   <li>
-                    <Plus className="inline h-3.5 w-3.5 mb-0.5" /> <b>&quot;홈 화면에 추가&quot;</b>를 눌러요
+                    <Share className="inline h-3.5 w-3.5 mb-0.5" /> <b>공유</b> → 목록을 아래로 내려 <Plus className="inline h-3.5 w-3.5 mb-0.5" /> <b>&quot;홈 화면에 추가&quot;</b>를 눌러요
                   </li>
                   <li>
                     홈 화면에 생긴 <b>퀄리오</b> 아이콘으로 들어오면 끝!

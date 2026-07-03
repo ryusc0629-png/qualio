@@ -235,6 +235,90 @@ export const assignBookingAction = action
     return { success: true }
   })
 
+// 거래처 전체 배정 — 드래그한 예약 1건의 날짜/담당자를 바꾸고,
+// 같은 거래처(같은 전화번호)의 '앞으로 예정된' 일정 전부를 같은 담당자로 배정한다.
+// 정기 청소는 한 담당자가 고정이므로, 정기계약에는 고정 담당자로도 저장해
+// 앞으로 새로 생기는 방문이 자동으로 이 사람에게 배정되게 한다.
+export const assignBookingAndPropagateAction = action
+  .schema(z.object({
+    bookingId: z.string().uuid(),
+    workerId:  z.string().uuid(), // 전파 배정은 실제 담당자 지정만 (미배정 전파 없음)
+    newDate:   z.string().min(10), // 드래그한 예약의 새 날짜 'YYYY-MM-DD'
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { data: booking } = await db
+      .from('bookings')
+      .select('scheduled_at, customer_phone, customer_id')
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+      .maybeSingle() as unknown as {
+        data: { scheduled_at: string; customer_phone: string | null; customer_id: string | null } | null
+      }
+
+    if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
+
+    // 드래그한 예약의 날짜만 새 위치로 이동 (KST 시:분 보존, 하루 밀림 방지)
+    const prevTime = new Date(booking.scheduled_at)
+    const kst = new Date(prevTime.getTime() + 9 * 60 * 60 * 1000)
+    const [year, month, day] = parsedInput.newDate.split('-').map(Number)
+    const newScheduledAt = new Date(
+      Date.UTC(year!, month! - 1, day!, kst.getUTCHours(), kst.getUTCMinutes()) - 9 * 60 * 60 * 1000
+    ).toISOString()
+
+    await db
+      .from('bookings')
+      .update({ worker_id: parsedInput.workerId, scheduled_at: newScheduledAt } as never)
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+
+    // 같은 거래처(전화번호)의 '앞으로 예정된' 일정 전부를 같은 담당자로 배정.
+    // 앞으로 예정 = 아직 안 끝난 상태(confirmed/in_progress). 완료·취소·노쇼는 기록이라 건드리지 않음.
+    const targetIds: string[] = [parsedInput.bookingId]
+    if (booking.customer_phone) {
+      const { data: siblings } = await db
+        .from('bookings')
+        .select('id')
+        .eq('business_id', businessId)
+        .eq('customer_phone', booking.customer_phone)
+        .in('status', ['confirmed', 'in_progress'])
+        .is('deleted_at' as never, null) as unknown as { data: { id: string }[] | null }
+
+      for (const s of siblings ?? []) {
+        if (!targetIds.includes(s.id)) targetIds.push(s.id)
+      }
+
+      if (targetIds.length > 1) {
+        await db
+          .from('bookings')
+          .update({ worker_id: parsedInput.workerId } as never)
+          .in('id', targetIds)
+          .eq('business_id', businessId)
+      }
+    }
+
+    // booking_workers 동기화 — 대상 예약 전부를 단일 담당자(팀장)로 교체
+    await db.from('booking_workers' as never).delete().in('booking_id' as never, targetIds)
+    await db.from('booking_workers' as never).insert(
+      targetIds.map((id) => ({ booking_id: id, worker_id: parsedInput.workerId, is_lead: true })) as never
+    )
+
+    // 정기계약 고정 담당자 저장 — 이 거래처의 활성 계약에 담당자를 못박아
+    // 앞으로 자동 생성되는 방문도 이 사람에게 배정되게 한다.
+    if (booking.customer_id) {
+      await db
+        .from('contracts')
+        .update({ default_worker_id: parsedInput.workerId } as never)
+        .eq('customer_id', booking.customer_id)
+        .eq('business_id', businessId)
+        .eq('status', 'active')
+    }
+
+    revalidatePath('/dashboard/schedule')
+    return { success: true, assignedCount: targetIds.length }
+  })
+
 // 다중 팀원 배정 — 상세 시트에서 여러 직원을 한 예약에 배정
 export const updateBookingWorkersAction = action
   .schema(z.object({

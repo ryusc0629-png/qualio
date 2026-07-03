@@ -20,7 +20,7 @@ import { ko } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2, Smartphone } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
-import { assignBookingAction, addWorkerAction, deleteWorkerAction, updateBookingWorkersAction } from '@/lib/actions/workers'
+import { assignBookingAction, assignBookingAndPropagateAction, addWorkerAction, deleteWorkerAction, updateBookingWorkersAction } from '@/lib/actions/workers'
 import { BookingDetailSheet } from '@/components/dashboard/booking-detail-sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -426,6 +426,16 @@ export function ScheduleBoard({
   const [bookings, setBookings] = useState(initialBookings)
   const [activeBooking, setActiveBooking] = useState<Booking | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
+  // 거래처 전체 배정 확인창 — 드래그로 정기/거래처 예약을 옮겼을 때 뜬다
+  const [pendingAssign, setPendingAssign] = useState<{
+    bookingId: string
+    workerId: string
+    workerName: string
+    workerColor: string
+    newDate: string
+    customerName: string
+    customerPhone: string | null
+  } | null>(null)
   // 푸시 딥링크(?booking=...)로 들어오면 해당 예약 시트를 바로 연다
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(initialBookingId)
 
@@ -437,6 +447,16 @@ export function ScheduleBoard({
   )
 
   const { execute: assignBooking } = useAction(assignBookingAction, {
+    onError: ({ error }) => {
+      toast.error(error.serverError ?? '저장에 실패했어요. 다시 시도해주세요')
+      setBookings(initialBookings) // 롤백
+    },
+  })
+
+  const { execute: assignAndPropagate } = useAction(assignBookingAndPropagateAction, {
+    onSuccess: ({ data }) => {
+      toast.success(`이 거래처 일정 ${data?.assignedCount ?? 0}건을 배정했어요`)
+    },
     onError: ({ error }) => {
       toast.error(error.serverError ?? '저장에 실패했어요. 다시 시도해주세요')
       setBookings(initialBookings) // 롤백
@@ -577,11 +597,64 @@ export function ScheduleBoard({
       )
     )
 
+    // 실제 담당자에게 배정하는 경우, 정기 예약이거나 같은 거래처의 다른 일정이 있으면
+    // '거래처 전체 배정'을 물어본다. (미배정으로 되돌릴 땐 그냥 1건만 반영)
+    const worker = workers.find((w) => w.id === newWorker)
+    const hasSibling = bookings.some(
+      (b) =>
+        b.id !== booking.id &&
+        b.customer_phone &&
+        b.customer_phone === booking.customer_phone &&
+        ['confirmed', 'in_progress'].includes(b.status)
+    )
+    if (newWorker && worker && (booking.isRecurring || hasSibling)) {
+      // 서버 반영은 확인창 선택에 따라 처리 — 여기선 낙관적 이동만
+      setPendingAssign({
+        bookingId: booking.id,
+        workerId: newWorker,
+        workerName: worker.name,
+        workerColor: worker.color,
+        newDate,
+        customerName: booking.customer_name,
+        customerPhone: booking.customer_phone,
+      })
+      return
+    }
+
     assignBooking({
       bookingId: booking.id,
       workerId:  newWorker,
       newDate,
     })
+  }
+
+  // 확인창: '이 일정만' — 드래그한 1건만 저장
+  const confirmAssignSingle = () => {
+    if (!pendingAssign) return
+    assignBooking({
+      bookingId: pendingAssign.bookingId,
+      workerId:  pendingAssign.workerId,
+      newDate:   pendingAssign.newDate,
+    })
+    setPendingAssign(null)
+  }
+
+  // 확인창: '전부 배정' — 같은 거래처의 앞으로 예정된 일정까지 함께 배정
+  const confirmAssignAll = () => {
+    if (!pendingAssign) return
+    const { bookingId, workerId, newDate, customerPhone } = pendingAssign
+    // 로드된 화면의 같은 거래처 예약도 즉시 담당자 반영 (서버가 나머지 기간까지 처리)
+    setBookings((prev) =>
+      prev.map((b) =>
+        b.customer_phone &&
+        b.customer_phone === customerPhone &&
+        ['confirmed', 'in_progress'].includes(b.status)
+          ? { ...b, worker_id: workerId, workerIds: [workerId] }
+          : b
+      )
+    )
+    assignAndPropagate({ bookingId, workerId, newDate })
+    setPendingAssign(null)
   }
 
   return (
@@ -765,6 +838,41 @@ export function ScheduleBoard({
           <p className="text-xs mt-1">예약 탭에서 예약을 추가하면 여기 표시돼요</p>
         </div>
       )}
+
+      {/* 거래처 전체 배정 확인창 — 닫거나 '이 일정만'을 고르면 드래그한 1건만 저장 */}
+      <Dialog
+        open={!!pendingAssign}
+        onOpenChange={(open) => { if (!open && pendingAssign) confirmAssignSingle() }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>이 거래처 일정도 함께 배정할까요?</DialogTitle>
+          </DialogHeader>
+          {pendingAssign && (
+            <div className="space-y-4 mt-1">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                <span className="font-semibold text-foreground">{pendingAssign.customerName}</span>
+                {' '}거래처의 앞으로 예정된 일정을 모두{' '}
+                <span
+                  className="inline-flex items-center gap-1 font-semibold text-foreground"
+                >
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: pendingAssign.workerColor }} />
+                  {pendingAssign.workerName}
+                </span>
+                {' '}님에게 배정할 수 있어요. (완료·지난 일정은 그대로 둬요)
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button className="w-full h-12" onClick={confirmAssignAll}>
+                  이 거래처 전부 배정하기
+                </Button>
+                <Button variant="outline" className="w-full h-11" onClick={confirmAssignSingle}>
+                  이 일정만 배정
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* 예약 상세 Sheet */}
       <BookingDetailSheet

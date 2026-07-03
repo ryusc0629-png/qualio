@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
   const { data: contracts, error } = await db
     .from('contracts')
-    .select('id, business_id, customer_id, service_type, frequency, start_date, end_date, status, last_generated_until' as never)
+    .select('id, business_id, customer_id, service_type, frequency, start_date, end_date, status, last_generated_until, default_worker_id' as never)
     .eq('status', 'active') as unknown as { data: ContractForGen[] | null; error: unknown }
 
   if (error) {
