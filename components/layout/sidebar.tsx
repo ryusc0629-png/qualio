@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
@@ -60,13 +61,15 @@ export function Sidebar({ businessName, isOpen = false, onClose }: SidebarProps)
       {/* 브랜드 헤더 */}
       <div className="px-4 py-4 border-b border-border flex items-center justify-between">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0">
-            {/* 브랜드 마크 — 파비콘/앱아이콘과 동일한 기하학 Q (텍스트 Q 아님) */}
-            <svg viewBox="0 0 512 512" className="w-5 h-5 text-primary-foreground" fill="none" stroke="currentColor" aria-hidden="true">
-              <circle cx="250" cy="234" r="120" strokeWidth="46" />
-              <line x1="306" y1="290" x2="384" y2="368" strokeWidth="46" strokeLinecap="round" />
-            </svg>
-          </div>
+          {/* 브랜드 마크 — 공식 퀄리오 아이콘(파비콘/앱아이콘과 동일 파일) */}
+          <Image
+            src="/qualio-icon.png"
+            alt="퀄리오"
+            width={32}
+            height={32}
+            priority
+            className="w-8 h-8 shrink-0"
+          />
           <div className="min-w-0">
             <p className="text-xs font-bold text-primary tracking-wide">퀄리오</p>
             <p className="text-xs text-muted-foreground truncate leading-tight">{businessName}</p>
