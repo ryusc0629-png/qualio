@@ -24,7 +24,7 @@ export default function AppleIcon() {
             'linear-gradient(135deg, #065f46 0%, #059669 55%, #10b981 100%)',
         }}
       >
-        {/* 상단 광택 오버레이 */}
+        {/* 상단 광택 오버레이 — 파비콘(icon.svg)의 sheen 값과 동일 (cx 30% / r 0.95 / 0.5→0.1→0) */}
         <div
           style={{
             position: 'absolute',
@@ -33,7 +33,19 @@ export default function AppleIcon() {
             width: '100%',
             height: '100%',
             backgroundImage:
-              'radial-gradient(120% 95% at 30% 0%, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.08) 45%, rgba(255,255,255,0) 70%)',
+              'radial-gradient(95% 95% at 30% 0%, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0) 100%)',
+          }}
+        />
+        {/* 은은한 흰색 테두리 림 — 파비콘의 inset 스트로크(opacity 0.18)와 동일한 입체 마감 */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 3,
+            left: 3,
+            width: 174,
+            height: 174,
+            borderRadius: 40,
+            border: '2px solid rgba(255,255,255,0.18)',
           }}
         />
         <svg width="180" height="180" viewBox="0 0 512 512" fill="none">
