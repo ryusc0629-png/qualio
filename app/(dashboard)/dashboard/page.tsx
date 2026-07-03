@@ -49,11 +49,15 @@ export default async function DashboardPage() {
   const todayEndUTC   = new Date(todayStartUTC.getTime() + 24 * 60 * 60 * 1000)
   const weekEndUTC    = new Date(todayStartUTC.getTime() + 7 * 24 * 60 * 60 * 1000)
 
-  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString()
-  const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+  // 월 경계는 KST 기준으로 계산 — Vercel은 UTC라 로컬 생성자(new Date(y,m,1))를 쓰면 경계가 9시간 밀림
+  const KST_OFFSET     = 9 * 60 * 60 * 1000
+  const kstYear        = nowKST.getUTCFullYear()
+  const kstMonth       = nowKST.getUTCMonth()
+  const thisMonthStart = new Date(Date.UTC(kstYear, kstMonth, 1) - KST_OFFSET).toISOString()
+  const nextMonthStart = new Date(Date.UTC(kstYear, kstMonth + 1, 1) - KST_OFFSET).toISOString()
+  const lastMonthStart = new Date(Date.UTC(kstYear, kstMonth - 1, 1) - KST_OFFSET).toISOString()
   const sevenDaysAgo   = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
-  const monthLabel     = `${now.getMonth() + 1}월`
+  const monthLabel     = `${kstMonth + 1}월`
 
   const hour     = now.getHours()
   const greeting = hour < 12 ? '좋은 아침이에요' : hour < 18 ? '안녕하세요' : '수고하셨어요'
@@ -82,16 +86,18 @@ export default async function DashboardPage() {
     { count: openClaimCount },
     { count: needsReviewCount },
   ] = await Promise.all([
-    // 이번 달 완료 예약
-    db.from('bookings').select('final_price')
-      .eq('business_id', businessId).eq('status', 'completed')
-      .is('deleted_at', null).gte('updated_at', thisMonthStart),
-
-    // 지난달 완료 예약
+    // 이번 달 완료 예약 — 청소일(scheduled_at) 기준.
+    // updated_at은 담당자 배정·정기방문 생성 등 어떤 수정에도 갱신돼, 과거 완료 건이 이번 달로 잘못 잡힘
     db.from('bookings').select('final_price')
       .eq('business_id', businessId).eq('status', 'completed')
       .is('deleted_at', null)
-      .gte('updated_at', lastMonthStart).lt('updated_at', lastMonthEnd),
+      .gte('scheduled_at', thisMonthStart).lt('scheduled_at', nextMonthStart),
+
+    // 지난달 완료 예약 — 청소일 기준
+    db.from('bookings').select('final_price')
+      .eq('business_id', businessId).eq('status', 'completed')
+      .is('deleted_at', null)
+      .gte('scheduled_at', lastMonthStart).lt('scheduled_at', thisMonthStart),
 
     // 활성 정기 계약
     db.from('contracts').select('contract_price')
