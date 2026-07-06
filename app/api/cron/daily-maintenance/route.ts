@@ -21,6 +21,7 @@ const SUB_TASKS = [
   'followup-reminder', // 오늘 연락할 B2B 거래처 대표 폰 푸시 알림
   'generate-recurring-visits', // 정기계약 → 향후 방문 자동 생성(롤링 60일)
   'metrics-snapshot', // 본사 지표 월별 스냅샷(NRR/코호트 기반)
+  'prepare-monthly-reports', // 매월 초 지난달 거래처 리포트 준비 + 대표 푸시(검토 후 발송)
 ] as const
 
 export async function GET(request: NextRequest) {

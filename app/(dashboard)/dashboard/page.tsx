@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
@@ -10,7 +11,7 @@ import {
   AlertCircle, Calendar, ChevronRight, RefreshCw,
   Wallet, ClipboardList, Star, Phone,
   Users, UserPlus, AlertTriangle, TrendingUp, CheckCircle2,
-  Handshake, PhoneCall, ShieldAlert, Film, ImageIcon, Send,
+  Handshake, PhoneCall, ShieldAlert, Film, ImageIcon, Send, FileText,
 } from 'lucide-react'
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
@@ -273,11 +274,20 @@ export default async function DashboardPage() {
   // 오늘 현장에서 금액이 조정된 예약 수 (직원 변경, 중복 제거)
   const fieldPriceChangedCount = new Set((fieldPriceChanges ?? []).map((c) => c.booking_id)).size
 
+  // 검토 대기 중인 거래처 월간 리포트 수 (매월 초 자동 준비됨)
+  // monthly_report_dispatches는 아직 database.ts 타입에 없어 느슨한 클라이언트로 접근
+  const { count: pendingMonthlyReportCount } = await (db as unknown as SupabaseClient)
+    .from('monthly_report_dispatches')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', businessId)
+    .eq('status', 'pending')
+
   // 알림 배너 여부
   const hasAlerts = (pendingQuoteCount ?? 0) > 0 || unreportedCount > 0 ||
     (unreviewedCount ?? 0) > 0 || (unassignedCount ?? 0) > 0 || todayFollowUpCount > 0 ||
     (doneReelCount ?? 0) > 0 || (pendingPortfolioCount ?? 0) > 0 || (pendingChannelCount ?? 0) > 0 ||
-    fieldPriceChangedCount > 0 || (openClaimCount ?? 0) > 0 || (needsReviewCount ?? 0) > 0
+    fieldPriceChangedCount > 0 || (openClaimCount ?? 0) > 0 || (needsReviewCount ?? 0) > 0 ||
+    (pendingMonthlyReportCount ?? 0) > 0
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
@@ -300,6 +310,20 @@ export default async function DashboardPage() {
       {/* 액션 알림 */}
       {hasAlerts && (
         <div className="space-y-2">
+          {(pendingMonthlyReportCount ?? 0) > 0 && (
+            <Link href="/dashboard/monthly-reports">
+              <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 hover:bg-emerald-100 transition-colors">
+                <FileText className="h-4 w-4 text-emerald-600 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-emerald-800">
+                    보낼 거래처 리포트가 {pendingMonthlyReportCount}건 있어요
+                  </p>
+                  <p className="text-xs text-emerald-600 mt-0.5">지난달 작업 내역을 거래처 담당자에게 보내 관계를 이어가세요</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-emerald-400 shrink-0" />
+              </div>
+            </Link>
+          )}
           {(openClaimCount ?? 0) > 0 && (
             <Link href="/dashboard/claims">
               <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 hover:bg-rose-100 transition-colors">
