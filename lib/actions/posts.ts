@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
+import { generatePostContent, generateTopicSuggestions, type TopicSuggestion } from '@/lib/ai/geo-content'
 import { generatePostImages, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
 import { revalidatePath } from 'next/cache'
 import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
@@ -250,12 +250,22 @@ export const getTopicSuggestionsAction = action
   .action(async () => {
     const { db, businessId } = await getBusinessId()
 
+    // 이번 달 키 'YYYY-MM' — 저장된 달이 이번 달과 같으면 AI를 다시 부르지 않고 재사용
+    const now = new Date()
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+
     const [businessResult, servicesResult] = await Promise.all([
       db
         .from('businesses')
-        .select('name')
+        .select('name, topic_suggestions, topic_suggestions_month' as never)
         .eq('id', businessId)
-        .maybeSingle(),
+        .maybeSingle() as unknown as Promise<{
+          data: {
+            name: string
+            topic_suggestions: TopicSuggestion[] | null
+            topic_suggestions_month: string | null
+          } | null
+        }>,
       db
         .from('service_items')
         .select('name, base_price, unit')
@@ -266,11 +276,30 @@ export const getTopicSuggestionsAction = action
 
     if (!businessResult.data) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
+    // 이번 달에 이미 생성된 주제가 있으면 그대로 반환 (토큰 소모 없음)
+    const saved = businessResult.data.topic_suggestions
+    if (
+      businessResult.data.topic_suggestions_month === monthKey &&
+      Array.isArray(saved) &&
+      saved.length > 0
+    ) {
+      return { suggestions: saved }
+    }
+
+    // 이번 달 첫 요청 — AI로 생성한 뒤 DB에 고정 저장
     const suggestions = await generateTopicSuggestions({
       businessName: businessResult.data.name,
       services: servicesResult.data ?? [],
-      currentMonth: new Date().getMonth() + 1,
+      currentMonth: now.getMonth() + 1,
     })
+
+    await db
+      .from('businesses')
+      .update({
+        topic_suggestions: suggestions,
+        topic_suggestions_month: monthKey,
+      } as never)
+      .eq('id', businessId)
 
     return { suggestions }
   })

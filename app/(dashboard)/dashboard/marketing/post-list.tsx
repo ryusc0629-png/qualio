@@ -19,18 +19,15 @@ interface TopicSuggestion {
 }
 
 interface SuggestionCache {
-  weekKey: string
+  monthKey: string
   suggestions: TopicSuggestion[]
 }
 
-function getWeekKey(businessId: string): string {
+// 주제는 '월 단위'로 고정 — 같은 달엔 브라우저 캐시를 재사용해 서버 호출도 하지 않음
+// (서버도 businesses.topic_suggestions_month로 월 단위 고정하므로 다른 기기에서도 재생성 안 됨)
+function getMonthKey(businessId: string): string {
   const now = new Date()
-  const year = now.getFullYear()
-  const startOfYear = new Date(year, 0, 1)
-  const week = Math.ceil(
-    ((now.getTime() - startOfYear.getTime()) / 86400000 + startOfYear.getDay() + 1) / 7
-  )
-  return `qualio_suggestions_${businessId}_${year}_w${week}`
+  return `qualio_suggestions_${businessId}_${now.getFullYear()}_m${now.getMonth() + 1}`
 }
 
 function loadCache(businessId: string): SuggestionCache | null {
@@ -38,7 +35,7 @@ function loadCache(businessId: string): SuggestionCache | null {
     const raw = localStorage.getItem('qualio_topic_cache')
     if (!raw) return null
     const cache = JSON.parse(raw) as SuggestionCache
-    if (cache.weekKey !== getWeekKey(businessId)) return null
+    if (cache.monthKey !== getMonthKey(businessId)) return null
     return cache
   } catch {
     return null
@@ -47,7 +44,7 @@ function loadCache(businessId: string): SuggestionCache | null {
 
 function saveCache(businessId: string, suggestions: TopicSuggestion[]) {
   try {
-    localStorage.setItem('qualio_topic_cache', JSON.stringify({ weekKey: getWeekKey(businessId), suggestions }))
+    localStorage.setItem('qualio_topic_cache', JSON.stringify({ monthKey: getMonthKey(businessId), suggestions }))
   } catch { /* 무시 */ }
 }
 
