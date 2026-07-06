@@ -28,3 +28,19 @@ export async function requireAdmin() {
 
   return user
 }
+
+/**
+ * 서버 액션용 관리자 게이트. 페이지가 아니라 액션에서 호출한다.
+ * requireAdmin은 redirect(페이지 전용)를 쓰므로, 액션에서는 이 함수로 [APP] 에러를 던진다.
+ */
+export async function assertAdmin() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user || !isAdminEmail(user.email)) {
+    throw new Error('[APP] 관리자만 접근할 수 있어요')
+  }
+  return user
+}

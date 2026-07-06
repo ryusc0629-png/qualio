@@ -39,6 +39,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      ops_lessons: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          vimeo_id: string
+          sort_order: number
+          is_free: boolean
+          duration_label: string | null
+          thumbnail_url: string | null
+          published: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          vimeo_id: string
+          sort_order?: number
+          is_free?: boolean
+          duration_label?: string | null
+          thumbnail_url?: string | null
+          published?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string | null
+          vimeo_id?: string
+          sort_order?: number
+          is_free?: boolean
+          duration_label?: string | null
+          thumbnail_url?: string | null
+          published?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bookings: {
         Row: {
           business_id: string

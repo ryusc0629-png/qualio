@@ -15,9 +15,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               ADMIN
             </span>
           </div>
-          <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
-            내 대시보드로 →
-          </Link>
+          <nav className="flex items-center gap-4">
+            <Link href="/admin" className="text-sm text-muted-foreground hover:text-foreground">
+              지표
+            </Link>
+            <Link href="/admin/lessons" className="text-sm text-muted-foreground hover:text-foreground">
+              OPS 강의
+            </Link>
+            <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
+              내 대시보드로 →
+            </Link>
+          </nav>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
