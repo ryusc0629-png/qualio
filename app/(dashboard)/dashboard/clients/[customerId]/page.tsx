@@ -8,6 +8,7 @@ import { CustomerOnMyWayToggle } from '@/components/dashboard/customer-on-my-way
 import { ContactActions } from '@/components/dashboard/contact-actions'
 import { AddClaimForm } from '@/components/dashboard/add-claim-form'
 import { AddBookingButton } from '@/components/dashboard/add-booking-button'
+import { MonthlyReportShare } from '@/components/dashboard/monthly-report-share'
 import { ClaimActions } from '@/components/dashboard/claim-actions'
 import { ClaimAssignee } from '@/components/dashboard/claim-assignee'
 import { contractAccruedRevenue, type ContractLike } from '@/lib/utils/ltv'
@@ -361,6 +362,13 @@ export default async function CustomerDetailPage({ params }: Props) {
               )
             })}
           </div>
+
+          {/* 거래처 월간 작업 리포트 — 이번 달 방문·작업내역·사진을 정리해 법인 담당자에게 전달 */}
+          <MonthlyReportShare
+            businessId={profile.business_id}
+            customerId={customer.id}
+            customerName={customer.name}
+          />
         </div>
       )}
 
