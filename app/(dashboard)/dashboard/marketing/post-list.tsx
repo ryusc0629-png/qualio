@@ -16,6 +16,9 @@ interface TopicSuggestion {
   title: string
   reason: string
   topic: string
+  keyword?: string
+  monthlySearches?: number
+  competition?: string
 }
 
 interface SuggestionCache {
@@ -109,6 +112,8 @@ interface ScheduleSlot {
   post: Post | null
   topicLabel: string
   status: 'published' | 'today' | 'upcoming'
+  monthlySearches?: number  // 발행 예정 주제의 실제 월 검색량 (있으면 배지 표시)
+  competition?: string      // 경쟁도 '낮음'|'중간'|'높음'
 }
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토']
@@ -142,11 +147,11 @@ function buildSchedule(target: number, posts: Post[], suggestions: TopicSuggesti
     }
   }
 
-  const suggestionTitles = suggestions?.map((s) => s.title) ?? []
+  const suggestionList = suggestions ?? []
   let suggIndex = 0
 
   return scheduledDays
-    .map((day) => {
+    .map((day): ScheduleSlot | null => {
       const date = new Date(year, month, day)
       const dayPosts = postsByDay.get(day) ?? []
       const post = dayPosts.shift() ?? null
@@ -157,13 +162,15 @@ function buildSchedule(target: number, posts: Post[], suggestions: TopicSuggesti
       else if (day >= today) status = 'upcoming'
       else return null  // 과거 미발행 슬롯은 제외
 
-      const topicLabel = post
-        ? post.title
-        : suggestionTitles.length > 0
-          ? suggestionTitles[suggIndex++ % suggestionTitles.length]
-          : 'AI가 최적 주제를 선택해요'
+      // 발행 완료 슬롯은 실제 제목, 예정 슬롯은 추천 주제(검색량 배지 동반)를 순환 배정
+      const suggestion = post ? null : suggestionList.length > 0 ? suggestionList[suggIndex++ % suggestionList.length] : null
+      const topicLabel = post ? post.title : suggestion?.title ?? 'AI가 최적 주제를 선택해요'
 
-      return { day, date, post, topicLabel, status }
+      return {
+        day, date, post, topicLabel, status,
+        monthlySearches: suggestion?.monthlySearches,
+        competition: suggestion?.competition,
+      }
     })
     .filter((s): s is ScheduleSlot => s !== null)
 }
@@ -907,6 +914,23 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                     }`}>
                       {slot.topicLabel}
                     </p>
+                    {/* 실제 검색량·경쟁도 배지 — 데이터가 있을 때만 (근거 있는 주제 선정) */}
+                    {slot.status !== 'published' && slot.monthlySearches !== undefined && (
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5">
+                          🔍 월 {slot.monthlySearches.toLocaleString()}회
+                        </span>
+                        {slot.competition && (
+                          <span className={`inline-flex items-center text-[11px] font-medium rounded px-1.5 py-0.5 ${
+                            slot.competition === '낮음' ? 'text-emerald-700 bg-emerald-50'
+                            : slot.competition === '중간' ? 'text-amber-700 bg-amber-50'
+                            : 'text-rose-700 bg-rose-50'
+                          }`}>
+                            경쟁 {slot.competition}
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {slot.status === 'today' && (
                       <p className="text-xs text-blue-500 mt-0.5">오늘 오전 9시 발행 예정</p>
                     )}

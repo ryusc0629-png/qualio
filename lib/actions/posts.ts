@@ -258,11 +258,12 @@ export const getTopicSuggestionsAction = action
     const [businessResult, servicesResult] = await Promise.all([
       db
         .from('businesses')
-        .select('name, topic_suggestions, topic_suggestions_month' as never)
+        .select('name, address, topic_suggestions, topic_suggestions_month' as never)
         .eq('id', businessId)
         .maybeSingle() as unknown as Promise<{
           data: {
             name: string
+            address: string | null
             topic_suggestions: TopicSuggestion[] | null
             topic_suggestions_month: string | null
           } | null
@@ -292,6 +293,7 @@ export const getTopicSuggestionsAction = action
       businessName: businessResult.data.name,
       services: servicesResult.data ?? [],
       currentMonth: nowKST.getUTCMonth() + 1,
+      address: businessResult.data.address,
     })
 
     await db
@@ -438,6 +440,7 @@ export const publishTodayAction = action
           businessName: business.name,
           services,
           currentMonth: month,
+          address: business.address,
         })
         const unused = suggestions.find(
           (s) => !publishedTitles.some((t) => t.includes(s.title.slice(0, 10)))
