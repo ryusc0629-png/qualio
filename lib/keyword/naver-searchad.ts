@@ -59,7 +59,10 @@ export async function getKeywordStats(seeds: string[]): Promise<Map<string, Keyw
     try {
       const timestamp = Date.now().toString()
       const signature = sign(timestamp, 'GET', KEYWORD_PATH, secret)
-      const query = new URLSearchParams({ hintKeywords: batch.join(','), showDetail: '1' })
+      // 네이버 키워드도구는 hintKeywords에 공백이 있으면 400을 반환하므로 공백 제거해 전송
+      // (응답 relKeyword도 공백이 제거돼 오므로 normalize 매칭엔 영향 없음)
+      const hints = batch.map((s) => s.replace(/\s+/g, ''))
+      const query = new URLSearchParams({ hintKeywords: hints.join(','), showDetail: '1' })
 
       const res = await fetch(`${BASE_URL}${KEYWORD_PATH}?${query.toString()}`, {
         headers: {
