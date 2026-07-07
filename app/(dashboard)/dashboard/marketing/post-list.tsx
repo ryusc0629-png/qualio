@@ -33,9 +33,12 @@ function getMonthKey(businessId: string): string {
   return `qualio_suggestions_${businessId}_${now.getFullYear()}_m${now.getMonth() + 1}`
 }
 
+// v2: 검색량 데이터 도입 — 이전(검색량 없는) 캐시를 무시하고 서버에서 새로 받도록 키 버전업
+const TOPIC_CACHE_KEY = 'qualio_topic_cache_v2'
+
 function loadCache(businessId: string): SuggestionCache | null {
   try {
-    const raw = localStorage.getItem('qualio_topic_cache')
+    const raw = localStorage.getItem(TOPIC_CACHE_KEY)
     if (!raw) return null
     const cache = JSON.parse(raw) as SuggestionCache
     if (cache.monthKey !== getMonthKey(businessId)) return null
@@ -47,7 +50,7 @@ function loadCache(businessId: string): SuggestionCache | null {
 
 function saveCache(businessId: string, suggestions: TopicSuggestion[]) {
   try {
-    localStorage.setItem('qualio_topic_cache', JSON.stringify({ monthKey: getMonthKey(businessId), suggestions }))
+    localStorage.setItem(TOPIC_CACHE_KEY, JSON.stringify({ monthKey: getMonthKey(businessId), suggestions }))
   } catch { /* 무시 */ }
 }
 
