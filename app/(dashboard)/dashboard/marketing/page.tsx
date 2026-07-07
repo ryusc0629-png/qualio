@@ -35,9 +35,9 @@ export default async function MarketingPage({
   const [businessResult, postsResult, subResult, pendingPortfolioResult, doneReelsResult] = await Promise.all([
     db
       .from('businesses')
-      .select('slug, name, monthly_post_target, auto_image_generation')
+      .select('slug, name, monthly_post_target, auto_image_generation, topic_suggestions, topic_suggestions_month' as never)
       .eq('id', profile.business_id)
-      .maybeSingle() as unknown as { data: { slug: string | null; name: string | null; monthly_post_target: number; auto_image_generation: boolean } | null },
+      .maybeSingle() as unknown as { data: { slug: string | null; name: string | null; monthly_post_target: number; auto_image_generation: boolean; topic_suggestions: { title: string; reason: string; topic: string }[] | null; topic_suggestions_month: string | null } | null },
     db
       .from('biz_posts' as never)
       .select('id, slug, title, content, summary, published, ai_generated, published_at, image_url, image_urls, naver_title, naver_content, naver_tags, daangn_content, instagram_content, instagram_hashtags, post_type, before_image_urls, after_image_urls, channel_posted_at' as never)
@@ -108,6 +108,13 @@ export default async function MarketingPage({
   }).length
   const isTodayComplete = todayPostCount >= autoDailyPostLimit
 
+  // 이번 달(KST) 저장된 주제가 있으면 서버에서 바로 넘겨 화면 진입 즉시 표시 (스피너·재조회 없음)
+  const monthKey = `${nowKST.getUTCFullYear()}-${String(nowKST.getUTCMonth() + 1).padStart(2, '0')}`
+  const initialSuggestions =
+    business?.topic_suggestions_month === monthKey && Array.isArray(business?.topic_suggestions) && business.topic_suggestions.length > 0
+      ? business.topic_suggestions
+      : null
+
   return (
     <div className="max-w-3xl space-y-6">
       <div>
@@ -128,6 +135,7 @@ export default async function MarketingPage({
         pendingPortfolios={pendingPortfolios}
         doneReels={doneReels}
         autoImageGeneration={business?.auto_image_generation ?? true}
+        initialSuggestions={initialSuggestions}
       />
 
       <div className="border-t pt-6 space-y-5">

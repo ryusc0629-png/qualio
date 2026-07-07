@@ -251,8 +251,9 @@ export const getTopicSuggestionsAction = action
     const { db, businessId } = await getBusinessId()
 
     // 이번 달 키 'YYYY-MM' — 저장된 달이 이번 달과 같으면 AI를 다시 부르지 않고 재사용
-    const now = new Date()
-    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    // Vercel은 UTC라 월말/월초 경계에서 밀리지 않도록 KST 기준으로 월을 계산
+    const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000)
+    const monthKey = `${nowKST.getUTCFullYear()}-${String(nowKST.getUTCMonth() + 1).padStart(2, '0')}`
 
     const [businessResult, servicesResult] = await Promise.all([
       db
@@ -290,7 +291,7 @@ export const getTopicSuggestionsAction = action
     const suggestions = await generateTopicSuggestions({
       businessName: businessResult.data.name,
       services: servicesResult.data ?? [],
-      currentMonth: now.getMonth() + 1,
+      currentMonth: nowKST.getUTCMonth() + 1,
     })
 
     await db

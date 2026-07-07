@@ -99,6 +99,8 @@ interface PostListProps {
   pendingPortfolios?: PendingPortfolio[]
   doneReels?: DoneReel[]
   autoImageGeneration?: boolean
+  // 서버가 이번 달 저장된 주제를 넘겨줌 — 있으면 재조회·스피너 없이 바로 표시
+  initialSuggestions?: TopicSuggestion[] | null
 }
 
 interface ScheduleSlot {
@@ -380,7 +382,7 @@ function ReelCard({
   )
 }
 
-export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], autoImageGeneration = true }: PostListProps) {
+export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], autoImageGeneration = true, initialSuggestions = null }: PostListProps) {
   const [posts] = useState(initialPosts)
   // 오름차순 정렬 (오래된 글 위 → 최신 글 아래) + 오늘 위치로 자동 스크롤
   const sortedPosts = [...posts].sort((a, b) => new Date(a.published_at).getTime() - new Date(b.published_at).getTime())
@@ -436,7 +438,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
 
   const [showEditor, setShowEditor] = useState(false)
   const [editingPost, setEditingPost] = useState<Post | null>(null)
-  const [suggestions, setSuggestions] = useState<TopicSuggestion[] | null>(null)
+  const [suggestions, setSuggestions] = useState<TopicSuggestion[] | null>(initialSuggestions)
   // 오늘 이미 발행 완료된 경우 버튼 초기 상태를 완료로 설정
   const [publishResult, setPublishResult] = useState<{ published: number; message?: string } | null>(
     isTodayComplete ? { published: 0, message: '오늘 발행 완료!' } : null
@@ -491,9 +493,14 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   const { execute: saveTarget } = useAction(setMonthlyTargetAction)
 
   useEffect(() => {
-    const cached = loadCache(businessId)
-    if (cached) setSuggestions(cached.suggestions)
-    else fetchSuggestions({})
+    // 서버가 이번 달 주제를 이미 넘겨줬으면 재조회하지 않음 (한 달간 고정 — 스피너 없음)
+    if (initialSuggestions && initialSuggestions.length > 0) {
+      saveCache(businessId, initialSuggestions)
+    } else {
+      const cached = loadCache(businessId)
+      if (cached) setSuggestions(cached.suggestions)
+      else fetchSuggestions({}) // 그 달 첫 방문에만 생성 (이후엔 서버·DB에 고정 저장돼 재사용)
+    }
     if (initialTarget !== autoPostLimit) saveTarget({ target: autoPostLimit })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
