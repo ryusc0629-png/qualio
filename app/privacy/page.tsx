@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { BusinessInfo } from '@/components/business-info'
 
 export const metadata: Metadata = {
   title: '개인정보처리방침 | 퀄리오',
@@ -114,9 +115,8 @@ export default function PrivacyPage() {
         </section>
 
         <section className="border-t pt-6">
-          <p className="text-sm text-muted-foreground">
-            상호: 다트챌린지 | 서비스명: 퀄리오 | 문의: ryusc0628@naver.com
-          </p>
+          <h2 className="text-lg font-semibold mb-3">사업자 정보</h2>
+          <BusinessInfo />
         </section>
 
       </div>

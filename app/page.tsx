@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { PAID_PLANS, formatPrice } from '@/lib/config/plans'
 import { ClipboardList, CalendarCheck, MessageCircle, Check, Star } from 'lucide-react'
+import { SiteFooter } from '@/components/site-footer'
 
 // 루트 페이지 — 로그인 상태면 대시보드로, 아니면 랜딩 페이지 표시
 export default async function RootPage() {
@@ -162,16 +163,7 @@ export default async function RootPage() {
       </main>
 
       {/* 푸터 */}
-      <footer className="border-t">
-        <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
-          <p>© 2026 퀄리오 | 상호: 다트챌린지 | All rights reserved.</p>
-          <div className="flex gap-4">
-            <Link href="/pricing" className="hover:text-foreground transition-colors">요금제</Link>
-            <Link href="/terms" className="hover:text-foreground transition-colors">이용약관</Link>
-            <Link href="/privacy" className="hover:text-foreground transition-colors">개인정보처리방침</Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
 
     </div>
   )

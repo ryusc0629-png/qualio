@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Check, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PLANS, PAID_PLANS, formatPrice } from '@/lib/config/plans'
+import { SiteFooter } from '@/components/site-footer'
 
 export const metadata: Metadata = {
   title: '요금제 | 퀄리오',
@@ -137,15 +138,7 @@ export default function PricingPage() {
       </main>
 
       {/* 푸터 */}
-      <footer className="border-t mt-16">
-        <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
-          <p>© 2026 퀄리오 | 상호: 다트챌린지 | All rights reserved.</p>
-          <div className="flex gap-4">
-            <Link href="/terms" className="hover:text-foreground transition-colors">이용약관</Link>
-            <Link href="/privacy" className="hover:text-foreground transition-colors">개인정보처리방침</Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }

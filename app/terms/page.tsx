@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import { PAID_PLANS, formatPrice } from '@/lib/config/plans'
+import { BusinessInfo } from '@/components/business-info'
 
 export const metadata: Metadata = {
   title: '이용약관 | 퀄리오',
@@ -67,21 +69,13 @@ export default function TermsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                <tr>
-                  <td className="px-4 py-2">Starter</td>
-                  <td className="px-4 py-2">49,000원/월</td>
-                  <td className="px-4 py-2 text-muted-foreground">신규 창업·1~2인 소규모</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2">Pro</td>
-                  <td className="px-4 py-2">290,000원/월</td>
-                  <td className="px-4 py-2 text-muted-foreground">성장기·법인 거래처 보유</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-2">Scale</td>
-                  <td className="px-4 py-2">490,000원/월</td>
-                  <td className="px-4 py-2 text-muted-foreground">다지점·기업형</td>
-                </tr>
+                {PAID_PLANS.map((plan) => (
+                  <tr key={plan.id}>
+                    <td className="px-4 py-2">{plan.name}</td>
+                    <td className="px-4 py-2">{formatPrice(plan.price)}</td>
+                    <td className="px-4 py-2 text-muted-foreground">{plan.target}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -123,9 +117,8 @@ export default function TermsPage() {
         </section>
 
         <section className="border-t pt-6">
-          <p className="text-sm text-muted-foreground">
-            상호: 다트챌린지 | 서비스명: 퀄리오 | 문의: ryusc0628@naver.com
-          </p>
+          <h2 className="text-lg font-semibold mb-3">사업자 정보</h2>
+          <BusinessInfo />
         </section>
 
       </div>
