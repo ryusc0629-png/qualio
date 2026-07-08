@@ -54,17 +54,18 @@ async function registerConsultationLead(
     .maybeSingle()
 
   if (existing) {
-    const patch: { notes: string; updated_at: string; contact_name?: string } = {
+    // 개인 리드는 고객명이 곧 제목(company_name) — 재상담 시 이름·메모 갱신
+    const patch: { notes: string; updated_at: string; company_name?: string } = {
       notes,
       updated_at: new Date().toISOString(),
     }
-    if (name) patch.contact_name = name
+    if (name) patch.company_name = name
     await db.from('leads').update(patch).eq('id', existing.id)
   } else {
     await db.from('leads').insert({
       business_id: businessId,
       company_name: name || '상담 요청 고객',
-      contact_name: name || null,
+      contact_name: null, // 개인 상담 리드는 담당자가 따로 없음(고객 본인) → '담당' 표시 안 함
       phone,
       customer_type: 'individual',
       status: 'new',
