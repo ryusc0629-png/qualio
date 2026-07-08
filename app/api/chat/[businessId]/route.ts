@@ -38,12 +38,14 @@ async function registerConsultationLead(
   businessId: string,
   input: { name?: string; phone?: string; reason?: string },
 ): Promise<boolean> {
-  const phone = (input.phone ?? '').trim()
-  if (!phone) return false
+  // 하이픈·공백 제거해 숫자만 저장 → 표기가 달라도 중복 판별이 일관됨
+  const phone = (input.phone ?? '').replace(/[^0-9]/g, '')
+  if (phone.length < 9) return false // 유효한 번호가 아니면 등록하지 않음
   const name = (input.name ?? '').trim()
   const reason = (input.reason ?? '').trim()
+  const notes = reason ? `[AI 상담] ${reason}` : '[AI 상담] 채팅에서 연락처를 남김'
 
-  // 같은 전화번호 리드가 이미 있으면 중복 등록하지 않음
+  // 같은 전화번호 리드가 있으면 갱신, 없으면 신규 등록 (재상담이 사라지지 않게)
   const { data: existing } = await db
     .from('leads')
     .select('id')
@@ -51,7 +53,14 @@ async function registerConsultationLead(
     .eq('phone', phone)
     .maybeSingle()
 
-  if (!existing) {
+  if (existing) {
+    const patch: { notes: string; updated_at: string; contact_name?: string } = {
+      notes,
+      updated_at: new Date().toISOString(),
+    }
+    if (name) patch.contact_name = name
+    await db.from('leads').update(patch).eq('id', existing.id)
+  } else {
     await db.from('leads').insert({
       business_id: businessId,
       company_name: name || '상담 요청 고객',
@@ -59,7 +68,7 @@ async function registerConsultationLead(
       phone,
       customer_type: 'individual',
       status: 'new',
-      notes: reason ? `[AI 상담] ${reason}` : '[AI 상담] 채팅에서 연락처를 남김',
+      notes,
     })
   }
 
@@ -153,6 +162,7 @@ export async function POST(
           role: m.role,
           content: m.content,
         }))
+        let registered = false // 이번 요청에서 리드가 등록됐는지
 
         // 도구 호출 → 실행 → 이어서 답변 루프 (안전 상한 4회)
         for (let round = 0; round < 4; round++) {
@@ -181,6 +191,7 @@ export async function POST(
                 business.id,
                 block.input as { name?: string; phone?: string; reason?: string },
               )
+              if (ok) registered = true
               toolResults.push({
                 type: 'tool_result',
                 tool_use_id: block.id,
@@ -190,6 +201,23 @@ export async function POST(
           }
           if (toolResults.length === 0) break
           convo.push({ role: 'user', content: toolResults })
+        }
+
+        // 안전망: AI가 도구를 안 불렀더라도 사용자 메시지에 휴대폰 번호가 있으면 서버가 직접 등록
+        // (AI 도구 호출은 확률적이라 가끔 누락됨 — 리드를 절대 놓치지 않도록)
+        if (!registered) {
+          const lastUser =
+            [...clientMessages].reverse().find((m) => m.role === 'user')?.content ?? ''
+          const phoneMatch = lastUser.match(/01[016789][-\s.]?\d{3,4}[-\s.]?\d{4}/)
+          if (phoneMatch) {
+            const rest = lastUser.replace(phoneMatch[0], ' ')
+            const nameMatch = rest.match(/[가-힣]{2,4}/) // 번호를 뺀 나머지에서 한글 이름 추정
+            await registerConsultationLead(db, business.id, {
+              name: nameMatch?.[0],
+              phone: phoneMatch[0],
+              reason: '채팅에서 연락처를 남김',
+            })
+          }
         }
 
         controller.close()
