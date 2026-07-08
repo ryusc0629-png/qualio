@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Star } from 'lucide-react'
 
 interface ReviewClaimClientProps {
   claimId: string
@@ -10,27 +11,69 @@ interface ReviewClaimClientProps {
 }
 
 export function ReviewClaimClient({ claimId, reviewUrl, hasReward }: ReviewClaimClientProps) {
-  const [step, setStep] = useState<'initial' | 'confirming' | 'done'>('initial')
+  // rating(별점 입력) → external(공개 리뷰 유도) / private(비공개 감사) / done
+  const [step, setStep] = useState<'rating' | 'external' | 'private' | 'done'>('rating')
+  const [rating, setRating] = useState(0)
+  const [hover, setHover] = useState(0)
+  const [comment, setComment] = useState('')
   const [isPending, setIsPending] = useState(false)
 
-  const handleClaim = async () => {
+  const submit = async () => {
+    if (rating === 0 || isPending) return
     setIsPending(true)
     try {
       await fetch('/api/review/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ claimId }),
+        body: JSON.stringify({ claimId, rating, comment: comment.trim() || undefined }),
       })
     } catch {
       // 실패해도 UX는 진행
     } finally {
       setIsPending(false)
-      setStep('done')
-      // 후기 사이트로 이동
-      if (reviewUrl) {
-        setTimeout(() => window.open(reviewUrl, '_blank'), 500)
-      }
+      // 별점 분기: 4점 이상은 공개 리뷰 유도, 3점 이하는 비공개 감사
+      if (rating >= 4) setStep(reviewUrl ? 'external' : 'done')
+      else setStep('private')
     }
+  }
+
+  // 4~5점 → 네이버 등 공개 리뷰로도 남기도록 유도
+  if (step === 'external') {
+    return (
+      <div className="space-y-3">
+        <p className="text-2xl">🙏</p>
+        <p className="text-sm font-medium text-emerald-700">소중한 후기 감사합니다!</p>
+        <p className="text-sm text-muted-foreground">
+          같은 후기를 <b>네이버</b>에도 남겨주시면 저희에게 큰 힘이 돼요
+        </p>
+        <Button
+          className="w-full h-12"
+          onClick={() => { window.open(reviewUrl!, '_blank'); setStep('done') }}
+        >
+          네이버에 후기 남기기 →
+        </Button>
+        <button
+          type="button"
+          onClick={() => setStep('done')}
+          className="text-xs text-muted-foreground underline"
+        >
+          다음에 할게요
+        </button>
+      </div>
+    )
+  }
+
+  // 1~3점 → 비공개로 사장님에게만 전달(공개 노출 방지)
+  if (step === 'private') {
+    return (
+      <div className="space-y-3">
+        <p className="text-2xl">🙇</p>
+        <p className="text-sm font-medium">소중한 의견 감사합니다</p>
+        <p className="text-sm text-muted-foreground">
+          말씀해주신 내용을 사장님께 바로 전달했어요. 더 나은 서비스로 보답할게요.
+        </p>
+      </div>
+    )
   }
 
   if (step === 'done') {
@@ -39,62 +82,53 @@ export function ReviewClaimClient({ claimId, reviewUrl, hasReward }: ReviewClaim
         <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
           <span className="text-xl">✓</span>
         </div>
-        <p className="text-sm font-medium text-emerald-700">인증 완료!</p>
+        <p className="text-sm font-medium text-emerald-700">감사합니다 😊</p>
         {hasReward && (
           <p className="text-xs text-muted-foreground">업체에서 곧 혜택을 안내해 드릴게요</p>
         )}
-        {reviewUrl && (
-          <p className="text-xs text-muted-foreground">후기 페이지가 열리지 않으면{' '}
-            <a href={reviewUrl} target="_blank" rel="noopener noreferrer" className="underline text-primary">
-              여기를 눌러주세요
-            </a>
-          </p>
-        )}
       </div>
     )
   }
 
-  if (step === 'confirming') {
-    return (
-      <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">후기를 남기셨나요?</p>
-        <div className="flex gap-2">
-          <Button
-            className="flex-1 h-12"
-            onClick={handleClaim}
-            disabled={isPending}
-          >
-            {isPending ? '처리 중...' : '네, 남겼어요!'}
-          </Button>
-          <Button
-            variant="outline"
-            className="flex-1 h-12"
-            onClick={() => setStep('initial')}
-          >
-            아직이요
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
+  // 기본: 별점 + 한 줄 후기 입력
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        후기 한 줄이 저희에게 큰 힘이 됩니다 🙏
-      </p>
-      {reviewUrl ? (
-        <Button
-          className="w-full h-12"
-          onClick={() => {
-            window.open(reviewUrl, '_blank')
-            setTimeout(() => setStep('confirming'), 1500)
-          }}
-        >
-          후기 남기러 가기 →
-        </Button>
-      ) : (
-        <p className="text-xs text-muted-foreground">업체에서 후기 링크를 아직 등록하지 않았어요</p>
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">서비스가 어떠셨나요?</p>
+
+      {/* 별점 */}
+      <div className="flex justify-center gap-1.5" onMouseLeave={() => setHover(0)}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button
+            key={n}
+            type="button"
+            aria-label={`${n}점`}
+            onMouseEnter={() => setHover(n)}
+            onClick={() => setRating(n)}
+            className="p-0.5"
+          >
+            <Star
+              className={`h-9 w-9 transition-colors ${
+                n <= (hover || rating) ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
+              }`}
+            />
+          </button>
+        ))}
+      </div>
+
+      {rating > 0 && (
+        <>
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder={rating >= 4 ? '어떤 점이 좋으셨나요? (선택)' : '아쉬운 점을 알려주시면 바로 개선할게요 (선택)'}
+            rows={3}
+            maxLength={500}
+            className="w-full rounded-xl border p-3 text-sm outline-none focus:border-primary resize-none"
+          />
+          <Button className="w-full h-12" onClick={submit} disabled={isPending}>
+            {isPending ? '보내는 중...' : '후기 보내기'}
+          </Button>
+        </>
       )}
     </div>
   )

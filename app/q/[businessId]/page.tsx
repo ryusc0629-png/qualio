@@ -3,6 +3,7 @@ import { notFound, permanentRedirect } from 'next/navigation'
 import { QuoteForm } from './quote-form'
 import { QuoteChatWidget } from '@/components/quote/quote-chat-widget'
 import { trackPageView } from '@/lib/utils/track-page-view'
+import { getReviewSummary } from '@/lib/reviews/get-reviews'
 
 interface Props {
   params: Promise<{ businessId: string }>
@@ -42,8 +43,8 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
 
   const businessId = business.id
 
-  // 견적폼 노출 서비스 목록 조회 + 방문 추적 (병렬 — 추적이 렌더를 지연시키지 않게)
-  const [{ data: services }] = await Promise.all([
+  // 견적폼 노출 서비스 목록 + 후기 요약(사회적 증거) 조회 + 방문 추적 (병렬)
+  const [{ data: services }, reviewSummary] = await Promise.all([
     db
       .from('service_items')
       .select('id, name, base_price, unit, ac_type_prices, unit_prices, unit_variants')
@@ -52,6 +53,7 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
       .is('deleted_at', null)
       .order('sort_order')
       .order('created_at'),
+    getReviewSummary(db, businessId),
     trackPageView(db, business.id, 'quote', ch),
   ])
 
@@ -75,6 +77,7 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
         businessId={business.id}
         businessName={business.name}
         services={typedServices}
+        reviewSummary={reviewSummary}
       />
       <QuoteChatWidget businessId={business.id} businessName={business.name} />
     </>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
-import { ChevronRight, ChevronLeft } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Star } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { calculateAndCreateQuoteAction } from '@/lib/actions/quotes'
 import { isAcService } from '@/lib/utils'
@@ -52,6 +52,12 @@ interface QuoteFormProps {
   businessId: string
   businessName: string
   services: ServiceItem[]
+  // 실제 고객 후기 요약(사회적 증거) — 전환율용
+  reviewSummary?: {
+    count: number
+    avg: number
+    items: { rating: number; comment: string | null; customerName: string; createdAt: string }[]
+  }
 }
 
 
@@ -427,7 +433,7 @@ function TypingBubble({ initial }: { initial: string }) {
   )
 }
 
-export function QuoteForm({ businessId, businessName, services }: QuoteFormProps) {
+export function QuoteForm({ businessId, businessName, services, reviewSummary }: QuoteFormProps) {
   const [currentStep, setCurrentStep] = useState<Step>('service')
   const [completedSteps, setCompletedSteps] = useState<Step[]>([])
   const [isTyping, setIsTyping] = useState(false)
@@ -653,6 +659,27 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
           </div>
         </div>
       </header>
+
+      {/* 사회적 증거 — 실제 후기 평균 별점·개수 (신뢰 → 전환율↑). 후기 있을 때만 */}
+      {reviewSummary && reviewSummary.count > 0 && (
+        <div className="bg-white border-b border-border">
+          <div className="max-w-md mx-auto px-4 py-2 flex items-center gap-2">
+            <div className="flex items-center gap-0.5 shrink-0">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <Star
+                  key={n}
+                  className={`h-3.5 w-3.5 ${n <= Math.round(reviewSummary.avg) ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`}
+                />
+              ))}
+            </div>
+            <span className="text-xs font-semibold text-[#1A1A1A]">{reviewSummary.avg.toFixed(1)}</span>
+            <span className="text-xs text-[#8D8D8D]">실제 후기 {reviewSummary.count}개</span>
+            {reviewSummary.items[0]?.comment && (
+              <span className="text-xs text-[#8D8D8D] truncate">· &ldquo;{reviewSummary.items[0].comment}&rdquo;</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 채팅 스레드 — 카카오톡처럼 메시지가 하단부터 쌓임 */}
       <div className="flex-1 overflow-y-auto px-4 pb-4 flex flex-col justify-end">

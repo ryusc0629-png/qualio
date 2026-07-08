@@ -25,6 +25,7 @@ import { ServiceList } from './service-list'
 import { buildBrandStyle, toBrandSettings } from '@/lib/brand'
 import { trackPageView } from '@/lib/utils/track-page-view'
 import { buildAreaServed } from '@/lib/address/parse-region'
+import { getReviewSummary } from '@/lib/reviews/get-reviews'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -131,7 +132,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
       : 'border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900',
   }
 
-  const [{ data: services }, { data: recentPosts }] = await Promise.all([
+  const [{ data: services }, { data: recentPosts }, reviewSummary] = await Promise.all([
     db
       .from('service_items')
       .select('id, name, base_price, unit, category')
@@ -147,6 +148,8 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
       .eq('published', true)
       .order('published_at', { ascending: false })
       .limit(3),
+    // 실제 고객 후기 요약(사회적 증거)
+    getReviewSummary(db, business.id, 6),
     // 브랜드 홈 방문 추적 (병렬)
     trackPageView(db, business.id, 'brand_home', ch),
   ])
@@ -666,8 +669,42 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
           </FadeIn>
         </section>
 
-        {/* ── 고객 추천사 ── */}
-        {business.testimonials && business.testimonials.length > 0 && (
+        {/* ── 고객 후기 ── 실제 수집된 후기를 우선 전시, 없으면 사장님이 쓴 추천사로 대체 */}
+        {reviewSummary.items.length > 0 ? (
+          <section className="py-20 sm:py-28 bg-slate-50">
+            <FadeIn>
+            <div className="max-w-5xl mx-auto px-6">
+              <div className="text-center mb-12">
+                <p className="text-primary font-semibold text-xs mb-3 tracking-widest uppercase">고객 후기</p>
+                <h2 className="text-3xl sm:text-4xl font-black tracking-tight">실제 고객의 이야기</h2>
+                {/* 평균 별점 + 후기 수 */}
+                <div className="mt-4 inline-flex items-center gap-2">
+                  <div className="flex gap-0.5">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star key={i} className={`h-5 w-5 ${i < Math.round(reviewSummary.avg) ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
+                    ))}
+                  </div>
+                  <span className="text-lg font-bold">{reviewSummary.avg.toFixed(1)}</span>
+                  <span className="text-sm text-muted-foreground">· 후기 {reviewSummary.count}개</span>
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-3 gap-4 max-w-4xl mx-auto">
+                {reviewSummary.items.map((r, idx) => (
+                  <div key={idx} className="rounded-3xl bg-white p-7 space-y-4 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex gap-0.5">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star key={i} className={`h-4 w-4 ${i < r.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`} />
+                      ))}
+                    </div>
+                    <p className="text-sm leading-relaxed text-slate-700">&ldquo;{r.comment}&rdquo;</p>
+                    <p className="text-xs text-muted-foreground font-medium">{r.customerName}님</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            </FadeIn>
+          </section>
+        ) : business.testimonials && business.testimonials.length > 0 ? (
           <section className="py-20 sm:py-28 bg-slate-50">
             <FadeIn>
             <div className="max-w-5xl mx-auto px-6">
@@ -693,7 +730,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
             </div>
             </FadeIn>
           </section>
-        )}
+        ) : null}
 
         {/* ── FAQ ── */}
         {faqs.length > 0 && (

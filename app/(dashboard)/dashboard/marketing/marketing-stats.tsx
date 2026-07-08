@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { SOURCE_LABELS, isAiSource } from '@/lib/utils/detect-view-source'
 import type { ViewSource } from '@/lib/utils/detect-view-source'
 import { MARKETING_CHANNELS, channelLabel } from '@/lib/utils/marketing-channels'
+import { getReviewSummary } from '@/lib/reviews/get-reviews'
 import { StatsCharts } from './stats-charts'
 
 interface MarketingStatsProps {
@@ -118,6 +119,8 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
   const reviewFollowupCount = completedBookings.filter((b) => b.auto_review_followup_sent_at).length
   const claims = claimsResult.data ?? []
   const claimedCount = claims.filter((c) => c.claimed_at).length
+  // 수집·전시 중인 실제 후기 요약 (누적) — 평균 별점·개수
+  const reviewSummary = await getReviewSummary(db, businessId, 1)
 
   const views = postViewsResult.data ?? []        // 블로그(post_views)
   const pageViews = pageViewsResult.data ?? []      // 공개 페이지(page_views)
@@ -521,8 +524,13 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
 
       {/* 후기 요청 현황 */}
       <div className="rounded-xl border bg-white overflow-hidden">
-        <div className="px-5 py-3.5 border-b bg-slate-50">
+        <div className="px-5 py-3.5 border-b bg-slate-50 flex items-center justify-between gap-2">
           <p className="font-semibold text-sm">{periodLabel} 후기 요청 현황</p>
+          {reviewSummary.count > 0 && (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700">
+              ⭐ {reviewSummary.avg.toFixed(1)} · 후기 {reviewSummary.count}개
+            </span>
+          )}
         </div>
         <div className="grid grid-cols-4 divide-x">
           <div className="px-3 py-4 text-center">
