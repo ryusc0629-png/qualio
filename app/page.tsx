@@ -14,6 +14,8 @@ import {
   CalendarCheck,
   ShieldCheck,
   Sparkles,
+  X,
+  TrendingUp,
 } from 'lucide-react'
 import { SiteFooter } from '@/components/site-footer'
 
@@ -70,8 +72,8 @@ export default async function RootPage() {
           </h1>
 
           <p className="text-lg md:text-xl text-muted-foreground mb-9 max-w-2xl mx-auto leading-relaxed break-keep text-pretty">
-            견적·예약·카카오 알림톡·단골 재방문까지 자동으로.<br className="hidden sm:block" />
-            밤에 견적서 쓰고, 전화 붙잡고, 놓친 손님 아쉬워하던 일을 퀄리오가 대신합니다.
+            견적·예약·카카오 알림톡은 기본, <span className="text-foreground font-semibold">홍보까지 자동으로.</span><br className="hidden sm:block" />
+            들어온 일만 정리하는 관리 툴이 아니라, 가만히 있어도 새 손님이 찾아오게 만드는 도구입니다.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -122,6 +124,65 @@ export default async function RootPage() {
               손님을 놓치는 건 실력이 부족해서가 아닙니다.{' '}
               <span className="text-primary">파는 걸 도와주는 도구</span>가 없어서입니다.
             </p>
+          </div>
+        </section>
+
+        {/* 차별화 — '관리'가 아니라 '새 매출을 만드는' 툴 (핵심 포지셔닝) */}
+        <section className="max-w-5xl mx-auto px-6 py-16 md:py-24">
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-1.5 rounded-full border bg-muted/50 px-3 py-1 text-xs font-medium text-muted-foreground mb-5">
+              <TrendingUp className="h-3.5 w-3.5 text-primary" />
+              퀄리오가 다른 이유
+            </div>
+            <h2 className="text-2xl md:text-3xl font-bold mb-3 break-keep text-balance">
+              정리만 하는 툴은,<br className="sm:hidden" /> 새 손님을 데려오지 못합니다
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto break-keep text-pretty">
+              예약·고객 관리는 기본입니다. 퀄리오는 거기서 멈추지 않고, 홍보까지 자동으로 돌려 새 매출이 들어올 길을 만듭니다.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-5">
+            {/* 보통의 관리 툴 */}
+            <div className="rounded-2xl border bg-muted/20 p-7">
+              <p className="font-semibold text-muted-foreground mb-5">보통의 관리 프로그램</p>
+              <ul className="space-y-3">
+                {[
+                  '들어온 예약·고객을 정리만 해줌',
+                  '홍보 글·블로그는 여전히 사장님 몫',
+                  '있는 손님만 관리, 새 손님은 알아서 찾아야',
+                ].map((t) => (
+                  <li key={t} className="flex items-start gap-3 text-sm md:text-base text-muted-foreground break-keep">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted-foreground/15">
+                      <X className="h-3 w-3 text-muted-foreground" />
+                    </span>
+                    {t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* 퀄리오 */}
+            <div className="rounded-2xl border-2 border-primary bg-primary/5 p-7">
+              <p className="font-semibold text-primary mb-5">퀄리오</p>
+              <ul className="space-y-3">
+                {[
+                  '예약·고객 관리는 기본으로 자동',
+                  'AI가 홍보 글을 대신 써서 검색에 노출 → 새 문의가 들어옴',
+                  '다녀간 단골을 알아서 다시 불러 재구매까지',
+                ].map((t) => (
+                  <li key={t} className="flex items-start gap-3 text-sm md:text-base font-medium break-keep">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary">
+                      <Check className="h-3 w-3 text-primary-foreground" />
+                    </span>
+                    {t}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-6 rounded-lg bg-primary/10 px-4 py-3 text-sm font-semibold text-primary text-center break-keep">
+                사장님이 자는 동안에도, 마케팅은 계속 돌아갑니다
+              </p>
+            </div>
           </div>
         </section>
 
