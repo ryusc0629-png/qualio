@@ -22,6 +22,31 @@ export interface ConsultMessage {
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`
 
+// 업계가 거의 동일하게 하는 표준 청소 서비스 설명 (업체가 포함항목을 직접 안 적었을 때의 기본값)
+// 원칙: 가격·정책은 넣지 않고, "일반적으로 이런 작업을 한다" 수준의 일반 설명만.
+const STANDARD_SERVICE_SCOPES: Array<{ keywords: string[]; scope: string }> = [
+  { keywords: ['입주', '이사'], scope: '입주·이사 전 집 전체를 청소해요. 바닥과 창틀·새시, 화장실 물때·곰팡이, 주방 기름때, 붙박이장 내부, 베란다, 스위치·문틀 먼지까지 구석구석 닦아 새 집처럼 만들어드려요.' },
+  { keywords: ['정기'], scope: '주기적으로 방문해 집을 일정하게 관리해요. 보통 바닥·화장실·주방 청소와 먼지 제거 등 생활공간 전반을 유지 관리하며, 방문 주기는 상담으로 정해요.' },
+  { keywords: ['거주', '생활'], scope: '생활 중인 집을 전반적으로 청소해요. 바닥·화장실·주방·먼지 제거 등을 상황에 맞게 진행해요.' },
+  { keywords: ['에어컨'], scope: '에어컨을 분해해 냉각핀과 송풍팬의 곰팡이·먼지·냄새를 세척해요. 벽걸이·스탠드·시스템 등 종류와 대수에 따라 작업량이 달라져요.' },
+  { keywords: ['새집', '증후군', '베이크'], scope: '새 집이나 리모델링 후 나오는 유해물질과 냄새를, 친환경 약품과 베이크아웃(실내를 데워 유해물질을 배출) 방식으로 줄여드려요.' },
+  { keywords: ['준공', '신축', '공사'], scope: '공사·리모델링 직후 남은 먼지와 시공 잔재를 제거하는 마무리 청소예요.' },
+  { keywords: ['줄눈'], scope: '화장실·주방 타일 사이 줄눈을 새로 시공해 곰팡이를 막고 방수·미관을 개선해요.' },
+  { keywords: ['코팅', '탄성', '나노', '마루'], scope: '바닥에 보호막을 입혀 흠집을 줄이고 광택과 내구성을 높여요.' },
+  { keywords: ['연마', '상판'], scope: '대리석·석재 표면을 연마해 얼룩과 흠집을 제거하고 광을 살려요.' },
+  { keywords: ['방충망'], scope: '낡거나 찢어진 방충망을 교체해드려요.' },
+  { keywords: ['필름', '자외선', '단열'], scope: '유리창에 단열·자외선 차단 필름을 시공해요.' },
+]
+
+// 서비스명에 표준 키워드가 있으면 일반 설명을 돌려줌 (없으면 null)
+function matchStandardScope(name: string): string | null {
+  const n = name.replace(/\s/g, '')
+  for (const entry of STANDARD_SERVICE_SCOPES) {
+    if (entry.keywords.some((k) => n.includes(k))) return entry.scope
+  }
+  return null
+}
+
 // 서비스 한 줄(+포함 항목)을 사람이 읽는 설명으로 — 내부 키(wall_standard 등)는 노출하지 않는다
 function formatService(s: ConsultService): string {
   const price = s.base_price ?? 0
@@ -46,7 +71,7 @@ function formatService(s: ConsultService): string {
     }
   }
 
-  // 포함 항목(있으면) — "이 서비스 뭐 포함돼요?"에 구체적으로 답할 수 있게 덧붙임
+  // 포함 항목(업체가 직접 적은 것이 우선) — "이 서비스 뭐 포함돼요?"에 구체적으로 답할 수 있게 덧붙임
   const extra: string[] = []
   if (s.includedGood && s.includedGood.length > 0)
     extra.push(`    · 기본 포함: ${s.includedGood.join(', ')}`)
@@ -54,6 +79,12 @@ function formatService(s: ConsultService): string {
     extra.push(`    · 추천 플랜 추가: ${s.includedBetter.join(', ')}`)
   if (s.includedBest && s.includedBest.length > 0)
     extra.push(`    · 프리미엄 플랜 추가: ${s.includedBest.join(', ')}`)
+
+  // 업체가 포함항목을 안 적었으면 표준(업계 일반) 설명을 기본값으로 붙임
+  if (extra.length === 0) {
+    const std = matchStandardScope(s.name)
+    if (std) extra.push(`    · 일반적으로: ${std}`)
+  }
 
   return [priceLine, ...extra].join('\n')
 }
@@ -88,7 +119,9 @@ ${serviceList}
 
 [서비스 상세 문의 대응]
 - 고객이 특정 서비스에 "무엇이 포함되나요?"라고 물으면, 위 [포함 항목]을 바탕으로 실제 포함되는 내용을 구체적으로 알려주세요.
-- 목록에 없는 내용은 지어내지 말고, 애매하면 "정확한 작업 범위는 사장님이 현장 보고 확인드려요"로 안내하세요.
+- '기본 포함/추천/프리미엄'처럼 업체가 직접 적은 항목이 있으면 그 내용을 우선해서 안내하세요.
+- '일반적으로'로 표시된 설명은 업계 일반 기준이에요. 이걸 안내할 땐 "보통 이런 작업을 해요"처럼 일반적인 설명임을 밝히고, 정확한 포함 여부·범위는 "사장님이 현장 보고 확인드려요" 또는 간편 견적으로 안내하세요.
+- 목록에 없는 내용은 지어내지 마세요.
 - 포함 항목이 매력적이면 자연스럽게 "간편 견적 받기"로 연결해도 좋습니다.
 
 [가격 안내 규칙 — 매우 중요]
