@@ -290,25 +290,32 @@ imagePrompt: 이 포스트 주제에 정확히 맞는 AI 이미지 생성용 영
       ]
     : [{ type: 'text', text: textPrompt }]
 
-  const message = await client.messages.create({
-    // 플랜별 모델 — 상위 플랜은 심층 글(Sonnet), 미지정 시 기본 Haiku
-    model: input.model ?? 'claude-haiku-4-5-20251001',
-    // 본문 1500~2000자 + 요약·keyPoints·FAQ JSON까지 담아야 함.
-    // 한국어 1자≈1.5토큰이라 전체 출력이 클 수 있어, 중간 잘림 방지용으로 넉넉히 확보
-    max_tokens: 6000,
-    messages: [{ role: 'user', content: userContent }],
-  })
+  // AI가 간헐적으로 깨진 JSON(본문 안에 이스케이프 안 된 따옴표 등)을 내면 파싱이 실패한다.
+  // 다시 생성하면 대개 정상 JSON이 나오므로 최대 2회까지 재시도해 자동 발행이 조용히 멈추지 않게 한다.
+  let lastErr: unknown = null
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const message = await client.messages.create({
+      // 플랜별 모델 — 상위 플랜은 심층 글(Sonnet), 미지정 시 기본 Haiku
+      model: input.model ?? 'claude-haiku-4-5-20251001',
+      // 본문 1500~2000자 + 요약·keyPoints·FAQ JSON까지 담아야 함.
+      // 한국어 1자≈1.5토큰이라 전체 출력이 커서 중간 잘림 방지용으로 넉넉히 확보
+      max_tokens: 8000,
+      messages: [{ role: 'user', content: userContent }],
+    })
 
-  const text = message.content[0].type === 'text' ? message.content[0].text : ''
-
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) throw new Error('JSON not found')
-    return JSON.parse(repairJson(jsonMatch[0])) as PostContent
-  } catch (e) {
-    console.error('[AI] 포스트 생성 파싱 실패:', e, text)
-    throw new Error('[APP] 포스트 생성에 실패했습니다')
+    const text = message.content[0].type === 'text' ? message.content[0].text : ''
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      if (!jsonMatch) throw new Error('JSON not found')
+      return JSON.parse(repairJson(jsonMatch[0])) as PostContent
+    } catch (e) {
+      lastErr = e
+      console.error(`[AI] 포스트 생성 파싱 실패 (시도 ${attempt}/2):`, e instanceof Error ? e.message : e)
+    }
   }
+
+  console.error('[AI] 포스트 생성 최종 실패:', lastErr)
+  throw new Error('[APP] 포스트 생성에 실패했습니다')
 }
 
 export interface TopicSuggestion {
@@ -327,6 +334,7 @@ export async function generateTopicSuggestions(input: {
   currentMonth: number   // 1~12
   recentTitles?: string[]  // 이미 발행한 제목들 — 중복(유사 주제 포함) 방지용
   address?: string | null  // 지역+서비스 롱테일 키워드 생성용
+  skipKeywordData?: boolean // 자동 발행 등 검색량 배지가 필요 없는 경로 — 네이버 API 호출 생략(지연·의존성 제거)
 }): Promise<TopicSuggestion[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('[APP] AI 기능을 사용하려면 API 키가 필요합니다')
@@ -389,6 +397,8 @@ ${region ? `지역: ${region}` : ''}
 
   // 실제 검색량·경쟁도로 데이터 보강 + 기회 점수 순 정렬
   // (검색광고 API 키가 없거나 실패하면 빈 Map → 기존 AI 추천 순서 그대로 유지)
+  // 자동 발행 등 배지가 필요 없는 경로는 생략 — 네이버 API 지연·의존성을 발행 흐름에서 제거
+  if (input.skipKeywordData) return suggestions
   try {
     const seeds = suggestions.map((s) => s.keyword).filter((k): k is string => !!k)
     if (seeds.length > 0) {

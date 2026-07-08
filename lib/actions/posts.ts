@@ -453,6 +453,7 @@ export const publishTodayAction = action
           services,
           currentMonth: month,
           address: business.address,
+          skipKeywordData: true, // 발행 경로: 검색량 배지 불필요 → 네이버 API 생략
         })
         const unused = suggestions.find(
           (s) => !publishedTitles.some((t) => t.includes(s.title.slice(0, 10)))

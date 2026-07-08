@@ -57,6 +57,7 @@ async function publishOnePost(
       currentMonth: month,
       // 이번 달 이미 발행한 제목(같은 실행 내 직전 발행분 포함) → AI가 유사 주제까지 제외
       recentTitles: publishedTitles,
+      skipKeywordData: true, // 발행 경로: 검색량 배지 불필요 → 네이버 API 생략(지연·의존성 제거)
     })
     const unused = suggestions.find(
       (s) => !publishedTitles.some((t) => t.includes(s.title.slice(0, 10)))

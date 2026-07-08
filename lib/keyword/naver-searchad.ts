@@ -34,6 +34,17 @@ function sign(timestamp: string, method: string, path: string, secret: string): 
   return crypto.createHmac('sha256', secret).update(`${timestamp}.${method}.${path}`).digest('base64')
 }
 
+// 느린/멈춘 응답이 호출부(특히 자동 발행 크론)를 막지 않도록 타임아웃을 건다
+async function fetchWithTimeout(url: string, init: RequestInit, ms = 6000): Promise<Response> {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), ms)
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal })
+  } finally {
+    clearTimeout(t)
+  }
+}
+
 interface KeywordRow {
   relKeyword: string
   monthlyPcQcCnt: unknown
@@ -64,7 +75,7 @@ export async function getKeywordStats(seeds: string[]): Promise<Map<string, Keyw
       const hints = batch.map((s) => s.replace(/\s+/g, ''))
       const query = new URLSearchParams({ hintKeywords: hints.join(','), showDetail: '1' })
 
-      const res = await fetch(`${BASE_URL}${KEYWORD_PATH}?${query.toString()}`, {
+      const res = await fetchWithTimeout(`${BASE_URL}${KEYWORD_PATH}?${query.toString()}`, {
         headers: {
           'X-Timestamp': timestamp,
           'X-API-KEY': apiKey,
@@ -110,7 +121,7 @@ export async function getRelatedKeywords(seed: string, limit = 8): Promise<Keywo
     const timestamp = Date.now().toString()
     const signature = sign(timestamp, 'GET', KEYWORD_PATH, secret)
     const query = new URLSearchParams({ hintKeywords: seed.replace(/\s+/g, ''), showDetail: '1' })
-    const res = await fetch(`${BASE_URL}${KEYWORD_PATH}?${query.toString()}`, {
+    const res = await fetchWithTimeout(`${BASE_URL}${KEYWORD_PATH}?${query.toString()}`, {
       headers: {
         'X-Timestamp': timestamp,
         'X-API-KEY': apiKey,
