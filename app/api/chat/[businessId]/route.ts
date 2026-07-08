@@ -126,7 +126,9 @@ export async function POST(
 
   const { data: services } = await db
     .from('service_items')
-    .select('name, base_price, unit, ac_type_prices, unit_prices')
+    .select(
+      'name, base_price, unit, ac_type_prices, unit_prices, tier_good_items, tier_better_items, tier_best_items',
+    )
     .eq('business_id', business.id)
     .eq('is_active', true)
     .is('deleted_at', null)
@@ -144,6 +146,9 @@ export async function POST(
     unit_prices: Array.isArray(s.unit_prices)
       ? (s.unit_prices as Array<{ name: string; price: number; variant?: string }>)
       : null,
+    includedGood: s.tier_good_items,
+    includedBetter: s.tier_better_items,
+    includedBest: s.tier_best_items,
   }))
 
   const system = buildConsultSystemPrompt({

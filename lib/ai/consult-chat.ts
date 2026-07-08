@@ -8,6 +8,10 @@ export interface ConsultService {
   unit: string | null
   ac_type_prices: Record<string, number> | null
   unit_prices: Array<{ name: string; price: number; variant?: string }> | null
+  // 플랜별 포함 항목 — "이 서비스 뭐 포함돼요?" 상세 상담용
+  includedGood: string[] | null
+  includedBetter: string[] | null
+  includedBest: string[] | null
 }
 
 // 대화 메시지 (클라이언트에서 넘어오는 형태)
@@ -18,29 +22,40 @@ export interface ConsultMessage {
 
 const won = (n: number) => `${n.toLocaleString('ko-KR')}원`
 
-// 서비스 한 줄을 사람이 읽는 가격 설명으로 — 내부 키(wall_standard 등)는 노출하지 않는다
+// 서비스 한 줄(+포함 항목)을 사람이 읽는 설명으로 — 내부 키(wall_standard 등)는 노출하지 않는다
 function formatService(s: ConsultService): string {
   const price = s.base_price ?? 0
 
-  // 항목별 단가(화장실/주방 등)는 이름이 사람이 읽는 값이라 그대로 나열
+  // 가격 한 줄 구성
+  let priceLine: string
   if (s.unit_prices && s.unit_prices.length > 0) {
+    // 항목별 단가(화장실/주방 등)는 이름이 사람이 읽는 값이라 그대로 나열
     const items = s.unit_prices
       .map((p) => `${p.name}${p.variant ? `(${p.variant})` : ''} ${won(p.price)}`)
       .join(', ')
-    return `- ${s.name}: ${items}`
+    priceLine = `- ${s.name}: ${items}`
+  } else if (s.ac_type_prices && Object.keys(s.ac_type_prices).length > 0) {
+    // 에어컨 등 종류·대수 변동형 — 내부 키를 노출하지 않고 기준가만 안내
+    priceLine = `- ${s.name}: 종류·대수에 따라 다름 (기준 ${won(price)}부터)`
+  } else {
+    switch (s.unit) {
+      case '평당': priceLine = `- ${s.name}: 평당 ${won(price)}`; break
+      case '개':   priceLine = `- ${s.name}: 개당 ${won(price)}`; break
+      case '시간': priceLine = `- ${s.name}: 시간당 ${won(price)}`; break
+      default:     priceLine = `- ${s.name}: ${won(price)}`
+    }
   }
 
-  // 에어컨 등 종류·대수 변동형 — 내부 키를 노출하지 않고 기준가만 안내
-  if (s.ac_type_prices && Object.keys(s.ac_type_prices).length > 0) {
-    return `- ${s.name}: 종류·대수에 따라 다름 (기준 ${won(price)}부터)`
-  }
+  // 포함 항목(있으면) — "이 서비스 뭐 포함돼요?"에 구체적으로 답할 수 있게 덧붙임
+  const extra: string[] = []
+  if (s.includedGood && s.includedGood.length > 0)
+    extra.push(`    · 기본 포함: ${s.includedGood.join(', ')}`)
+  if (s.includedBetter && s.includedBetter.length > 0)
+    extra.push(`    · 추천 플랜 추가: ${s.includedBetter.join(', ')}`)
+  if (s.includedBest && s.includedBest.length > 0)
+    extra.push(`    · 프리미엄 플랜 추가: ${s.includedBest.join(', ')}`)
 
-  switch (s.unit) {
-    case '평당': return `- ${s.name}: 평당 ${won(price)}`
-    case '개':   return `- ${s.name}: 개당 ${won(price)}`
-    case '시간': return `- ${s.name}: 시간당 ${won(price)}`
-    default:     return `- ${s.name}: ${won(price)}`
-  }
+  return [priceLine, ...extra].join('\n')
 }
 
 export function buildConsultSystemPrompt({
@@ -61,7 +76,7 @@ export function buildConsultSystemPrompt({
 [업체 소개]
 ${businessDescription || '(소개 정보 없음)'}
 
-[제공 서비스와 기준 단가]
+[제공 서비스 · 기준 단가 · 포함 항목]
 ${serviceList}
 
 [역할과 태도]
@@ -70,6 +85,11 @@ ${serviceList}
 - 답변은 3~4문장 이내로 짧게. 전문용어·영어·이모지 남발 금지.
 - 모바일 화면에서 읽으므로 문단을 길게 쓰지 마세요.
 - 마크다운 서식을 절대 쓰지 마세요. **굵게**, *, #, - 같은 기호는 화면에 별표·기호가 그대로 보여 지저분합니다. 강조가 필요하면 그냥 일반 문장으로 쓰세요.
+
+[서비스 상세 문의 대응]
+- 고객이 특정 서비스에 "무엇이 포함되나요?"라고 물으면, 위 [포함 항목]을 바탕으로 실제 포함되는 내용을 구체적으로 알려주세요.
+- 목록에 없는 내용은 지어내지 말고, 애매하면 "정확한 작업 범위는 사장님이 현장 보고 확인드려요"로 안내하세요.
+- 포함 항목이 매력적이면 자연스럽게 "간편 견적 받기"로 연결해도 좋습니다.
 
 [가격 안내 규칙 — 매우 중요]
 - 위 [기준 단가]는 "평당 얼마부터 시작해요" 수준까지만 참고로 알려줄 수 있습니다.
