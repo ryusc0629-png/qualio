@@ -275,6 +275,18 @@ export default async function ClientsPage({
   )
   const archivedLeads = (leads ?? []).filter(l => l.customer_type === 'company' && l.status === 'archived' && matchesSearch(l.company_name))
 
+  // 개인 상담 리드 (leads의 individual, 아직 고객 미전환) — AI 상담·현장견적 문의로 들어온 개인
+  const individualCustomerPhones = new Set((customers ?? []).map(c => c.phone ?? '').filter(Boolean))
+  const individualLeads = sortLeads(
+    (leads ?? []).filter(l =>
+      l.customer_type !== 'company' &&
+      l.status !== 'archived' &&
+      !registeredLeadIds.has(l.id) &&
+      !individualCustomerPhones.has(l.phone ?? '') &&
+      matchesSearch(l.company_name)
+    )
+  )
+
   const totalLtv = (completedBookings ?? []).reduce((s, b) => s + (b.final_price ?? 0), 0)
   const monthlyRecurring = (contracts ?? []).filter(c => c.status === 'active').reduce((s, c) => s + c.contract_price, 0)
 
@@ -417,7 +429,45 @@ export default async function ClientsPage({
             </div>
           )}
 
-          {individualCustomers.length === 0 && (pendingQuotes ?? []).length === 0 ? (
+          {/* 상담·문의 중 개인 (leads) — AI 상담·현장견적 문의 */}
+          {individualLeads.length > 0 && (
+            <div className="space-y-2 mb-1">
+              <p className="text-xs font-semibold text-muted-foreground px-0.5">상담·문의 중 ({individualLeads.length})</p>
+              {individualLeads.map((lead) => {
+                const stage = PIPELINE_STAGE[lead.status] ?? PIPELINE_STAGE.new
+                return (
+                  <Link
+                    key={`ilead-${lead.id}`}
+                    href={`/dashboard/pipeline/${lead.id}`}
+                    className="block bg-white rounded-xl border p-4 hover:border-primary/30 transition-colors"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-sky-100 text-sky-700">개인</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${stage.color}`}>{stage.text}</span>
+                          <p className="font-semibold">{lead.company_name}</p>
+                        </div>
+                        <div className="mt-1 space-y-0.5">
+                          {lead.phone && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Phone className="h-3 w-3 shrink-0" />{lead.phone}
+                            </p>
+                          )}
+                          {lead.notes && (
+                            <p className="text-xs text-muted-foreground line-clamp-1">{lead.notes}</p>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+
+          {individualCustomers.length === 0 && (pendingQuotes ?? []).length === 0 && individualLeads.length === 0 ? (
             <div className="bg-white rounded-xl border border-dashed p-8 text-center space-y-2">
               <p className="text-sm text-muted-foreground">아직 개인 고객이 없어요</p>
               <p className="text-xs text-muted-foreground">고객 링크를 공유하면 견적 요청이 자동으로 들어와요</p>
@@ -528,9 +578,7 @@ export default async function ClientsPage({
           {activeLeads.length === 0 && companyCustomers.length === 0 ? (
             <div className="bg-white rounded-xl border border-dashed p-8 text-center space-y-2">
               <p className="text-sm text-muted-foreground">영업 중인 법인 거래처가 없어요</p>
-              <Link href="/dashboard/pipeline" className="inline-block text-xs text-primary underline">
-                거래처 추가하기 →
-              </Link>
+              <p className="text-xs text-muted-foreground">위 &lsquo;고객 추가&rsquo; 버튼으로 거래처를 등록하세요</p>
             </div>
           ) : (
             activeLeads.map((lead) => {

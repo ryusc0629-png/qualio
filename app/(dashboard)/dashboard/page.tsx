@@ -430,7 +430,7 @@ export default async function DashboardPage() {
             </Link>
           )}
           {todayFollowUpCount > 0 && (
-            <Link href="/dashboard/pipeline">
+            <Link href="/dashboard/clients?type=company">
               <div className="flex items-center gap-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 hover:bg-violet-100 transition-colors">
                 <PhoneCall className="h-4 w-4 text-violet-600 shrink-0" />
                 <div className="flex-1">
@@ -671,12 +671,12 @@ export default async function DashboardPage() {
           <div>
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-semibold">거래처 현황</p>
-              <Link href="/dashboard/pipeline" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-0.5">
+              <Link href="/dashboard/clients?type=company" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-0.5">
                 관리 <ChevronRight className="h-3 w-3" />
               </Link>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <Link href="/dashboard/pipeline?status=active">
+              <Link href="/dashboard/clients?type=company">
                 <div className="rounded-lg bg-violet-50 p-3 hover:bg-violet-100 transition-colors">
                   <div className="flex items-center gap-1 mb-1">
                     <Handshake className="h-3 w-3 text-violet-500" />
@@ -685,7 +685,7 @@ export default async function DashboardPage() {
                   <p className="text-lg font-bold text-violet-700 tabular-nums">{activeLeads.length}곳</p>
                 </div>
               </Link>
-              <Link href="/dashboard/pipeline?status=contracted">
+              <Link href="/dashboard/clients?type=company">
                 <div className="rounded-lg bg-green-50 p-3 hover:bg-green-100 transition-colors">
                   <div className="flex items-center gap-1 mb-1">
                     <CheckCircle2 className="h-3 w-3 text-green-500" />
@@ -808,7 +808,7 @@ export default async function DashboardPage() {
               </span>
             </div>
             <Link
-              href="/dashboard/pipeline"
+              href="/dashboard/clients?type=company"
               className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-0.5"
             >
               전체 보기 <ChevronRight className="h-3 w-3" />

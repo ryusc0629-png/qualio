@@ -11,7 +11,6 @@ import {
   Settings,
   Users,
   Megaphone,
-  Handshake,
   CalendarDays,
   X,
 } from 'lucide-react'
@@ -28,8 +27,7 @@ interface SidebarProps {
 
 const navItems = [
   { href: '/dashboard',          label: '홈',          desc: undefined,        icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/clients',  label: '고객 관리',   desc: '견적·예약·거래처', icon: Users },
-  { href: '/dashboard/pipeline', label: '영업 관리',   desc: '상담·잠재고객',    icon: Handshake },
+  { href: '/dashboard/clients',  label: '고객 관리',   desc: '상담·견적·거래처', icon: Users },
   { href: '/dashboard/schedule', label: '일정·배정',   desc: undefined,        icon: CalendarDays },
   { href: '/dashboard/services', label: '서비스',      desc: undefined,        icon: Wrench },
   { href: '/dashboard/marketing',label: '마케팅',      desc: undefined,        icon: Megaphone },
