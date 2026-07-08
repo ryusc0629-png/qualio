@@ -64,12 +64,12 @@ export default async function RootPage() {
             청소·홈케어 업체 전용 · 지금 무료 베타
           </div>
 
-          <h1 className="text-4xl md:text-6xl font-bold leading-[1.15] mb-6">
+          <h1 className="text-4xl md:text-6xl font-bold leading-[1.15] mb-6 break-keep text-balance">
             청소는 사장님이,<br />
             <span className="text-primary">영업은 퀄리오가</span> 합니다.
           </h1>
 
-          <p className="text-lg md:text-xl text-muted-foreground mb-9 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-lg md:text-xl text-muted-foreground mb-9 max-w-2xl mx-auto leading-relaxed break-keep text-pretty">
             견적·예약·카카오 알림톡·단골 재방문까지 자동으로.<br className="hidden sm:block" />
             밤에 견적서 쓰고, 전화 붙잡고, 놓친 손님 아쉬워하던 일을 퀄리오가 대신합니다.
           </p>
@@ -97,10 +97,10 @@ export default async function RootPage() {
         {/* 공감(Pain) — "어, 내 얘기네" 후크 */}
         <section className="bg-muted/30 border-y">
           <div className="max-w-4xl mx-auto px-6 py-16 md:py-20">
-            <h2 className="text-2xl md:text-3xl font-bold text-center mb-3">
+            <h2 className="text-2xl md:text-3xl font-bold text-center mb-3 break-keep text-balance">
               혹시 이런 적, 있으시죠?
             </h2>
-            <p className="text-muted-foreground text-center mb-12">
+            <p className="text-muted-foreground text-center mb-12 break-keep text-pretty">
               청소는 누구보다 잘하는데, 이런 것들이 매출을 갉아먹습니다.
             </p>
             <div className="grid sm:grid-cols-2 gap-4">
@@ -114,11 +114,11 @@ export default async function RootPage() {
                   <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive text-sm font-bold">
                     !
                   </span>
-                  <p className="text-sm md:text-base leading-relaxed">{pain}</p>
+                  <p className="text-sm md:text-base leading-relaxed break-keep">{pain}</p>
                 </div>
               ))}
             </div>
-            <p className="text-center text-base md:text-lg font-medium mt-10">
+            <p className="text-center text-base md:text-lg font-medium mt-10 break-keep text-pretty">
               손님을 놓치는 건 실력이 부족해서가 아닙니다.{' '}
               <span className="text-primary">파는 걸 도와주는 도구</span>가 없어서입니다.
             </p>
@@ -127,10 +127,10 @@ export default async function RootPage() {
 
         {/* 사용 방법(Mechanism) — 3단계로 신뢰 확보 */}
         <section id="how" className="max-w-6xl mx-auto px-6 py-16 md:py-24 scroll-mt-20">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-3">
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-3 break-keep text-balance">
             링크 하나면, 나머지는 퀄리오가 알아서
           </h2>
-          <p className="text-muted-foreground text-center mb-14">
+          <p className="text-muted-foreground text-center mb-14 break-keep text-pretty">
             새로 배울 것도, 복잡한 설정도 없습니다. 카카오톡 쓸 줄 알면 충분해요.
           </p>
 
@@ -162,8 +162,8 @@ export default async function RootPage() {
                   </span>
                   <item.icon className="h-5 w-5 text-primary" />
                 </div>
-                <h3 className="font-bold text-lg mb-2">{item.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                <h3 className="font-bold text-lg mb-2 break-keep">{item.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed break-keep">{item.desc}</p>
               </div>
             ))}
           </div>
@@ -194,8 +194,8 @@ export default async function RootPage() {
                   <div className="mx-auto w-12 h-12 rounded-xl bg-background border flex items-center justify-center">
                     <item.icon className="h-5 w-5 text-primary" />
                   </div>
-                  <h3 className="font-semibold">{item.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                  <h3 className="font-semibold break-keep">{item.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed break-keep text-pretty">{item.desc}</p>
                 </div>
               ))}
             </div>
@@ -204,10 +204,10 @@ export default async function RootPage() {
 
         {/* 요금제 미리보기 — 무료 베타 먼저 강조 + 토스 심사용 결제 조건 명시 */}
         <section className="max-w-6xl mx-auto px-6 py-16 md:py-24">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-3">
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-3 break-keep text-balance">
             지금은 무료, 요금은 나중에 골라도 됩니다
           </h2>
-          <p className="text-muted-foreground text-center mb-4">
+          <p className="text-muted-foreground text-center mb-4 break-keep text-pretty">
             베타 기간에는 모든 기능을 제한 없이 무료로 써보세요. 마음에 들면 그때 플랜을 고르시면 됩니다.
           </p>
           {/* 결제 조건 명시 — /pricing 과 일관 (전자상거래법·토스 심사 요건) */}
@@ -277,10 +277,10 @@ export default async function RootPage() {
         {/* CTA 배너 — 마지막 밀어주기 */}
         <section className="bg-primary text-primary-foreground">
           <div className="max-w-4xl mx-auto px-6 py-20 text-center">
-            <h2 className="text-2xl md:text-3xl font-bold mb-3">
+            <h2 className="text-2xl md:text-3xl font-bold mb-3 break-keep text-balance">
               손님 놓치는 오늘 하루가, 제일 아깝습니다
             </h2>
-            <p className="text-primary-foreground/80 mb-8 max-w-lg mx-auto">
+            <p className="text-primary-foreground/80 mb-8 max-w-lg mx-auto break-keep text-pretty">
               지금 무료로 시작해서, 견적·예약·단골 관리를 퀄리오에 맡겨보세요. 마음에 안 들면 그냥 안 쓰시면 됩니다.
             </p>
             <Link href="/signup">
