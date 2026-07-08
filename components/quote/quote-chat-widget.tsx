@@ -172,29 +172,45 @@ export function QuoteChatWidget({ businessId, businessName }: Props) {
                   </div>
                 </div>
               ) : (
-                messages.map((m, i) => (
-                  <div
-                    key={i}
-                    className={m.role === 'user' ? 'flex justify-end' : 'flex justify-start'}
-                  >
+                messages.map((m, i) => {
+                  // 마지막 어시스턴트 말풍선이 스트리밍 중이면 커서를 붙인다
+                  const streamingThis =
+                    streaming && m.role === 'assistant' && i === messages.length - 1
+                  return (
                     <div
-                      className={
-                        m.role === 'user'
-                          ? 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-emerald-600 px-4 py-2.5 text-sm text-white'
-                          : 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tl-sm bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm'
-                      }
+                      key={i}
+                      // 말풍선 등장 모션 — 아래에서 부드럽게 떠오르며 페이드인
+                      className={`animate-in fade-in slide-in-from-bottom-2 duration-300 ${
+                        m.role === 'user' ? 'flex justify-end' : 'flex justify-start'
+                      }`}
                     >
-                      {m.content || (
-                        // 아직 첫 토큰 전 — 타이핑 점 애니메이션
-                        <span className="inline-flex gap-1 py-1">
-                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-300 [animation-delay:-0.3s]" />
-                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-300 [animation-delay:-0.15s]" />
-                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-300" />
-                        </span>
-                      )}
+                      <div
+                        className={
+                          m.role === 'user'
+                            ? 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-emerald-600 px-4 py-2.5 text-sm text-white'
+                            : 'max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tl-sm bg-white px-4 py-2.5 text-sm text-gray-700 shadow-sm'
+                        }
+                      >
+                        {m.content ? (
+                          <>
+                            {m.content}
+                            {streamingThis && (
+                              // 작성 중 — 깜빡이는 커서
+                              <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-gray-400 align-text-bottom" />
+                            )}
+                          </>
+                        ) : (
+                          // 아직 첫 토큰 전 — 타이핑 점 애니메이션
+                          <span className="inline-flex gap-1 py-1">
+                            <span className="h-2 w-2 animate-bounce rounded-full bg-gray-300 [animation-delay:-0.3s]" />
+                            <span className="h-2 w-2 animate-bounce rounded-full bg-gray-300 [animation-delay:-0.15s]" />
+                            <span className="h-2 w-2 animate-bounce rounded-full bg-gray-300" />
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
 
