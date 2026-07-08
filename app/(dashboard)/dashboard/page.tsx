@@ -282,12 +282,19 @@ export default async function DashboardPage() {
     .eq('business_id', businessId)
     .eq('status', 'pending')
 
+  // 검토 대기 중인 재방문 유도 건 (마지막 방문 90일 경과 단골 대상, 개인화 문구 준비됨)
+  const { count: pendingReengagementCount } = await (db as unknown as SupabaseClient)
+    .from('reengagement_dispatches')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', businessId)
+    .eq('status', 'pending')
+
   // 알림 배너 여부
   const hasAlerts = (pendingQuoteCount ?? 0) > 0 || unreportedCount > 0 ||
     (unreviewedCount ?? 0) > 0 || (unassignedCount ?? 0) > 0 || todayFollowUpCount > 0 ||
     (doneReelCount ?? 0) > 0 || (pendingPortfolioCount ?? 0) > 0 || (pendingChannelCount ?? 0) > 0 ||
     fieldPriceChangedCount > 0 || (openClaimCount ?? 0) > 0 || (needsReviewCount ?? 0) > 0 ||
-    (pendingMonthlyReportCount ?? 0) > 0
+    (pendingMonthlyReportCount ?? 0) > 0 || (pendingReengagementCount ?? 0) > 0
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
@@ -319,6 +326,20 @@ export default async function DashboardPage() {
                     보낼 거래처 리포트가 {pendingMonthlyReportCount}건 있어요
                   </p>
                   <p className="text-xs text-emerald-600 mt-0.5">지난달 작업 내역을 거래처 담당자에게 보내 관계를 이어가세요</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-emerald-400 shrink-0" />
+              </div>
+            </Link>
+          )}
+          {(pendingReengagementCount ?? 0) > 0 && (
+            <Link href="/dashboard/reengagement">
+              <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 hover:bg-emerald-100 transition-colors">
+                <Users className="h-4 w-4 text-emerald-600 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-emerald-800">
+                    재방문 유도할 단골이 {pendingReengagementCount}명 있어요
+                  </p>
+                  <p className="text-xs text-emerald-600 mt-0.5">한동안 안 오신 고객께 개인화 메시지를 보내 재구매로 이어가세요</p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-emerald-400 shrink-0" />
               </div>

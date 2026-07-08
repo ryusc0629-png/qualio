@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendReengagementAlimtalk } from '@/lib/kakao/alimtalk'
+import { sendPushToBusiness } from '@/lib/push/web-push'
+import { generateReengagementMessage } from '@/lib/ai/reengagement-message'
 
-// Vercel Cron: 매일 02:00 UTC (KST 오전 11시) 실행
-// 마지막 방문 후 90일 경과 고객에게 재방문 유도 알림톡 발송
+// Vercel Cron(daily-maintenance에서 호출): 마지막 방문 후 90일 경과 고객에 대해
+// AI 개인화 재방문 문구를 미리 만들어 '검토 대기(pending)' 대기열에 넣고, 대표에게 푸시한다.
+// (기존: 제네릭 알림톡 자동발송 → 변경: 개인화 대기열. 대표가 검토 후 카톡으로 발송)
+// 한 고객당 1건만(unique) — 재실행/중복 방지(멱등).
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -14,52 +18,57 @@ export async function GET(request: NextRequest) {
   }
 
   const db = createServiceClient()
+  const looseDb = db as unknown as SupabaseClient
 
-  // KST 기준 90일 전 UTC 범위 계산
+  // KST 기준 90일 전 하루 범위(UTC)
   const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000)
   const d90KST = new Date(nowKST)
   d90KST.setUTCDate(nowKST.getUTCDate() - 90)
   d90KST.setUTCHours(0, 0, 0, 0)
   const d90Start = new Date(d90KST.getTime() - 9 * 60 * 60 * 1000)
-  const d90End   = new Date(d90Start.getTime() + 24 * 60 * 60 * 1000)
+  const d90End = new Date(d90Start.getTime() + 24 * 60 * 60 * 1000)
 
-  // 90일 전 완료된 예약 조회 (고객 정보 + 업체 정보 포함)
-  const { data: bookings } = await db
+  // 90일 전 완료된 예약 + 서비스명(견적)·현장 메모·업체 정보
+  const { data: bookings } = (await db
     .from('bookings')
-    .select('customer_phone, customer_name, business_id, businesses!business_id(name, slug)')
+    .select('id, customer_phone, customer_name, business_id, customer_id, memo, scheduled_at, quotes!quote_id(cleaning_type), businesses!business_id(name)')
     .eq('status', 'completed')
     .gte('scheduled_at', d90Start.toISOString())
     .lt('scheduled_at', d90End.toISOString())
-    .not('customer_phone', 'is', null)
+    .not('customer_phone', 'is', null)) as unknown as {
+    data:
+      | Array<{
+          id: string
+          customer_phone: string | null
+          customer_name: string | null
+          business_id: string
+          customer_id: string | null
+          memo: string | null
+          scheduled_at: string
+          quotes: { cleaning_type: string | null } | { cleaning_type: string | null }[] | null
+          businesses: { name: string } | { name: string }[] | null
+        }>
+      | null
+  }
 
   if (!bookings || bookings.length === 0) {
-    return NextResponse.json({ sent: 0, skipped: 0 })
+    return NextResponse.json({ prepared: 0, businesses: 0 })
   }
 
-  // 동일 고객 중복 처리 방지 (같은 크론 실행에서)
   const processed = new Set<string>()
+  const newByBusiness = new Map<string, number>()
+  let prepared = 0
 
-  interface BizInfo { name: string; slug: string | null }
-
-  interface BookingRow {
-    customer_phone: string | null
-    customer_name: string | null
-    business_id: string
-    businesses: BizInfo | BizInfo[] | null
-  }
-
-  let sent = 0, skipped = 0
-
-  for (const booking of (bookings as BookingRow[])) {
-    const { customer_phone, customer_name, business_id } = booking
-    if (!customer_phone) { skipped++; continue }
+  for (const booking of bookings) {
+    const { customer_phone, customer_name, business_id, customer_id } = booking
+    if (!customer_phone) continue
 
     const key = `${business_id}:${customer_phone}`
     if (processed.has(key)) continue
     processed.add(key)
 
     try {
-      // 90일 이후에 다시 방문한 예약이 있으면 스킵
+      // 90일 이후 재방문 있으면 스킵(이미 돌아온 고객)
       const { count: recentCount } = await db
         .from('bookings')
         .select('id', { count: 'exact', head: true })
@@ -67,47 +76,84 @@ export async function GET(request: NextRequest) {
         .eq('customer_phone', customer_phone)
         .eq('status', 'completed')
         .gte('scheduled_at', d90End.toISOString())
+      if ((recentCount ?? 0) > 0) continue
 
-      if ((recentCount ?? 0) > 0) { skipped++; continue }
+      // 이미 대기열에 있거나(어느 상태든) 예전 재유도 발송 이력 있으면 스킵
+      const { data: existing } = (await looseDb
+        .from('reengagement_dispatches')
+        .select('id')
+        .eq('business_id', business_id)
+        .eq('customer_phone', customer_phone)
+        .maybeSingle()) as unknown as { data: { id: string } | null }
+      if (existing) continue
 
-      // 고객 DB에서 재방문 발송 여부 확인
-      const { data: customer } = await db
+      const { data: cust } = await db
         .from('customers')
-        .select('id, reengagement_sent_at')
+        .select('reengagement_sent_at')
         .eq('business_id', business_id)
         .eq('phone', customer_phone)
         .maybeSingle()
-
-      if (customer?.reengagement_sent_at) { skipped++; continue }
+      if (cust?.reengagement_sent_at) continue
 
       const biz = Array.isArray(booking.businesses) ? booking.businesses[0] : booking.businesses
-      if (!biz) { skipped++; continue }
+      if (!biz) continue
+      const quote = Array.isArray(booking.quotes) ? booking.quotes[0] : booking.quotes
+      const lastService = quote?.cleaning_type ?? null
+      const name = customer_name ?? '고객'
+      const monthsSince = Math.max(1, Math.round((Date.now() - new Date(booking.scheduled_at).getTime()) / (30 * 24 * 60 * 60 * 1000)))
 
-      const quoteUrl = biz.slug ? `${appUrl}/q/${biz.slug}` : appUrl
-
-      await sendReengagementAlimtalk({
-        customerPhone: customer_phone,
-        customerName:  customer_name ?? '고객',
-        businessName:  biz.name,
-        quoteUrl,
+      // AI 개인화 문구 생성(실패해도 폴백 문구 반환)
+      const message = await generateReengagementMessage({
+        businessName: biz.name,
+        customerName: name,
+        lastService,
+        monthsSince,
+        memo: booking.memo,
       })
 
-      // 발송 시각 기록 (고객 DB에 있을 때만)
-      if (customer?.id) {
-        await db
-          .from('customers')
-          .update({ reengagement_sent_at: new Date().toISOString() })
-          .eq('id', customer.id)
+      const { error: insErr } = await looseDb.from('reengagement_dispatches').insert({
+        business_id,
+        customer_id: customer_id ?? null,
+        customer_phone,
+        customer_name: name,
+        last_booking_id: booking.id,
+        last_service: lastService,
+        last_serviced_at: booking.scheduled_at,
+        months_since: monthsSince,
+        message,
+        status: 'pending',
+        channel: 'manual',
+      })
+      if (insErr) {
+        if (!String(insErr.message || '').includes('duplicate')) {
+          console.error('[Cron] reengagement 대기열 삽입 실패:', insErr)
+        }
+        continue
       }
 
-      sent++
+      prepared++
+      newByBusiness.set(business_id, (newByBusiness.get(business_id) ?? 0) + 1)
     } catch (err) {
-      console.error(`[Cron] reengagement 발송 실패 phone=${customer_phone}:`, err)
-      skipped++
+      console.error(`[Cron] reengagement 준비 실패 phone=${customer_phone}:`, err)
     }
   }
 
-  console.log(`[Cron] reengagement — 발송: ${sent}건 / 스킵: ${skipped}건`)
+  // 새 대기 건 있는 업체 대표에게 푸시
+  let pushed = 0
+  for (const [businessId, cnt] of newByBusiness) {
+    try {
+      await sendPushToBusiness(businessId, {
+        title: '재방문 유도할 고객이 있어요 🤝',
+        body: `한동안 안 오신 단골 ${cnt}분께 보낼 개인화 메시지가 준비됐어요. 검토하고 보내주세요`,
+        url: '/dashboard/reengagement',
+        tag: 'reengagement-prepare',
+      })
+      pushed++
+    } catch (err) {
+      console.error(`[Cron] reengagement 푸시 실패 business=${businessId}:`, err)
+    }
+  }
 
-  return NextResponse.json({ sent, skipped })
+  console.log(`[Cron] reengagement — 준비 ${prepared}건 / 푸시 ${pushed}업체`)
+  return NextResponse.json({ prepared, businesses: pushed })
 }
