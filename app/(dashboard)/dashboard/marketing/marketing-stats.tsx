@@ -26,10 +26,10 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
       .eq('business_id', businessId)
       .gte('created_at', periodStart),
 
-    // 예약 수 (quote_id 있는 것만 — 마케팅 유입 전환) — 퍼널 '예약 완료' 단계 겸용
+    // 예약 (quote_id 있는 것만 — 마케팅 유입 전환). 건수 + 매출 계산 겸용
     db
       .from('bookings')
-      .select('id', { count: 'exact', head: true })
+      .select('final_price, status')
       .eq('business_id', businessId)
       .not('quote_id', 'is', null)
       .gte('created_at', periodStart),
@@ -81,8 +81,19 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
   ])
 
   const quoteCount = quotesResult.count ?? 0
-  const bookingCount = bookingsResult.count ?? 0
+  // 마케팅 유입(견적)에서 나온 예약들 — 건수 + 매출
+  const bookingRows = (bookingsResult.data ?? []) as { final_price: number | null; status: string }[]
+  const bookingCount = bookingRows.length
   const conversionRate = quoteCount > 0 ? Math.round((bookingCount / quoteCount) * 100) : 0
+  // 퀄리오가 만든 매출 — 취소·노쇼 제외한 예약 매출(실현+예정), 그중 이미 완료분 별도 표시
+  const REVENUE_STATUSES = ['confirmed', 'in_progress', 'completed']
+  const attributedRevenue = bookingRows
+    .filter((b) => REVENUE_STATUSES.includes(b.status))
+    .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
+  const completedRevenue = bookingRows
+    .filter((b) => b.status === 'completed')
+    .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
+  const upcomingRevenue = attributedRevenue - completedRevenue
 
   // 후기 요청 현황
   const completedBookings = reviewResult.data ?? []
@@ -221,6 +232,37 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
 
   return (
     <div className="space-y-5">
+      {/* 퀄리오가 만든 매출 — 마케팅 유입(견적)에서 나온 예약 매출. ROI를 한눈에 */}
+      <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5">
+        <div className="flex items-center gap-1.5">
+          <span className="text-base">🎉</span>
+          <p className="text-sm font-semibold text-emerald-800">퀄리오가 만든 매출</p>
+          <span className="text-xs text-emerald-600/70">· {periodLabel}</span>
+        </div>
+        <p className="mt-2 text-3xl font-extrabold text-emerald-700 tracking-tight">
+          ₩{attributedRevenue.toLocaleString('ko-KR')}
+        </p>
+        {attributedRevenue > 0 ? (
+          <>
+            <p className="mt-1.5 text-sm text-emerald-900/80">
+              견적 <b>{quoteCount}건</b>이 예약 <b>{bookingCount}건</b>·매출로 이어졌어요
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <span className="inline-flex items-center gap-1 rounded-lg bg-white/70 border border-emerald-100 px-2.5 py-1 text-emerald-700">
+                이미 완료 <b>₩{completedRevenue.toLocaleString('ko-KR')}</b>
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-lg bg-white/70 border border-emerald-100 px-2.5 py-1 text-emerald-700/80">
+                예정 <b>₩{upcomingRevenue.toLocaleString('ko-KR')}</b>
+              </span>
+            </div>
+          </>
+        ) : (
+          <p className="mt-1.5 text-sm text-emerald-900/70">
+            아직 매출로 이어진 예약이 없어요. 홍보 링크를 공유하고 견적을 받으면 여기에 매출이 쌓여요.
+          </p>
+        )}
+      </div>
+
       {/* 상단 지표 카드 — 견적/전환 */}
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border bg-white p-4 space-y-0.5">
