@@ -1,7 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { SOURCE_LABELS, isAiSource } from '@/lib/utils/detect-view-source'
 import type { ViewSource } from '@/lib/utils/detect-view-source'
-import { MARKETING_CHANNELS } from '@/lib/utils/marketing-channels'
+import { MARKETING_CHANNELS, channelLabel } from '@/lib/utils/marketing-channels'
 import { StatsCharts } from './stats-charts'
 
 interface MarketingStatsProps {
@@ -26,10 +26,10 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
       .eq('business_id', businessId)
       .gte('created_at', periodStart),
 
-    // 예약 (quote_id 있는 것만 — 마케팅 유입 전환). 건수 + 매출 계산 겸용
+    // 예약 (quote_id 있는 것만 — 마케팅 유입 전환). 건수 + 매출 + 채널 귀속 겸용
     db
       .from('bookings')
-      .select('final_price, status')
+      .select('final_price, status, quote_id')
       .eq('business_id', businessId)
       .not('quote_id', 'is', null)
       .gte('created_at', periodStart),
@@ -75,25 +75,42 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
     // 견적 퍼널 이벤트 (전체 여정) — 타입 미반영이라 단언 사용
     db
       .from('quote_funnel_events' as never)
-      .select('session_id, event_type, step, meta' as never)
+      .select('session_id, event_type, step, meta, channel' as never)
       .eq('business_id' as never, businessId)
-      .gte('created_at' as never, periodStart) as unknown as Promise<{ data: { session_id: string; event_type: string; step: string | null; meta: Record<string, string | number> | null }[] | null }>,
+      .gte('created_at' as never, periodStart) as unknown as Promise<{ data: { session_id: string; event_type: string; step: string | null; meta: Record<string, string | number> | null; channel: string | null }[] | null }>,
   ])
 
   const quoteCount = quotesResult.count ?? 0
-  // 마케팅 유입(견적)에서 나온 예약들 — 건수 + 매출
-  const bookingRows = (bookingsResult.data ?? []) as { final_price: number | null; status: string }[]
+  // 마케팅 유입(견적)에서 나온 예약들 — 건수 + 매출 + 채널 귀속
+  const bookingRows = (bookingsResult.data ?? []) as { final_price: number | null; status: string; quote_id: string | null }[]
   const bookingCount = bookingRows.length
   const conversionRate = quoteCount > 0 ? Math.round((bookingCount / quoteCount) * 100) : 0
   // 퀄리오가 만든 매출 — 취소·노쇼 제외한 예약 매출(실현+예정), 그중 이미 완료분 별도 표시
   const REVENUE_STATUSES = ['confirmed', 'in_progress', 'completed']
-  const attributedRevenue = bookingRows
-    .filter((b) => REVENUE_STATUSES.includes(b.status))
-    .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
+  const revenueBookings = bookingRows.filter((b) => REVENUE_STATUSES.includes(b.status))
+  const attributedRevenue = revenueBookings.reduce((sum, b) => sum + (b.final_price ?? 0), 0)
   const completedRevenue = bookingRows
     .filter((b) => b.status === 'completed')
     .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
   const upcomingRevenue = attributedRevenue - completedRevenue
+
+  // 채널별 매출 — 견적 제출 이벤트(quote_submitted)의 meta.quoteId↔channel로 예약 매출을 귀속
+  // (블로그 글 CTA는 ?ch=post 로 태그돼 '자동발행 글'로 잡힘)
+  const funnelRows = funnelResult.data ?? []
+  const quoteIdToChannel = new Map<string, string | null>()
+  for (const e of funnelRows) {
+    if (e.event_type !== 'quote_submitted') continue
+    const qid = e.meta && typeof e.meta.quoteId === 'string' ? e.meta.quoteId : null
+    if (qid) quoteIdToChannel.set(qid, e.channel ?? null)
+  }
+  const channelRevenueMap = new Map<string, number>()
+  for (const b of revenueBookings) {
+    const ch = (b.quote_id && quoteIdToChannel.get(b.quote_id)) || '직접·기타'
+    channelRevenueMap.set(ch, (channelRevenueMap.get(ch) ?? 0) + (b.final_price ?? 0))
+  }
+  const channelRevenue = Array.from(channelRevenueMap.entries())
+    .map(([channel, amount]) => ({ channel, amount, label: channel === '직접·기타' ? '직접·기타' : channelLabel(channel) }))
+    .sort((a, b) => b.amount - a.amount)
 
   // 후기 요청 현황
   const completedBookings = reviewResult.data ?? []
@@ -262,6 +279,35 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
           </p>
         )}
       </div>
+
+      {/* 채널별 매출 — 어디서 온 견적이 매출이 됐는지(자동발행 글·네이버·당근 등) */}
+      {channelRevenue.length > 0 && (
+        <div className="rounded-xl border bg-white overflow-hidden">
+          <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
+            <p className="font-semibold text-sm">채널별 매출</p>
+            <p className="text-xs text-muted-foreground">어디서 온 예약이 매출이 됐나</p>
+          </div>
+          <div className="p-4 space-y-2.5">
+            {channelRevenue.map((c) => {
+              const pct = attributedRevenue > 0 ? Math.round((c.amount / attributedRevenue) * 100) : 0
+              return (
+                <div key={c.channel} className="space-y-1">
+                  <div className="flex items-baseline justify-between gap-2 text-sm">
+                    <span className="font-medium">{c.label}</span>
+                    <span className="font-semibold text-emerald-700">₩{c.amount.toLocaleString('ko-KR')}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.max(pct, c.amount > 0 ? 6 : 0)}%` }} />
+                  </div>
+                </div>
+              )
+            })}
+            <p className="text-xs text-muted-foreground pt-1">
+              자동 발행 블로그 글에서 온 예약은 &lsquo;자동발행 글&rsquo;로 잡혀요.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* 상단 지표 카드 — 견적/전환 */}
       <div className="grid grid-cols-2 gap-3">

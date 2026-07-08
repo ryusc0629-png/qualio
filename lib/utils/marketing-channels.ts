@@ -18,12 +18,18 @@ export const MARKETING_CHANNELS: MarketingChannel[] = [
   { key: 'flyer',       label: '전단지·명함 QR',  emoji: '📄', hint: '인쇄물 QR코드로 만들 링크' },
 ]
 
-const CHANNEL_KEYS = new Set(MARKETING_CHANNELS.map((c) => c.key))
+// 시스템이 자동으로 붙이는 내부 채널 — 링크 복사 카드엔 안 나오지만 통계엔 잡힘
+// (자동 발행 블로그 글의 견적 버튼처럼, 사장님이 손수 배포하지 않아도 유입 출처를 구분)
+export const AUTO_CHANNELS: MarketingChannel[] = [
+  { key: 'post', label: '자동발행 글', emoji: '✍️', hint: '자동 발행되는 블로그 글의 견적 버튼에서 온 방문' },
+]
+
+const CHANNEL_KEYS = new Set([...MARKETING_CHANNELS, ...AUTO_CHANNELS].map((c) => c.key))
 
 // 표시용 레이블 조회 (알 수 없는 값은 그대로 노출)
 export function channelLabel(key: string | null | undefined): string {
   if (!key) return '직접·기타'
-  return MARKETING_CHANNELS.find((c) => c.key === key)?.label ?? key
+  return [...MARKETING_CHANNELS, ...AUTO_CHANNELS].find((c) => c.key === key)?.label ?? key
 }
 
 // 알려진 채널만 통과 — 임의 문자열 저장 방지(오염된 통계 예방)

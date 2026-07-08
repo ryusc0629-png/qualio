@@ -473,7 +473,8 @@ export function QuoteForm({ businessId, businessName, services }: QuoteFormProps
   const { execute, isPending } = useAction(calculateAndCreateQuoteAction, {
     onSuccess: ({ data }) => {
       if (!data) return
-      trackFunnel(businessId, 'quote_submitted') // 견적 제출 완료 기록(이동 전 sendBeacon)
+      // 견적 제출 완료 기록(이동 전 sendBeacon). quoteId를 함께 남겨 예약→세션→채널 매출 연결
+      trackFunnel(businessId, 'quote_submitted', { meta: { quoteId: data.quoteId } })
       window.location.replace(`/q/${businessId}/quote/${data.quoteId}`)
     },
     onError: ({ error }) => toast.error(error.serverError ?? '견적 계산에 실패했습니다'),

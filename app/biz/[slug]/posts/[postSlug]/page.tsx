@@ -312,7 +312,7 @@ export default async function PostPage({ params }: Props) {
               <ArrowLeft className="h-4 w-4" />
               {business.name}
             </Link>
-            <Link href={`/q/${business.id}`}>
+            <Link href={`/q/${business.id}?ch=post`}>
               <Button size="sm">견적 받기</Button>
             </Link>
           </div>
@@ -439,7 +439,7 @@ export default async function PostPage({ params }: Props) {
                   <p className="text-sm text-muted-foreground mt-0.5">무료 견적을 지금 바로 받아보세요.</p>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2">
-                  <Link href={`/q/${business.id}`} className="flex-1">
+                  <Link href={`/q/${business.id}?ch=post`} className="flex-1">
                     <Button className="w-full">온라인 견적 받기 →</Button>
                   </Link>
                   {business.phone && (
