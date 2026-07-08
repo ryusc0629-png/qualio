@@ -11,6 +11,7 @@ import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContent
 import type { PlanId } from '@/lib/config/plans'
 import { fetchRecentJobCases } from '@/lib/ai/job-cases'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
+import { getRelatedKeywords } from '@/lib/keyword/naver-searchad'
 
 // 공통: 현재 유저의 business_id 조회
 async function getBusinessId() {
@@ -35,6 +36,7 @@ export const generatePostAction = action
     topic: z.string().max(300).optional(),
     imageUrl: z.string().url().optional(),
     suggestedTitle: z.string().max(200).optional(), // 추천 카드 제목 고정용
+    keyword: z.string().max(100).optional(), // 추천 주제의 핵심 검색어 (본문·태그 최적화용)
   }))
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getBusinessId()
@@ -71,6 +73,12 @@ export const generatePostAction = action
     // 실제 작업 사례(익명) — 글 고유성 근거
     const realCases = await fetchRecentJobCases(db, businessId)
 
+    // 핵심 검색어가 있으면 연관 검색어까지 조회 → 본문·태그를 실제 검색어에 맞춤
+    const keyword = parsedInput.keyword
+    const relatedStats = keyword ? await getRelatedKeywords(keyword) : []
+    const relatedKeywords = relatedStats.map((r) => r.keyword)
+    const seoKeywords = keyword ? [keyword, ...relatedKeywords] : undefined
+
     // AI 포스트 생성
     const postContent = await generatePostContent({
       businessName: business.name,
@@ -82,6 +90,8 @@ export const generatePostAction = action
       serviceAreas: business.service_areas,
       model,
       realCases,
+      keyword,
+      relatedKeywords,
     })
 
     // 추천 카드에서 발행한 경우 → 기획 단계 제목 그대로 사용
@@ -138,6 +148,7 @@ export const generatePostAction = action
         address: business.address,
         geoTitle: postContent.title,
         geoContent: fullContent,
+        seoKeywords,
       })
     }
 
@@ -435,6 +446,7 @@ export const publishTodayAction = action
     for (let i = 0; i < needed; i++) {
       // 주제 추천
       let topic: string | undefined
+      let keyword: string | undefined
       try {
         const suggestions = await generateTopicSuggestions({
           businessName: business.name,
@@ -446,7 +458,13 @@ export const publishTodayAction = action
           (s) => !publishedTitles.some((t) => t.includes(s.title.slice(0, 10)))
         )
         topic = unused?.topic ?? suggestions[0]?.topic
+        keyword = unused?.keyword ?? suggestions[0]?.keyword
       } catch { /* 주제 추천 실패 시 AI 자유 선택 */ }
+
+      // 핵심 검색어 연관어까지 조회 → 본문·태그를 실제 검색어에 맞춤
+      const relatedStats = keyword ? await getRelatedKeywords(keyword) : []
+      const relatedKeywords = relatedStats.map((r) => r.keyword)
+      const seoKeywords = keyword ? [keyword, ...relatedKeywords] : undefined
 
       const postContent = await generatePostContent({
         businessName: business.name,
@@ -457,6 +475,8 @@ export const publishTodayAction = action
         serviceAreas: business.service_areas,
         model,
         realCases,
+        keyword,
+        relatedKeywords,
       })
 
       // slug 중복 방지
@@ -497,6 +517,7 @@ export const publishTodayAction = action
           address: business.address,
           geoTitle: postContent.title,
           geoContent: fullContent,
+          seoKeywords,
         })
       }
 

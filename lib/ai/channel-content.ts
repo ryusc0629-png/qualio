@@ -8,6 +8,7 @@ interface ChannelContentInput {
   address: string | null
   geoTitle: string
   geoContent: string
+  seoKeywords?: string[]  // 실검색량 기반 키워드(핵심+연관) — 네이버 태그에 우선 반영
 }
 
 // GEO 글을 바탕으로 네이버·당근·인스타 채널 텍스트를 생성해 biz_posts에 저장한다.

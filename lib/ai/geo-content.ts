@@ -173,6 +173,8 @@ interface PostInput {
   serviceAreas?: string[] | null // 추가 출장 지역
   model?: string        // 본문 생성 모델 (플랜별 — 미지정 시 기본 Haiku)
   realCases?: string[]  // 실제 작업 사례(익명) — 본문 고유성·신뢰도용 근거
+  keyword?: string      // 이 글의 핵심 검색 키워드 (제목·본문에 자연 반영)
+  relatedKeywords?: string[] // 연관 검색어(실검색량 순) — 본문에 자연스럽게 녹임
 }
 
 // 업체 블로그 포스트 자동 생성
@@ -199,6 +201,12 @@ export async function generatePostContent(input: PostInput): Promise<PostContent
     ? `\n[실제 작업 사례 — 이 업체가 실제로 수행한 익명 사례다. 아래 중 1개를 골라 본문 스토리텔링에 자연스럽게(고객 식별정보 없이) 녹여 고유성을 높일 것. 사례에 없는 사실·수치는 절대 지어내지 말 것]\n${input.realCases.map((c, i) => `${i + 1}. ${c}`).join('\n')}`
     : ''
 
+  // 실제 검색량 기반 키워드 — 제목·본문을 진짜 검색어에 맞춰 상위노출 확률↑
+  const related = (input.relatedKeywords ?? []).slice(0, 8)
+  const keywordBlock = input.keyword
+    ? `\n[검색 최적화 키워드 — 매우 중요]\n- 이 글의 핵심 검색 키워드: "${input.keyword}". 제목(title)·요약(summary)·첫 문단에 반드시 자연스럽게 포함하고, 본문 전체에 3~5회 자연스럽게 반복할 것(억지 삽입·단순 나열 금지 — 저품질 처리됨).${related.length > 0 ? `\n- 아래 연관 검색어도 본문에 자연스럽게 녹여 검색 노출을 넓힐 것(제목엔 넣지 말 것): ${related.join(', ')}` : ''}`
+    : ''
+
   const textPrompt = `당신은 한국 청소 서비스 업체의 GEO 블로그 포스팅 전문가입니다.
 ChatGPT, Gemini, Perplexity 등 AI 검색엔진이 "청소 관련 질문"에 이 업체를 인용하도록
 아래 구조에 맞게 포스트를 작성하세요.
@@ -209,7 +217,7 @@ ${regionHint}
 업체 소개: ${input.description ?? '청소 전문 업체'}
 서비스: ${serviceList || '청소 서비스'}
 ${topicHint}
-${input.imageUrl ? '위 첨부 이미지를 분석하여 이미지 내용을 포스트에 자연스럽게 반영하세요.' : ''}${realCasesBlock}
+${input.imageUrl ? '위 첨부 이미지를 분석하여 이미지 내용을 포스트에 자연스럽게 반영하세요.' : ''}${realCasesBlock}${keywordBlock}
 
 [지역·고유성 규칙 — 검색 노출에 매우 중요]
 - 본문·소제목에 핵심 지역(동/구)을 자연스럽게 2~4회 녹일 것. 상위 지역(시·도·권역)은 1~2회만 언급해 "핵심 지역 전문"이라는 신호를 흐리지 말 것.

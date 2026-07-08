@@ -98,6 +98,57 @@ export async function getKeywordStats(seeds: string[]): Promise<Map<string, Keyw
   return result
 }
 
+// 씨드 키워드의 '연관 검색어'를 실검색량 순으로 반환 (본문·태그에 실제 검색어 주입용).
+// 키워드도구 응답의 keywordList 전체(연관어 포함)에서 씨드 자신을 빼고 검색량 상위 N개를 고른다.
+export async function getRelatedKeywords(seed: string, limit = 8): Promise<KeywordStat[]> {
+  const apiKey = process.env.NAVER_SEARCHAD_API_KEY
+  const secret = process.env.NAVER_SEARCHAD_SECRET_KEY
+  const customerId = process.env.NAVER_SEARCHAD_CUSTOMER_ID
+  if (!apiKey || !secret || !customerId) return []
+
+  try {
+    const timestamp = Date.now().toString()
+    const signature = sign(timestamp, 'GET', KEYWORD_PATH, secret)
+    const query = new URLSearchParams({ hintKeywords: seed.replace(/\s+/g, ''), showDetail: '1' })
+    const res = await fetch(`${BASE_URL}${KEYWORD_PATH}?${query.toString()}`, {
+      headers: {
+        'X-Timestamp': timestamp,
+        'X-API-KEY': apiKey,
+        'X-Customer': customerId,
+        'X-Signature': signature,
+      },
+    })
+    if (!res.ok) {
+      console.error('[Keyword] 연관 검색어 API 응답 오류:', res.status)
+      return []
+    }
+    const data = (await res.json()) as { keywordList?: KeywordRow[] }
+    const seedNorm = normalize(seed)
+    // 씨드에서 2글자 조각(bi-gram)들을 뽑아, 이 조각 중 하나라도 포함하는 연관어만 남긴다.
+    // (네이버는 검색량 큰 무관 단어도 연관어로 주므로 — 미세먼지·분리수거 등 오프토픽 태그 방지)
+    const grams: string[] = []
+    for (let i = 0; i < seedNorm.length - 1; i++) grams.push(seedNorm.slice(i, i + 2))
+    const isRelevant = (relNorm: string) => grams.some((g) => relNorm.includes(g))
+
+    return (data.keywordList ?? [])
+      .filter((r) => normalize(r.relKeyword) !== seedNorm && isRelevant(normalize(r.relKeyword)))
+      .map((r) => ({
+        keyword: r.relKeyword,
+        monthlySearches: parseVolume(r.monthlyPcQcCnt) + parseVolume(r.monthlyMobileQcCnt),
+        competition:
+          r.compIdx === '낮음' || r.compIdx === '중간' || r.compIdx === '높음'
+            ? (r.compIdx as KeywordStat['competition'])
+            : '중간',
+      }))
+      .filter((k) => k.monthlySearches > 0)
+      .sort((a, b) => b.monthlySearches - a.monthlySearches)
+      .slice(0, limit)
+  } catch (err) {
+    console.error('[Keyword] 연관 검색어 조회 실패:', err instanceof Error ? err.message : err)
+    return []
+  }
+}
+
 // 기회 점수 — 검색량이 많을수록↑, 경쟁이 셀수록↓. '검색 많고 경쟁 적은' 키워드를 상위로.
 export function opportunityScore(stat: KeywordStat): number {
   const weight = stat.competition === '낮음' ? 1 : stat.competition === '중간' ? 1.6 : 2.5

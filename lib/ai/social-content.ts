@@ -7,6 +7,7 @@ interface SocialContentInput {
   address: string | null
   geoTitle: string
   geoContent: string
+  seoKeywords?: string[]  // 실검색량 기반 키워드(핵심+연관) — 네이버 태그 앞쪽에 우선 배치
 }
 
 interface SocialContentOutput {
@@ -43,7 +44,7 @@ function repairJson(raw: string): string {
 export async function generateSocialContent(
   input: SocialContentInput,
 ): Promise<SocialContentOutput> {
-  const { businessName, address, geoTitle, geoContent } = input
+  const { businessName, address, geoTitle, geoContent, seoKeywords } = input
   const pureContent = extractContent(geoContent)
   const region = address ? address.split(' ').slice(0, 2).join(' ') : '우리 동네'
 
@@ -118,5 +119,16 @@ ${pureContent.slice(0, 2500)}
 
   parsed.naverTags = cleanTags(parsed.naverTags)
   parsed.instagramHashtags = cleanTags(parsed.instagramHashtags)
+
+  // 실검색량 기반 키워드가 있으면 네이버 태그 앞쪽에 우선 배치(실제 검색되는 태그) + 중복 제거, 최대 12개
+  if (seoKeywords && seoKeywords.length > 0) {
+    const real = cleanTags(seoKeywords)
+    const merged: string[] = []
+    for (const t of [...real, ...parsed.naverTags]) {
+      if (t && !merged.includes(t)) merged.push(t)
+    }
+    parsed.naverTags = merged.slice(0, 12)
+  }
+
   return parsed
 }
