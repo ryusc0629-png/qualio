@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound, permanentRedirect } from 'next/navigation'
 import { QuoteForm } from './quote-form'
+import { QuoteChatWidget } from '@/components/quote/quote-chat-widget'
 import { trackPageView } from '@/lib/utils/track-page-view'
 
 interface Props {
@@ -69,10 +70,13 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
   }))
 
   return (
-    <QuoteForm
-      businessId={business.id}
-      businessName={business.name}
-      services={typedServices}
-    />
+    <>
+      <QuoteForm
+        businessId={business.id}
+        businessName={business.name}
+        services={typedServices}
+      />
+      <QuoteChatWidget businessId={business.id} businessName={business.name} />
+    </>
   )
 }
