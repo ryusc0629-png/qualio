@@ -125,11 +125,10 @@ export function QuoteChatWidget({ businessId, businessName }: Props) {
       {open && (
         <div className="fixed inset-0 z-50 sm:inset-auto sm:bottom-4 sm:right-4">
           <ScrollLock />
-          <div
-            ref={(el) => el?.focus()}
-            tabIndex={-1}
-            className="flex h-full w-full flex-col bg-white outline-none sm:h-[600px] sm:max-h-[80vh] sm:w-[380px] sm:rounded-2xl sm:border sm:shadow-2xl"
-          >
+          {/* 포커스는 아래 useEffect에서 입력창(textarea)에 준다.
+              컨테이너에 인라인 ref로 focus를 걸면 리렌더마다 포커스를 뺏어가
+              한글 입력이 중단되므로 여기서는 focus를 걸지 않는다. */}
+          <div className="flex h-full w-full flex-col bg-white sm:h-[600px] sm:max-h-[80vh] sm:w-[380px] sm:rounded-2xl sm:border sm:shadow-2xl">
             {/* 헤더 */}
             <div className="flex items-center justify-between border-b bg-emerald-600 px-4 py-3 text-white sm:rounded-t-2xl">
               <div className="min-w-0">
