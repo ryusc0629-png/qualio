@@ -57,9 +57,18 @@ export function QuoteChatWidget({ businessId, businessName }: Props) {
     if (!trimmed || streaming) return
 
     const nextMessages: ChatMessage[] = [...messages, { role: 'user', content: trimmed }]
-    setMessages(nextMessages)
+    // 보내는 즉시 사용자 메시지 + 로딩(빈 어시스턴트) 말풍선을 함께 표시 → 대기 중임을 바로 알림
+    setMessages([...nextMessages, { role: 'assistant', content: '' }])
     setInput('')
     setStreaming(true)
+
+    // 마지막(어시스턴트) 말풍선 내용을 교체하는 헬퍼
+    const setLast = (content: string) =>
+      setMessages((prev) => {
+        const copy = [...prev]
+        copy[copy.length - 1] = { role: 'assistant', content }
+        return copy
+      })
 
     try {
       const res = await fetch(`/api/chat/${businessId}`, {
@@ -72,9 +81,6 @@ export function QuoteChatWidget({ businessId, businessName }: Props) {
         throw new Error('response not ok')
       }
 
-      // 빈 어시스턴트 말풍선을 먼저 넣고, 토큰이 올 때마다 채운다
-      setMessages((prev) => [...prev, { role: 'assistant', content: '' }])
-
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let acc = ''
@@ -83,17 +89,15 @@ export function QuoteChatWidget({ businessId, businessName }: Props) {
         const { done, value } = await reader.read()
         if (done) break
         acc += decoder.decode(value, { stream: true })
-        setMessages((prev) => {
-          const copy = [...prev]
-          copy[copy.length - 1] = { role: 'assistant', content: acc }
-          return copy
-        })
+        setLast(acc)
+      }
+
+      // 아무 내용도 못 받았으면 폴백 문구로 채움(빈 말풍선 방지)
+      if (!acc.trim()) {
+        setLast('죄송해요, 답변을 받지 못했어요. 다시 한 번 시도해주세요.')
       }
     } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: '앗, 연결이 잠깐 끊겼어요. 다시 한 번 물어봐 주세요.' },
-      ])
+      setLast('앗, 연결이 잠깐 끊겼어요. 다시 한 번 물어봐 주세요.')
     } finally {
       setStreaming(false)
       inputRef.current?.focus()
