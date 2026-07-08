@@ -14,6 +14,16 @@ interface ChatMessage {
   content: string
 }
 
+// AI가 실수로 넣은 마크다운 기호 제거 (일반 텍스트로 렌더링하므로 별표가 그대로 보임 방지)
+function stripMarkdown(t: string): string {
+  return t
+    .replace(/\*\*(.+?)\*\*/g, '$1') // **굵게** → 굵게
+    .replace(/\*\*/g, '') // 짝 안 맞는 남은 별표
+    .replace(/__(.+?)__/g, '$1') // __굵게__ → 굵게
+    .replace(/^\s*[-*]\s+/gm, '') // 줄머리 목록 기호
+    .replace(/^#{1,6}\s+/gm, '') // 헤딩 기호
+}
+
 // 처음 열었을 때 보여줄 추천 질문 — 하나는 일부러 '가격' 질문(견적 폼 유도 시연)
 const SUGGESTIONS = [
   '입주청소는 뭐가 포함되나요?',

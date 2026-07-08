@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createServiceClient } from '@/lib/supabase/server'
+import { sendPushToBusiness } from '@/lib/push/web-push'
 import {
   buildConsultSystemPrompt,
   sanitizeMessages,
@@ -9,8 +10,73 @@ import {
 // 고객용 AI 상담 스트리밍 엔드포인트 — 로그인 불필요
 // POST body: { messages: { role, content }[] }
 // 응답: text/plain 스트림 (토큰이 도착하는 대로 흘려보냄)
+// 고객이 연락처를 남기면 AI가 register_consultation_lead 도구를 호출 → 리드 등록 + 대표 알림
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// AI가 상담 요청 고객의 연락처를 확보했을 때 호출하는 도구
+const CONSULT_TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'register_consultation_lead',
+    description:
+      '고객이 직접 상담을 원해 휴대폰 번호를 남겼을 때만 호출한다. 호출하면 잠재고객(리드)으로 등록되고 사장님에게 알림이 간다. 연락처를 아직 받지 못했으면 절대 호출하지 말고 먼저 물어볼 것.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: '고객 성함 (모르면 빈 문자열)' },
+        phone: { type: 'string', description: '고객 휴대폰 번호 (예: 010-1234-5678)' },
+        reason: { type: 'string', description: '상담이 필요한 내용을 한 문장으로 요약' },
+      },
+      required: ['phone'],
+    },
+  },
+]
+
+// 상담 요청 고객을 잠재고객(리드)으로 등록하고 대표에게 푸시 알림
+async function registerConsultationLead(
+  db: ReturnType<typeof createServiceClient>,
+  businessId: string,
+  input: { name?: string; phone?: string; reason?: string },
+): Promise<boolean> {
+  const phone = (input.phone ?? '').trim()
+  if (!phone) return false
+  const name = (input.name ?? '').trim()
+  const reason = (input.reason ?? '').trim()
+
+  // 같은 전화번호 리드가 이미 있으면 중복 등록하지 않음
+  const { data: existing } = await db
+    .from('leads')
+    .select('id')
+    .eq('business_id', businessId)
+    .eq('phone', phone)
+    .maybeSingle()
+
+  if (!existing) {
+    await db.from('leads').insert({
+      business_id: businessId,
+      company_name: name || '상담 요청 고객',
+      contact_name: name || null,
+      phone,
+      customer_type: 'individual',
+      status: 'new',
+      notes: reason ? `[AI 상담] ${reason}` : '[AI 상담] 채팅에서 연락처를 남김',
+    })
+  }
+
+  // 대표 폰 알림 — 실패해도 상담 흐름은 끊기지 않게 격리
+  try {
+    await sendPushToBusiness(businessId, {
+      title: '상담 요청이 들어왔어요! 📞',
+      body: `${name || '고객'}님 · ${phone}${reason ? ` · ${reason}` : ''}`,
+      url: '/dashboard/crm',
+      tag: `consult-${phone}`,
+    })
+  } catch (e) {
+    console.error('[Consult] 상담 알림 발송 실패:', e)
+  }
+
+  return true
+}
 
 export async function POST(
   req: Request,
@@ -31,8 +97,8 @@ export async function POST(
     return new Response('[APP] 잘못된 요청이에요', { status: 400 })
   }
 
-  const messages = sanitizeMessages((body as { messages?: unknown })?.messages)
-  if (messages.length === 0) {
+  const clientMessages = sanitizeMessages((body as { messages?: unknown })?.messages)
+  if (clientMessages.length === 0) {
     return new Response('[APP] 질문을 입력해주세요', { status: 400 })
   }
 
@@ -78,27 +144,57 @@ export async function POST(
 
   const client = new Anthropic({ apiKey })
 
-  // Claude 응답을 토큰 단위로 흘려보내는 스트림 구성
+  // Claude 응답을 토큰 단위로 흘려보내는 스트림 — 도구 호출이 나오면 실행 후 이어서 답변
   const encoder = new TextEncoder()
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        const anthropicStream = client.messages.stream({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1024,
-          system,
-          messages,
-        })
+        const convo: Anthropic.MessageParam[] = clientMessages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }))
 
-        anthropicStream.on('text', (delta) => {
-          controller.enqueue(encoder.encode(delta))
-        })
+        // 도구 호출 → 실행 → 이어서 답변 루프 (안전 상한 4회)
+        for (let round = 0; round < 4; round++) {
+          const anthropicStream = client.messages.stream({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 1024,
+            system,
+            messages: convo,
+            tools: CONSULT_TOOLS,
+          })
 
-        await anthropicStream.finalMessage()
+          anthropicStream.on('text', (delta) => {
+            controller.enqueue(encoder.encode(delta))
+          })
+
+          const final = await anthropicStream.finalMessage()
+          if (final.stop_reason !== 'tool_use') break
+
+          // 어시스턴트 턴(도구 호출 포함)을 대화에 추가하고 도구 실행
+          convo.push({ role: 'assistant', content: final.content })
+          const toolResults: Anthropic.ToolResultBlockParam[] = []
+          for (const block of final.content) {
+            if (block.type === 'tool_use' && block.name === 'register_consultation_lead') {
+              const ok = await registerConsultationLead(
+                db,
+                business.id,
+                block.input as { name?: string; phone?: string; reason?: string },
+              )
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: block.id,
+                content: ok ? '등록 완료. 사장님에게 알림을 보냈습니다.' : '연락처가 없어 등록하지 못했습니다.',
+              })
+            }
+          }
+          if (toolResults.length === 0) break
+          convo.push({ role: 'user', content: toolResults })
+        }
+
         controller.close()
       } catch (e) {
         console.error('[Consult] 스트리밍 오류:', e)
-        // 이미 일부가 나갔을 수 있으므로 짧은 폴백 문구만 덧붙이고 종료
         controller.enqueue(encoder.encode('\n\n잠시 문제가 있었어요. 다시 시도해주세요.'))
         controller.close()
       }
