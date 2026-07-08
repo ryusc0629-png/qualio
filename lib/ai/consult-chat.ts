@@ -53,7 +53,10 @@ function formatService(s: ConsultService): string {
 
   // 가격 한 줄 구성
   let priceLine: string
-  if (s.unit_prices && s.unit_prices.length > 0) {
+  if (s.unit === '상담') {
+    // 현장 방문 후 견적 — 미리 가격 산정 불가
+    priceLine = `- ${s.name}: 현장 방문 후 견적 (미리 가격 산정 불가 — 방문·상담 필요)`
+  } else if (s.unit_prices && s.unit_prices.length > 0) {
     // 항목별 단가(화장실/주방 등)는 이름이 사람이 읽는 값이라 그대로 나열
     const items = s.unit_prices
       .map((p) => `${p.name}${p.variant ? `(${p.variant})` : ''} ${won(p.price)}`)
@@ -123,6 +126,7 @@ ${serviceList}
 - '일반적으로'로 표시된 설명은 업계 일반 기준이에요. 이걸 안내할 땐 "보통 이런 작업을 해요"처럼 일반적인 설명임을 밝히고, 정확한 포함 여부·범위는 "사장님이 현장 보고 확인드려요" 또는 간편 견적으로 안내하세요.
 - 목록에 없는 내용은 지어내지 마세요.
 - 포함 항목이 매력적이면 자연스럽게 "간편 견적 받기"로 연결해도 좋습니다.
+- '현장 방문 후 견적'으로 표시된 서비스는 미리 금액을 낼 수 없어요. 이건 "현장을 봐야 정확한 견적이 나와요. 성함과 연락처를 남겨주시면 사장님이 방문 견적을 잡아드려요"라고 안내하고, 연락처를 받으면 register_consultation_lead 도구를 호출하세요.
 
 [가격 안내 규칙 — 매우 중요]
 - 위 [기준 단가]는 "평당 얼마부터 시작해요" 수준까지만 참고로 알려줄 수 있습니다.

@@ -93,6 +93,7 @@ const UNITS = [
   { value: '평당', label: '평당 가격' },
   { value: '개',   label: '대·개당 가격' },
   { value: '시간', label: '시간당 가격' },
+  { value: '상담', label: '현장 견적 (방문 후 산출)' },
 ] as const
 
 const AC_TYPE_LIST = [
@@ -356,6 +357,7 @@ export function EditServiceButton({
   })
 
   const currentName  = watch('name') ?? ''
+  const currentUnit  = watch('unit')
   const isAcByName   = isAcService(currentName)
 
   // ── 가격 가이드 ── 기본가 × 배수 × 할인으로 플랜별 예시 가격 실시간 계산
@@ -490,7 +492,8 @@ export function EditServiceButton({
             onSubmit={handleSubmit((data) => {
               let acTypePrices: Record<string, number> | undefined
               let unitPrices: Array<{ name: string; price: number }> | undefined
-              let basePrice = Number(data.base_price)
+              // 현장 견적(상담)은 미리 가격이 없으므로 0으로 저장
+              let basePrice = data.unit === '상담' ? 0 : Number(data.base_price)
 
               if (isAcByName) {
                 const parsed: Record<string, number> = {}
@@ -651,8 +654,16 @@ export function EditServiceButton({
               </div>
             )}
 
-            {/* 기본가 — 에어컨/항목별 단가 모드에서는 자동 계산 */}
-            {!isAcByName && !isUnitByName && (
+            {/* 현장 견적(상담) — 가격 대신 안내만 */}
+            {currentUnit === '상담' && (
+              <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                현장 방문 후 견적이라 미리 가격을 넣지 않아도 돼요. 고객이 고르면 연락처를 받아
+                &lsquo;상담 요청&rsquo;으로 접수돼요.
+              </p>
+            )}
+
+            {/* 기본가 — 에어컨/항목별 단가/현장견적 모드에서는 숨김 */}
+            {!isAcByName && !isUnitByName && currentUnit !== '상담' && (
               <div className="space-y-1">
                 <Label>기본 가격 (원) *</Label>
                 <Input type="number" {...register('base_price')} />

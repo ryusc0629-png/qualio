@@ -5,7 +5,7 @@ import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import { ChevronRight, ChevronLeft, Star } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { calculateAndCreateQuoteAction } from '@/lib/actions/quotes'
+import { calculateAndCreateQuoteAction, createConsultationRequestAction } from '@/lib/actions/quotes'
 import { isAcService } from '@/lib/utils'
 import { trackFunnel } from '@/lib/utils/track-funnel'
 
@@ -14,6 +14,8 @@ const STEP_SEQUENCE_DEFAULT      = ['service', 'space', 'context', 'date', 'note
 const STEP_SEQUENCE_AC           = ['service', 'ac_detail', 'context', 'date', 'notes', 'name', 'phone'] as const
 const STEP_SEQUENCE_UNIT         = ['service', 'unit_detail', 'context', 'date', 'notes', 'name', 'phone'] as const
 const STEP_SEQUENCE_UNIT_VARIANT = ['service', 'unit_variant', 'unit_detail', 'context', 'date', 'notes', 'name', 'phone'] as const
+// 현장 견적(상담) 서비스 — 가격 단계 없이 요청내용→이름→연락처만 받아 상담 접수
+const STEP_SEQUENCE_CONSULT      = ['service', 'notes', 'name', 'phone'] as const
 type Step = 'service' | 'space' | 'ac_detail' | 'unit_variant' | 'unit_detail' | 'context' | 'date' | 'notes' | 'name' | 'phone'
 
 const SPACE_CHIPS = ['15평', '20평', '25평', '30평', '35평', '40평', '50평 이상']
@@ -442,6 +444,8 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
   const [selectedServiceName, setSelectedServiceName] = useState('')
   const [isAcMode, setIsAcMode] = useState(false)
   const [isUnitMode, setIsUnitMode] = useState(false)
+  const [isConsultMode, setIsConsultMode] = useState(false) // 현장 견적(상담) 서비스 여부
+  const [consultDone, setConsultDone] = useState(false)      // 상담요청 접수 완료
   const [acSummary, setAcSummary] = useState('')
   const [acTotalCount, setAcTotalCount] = useState(0)
   const [acSelections, setAcSelections] = useState<Record<string, number>>({})
@@ -461,11 +465,13 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
   const [customerPhone, setCustomerPhone] = useState('')
 
   // 현재 서비스에 맞는 스텝 순서
-  const stepSequence = isAcMode
-    ? STEP_SEQUENCE_AC
-    : isUnitMode
-      ? (unitVariants && unitVariants.length > 0 ? STEP_SEQUENCE_UNIT_VARIANT : STEP_SEQUENCE_UNIT)
-      : STEP_SEQUENCE_DEFAULT
+  const stepSequence = isConsultMode
+    ? STEP_SEQUENCE_CONSULT
+    : isAcMode
+      ? STEP_SEQUENCE_AC
+      : isUnitMode
+        ? (unitVariants && unitVariants.length > 0 ? STEP_SEQUENCE_UNIT_VARIANT : STEP_SEQUENCE_UNIT)
+        : STEP_SEQUENCE_DEFAULT
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const startedRef = useRef(false) // 폼 시작(form_started) 1회만 기록
@@ -486,6 +492,15 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
     onError: ({ error }) => toast.error(error.serverError ?? '견적 계산에 실패했습니다'),
   })
 
+  // 현장 견적(상담) 접수 액션
+  const { execute: executeConsult, isPending: isConsultPending } = useAction(createConsultationRequestAction, {
+    onSuccess: () => {
+      trackFunnel(businessId, 'quote_submitted', { meta: { consult: 1 } })
+      setConsultDone(true)
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '접수에 실패했어요. 다시 시도해주세요'),
+  })
+
   const initial = businessName.slice(0, 1)
   const progressPct = (completedSteps.length / stepSequence.length) * 100
 
@@ -498,9 +513,9 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
       case 'unit_detail':   return '항목별 수량을 선택해주세요'
       case 'context':   return '주거 형태가 어떻게 되세요?'
       case 'date':      return '언제 방문해 드릴까요?'
-      case 'notes':     return '특별히 신경 써드릴 부분이 있나요?'
+      case 'notes':     return isConsultMode ? '어떤 작업이 필요하신가요? 편하게 적어주세요' : '특별히 신경 써드릴 부분이 있나요?'
       case 'name':      return '성함이 어떻게 되세요?'
-      case 'phone':     return '카카오톡으로 견적서를 보내드릴게요 📱\n연락처를 알려주세요'
+      case 'phone':     return isConsultMode ? '사장님이 방문 견적을 위해 연락드릴게요 📞\n연락처를 알려주세요' : '카카오톡으로 견적서를 보내드릴게요 📱\n연락처를 알려주세요'
     }
   }
 
@@ -535,18 +550,23 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
   }
 
   const handleServiceSelect = (service: ServiceItem) => {
-    const isAc   = isAcService(service.name)
-    const isUnit = !isAc && Array.isArray(service.unit_prices) && service.unit_prices.length > 0
+    const isConsult = service.unit === '상담' // 현장 방문 후 견적 서비스
+    const isAc   = !isConsult && isAcService(service.name)
+    const isUnit = !isConsult && !isAc && Array.isArray(service.unit_prices) && service.unit_prices.length > 0
     const hasVariants = isUnit && Array.isArray(service.unit_variants) && service.unit_variants.length > 0
     setSelectedServiceId(service.id)
     setSelectedServiceName(service.name)
+    setIsConsultMode(isConsult)
     setIsAcMode(isAc)
     setIsUnitMode(isUnit)
     setAcTypePrices(service.ac_type_prices)
     setUnitPrices(isUnit ? service.unit_prices : null)
     setUnitVariants(hasVariants ? (service.unit_variants as string[]) : null)
     setSelectedUnitVariant(null)
-    const nextStep = isAc ? 'ac_detail' : isUnit ? (hasVariants ? 'unit_variant' : 'unit_detail') : 'space'
+    // 상담 서비스는 가격 단계 건너뛰고 요청내용(notes)부터
+    const nextStep = isConsult
+      ? 'notes'
+      : isAc ? 'ac_detail' : isUnit ? (hasVariants ? 'unit_variant' : 'unit_detail') : 'space'
     setTimeout(() => advance('service', nextStep), 50)
   }
 
@@ -609,6 +629,18 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
       return
     }
 
+    // 현장 견적(상담) 서비스: 가격 계산 없이 상담 요청으로 접수
+    if (isConsultMode) {
+      executeConsult({
+        business_id:    businessId,
+        service_id:     selectedServiceId,
+        customer_name:  customerName.trim(),
+        customer_phone: clean,
+        notes:          notes.trim() || undefined,
+      })
+      return
+    }
+
     // 컨텍스트 + 에어컨 상세 + 요청사항 합산
     const combinedNotes = [
       contextAnswer ? `주거형태: ${contextAnswer}` : '',
@@ -628,6 +660,22 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
       unit_selections: isUnitMode && Object.keys(unitSelections).length > 0 ? unitSelections : undefined,
       unit_variant:    selectedUnitVariant ?? undefined,
     })
+  }
+
+  // 상담 요청 접수 완료 화면 (현장 견적 서비스)
+  if (consultDone) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center text-3xl mb-4">
+          ✅
+        </div>
+        <h1 className="text-xl font-bold text-[#1A1A1A] mb-2">상담 요청이 접수됐어요!</h1>
+        <p className="text-sm text-muted-foreground leading-relaxed">
+          {businessName} 사장님이 남겨주신 연락처로<br />
+          곧 연락드려 방문 견적을 잡아드릴게요.
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -903,10 +951,10 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={isPending || customerPhone.length < 10}
+                disabled={isPending || isConsultPending || customerPhone.length < 10}
                 className="w-full h-14 rounded-2xl bg-primary text-white font-extrabold text-base disabled:opacity-50 active:scale-[0.98] transition-all"
               >
-                내 견적서 바로 받기 →
+                {isConsultMode ? '상담 요청 보내기 →' : '내 견적서 바로 받기 →'}
               </button>
               <p className="text-[11px] text-zinc-400 text-center leading-relaxed">
                 🔒 전화번호는 예약 확인에만 사용돼요. 광고 문자는 보내지 않습니다.

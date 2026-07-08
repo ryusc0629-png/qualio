@@ -658,3 +658,70 @@ export const confirmBookingFromQuoteAction = authAction
     revalidatePath('/dashboard/clients')
     return { success: true }
   })
+
+// 현장 견적(상담) 서비스 접수 — 고객이 견적폼에서 '상담' 단위 서비스를 고르면
+// 가격 계산 대신 연락처를 받아 잠재고객(리드)으로 등록하고 대표에게 알림
+const consultationRequestSchema = z.object({
+  business_id:    z.string().uuid(),
+  service_id:     z.string().uuid(),
+  customer_name:  z.string().min(1),
+  customer_phone: z.string().min(8),
+  notes:          z.string().optional(),
+})
+
+export const createConsultationRequestAction = publicAction
+  .schema(consultationRequestSchema)
+  .action(async ({ parsedInput }) => {
+    const db = createServiceClient()
+
+    const { data: service } = await db
+      .from('service_items')
+      .select('name')
+      .eq('id', parsedInput.service_id)
+      .maybeSingle()
+    const serviceName = service?.name ?? '상담 요청'
+
+    const phone = parsedInput.customer_phone.replace(/[^0-9]/g, '')
+    const name = parsedInput.customer_name.trim()
+    const noteText = parsedInput.notes?.trim()
+    const notes = `[현장견적 상담요청] ${serviceName}${noteText ? ` · ${noteText}` : ''}`
+
+    // 같은 번호 리드가 있으면 갱신, 없으면 신규 (AI 상담 리드와 동일 규칙)
+    const { data: existing } = await db
+      .from('leads')
+      .select('id')
+      .eq('business_id', parsedInput.business_id)
+      .eq('phone', phone)
+      .maybeSingle()
+
+    if (existing) {
+      await db
+        .from('leads')
+        .update({ company_name: name, notes, updated_at: new Date().toISOString() })
+        .eq('id', existing.id)
+    } else {
+      await db.from('leads').insert({
+        business_id:   parsedInput.business_id,
+        company_name:  name,
+        contact_name:  null,
+        phone,
+        customer_type: 'individual',
+        status:        'new',
+        notes,
+      })
+    }
+
+    // 대표 폰 알림 — 실패해도 접수는 유지
+    try {
+      await sendPushToBusiness(parsedInput.business_id, {
+        title: '현장 견적 상담 요청! 📞',
+        body: `${name}님 · ${phone} · ${serviceName}`,
+        url: '/dashboard/crm',
+        tag: `consult-${phone}`,
+      })
+    } catch (e) {
+      console.error('[Consult] 상담요청 알림 실패:', e)
+    }
+
+    return { success: true }
+  })

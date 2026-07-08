@@ -6,7 +6,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { recommendServiceTierItems } from '@/lib/ai/service-tier-items'
 import { revalidatePath } from 'next/cache'
 
-const VALID_UNITS = ['정액', '평당', '시간', '개'] as const
+const VALID_UNITS = ['정액', '평당', '시간', '개', '상담'] as const
 
 // AC 유형별 단가 스키마
 const acTypePricesSchema = z.record(z.string(), z.number().min(0)).optional()
