@@ -30,6 +30,7 @@ export default async function PipelinePage({
     { data: convertedRows },
     { data: publicQuotes },
     { data: bookings },
+    { data: contracts },
   ] = await Promise.all([
     db.rpc('get_leads_for_pipeline', { p_business_id: profile.business_id }),
     // 거래처별 견적 정보 (전환 시 자동 채움용)
@@ -54,7 +55,17 @@ export default async function PipelinePage({
       .select('customer_phone, status, scheduled_at')
       .eq('business_id', profile.business_id)
       .is('deleted_at', null),
+    // 활성 정기계약 — '예상 월 매출'을 고객관리 '월 정기 매출'과 동일하게 계산
+    db
+      .from('contracts')
+      .select('contract_price, status')
+      .eq('business_id', profile.business_id),
   ])
+
+  // 활성 계약의 월 금액 합계 (고객관리 페이지와 동일 출처)
+  const monthlyRecurring = (contracts ?? [])
+    .filter((c) => c.status === 'active')
+    .reduce((s, c) => s + (c.contract_price ?? 0), 0)
 
   // 거래처별 견적 요약 맵
   const quoteByLead: Record<string, { total_amount: number; frequency: string | null; serviceName: string | null }> = {}
@@ -97,6 +108,7 @@ export default async function PipelinePage({
         quoteByLead={quoteByLead}
         convertedLeadIds={convertedLeadIds}
         liveStatusByLeadId={liveStatusByLeadId}
+        monthlyRecurring={monthlyRecurring}
       />
     </div>
   )

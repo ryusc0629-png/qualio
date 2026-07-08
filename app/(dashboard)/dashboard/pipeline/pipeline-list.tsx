@@ -90,6 +90,7 @@ interface Props {
   quoteByLead?: Record<string, QuoteSummary>
   convertedLeadIds?: string[]
   liveStatusByLeadId?: Record<string, LiveStatus>
+  monthlyRecurring?: number // 활성 정기계약 월 매출 합계 (고객관리 '월 정기 매출'과 동일 출처)
 }
 
 // 예약 일시 → 짧은 한글 날짜
@@ -115,7 +116,7 @@ const emptyForm = {
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────
 
-export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedLeadIds = [], liveStatusByLeadId = {} }: Props) {
+export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedLeadIds = [], liveStatusByLeadId = {}, monthlyRecurring = 0 }: Props) {
   const router = useRouter()
   const convertedSet = new Set(convertedLeadIds)
   const [activeFilter, setActiveFilter] = useState(filterStatus ?? '')
@@ -321,7 +322,7 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
         {[
           { label: '진행 중', value: leads.filter(l => l.status !== 'contracted' && l.status !== 'rejected').length, color: 'text-blue-600' },
           { label: '계약 완료', value: leads.filter(l => l.status === 'contracted').length, color: 'text-green-600' },
-          { label: '예상 월 매출', value: `${(leads.filter(l => l.status === 'contracted' && l.monthly_budget).reduce((s, l) => s + (l.monthly_budget ?? 0), 0) / 10000).toFixed(0)}만원`, color: 'text-primary' },
+          { label: '예상 월 매출', value: `${(monthlyRecurring / 10000).toFixed(0)}만원`, color: 'text-primary' },
         ].map((stat) => (
           <div key={stat.label} className="bg-white rounded-xl border p-3 text-center">
             <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
