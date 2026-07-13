@@ -9,7 +9,18 @@ import { redirect } from 'next/navigation'
 const loginSchema = z.object({
   email: z.string().email('올바른 이메일 형식이 아닙니다'),
   password: z.string().min(6, '비밀번호는 6자 이상이어야 합니다'),
+  // 로그인 후 복귀할 원래 목적지 (알림 클릭 등으로 진입 시 proxy가 채워줌)
+  next: z.string().optional(),
 })
+
+// 오픈 리다이렉트 방지 — 앱 내부 경로만 허용 (/로 시작, //·/\ 같은 외부/프로토콜상대 주소 거부)
+function safeInternalPath(next: string | undefined): string | null {
+  if (!next) return null
+  if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) {
+    return null
+  }
+  return next
+}
 
 // 회원가입 입력값 검증 스키마
 const signupSchema = z.object({
@@ -39,8 +50,12 @@ export const loginAction = action
       .eq('id', data.user.id)
       .single()
 
+    // 업체 등록이 끝난 사용자만 원래 목적지(next)로 복귀 —
+    // 온보딩 전이면 대시보드 접근이 불가하므로 next를 무시하고 온보딩으로 보낸다
     return {
-      redirectTo: profile?.business_id ? '/dashboard' : '/onboarding',
+      redirectTo: profile?.business_id
+        ? safeInternalPath(parsedInput.next) ?? '/dashboard'
+        : '/onboarding',
     }
   })
 

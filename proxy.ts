@@ -41,9 +41,14 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // 보호된 경로에 미로그인 접근 시 로그인 페이지로 이동
+  // (알림 클릭 등으로 들어왔다가 세션 만료로 튕길 때, 로그인 후 원래 목적지로 복귀시키기 위해
+  //  경로+쿼리를 next에 담아둔다)
   if (!user && protectedRoutes.some((route) => pathname.startsWith(route))) {
     const redirectUrl = request.nextUrl.clone()
+    const nextPath = pathname + request.nextUrl.search // 원래 가려던 곳 (경로 + 쿼리)
     redirectUrl.pathname = '/login'
+    redirectUrl.search = ''
+    redirectUrl.searchParams.set('next', nextPath)
     return NextResponse.redirect(redirectUrl)
   }
 
