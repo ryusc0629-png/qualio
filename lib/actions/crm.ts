@@ -20,6 +20,7 @@ const createLeadSchema = z.object({
   email: z.string().optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
+  category: z.string().optional(),
   monthly_budget: z.number().optional(),
   next_follow_up_date: z.string().optional(),
   notes: z.string().optional(),
@@ -41,6 +42,7 @@ const updateLeadSchema = z.object({
   email: z.string().optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
+  category: z.string().optional(),
   monthly_budget: z.number().optional(),
   next_follow_up_date: z.string().optional(),
   notes: z.string().optional(),
@@ -118,8 +120,10 @@ export const createLeadAction = action
       email:               parsedInput.email ?? null,
       phone:               parsedInput.phone ?? null,
       address:             parsedInput.address ?? null,
+      category:            parsedInput.category || null,
       monthly_budget:      parsedInput.monthly_budget ?? null,
-      next_follow_up_date: parsedInput.next_follow_up_date ?? null,
+      // 빈 문자열('')이 date 컬럼에 들어가면 22007 오류 → 빈 값은 반드시 null 로
+      next_follow_up_date: parsedInput.next_follow_up_date || null,
       notes:               parsedInput.notes ?? null,
     })
 
@@ -165,8 +169,10 @@ export const updateLeadAction = action
         email:               parsedInput.email ?? null,
         phone:               parsedInput.phone ?? null,
         address:             parsedInput.address ?? null,
+        category:            parsedInput.category || null,
         monthly_budget:      parsedInput.monthly_budget ?? null,
-        next_follow_up_date: parsedInput.next_follow_up_date ?? null,
+        // 빈 문자열('')이 date 컬럼에 들어가면 22007 오류 → 빈 값은 반드시 null 로
+        next_follow_up_date: parsedInput.next_follow_up_date || null,
         notes:               parsedInput.notes ?? null,
       })
       .eq('id', parsedInput.leadId)
