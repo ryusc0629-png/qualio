@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { saveB2bQuoteAction, generateSpecAction } from '@/lib/actions/b2b-quotes'
-import { FileText, Plus, Trash2, Sparkles, MapPin } from 'lucide-react'
+import { FileText, Plus, Trash2, Sparkles, MapPin, Loader2 } from 'lucide-react'
 import { openAddressSearch } from '@/lib/address/postcode'
 import {
   AREA_UNITS,
@@ -67,6 +67,18 @@ const UNIT_COUNT_LABEL: Record<string, string> = {
   월: '개월', 개월: '개월', 주: '주', 일: '일', 년: '년', 회: '횟수', 차: '횟수', 번: '횟수',
 }
 const countLabelForUnit = (unit?: string): string => UNIT_COUNT_LABEL[(unit ?? '').trim()] ?? '수량'
+
+// 시방서 AI 생성 중 보여줄 단계별 진행 문구 (실제 스트리밍은 아니지만 기다림을 덜 답답하게)
+const SPEC_STEPS = [
+  '현장 정보를 분석하고 있어요',
+  '작업 범위와 순서를 정리하는 중',
+  '사용 약품·장비를 고르는 중',
+  '작업 주기·투입 인원을 반영하는 중',
+  '품질 기준을 정리하는 중',
+  '거의 다 됐어요, 마무리 중',
+]
+// 스켈레톤 줄 너비 — 문단·소제목이 섞인 것처럼 보이게
+const SPEC_SKELETON = ['w-1/3', 'w-11/12', 'w-10/12', 'w-9/12', 'w-1/4', 'w-11/12', 'w-8/12', 'w-10/12', 'w-1/3', 'w-9/12']
 
 export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: Props) {
   const router = useRouter()
@@ -148,6 +160,15 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: 
     },
     onError: ({ error }) => toast.error(error.serverError ?? 'AI 생성에 실패했습니다'),
   })
+
+  // 생성 중 진행 문구를 2.2초마다 다음 단계로 넘김 (마지막 단계에서 멈춤)
+  const [specStep, setSpecStep] = useState(0)
+  useEffect(() => {
+    if (!generatingSpec) { setSpecStep(0); return }
+    setSpecStep(0)
+    const id = setInterval(() => setSpecStep((s) => Math.min(s + 1, SPEC_STEPS.length - 1)), 2200)
+    return () => clearInterval(id)
+  }, [generatingSpec])
 
   const updateItem = (idx: number, key: keyof QuoteItem, val: string | number) => {
     setItems((prev) => prev.map((it, i) => i === idx ? { ...it, [key]: val } : it))
@@ -454,17 +475,39 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: 
                 onClick={handleGenerateSpec}
                 disabled={generatingSpec || items.filter((it) => it.name).length === 0}
               >
-                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                {generatingSpec ? 'AI 작성 중...' : 'AI로 초안 만들기'}
+                {generatingSpec
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                  : <Sparkles className="h-3.5 w-3.5 text-amber-500" />}
+                {generatingSpec ? 'AI가 작성 중이에요...' : 'AI로 초안 만들기'}
               </Button>
             </div>
-            <Textarea
-              value={specContent}
-              onChange={(e) => setSpecContent(e.target.value)}
-              placeholder="위 현장 정보를 입력 후 'AI로 초안 만들기'를 누르거나, 직접 작성하세요"
-              rows={10}
-              className="resize-none font-mono text-xs leading-relaxed"
-            />
+            {generatingSpec ? (
+              // 생성 중 — 글이 써지는 듯한 스켈레톤 + 단계별 진행 문구로 기다림을 덜 답답하게
+              <div className="rounded-md border border-input bg-muted/20 p-4 min-h-[240px] space-y-4" aria-live="polite">
+                <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                  <span>{SPEC_STEPS[specStep]}…</span>
+                </div>
+                <div className="space-y-2.5">
+                  {SPEC_SKELETON.map((w, i) => (
+                    <div
+                      key={i}
+                      className={`h-3 rounded bg-muted animate-pulse ${w}`}
+                      style={{ animationDelay: `${i * 90}ms` }}
+                    />
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted-foreground">현장 정보에 맞춰 시방서를 작성하고 있어요. 잠시만요…</p>
+              </div>
+            ) : (
+              <Textarea
+                value={specContent}
+                onChange={(e) => setSpecContent(e.target.value)}
+                placeholder="위 현장 정보를 입력 후 'AI로 초안 만들기'를 누르거나, 직접 작성하세요"
+                rows={10}
+                className="resize-none font-mono text-xs leading-relaxed"
+              />
+            )}
           </section>
 
           {/* 버튼 */}
