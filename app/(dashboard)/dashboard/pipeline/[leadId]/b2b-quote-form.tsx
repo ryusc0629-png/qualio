@@ -60,12 +60,13 @@ const defaultItem = (jobType: JobType = 'recurring'): QuoteItem => ({
   name: '', unit: jobType === 'one_off' ? '식' : '월', qty: 1, unit_price: 0,
 })
 
-// 입력된 단위에 맞춰 '횟수' 열 라벨을 자동 조정 (월→개월, 주→주, 회→횟수 …)
-// 매핑에 없는 단위(식·건 등)는 기본값 '횟수'로 통일
+// 입력된 단위에 맞춰 수량 열 라벨을 자동 조정 (월→개월, 회→횟수 …)
+// 시간 반복 단위만 별칭을 쓰고, 면적·개수 등(평·㎡·개·대)은 '수량'으로 통일
+// (예전엔 기본값이 '횟수'라 단위가 '평'일 때도 '횟수 40'으로 어색했음)
 const UNIT_COUNT_LABEL: Record<string, string> = {
   월: '개월', 개월: '개월', 주: '주', 일: '일', 년: '년', 회: '횟수', 차: '횟수', 번: '횟수',
 }
-const countLabelForUnit = (unit?: string): string => UNIT_COUNT_LABEL[(unit ?? '').trim()] ?? '횟수'
+const countLabelForUnit = (unit?: string): string => UNIT_COUNT_LABEL[(unit ?? '').trim()] ?? '수량'
 
 export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: Props) {
   const router = useRouter()
