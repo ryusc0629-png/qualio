@@ -142,7 +142,7 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: 
   const tax = taxIncluded ? Math.floor(subtotal * 0.1) : 0
   const total = subtotal + tax
 
-  const { execute: executeSave, isPending: saving } = useAction(saveB2bQuoteAction, {
+  const { execute: executeSave, executeAsync: executeSaveAsync, isPending: saving } = useAction(saveB2bQuoteAction, {
     onSuccess: () => {
       toast.success('저장됐어요!')
       setOpen(false)
@@ -174,24 +174,26 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: 
     setItems((prev) => prev.map((it, i) => i === idx ? { ...it, [key]: val } : it))
   }
 
+  const buildPayload = () => ({
+    leadId,
+    customerId,
+    quoteNumber:  quoteNumber || undefined,
+    validUntil:   validUntil || undefined,
+    items:        items.filter((it) => it.name),
+    totalAmount:  total,
+    taxIncluded,
+    conditions:   conditions || undefined,
+    siteName:     siteName || undefined,
+    siteAddress:  siteAddress || undefined,
+    siteArea:     siteArea || undefined,
+    frequency:    isOneOff ? undefined : (frequency || undefined),
+    workerCount:  workerCount ? Number(workerCount) : undefined,
+    specContent:  specContent || undefined,
+    jobType,
+  })
+
   const handleSave = () => {
-    executeSave({
-      leadId,
-      customerId,
-      quoteNumber:  quoteNumber || undefined,
-      validUntil:   validUntil || undefined,
-      items:        items.filter((it) => it.name),
-      totalAmount:  total,
-      taxIncluded,
-      conditions:   conditions || undefined,
-      siteName:     siteName || undefined,
-      siteAddress:  siteAddress || undefined,
-      siteArea:     siteArea || undefined,
-      frequency:    isOneOff ? undefined : (frequency || undefined),
-      workerCount:  workerCount ? Number(workerCount) : undefined,
-      specContent:  specContent || undefined,
-      jobType,
-    })
+    executeSave(buildPayload())
   }
 
   const handleGenerateSpec = () => {
@@ -210,9 +212,24 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: 
     })
   }
 
-  const handlePreview = () => {
-    handleSave()
-    window.open(printHref, '_blank')
+  const handlePreview = async () => {
+    // 새 탭을 클릭 즉시(동기) 열어 팝업 차단을 피하고, 저장이 끝난 뒤에 주소를 미리보기로 바꿔치기.
+    // (예전엔 저장을 기다리지 않고 바로 열어서, DB 기록 전이면 미리보기가 404를 냈음)
+    const win = window.open('', '_blank')
+    if (win) {
+      win.document.write(
+        '<!doctype html><meta charset="utf-8"><title>견적서 준비 중</title>' +
+        '<div style="font-family:system-ui,-apple-system,sans-serif;display:flex;height:100vh;align-items:center;justify-content:center;color:#555">견적서를 저장하고 있어요… 잠시만요</div>'
+      )
+    }
+    const res = await executeSaveAsync(buildPayload())
+    if (res?.data?.success) {
+      if (win) win.location.href = printHref
+      else window.open(printHref, '_blank') // 팝업이 막혔던 경우 대비(사용자 제스처 직후라 대개 허용)
+    } else if (win) {
+      // 저장 실패 — onError 토스트는 이미 표시됨. 빈 탭은 닫아줌
+      win.close()
+    }
   }
 
   return (
