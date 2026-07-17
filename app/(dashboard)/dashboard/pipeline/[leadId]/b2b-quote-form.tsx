@@ -47,8 +47,10 @@ interface ExistingQuote {
 }
 
 interface Props {
-  leadId: string
-  leadName: string
+  // 리드(영업 중) 또는 고객(계약 중) 중 하나에 연결
+  leadId?: string
+  customerId?: string
+  clientName: string
   existingQuote: ExistingQuote | null
 }
 
@@ -65,10 +67,15 @@ const UNIT_COUNT_LABEL: Record<string, string> = {
 }
 const countLabelForUnit = (unit?: string): string => UNIT_COUNT_LABEL[(unit ?? '').trim()] ?? '횟수'
 
-export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
+export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [, startTransition] = useTransition()
+
+  // 미리보기(인쇄) 경로 — 고객이면 고객 경로, 아니면 리드 경로
+  const printHref = customerId
+    ? `/dashboard/clients/${customerId}/quote/print`
+    : `/dashboard/pipeline/${leadId}/quote/print`
 
   const today = new Date().toISOString().slice(0, 10)
   const defaultQuoteNumber = `Q-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`
@@ -148,6 +155,7 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
   const handleSave = () => {
     executeSave({
       leadId,
+      customerId,
       quoteNumber:  quoteNumber || undefined,
       validUntil:   validUntil || undefined,
       items:        items.filter((it) => it.name),
@@ -167,7 +175,8 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
   const handleGenerateSpec = () => {
     executeGenSpec({
       leadId,
-      clientName:   leadName,
+      customerId,
+      clientName,
       siteName:     siteName || undefined,
       siteAddress:  siteAddress || undefined,
       siteArea:     siteArea || undefined,
@@ -181,7 +190,7 @@ export function B2bQuoteForm({ leadId, leadName, existingQuote }: Props) {
 
   const handlePreview = () => {
     handleSave()
-    window.open(`/dashboard/pipeline/${leadId}/quote/print`, '_blank')
+    window.open(printHref, '_blank')
   }
 
   return (

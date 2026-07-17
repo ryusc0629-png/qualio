@@ -10,7 +10,7 @@ import { formatFrequency } from '@/lib/utils/frequency'
 import { contractAccruedRevenue } from '@/lib/utils/ltv'
 import { ClientSearchInput } from '@/components/dashboard/client-search-input'
 import { formatCompactKRW } from '@/lib/format/krw'
-import { Phone, MapPin, Calendar, TrendingUp, ChevronRight, Building2, User, Archive, Star } from 'lucide-react'
+import { Phone, MapPin, Calendar, TrendingUp, ChevronRight, Building2, User, Archive, Star, FileText } from 'lucide-react'
 
 // ── 타입 ────────────────────────────────────────────────
 
@@ -705,6 +705,9 @@ export default async function ClientsPage({
                           )}
                         </div>
                         <div className="flex items-center gap-1">
+                          <Link href={`/dashboard/clients/${customer.id}`} className="inline-flex items-center gap-0.5 text-xs text-primary hover:text-primary/80 px-2 py-1 rounded border border-primary/30 hover:border-primary/50">
+                            <FileText className="h-3 w-3" />견적서
+                          </Link>
                           <Link href={`/dashboard/clients/${customer.id}`} className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-emerald-200 hover:border-emerald-400">
                             이력<ChevronRight className="h-3 w-3" />
                           </Link>

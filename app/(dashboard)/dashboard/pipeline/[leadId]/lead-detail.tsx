@@ -249,7 +249,7 @@ export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, 
             {isCompany && (
               <B2bQuoteForm
                 leadId={lead.id}
-                leadName={lead.company_name}
+                clientName={lead.company_name}
                 existingQuote={existingQuote}
               />
             )}

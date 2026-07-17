@@ -24,7 +24,8 @@ export default async function PublicQuotePage({
     .maybeSingle() as unknown as {
       data: {
         id: string
-        lead_id: string
+        lead_id: string | null
+        customer_id: string | null
         business_id: string
         public_token: string | null
         quote_number: string | null
@@ -44,26 +45,39 @@ export default async function PublicQuotePage({
 
   if (!quote) notFound()
 
-  const [leadResult, businessResult] = await Promise.all([
-    db
+  // 견적서는 리드(영업 중) 또는 고객(계약 중)에 연결됨 — 어느 쪽이든 lead 형태로 맞춰 PrintQuote에 전달
+  const businessPromise = db
+    .from('businesses')
+    .select('name, phone, address')
+    .eq('id', quote.business_id)
+    .maybeSingle()
+
+  let client: { id: string; company_name: string; contact_name: string | null; phone: string | null; address: string | null } | null = null
+  if (quote.customer_id) {
+    const { data: c } = await db
+      .from('customers')
+      .select('id, name, phone, address')
+      .eq('id', quote.customer_id)
+      .maybeSingle()
+    if (c) client = { id: c.id, company_name: c.name, contact_name: null, phone: c.phone, address: c.address }
+  } else if (quote.lead_id) {
+    const { data: l } = await db
       .from('leads')
       .select('id, company_name, contact_name, phone, address')
       .eq('id', quote.lead_id)
-      .maybeSingle(),
-    db
-      .from('businesses')
-      .select('name, phone, address')
-      .eq('id', quote.business_id)
-      .maybeSingle(),
-  ])
+      .maybeSingle()
+    if (l) client = l
+  }
 
-  if (!leadResult.data) notFound()
+  const businessResult = await businessPromise
+
+  if (!client) notFound()
 
   const initialMode = doc === 'quote' || doc === 'spec' ? doc : 'both'
 
   return (
     <PrintQuote
-      lead={leadResult.data}
+      lead={client}
       quote={quote}
       business={businessResult.data}
       variant="public"

@@ -14,7 +14,9 @@ const quoteItemSchema = z.object({
 })
 
 const saveB2bQuoteSchema = z.object({
-  leadId:       z.string().uuid(),
+  // 리드(영업 중) 또는 고객(계약 중) 중 하나에 연결 — 둘 중 하나는 필수
+  leadId:       z.string().uuid().optional(),
+  customerId:   z.string().uuid().optional(),
   quoteNumber:  z.string().optional(),
   validUntil:   z.string().optional(),
   items:        z.array(quoteItemSchema).min(1, '항목을 하나 이상 입력해주세요'),
@@ -34,7 +36,9 @@ const saveB2bQuoteSchema = z.object({
 })
 
 const generateSpecSchema = z.object({
-  leadId:       z.string().uuid(),
+  // 대상 식별용(본문에선 미사용) — 리드/고객 어느 쪽이든 허용
+  leadId:       z.string().uuid().optional(),
+  customerId:   z.string().uuid().optional(),
   clientName:   z.string().min(1),
   siteName:     z.string().optional(),
   siteAddress:  z.string().optional(),
@@ -99,15 +103,23 @@ export const saveB2bQuoteAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getAuth()
 
-    const { data: existing } = await db
+    const isCustomer = Boolean(parsedInput.customerId)
+    if (!parsedInput.leadId && !parsedInput.customerId) {
+      throw new Error('[APP] 견적 대상(거래처)이 지정되지 않았습니다')
+    }
+
+    // 대상(리드 또는 고객)별로 기존 견적서 1건을 찾아 있으면 수정, 없으면 새로 생성
+    const existingLookup = db
       .from('b2b_quotes')
       .select('id')
-      .eq('lead_id', parsedInput.leadId)
       .eq('business_id', businessId)
-      .maybeSingle()
+    const { data: existing } = isCustomer
+      ? await existingLookup.eq('customer_id' as never, parsedInput.customerId!).maybeSingle()
+      : await existingLookup.eq('lead_id', parsedInput.leadId!).maybeSingle()
 
     const payload = {
-      lead_id:      parsedInput.leadId,
+      lead_id:      parsedInput.leadId ?? null,
+      customer_id:  parsedInput.customerId ?? null,
       business_id:  businessId,
       quote_number: parsedInput.quoteNumber ?? null,
       valid_until:  parsedInput.validUntil ?? null,
@@ -138,6 +150,7 @@ export const saveB2bQuoteAction = action
       if (error) throw new Error('[APP] 견적서 저장에 실패했습니다')
     }
 
-    revalidatePath(`/dashboard/pipeline/${parsedInput.leadId}`)
+    if (isCustomer) revalidatePath(`/dashboard/clients/${parsedInput.customerId}`)
+    else revalidatePath(`/dashboard/pipeline/${parsedInput.leadId}`)
     return { success: true }
   })

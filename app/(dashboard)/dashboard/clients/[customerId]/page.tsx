@@ -11,6 +11,7 @@ import { AddBookingButton } from '@/components/dashboard/add-booking-button'
 import { MonthlyReportShare } from '@/components/dashboard/monthly-report-share'
 import { ClaimActions } from '@/components/dashboard/claim-actions'
 import { ClaimAssignee } from '@/components/dashboard/claim-assignee'
+import { B2bQuoteForm } from '@/app/(dashboard)/dashboard/pipeline/[leadId]/b2b-quote-form'
 import { contractAccruedRevenue, type ContractLike } from '@/lib/utils/ltv'
 import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
 
@@ -165,6 +166,30 @@ export default async function CustomerDetailPage({ params }: Props) {
     .eq('customer_id', customerId)
     .order('created_at', { ascending: false })
 
+  // 이 고객의 B2B 견적서/시방서 (있으면 '수정', 없으면 '만들기') — 계약 중 거래처의 재계약·추가 견적용
+  interface B2bQuoteExisting {
+    id: string
+    quote_number: string | null
+    valid_until: string | null
+    items: { name: string; unit: string; qty: number; unit_price: number }[]
+    total_amount: number
+    tax_included: boolean
+    conditions: string | null
+    site_name: string | null
+    site_address: string | null
+    site_area: string | null
+    frequency: string | null
+    worker_count: number | null
+    spec_content: string | null
+    job_type: string | null
+  }
+  const { data: b2bQuote } = await db
+    .from('b2b_quotes')
+    .select('*')
+    .eq('customer_id' as never, customerId)
+    .eq('business_id', profile.business_id)
+    .maybeSingle() as unknown as { data: B2bQuoteExisting | null }
+
   // 잠재고객(리드) 시절 영업 기록 — 전환된 고객이면 상담·통화·견적 이력을 이어서 보여줌
   type LeadActivity = { id: string; type: string; content: string | null; activity_at: string }
   const { data: leadActivities } = customer.lead_id
@@ -317,6 +342,26 @@ export default async function CustomerDetailPage({ params }: Props) {
             <span className="text-sm font-normal text-muted-foreground ml-0.5">회</span>
           </p>
         </div>
+      </div>
+
+      {/* 견적서·시방서 — 계약 중 거래처에도 견적서/시방서를 만들고 공개 링크로 발송 (재계약·추가 견적) */}
+      <div className="bg-white rounded-xl border border-border p-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold flex items-center gap-1.5">
+            <FileText className="h-4 w-4 text-muted-foreground" />
+            견적서·시방서
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {b2bQuote
+              ? `견적서가 있어요 · ${b2bQuote.total_amount.toLocaleString('ko-KR')}원`
+              : '이 거래처에 보낼 견적서와 시방서를 만들어요'}
+          </p>
+        </div>
+        <B2bQuoteForm
+          customerId={customer.id}
+          clientName={customer.name}
+          existingQuote={b2bQuote}
+        />
       </div>
 
       {/* 정기계약 — 계약을 고객 허브에 직접 표시 (주기·월금액·다음 방문·완료/예정 횟수) */}
