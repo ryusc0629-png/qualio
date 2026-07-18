@@ -19,6 +19,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link href="/admin" className="text-sm text-muted-foreground hover:text-foreground">
               지표
             </Link>
+            <Link href="/admin/pre-registrations" className="text-sm text-muted-foreground hover:text-foreground">
+              사전신청
+            </Link>
             <Link href="/admin/lessons" className="text-sm text-muted-foreground hover:text-foreground">
               OPS 강의
             </Link>
