@@ -1,18 +1,21 @@
 import type { Metadata } from 'next'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, ArrowRight } from 'lucide-react'
 import { SiteFooter } from '@/components/site-footer'
 import { PreRegistrationForm } from './pre-registration-form'
 
 export const metadata: Metadata = {
   title: '청소 창업 90일 챌린지 — 1기 사전신청 | 퀄리오',
   description:
-    '광고 없이 0에서 시작해 90일 안에 월매출 1,000만 원까지. 그 과정을 숫자까지 실시간으로 공개합니다. 결과가 좋으면 1기로 가장 먼저 연락드려요.',
+    '기술은 있는데 오더를 못 따서 남 밑으로, 플랫폼 종속으로 가는 청소 사장님을 위한 도구. 오더 따오는 것부터 운영까지 퀄리오가 다 합니다. 90일 안에 월매출 1,000만 원 도전을 실시간 공개.',
 }
 
-const VALUE_POINTS = [
-  { emoji: '📈', text: '반복되는 홍보·글 발행은 자동으로 — 사장님은 영업에만 집중' },
-  { emoji: '🔍', text: '검색·AI 검색에 내 업체가 노출되게 자동 세팅' },
-  { emoji: '🎬', text: '실제 매출이 오르는 과정을 이 채널에서 그대로 확인' },
+// 퀄리오가 대신하는 워크플로우 — 기능이 아니라 '결과의 흐름'으로 쉽게
+const WORKFLOW = [
+  { emoji: '🌐', title: '홍보 웹사이트 자동 생성', desc: '포트폴리오 + 문의받는 페이지까지 알아서' },
+  { emoji: '📣', title: '노출용 글 자동 발행', desc: '검색·AI 검색에 뜨게 여러 채널에 자동으로' },
+  { emoji: '📩', title: '문의·견적 자동 접수', desc: '들어온 문의를 놓치지 않게 정리' },
+  { emoji: '📅', title: '예약·고객 자동 관리', desc: '일정·정기계약·단골까지 한 곳에서' },
+  { emoji: '🔁', title: '단골 재구매 자동 유도', desc: '끝난 고객을 다시 부르고 후기까지' },
 ]
 
 export default function ChallengeLandingPage() {
@@ -25,41 +28,62 @@ export default function ChallengeLandingPage() {
             <Sparkles className="w-4 h-4" /> 90일 챌린지 · 1기 모집
           </div>
 
-          {/* 헤드라인 */}
+          {/* 헤드라인 — 진짜 통증: 기술은 있는데 오더가 없다 */}
           <h1 className="text-3xl sm:text-4xl font-bold leading-tight break-keep">
-            광고 없이 <span className="text-primary">0에서</span>,<br />
-            90일 안에 <span className="text-primary">월매출 1,000만 원</span>
+            기술은 최고인데,
             <br />
-            만들 수 있을까?
+            <span className="text-primary">오더</span>는 왜 늘 남의 손에 있을까요?
           </h1>
 
           <p className="text-muted-foreground text-base leading-relaxed break-keep">
-            청소 기술은 밑바닥, 시작은 완전 백지. 대신 운영은 전부 자동화하고 영업에만 집중합니다.
-            그 90일을 <b className="text-foreground">숫자까지 전부 실시간으로 공개</b>해요.
+            직접 오더를 못 따면, 실력이 있어도 결국 <b className="text-foreground">남의 팀장</b>으로 들어가거나{' '}
+            <b className="text-foreground">숨고·미소·아정당</b> 같은 플랫폼에 매달리게 돼요. 매칭비는 계속 오르고,
+            단가 경쟁은 갈수록 심해지죠.
           </p>
 
-          {/* 가치 3줄 */}
+          <p className="text-base leading-relaxed break-keep font-medium">
+            퀄리오는 <b className="text-primary">오더 따오는 것부터 운영까지 전부 대신</b>합니다. 사장님은{' '}
+            <b>기술력만</b> 있으면 돼요.
+          </p>
+
+          {/* 워크플로우 — 이 모든 걸 대신합니다 */}
           <div className="space-y-2.5">
-            {VALUE_POINTS.map(({ emoji, text }) => (
-              <div key={text} className="flex items-start gap-3 bg-muted/50 rounded-xl px-4 py-3">
+            <p className="text-sm font-semibold text-muted-foreground">이 모든 걸 퀄리오가 대신해요</p>
+            {WORKFLOW.map(({ emoji, title, desc }) => (
+              <div key={title} className="flex items-start gap-3 bg-muted/50 rounded-xl px-4 py-3">
                 <span className="text-lg shrink-0">{emoji}</span>
-                <p className="text-sm font-medium leading-snug break-keep">{text}</p>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold break-keep">{title}</p>
+                  <p className="text-xs text-muted-foreground break-keep">{desc}</p>
+                </div>
               </div>
             ))}
+            <div className="flex items-center gap-2 pt-1 text-sm font-medium text-primary break-keep">
+              <ArrowRight className="w-4 h-4 shrink-0" />
+              사장님은 청소만. 오더와 운영은 퀄리오가 다 합니다.
+            </div>
           </div>
 
-          {/* 왜 지금 신청? */}
+          {/* 챌린지 증명 프레임 */}
           <div className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-5 space-y-2">
-            <p className="font-bold break-keep">“만약 이 방법으로 내 매출도 자동으로 오른다면?”</p>
+            <p className="font-bold break-keep">정말 되는지, 제가 직접 증명합니다.</p>
             <p className="text-sm text-muted-foreground break-keep">
-              미리 사전신청해 두세요. 챌린지 결과가 좋으면, 신청하신 분들께{' '}
-              <b className="text-foreground">1기로 가장 먼저</b> 사용 안내를 드립니다. 지금 신청하면{' '}
-              <b className="text-foreground">첫 달 무료 · 1기 가격 평생 고정</b>.
+              기술만 있는 신규 업체를 완전 백지에서 시작해, 퀄리오로{' '}
+              <b className="text-foreground">90일 안에 월매출 1,000만 원</b>에 도전합니다. 그 과정을{' '}
+              <b className="text-foreground">숫자까지 전부 실시간으로</b> 공개해요.
             </p>
           </div>
 
-          {/* 신청 폼 */}
-          <div className="rounded-2xl border bg-card p-5 shadow-sm">
+          {/* 왜 지금 신청 + 폼 */}
+          <div className="rounded-2xl border bg-card p-5 shadow-sm space-y-4">
+            <div className="space-y-1">
+              <p className="font-bold break-keep">기술은 있는데 오더가 없어 고민이라면</p>
+              <p className="text-sm text-muted-foreground break-keep">
+                미리 신청해 두세요. 챌린지 결과가 좋으면 신청하신 분들께{' '}
+                <b className="text-foreground">1기로 가장 먼저</b> 안내드려요.{' '}
+                <b className="text-foreground">첫 달 무료 · 1기 가격 평생 고정</b>.
+              </p>
+            </div>
             <PreRegistrationForm />
           </div>
         </div>
