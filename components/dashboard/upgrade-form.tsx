@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { loadTossPayments, ANONYMOUS } from '@tosspayments/tosspayments-sdk'
+import * as PortOne from '@portone/browser-sdk/v2'
 import { useAction } from 'next-safe-action/hooks'
 import { Check, Star, Loader2, ArrowUp, ArrowDown, CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -67,7 +67,7 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
     },
   })
 
-  // 베타 사용자: 토스 결제 플로우
+  // 베타 사용자: 포트원(PortOne) V2 결제 플로우
   const handlePayment = async () => {
     if (!selectedPlanId) {
       toast.error('플랜을 선택해주세요')
@@ -77,36 +77,46 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
     const plan = PAID_PLANS.find((p) => p.id === selectedPlanId)
     if (!plan) return
 
-    const clientKey = process.env.NEXT_PUBLIC_TOSSPAYMENTS_CLIENT_KEY
-    if (!clientKey) {
+    const storeId = process.env.NEXT_PUBLIC_PORTONE_STORE_ID
+    const channelKey = process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY
+    if (!storeId || !channelKey) {
       toast.error('결제 설정 오류입니다. 관리자에게 문의해주세요.')
       return
     }
 
     setIsPaying(true)
     try {
-      const tossPayments = await loadTossPayments(clientKey)
-      const payment = tossPayments.payment({ customerKey: ANONYMOUS })
+      // paymentId 형식은 서버(confirm)에서 businessId/planId 파싱에 사용됨
+      const paymentId = `${businessId}_${selectedPlanId}_${Date.now()}`
 
-      const orderId = `${businessId}_${selectedPlanId}_${Date.now()}`
-
-      await payment.requestPayment({
-        method: 'CARD',
-        amount: {
-          currency: 'KRW',
-          value: plan.price,
-        },
-        orderId,
+      const response = await PortOne.requestPayment({
+        storeId,
+        channelKey,
+        paymentId,
         orderName: `퀄리오 ${plan.label} 플랜 1개월`,
-        successUrl: `${window.location.origin}/upgrade/success`,
-        failUrl: `${window.location.origin}/upgrade`,
-        customerName: businessName,
+        totalAmount: plan.price,
+        currency: 'CURRENCY_KRW',
+        payMethod: 'CARD',
+        customer: { fullName: businessName },
+        // 모바일은 이 URL로 리다이렉트되며 paymentId·code가 쿼리로 붙는다
+        redirectUrl: `${window.location.origin}/upgrade/success`,
       })
-    } catch (e) {
-      const err = e as { code?: string }
-      if (err?.code !== 'USER_CANCEL') {
-        toast.error('결제 진행 중 오류가 발생했습니다')
+
+      // 모바일 리다이렉트 시엔 여기 도달하지 않음(위 redirectUrl로 이동)
+      // PC(팝업/iframe)는 결과가 반환됨
+      if (!response) return
+
+      // code가 있으면 실패/취소
+      if (response.code != null) {
+        toast.error(response.message ?? '결제가 취소되었어요')
+        setIsPaying(false)
+        return
       }
+
+      // 성공 — 서버 검증 페이지로 이동(구독 활성화)
+      window.location.replace(`/upgrade/success?paymentId=${encodeURIComponent(response.paymentId)}`)
+    } catch {
+      toast.error('결제 진행 중 오류가 발생했습니다')
       setIsPaying(false)
     }
   }
@@ -275,7 +285,7 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
           {showPaymentFlow ? (
             <>
               결제 1건당 <strong>1개월(30일)</strong> 이용권이 제공됩니다. 자동 갱신 없음.<br />
-              토스페이먼츠를 통해 안전하게 처리됩니다.
+              포트원(PortOne)을 통해 안전하게 결제됩니다.
               결제 후 7일 이내 미사용 시 전액 환불 가능합니다.
             </>
           ) : (

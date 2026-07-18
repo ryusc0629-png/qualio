@@ -46,7 +46,7 @@ export async function POST(_req: NextRequest) {
     }
 
     // 구독 취소 — status만 cancelled로 변경 (plan, current_period_end 유지)
-    // 환불은 토스페이먼츠 콘솔에서 수동 처리
+    // 환불은 포트원(PortOne) 콘솔에서 수동 처리
     const { error: updateError } = await db
       .from('subscriptions')
       .update({ status: 'cancelled' })
@@ -57,7 +57,6 @@ export async function POST(_req: NextRequest) {
       return NextResponse.json({ error: '구독 취소에 실패했습니다' }, { status: 500 })
     }
 
-    console.log('[Cancel] 구독 취소 완료:', { businessId: profile.business_id, plan: subscription.plan })
     return NextResponse.json({ success: true })
   } catch (e) {
     console.error('[Cancel] 예기치 못한 오류:', e)
