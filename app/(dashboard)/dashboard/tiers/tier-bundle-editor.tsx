@@ -93,9 +93,9 @@ export function TierBundleEditor({ services, tiers, currentBundles }: Props) {
 
       setSelected(next)
       setAiReason(data.reason ?? null)
-      toast.success('AI 추천을 적용했어요. 검토 후 저장하세요')
+      toast.success('전문가 추천을 적용했어요. 검토 후 저장하세요')
     },
-    onError: ({ error }) => toast.error(error.serverError ?? 'AI 추천에 실패했어요'),
+    onError: ({ error }) => toast.error(error.serverError ?? '추천에 실패했어요'),
   })
 
   const toggleService = (tierId: string, serviceId: string) => {
@@ -146,7 +146,7 @@ export function TierBundleEditor({ services, tiers, currentBundles }: Props) {
           className="gap-2 h-12"
         >
           <Sparkles className="h-4 w-4" />
-          {isSuggesting ? 'AI 분석 중...' : 'AI 번들 자동 추천'}
+          {isSuggesting ? '분석 중...' : '전문가 번들 추천'}
         </Button>
         <Button onClick={handleSave} disabled={isSaving || isSuggesting} className="gap-2 h-12">
           <Save className="h-4 w-4" />
@@ -163,7 +163,7 @@ export function TierBundleEditor({ services, tiers, currentBundles }: Props) {
 
       {aiReason && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          <span className="font-medium">AI 추천 이유</span> — {aiReason}
+          <span className="font-medium">추천 이유</span> — {aiReason}
         </div>
       )}
 

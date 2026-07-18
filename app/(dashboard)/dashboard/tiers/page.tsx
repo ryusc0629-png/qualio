@@ -69,7 +69,7 @@ export default async function TiersPage() {
       <div>
         <h1 className="text-2xl font-bold">견적 플랜 설정</h1>
         <p className="text-muted-foreground mt-1 text-sm">
-          기본 / 추천 / 프리미엄 각 플랜에 포함할 서비스를 선택하세요. AI가 최적 조합을 추천해드립니다.
+          기본 / 추천 / 프리미엄 각 플랜에 포함할 서비스를 선택하세요. 전문가 데이터로 최적 조합을 추천해드립니다.
         </p>
       </div>
 

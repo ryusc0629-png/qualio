@@ -120,7 +120,7 @@ export default async function MarketingPage({
       <div>
         <h1 className="text-xl font-bold">마케팅 포스팅</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          AI가 GEO 최적화 포스트를 자동 작성합니다. 포스트가 쌓일수록 AI 검색엔진에 더 자주 노출됩니다.
+          마케팅 전문가 데이터로 홍보 글을 자동 작성합니다. 글이 쌓일수록 AI 검색엔진에 더 자주 노출됩니다.
         </p>
       </div>
 

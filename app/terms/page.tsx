@@ -48,7 +48,7 @@ export default function TermsPage() {
           <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
             <li>온라인 견적 폼 생성 및 관리</li>
             <li>예약 접수 및 관리 대시보드</li>
-            <li>AI 기반 3단계 가격 견적 자동화</li>
+            <li>3단계 가격 견적 자동화</li>
             <li>카카오 알림톡 예약 확정 발송</li>
             <li>업체 운영 통계 및 리포트</li>
           </ul>

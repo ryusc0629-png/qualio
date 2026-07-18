@@ -440,9 +440,9 @@ export function EditServiceButton({
       setTierGood(data.good)
       setTierBetter(data.better)
       setTierBest(data.best)
-      toast.success('AI 추천을 채웠어요. 필요하면 수정한 뒤 저장하세요')
+      toast.success('전문가 추천을 채웠어요. 필요하면 수정한 뒤 저장하세요')
     },
-    onError: ({ error }) => toast.error(error.serverError ?? 'AI 추천에 실패했어요'),
+    onError: ({ error }) => toast.error(error.serverError ?? '추천에 실패했어요'),
   })
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -770,11 +770,11 @@ export function EditServiceButton({
                     {isSuggesting
                       ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       : <Sparkles className="h-3.5 w-3.5" />}
-                    {isSuggesting ? '추천 중...' : 'AI로 추천받기'}
+                    {isSuggesting ? '추천 중...' : '전문가 추천받기'}
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  입력하시면 견적서에 정확한 포함 항목이 표시됩니다. 비워두면 AI가 자동으로 채웁니다.
+                  입력하시면 견적서에 정확한 포함 항목이 표시됩니다. 비워두면 자동으로 채웁니다.
                 </p>
                 <p className="text-xs text-amber-600 mt-1">
                   ✏️ 짧은 명사형으로 입력해주세요 — &ldquo;필터 세척&rdquo; O, &ldquo;필터를 세척해드립니다&rdquo; X

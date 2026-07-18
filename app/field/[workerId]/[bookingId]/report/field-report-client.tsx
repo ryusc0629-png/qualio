@@ -137,7 +137,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
         setSelectedServices(newServices)
         const formatted = formatAiNotes(data.report, newServices)
         setNotes(formatted)
-        toast.success('AI 보고서가 작성됐어요!')
+        toast.success('전문 보고서가 작성됐어요!')
 
         // AI 보고서 생성 즉시 자동 저장 (API 비용 낭비 방지)
         saveReport({
@@ -150,7 +150,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
         })
       }
     },
-    onError: ({ error }) => toast.error(error.serverError ?? 'AI 작성에 실패했어요. 다시 시도해주세요'),
+    onError: ({ error }) => toast.error(error.serverError ?? '보고서 작성에 실패했어요. 다시 시도해주세요'),
   })
 
   // 작업 중 영상 클립 저장 (업로드 완료 시 자동 호출)
@@ -827,7 +827,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           <div className="flex items-center justify-between">
             <div>
               <Label className="text-sm font-medium">작업 메모</Label>
-              <p className="text-xs text-muted-foreground">간단히 적으면 AI가 전문 보고서로 만들어드려요</p>
+              <p className="text-xs text-muted-foreground">간단히 적으면 전문 보고서로 만들어드려요</p>
             </div>
           </div>
 
@@ -848,15 +848,15 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
                 onClick={() => generateAi({ workerId, memo: notes.trim(), serviceItems })}
               >
                 <Sparkles className="h-4 w-4" />
-                {isGenerating ? 'AI가 작성 중이에요...' : 'AI로 전문 보고서 작성하기'}
+                {isGenerating ? '전문 보고서로 정리 중이에요...' : '전문 보고서로 정리하기'}
               </Button>
 
               {notes.trim().length > 0 && notes.trim().length < 5 && (
-                <p className="text-xs text-amber-600 text-center">5자 이상 작성하면 AI 보고서를 만들 수 있어요</p>
+                <p className="text-xs text-amber-600 text-center">5자 이상 작성하면 전문 보고서를 만들 수 있어요</p>
               )}
               {notes.trim().length === 0 && (
                 <p className="text-xs text-muted-foreground text-center">
-                  작업 내용을 간단히 메모하면 AI가 전문 보고서로 변환해드려요
+                  작업 내용을 간단히 메모하면 전문 보고서로 변환해드려요
                 </p>
               )}
             </>
@@ -870,7 +870,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
                 className="w-full text-xs text-muted-foreground gap-1.5"
                 disabled={isGenerating}
                 onClick={() => {
-                  const confirmed = window.confirm('AI 보고서를 다시 작성할까요?\n\n현재 보고서 내용이 새로 작성됩니다.')
+                  const confirmed = window.confirm('보고서를 다시 작성할까요?\n\n현재 보고서 내용이 새로 작성됩니다.')
                   if (!confirmed) return
                   // 원본 메모 추출 (AI 포맷팅 전 텍스트)
                   const rawMemo = notes.replace(/📋 작업 전 상태\n[\s\S]*$/, '').trim()
@@ -885,7 +885,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
                 }}
               >
                 <Sparkles className="h-3.5 w-3.5" />
-                {isGenerating ? 'AI가 재작성 중이에요...' : 'AI 보고서 다시 작성하기'}
+                {isGenerating ? '다시 정리 중이에요...' : '보고서 다시 작성하기'}
               </Button>
             </div>
           )}

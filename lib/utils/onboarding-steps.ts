@@ -42,14 +42,14 @@ export function buildOnboardingSteps(c: OnboardingCounts): OnboardingStep[] {
     {
       key: 'tier',
       label: '플랜(번들) 구성하기',
-      description: '각 서비스의 기본·추천·프리미엄 항목을 정해요 (AI 추천 가능)',
+      description: '각 서비스의 기본·추천·프리미엄 항목을 정해요 (전문가 추천 가능)',
       href: '/dashboard/services',
       cta: '플랜 구성하기',
       done: c.hasBundles,
     },
     {
       key: 'geo',
-      label: 'AI 홍보 페이지 만들기',
+      label: '홍보 페이지 만들기',
       description: '등록한 서비스로 검색·AI 추천에 노출되는 페이지를 자동으로 만들어요',
       href: '/dashboard/settings',
       cta: '홍보 페이지 만들기',

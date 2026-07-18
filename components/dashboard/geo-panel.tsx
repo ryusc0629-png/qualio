@@ -126,7 +126,7 @@ export function GeoPanel({
             GEO 자동화
           </h2>
           <p className="text-xs text-muted-foreground mt-1">
-            AI가 ChatGPT·Gemini·Perplexity에 인용되는 업체 페이지를 자동 생성합니다
+            ChatGPT·Gemini·Perplexity에 인용되는 업체 페이지를 자동 생성합니다
           </p>
         </div>
         <Button
@@ -141,7 +141,7 @@ export function GeoPanel({
           ) : (
             <Sparkles className="h-3.5 w-3.5" />
           )}
-          {isGenerating ? 'AI 생성 중...' : (slug ? '재생성' : 'AI로 생성하기')}
+          {isGenerating ? '생성 중...' : (slug ? '재생성' : '생성하기')}
         </Button>
       </div>
 
@@ -231,7 +231,7 @@ export function GeoPanel({
       {/* 생성된 SEO 콘텐츠 미리보기 */}
       {(seoTitle || seoDesc || keywords) && (
         <div className="space-y-3 pt-2 border-t">
-          <p className="text-xs font-medium text-muted-foreground">생성된 AI 콘텐츠 미리보기</p>
+          <p className="text-xs font-medium text-muted-foreground">생성된 콘텐츠 미리보기</p>
 
           {seoTitle && (
             <div className="space-y-1">
@@ -262,7 +262,7 @@ export function GeoPanel({
                 )}
               </div>
               <p className="text-[11px] text-muted-foreground leading-relaxed">
-                고객이 검색할 때 쓰는 말이에요. AI가 자동으로 채워주고, 직접 고칠 수도 있어요. (쉼표로 구분)
+                고객이 검색할 때 쓰는 말이에요. 자동으로 채워주고, 직접 고칠 수도 있어요. (쉼표로 구분)
               </p>
               {editingKeywords ? (
                 <div className="space-y-2">
@@ -368,7 +368,7 @@ export function GeoPanel({
       {canGenerate && !slug && !isGenerating && (
         <div className="text-center py-4 text-sm text-muted-foreground">
           <p>아직 공개 페이지가 없습니다.</p>
-          <p className="mt-1">&quot;AI로 생성하기&quot; 버튼을 누르면 자동으로 만들어집니다.</p>
+          <p className="mt-1">&quot;생성하기&quot; 버튼을 누르면 자동으로 만들어집니다.</p>
         </div>
       )}
     </div>

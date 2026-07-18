@@ -158,7 +158,7 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: 
         toast.success('시방서 초안을 만들었어요! 검토 후 수정하세요')
       }
     },
-    onError: ({ error }) => toast.error(error.serverError ?? 'AI 생성에 실패했습니다'),
+    onError: ({ error }) => toast.error(error.serverError ?? '초안 생성에 실패했습니다'),
   })
 
   // 생성 중 진행 문구를 2.2초마다 다음 단계로 넘김 (마지막 단계에서 멈춤)
@@ -495,7 +495,7 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: 
                 {generatingSpec
                   ? <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
                   : <Sparkles className="h-3.5 w-3.5 text-amber-500" />}
-                {generatingSpec ? 'AI가 작성 중이에요...' : 'AI로 초안 만들기'}
+                {generatingSpec ? '전문 초안을 만드는 중이에요...' : '전문 초안 만들기'}
               </Button>
             </div>
             {generatingSpec ? (
@@ -520,7 +520,7 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: 
               <Textarea
                 value={specContent}
                 onChange={(e) => setSpecContent(e.target.value)}
-                placeholder="위 현장 정보를 입력 후 'AI로 초안 만들기'를 누르거나, 직접 작성하세요"
+                placeholder="위 현장 정보를 입력 후 '전문 초안 만들기'를 누르거나, 직접 작성하세요"
                 rows={10}
                 className="resize-none font-mono text-xs leading-relaxed"
               />

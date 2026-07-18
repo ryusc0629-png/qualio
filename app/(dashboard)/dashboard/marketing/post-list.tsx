@@ -167,7 +167,7 @@ function buildSchedule(target: number, posts: Post[], suggestions: TopicSuggesti
 
       // 발행 완료 슬롯은 실제 제목, 예정 슬롯은 추천 주제(검색량 배지 동반)를 순환 배정
       const suggestion = post ? null : suggestionList.length > 0 ? suggestionList[suggIndex++ % suggestionList.length] : null
-      const topicLabel = post ? post.title : suggestion?.title ?? 'AI가 최적 주제를 선택해요'
+      const topicLabel = post ? post.title : suggestion?.title ?? '최적 주제를 자동으로 선택해요'
 
       return {
         day, date, post, topicLabel, status,
@@ -535,7 +535,7 @@ const { execute: deletePost, isPending: isDeleting } = useAction(deletePostActio
 
   const [imageToggle, setImageToggle] = useState(autoImageGeneration)
   const { execute: toggleAutoImage } = useAction(toggleAutoImageAction, {
-    onSuccess: () => { toast.success(imageToggle ? 'AI 이미지 자동 생성이 켜졌어요' : 'AI 이미지 자동 생성이 꺼졌어요') },
+    onSuccess: () => { toast.success(imageToggle ? '홍보 이미지 자동 생성이 켜졌어요' : '홍보 이미지 자동 생성이 꺼졌어요') },
     onError: ({ error }) => { setImageToggle(!imageToggle); toast.error(error.serverError ?? '설정 변경에 실패했어요') },
   })
 
@@ -834,9 +834,9 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
         <div className="flex items-center gap-2.5">
           <ImageIcon className="h-4 w-4 text-violet-600 shrink-0" />
           <div>
-            <p className="text-sm font-medium">AI 이미지 자동 생성</p>
+            <p className="text-sm font-medium">홍보 이미지 자동 생성</p>
             <p className="text-xs text-muted-foreground">
-              {imageToggle ? '포스트 발행 시 AI 이미지 3장이 함께 생성돼요' : '직접 촬영한 사진을 올릴 수 있어요'}
+              {imageToggle ? '포스트 발행 시 홍보 이미지 3장이 함께 생성돼요' : '직접 촬영한 사진을 올릴 수 있어요'}
             </p>
           </div>
         </div>
@@ -977,7 +977,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           variant={publishResult !== null && !isPublishing ? 'outline' : 'default'}
         >
           {isPublishing
-            ? <><Loader2 className="h-4 w-4 animate-spin" />AI가 작성 중이에요...</>
+            ? <><Loader2 className="h-4 w-4 animate-spin" />홍보 글을 작성 중이에요...</>
             : publishResult !== null
               ? <><CheckCircle2 className="h-4 w-4 text-emerald-500" />{publishResult.published > 0 ? `${publishResult.published}건 발행됐어요!` : '오늘 발행 완료!'}</>
               : <><Play className="h-4 w-4" />지금 발행</>
@@ -1087,7 +1087,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
 
       {posts.length === 0 && (
         <div className="rounded-lg border bg-card p-10 text-center text-sm text-muted-foreground">
-          아직 포스트가 없어요. AI로 첫 번째 포스트를 만들어보세요!
+          아직 포스트가 없어요. 첫 번째 포스트를 만들어보세요!
         </div>
       )}
 

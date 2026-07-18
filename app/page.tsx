@@ -168,7 +168,7 @@ export default async function RootPage() {
               <ul className="space-y-3">
                 {[
                   '예약·고객 관리는 기본으로 자동',
-                  'AI가 홍보 글을 대신 써서 검색에 노출 → 새 문의가 들어옴',
+                  '마케팅 전문가 데이터로 홍보 글을 대신 써서 검색에 노출 → 새 문의가 들어옴',
                   '다녀간 단골을 알아서 다시 불러 재구매까지',
                 ].map((t) => (
                   <li key={t} className="flex items-start gap-3 text-sm md:text-base font-medium break-keep">
@@ -247,7 +247,7 @@ export default async function RootPage() {
                 },
                 {
                   icon: Sparkles,
-                  title: 'AI가 홍보 글까지',
+                  title: '홍보 글까지 자동으로',
                   desc: '검색에 노출되는 업체 홍보 글을 퀄리오가 대신 써서 올려줍니다.',
                 },
               ].map((item) => (

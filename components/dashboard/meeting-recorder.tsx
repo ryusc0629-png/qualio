@@ -192,7 +192,7 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     return (
       <div className="bg-white rounded-xl border p-8 space-y-3 text-center">
         <Loader2 className="h-8 w-8 mx-auto animate-spin text-primary" />
-        <p className="text-sm font-medium">AI가 미팅 내용을 정리하고 있어요...</p>
+        <p className="text-sm font-medium">미팅 내용을 정리하고 있어요...</p>
         <p className="text-xs text-muted-foreground">
           녹음 길이에 따라 1~2분 걸릴 수 있어요. 잠시만 기다려주세요
         </p>

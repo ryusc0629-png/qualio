@@ -56,7 +56,7 @@ export function ServicesGuideCard({ serviceCount, hasBundles }: Props) {
               <p className="text-sm font-medium">각 서비스의 플랜 구성하기</p>
               <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
                 아래 서비스의 <Pencil className="inline h-3 w-3 mb-0.5" /> 수정 아이콘을 누른 뒤,
-                <span className="font-medium text-foreground"> &lsquo;AI로 추천받기&rsquo;</span>를 누르면
+                <span className="font-medium text-foreground"> &lsquo;전문가 추천받기&rsquo;</span>를 누르면
                 기본·추천·프리미엄 작업을 자동으로 채워줘요. 마음에 안 들면 그 자리에서 고치면 돼요.
               </p>
             </div>

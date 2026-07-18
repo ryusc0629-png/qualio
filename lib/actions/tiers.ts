@@ -116,7 +116,7 @@ export const aiSuggestBundleAction = action
       .order('created_at')
 
     if (!services || services.length < 2) {
-      throw new Error('[APP] AI 추천을 받으려면 서비스를 2개 이상 등록해주세요')
+      throw new Error('[APP] 추천을 받으려면 서비스를 2개 이상 등록해주세요')
     }
 
     const recommendation = await recommendBundles(services)
