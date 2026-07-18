@@ -160,6 +160,9 @@ export default async function AdminMetricsPage() {
         <Stat label="이번 달 신규" value={`+${m.growth.newBusinessesThisMonth}곳`} />
         <Stat label="활성 업체" value={`${m.growth.activeBusinesses}곳`} sub="견적·고객 보유" />
         <Stat label="활성화율" value={pct(m.growth.activationRate)} />
+        {m.growth.acquisitionBreakdown.map((a) => (
+          <Stat key={a.source} label={`유입 · ${a.label}`} value={`${a.count}곳`} />
+        ))}
       </Section>
 
       {/* B2B 파이프라인 — 영업 자산 */}

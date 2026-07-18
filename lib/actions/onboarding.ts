@@ -7,6 +7,9 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 // 한국 전화번호 검증: 하이픈 제거 후 010/011/02/031... 형식 확인
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
 
+// 가입 경로(자가응답) 채널 코드 — z.enum 금지 규칙에 따라 refine 사용
+const ACQUISITION_SOURCES = ['youtube', 'search', 'referral', 'sns', 'community', 'etc']
+
 // 업체 등록 입력값 검증 스키마
 const createBusinessSchema = z.object({
   name: z.string().min(2, '업체명은 2자 이상이어야 합니다'),
@@ -15,6 +18,13 @@ const createBusinessSchema = z.object({
     .min(1, '전화번호를 입력해주세요')
     .transform((val) => val.replace(/-/g, ''))  // 하이픈 자동 제거
     .refine((val) => phoneRegex.test(val), '올바른 전화번호 형식이 아닙니다'),
+  // 가입 경로: 어떻게 알게 되셨나요 (필수)
+  acquisitionSource: z
+    .string()
+    .refine((v) => ACQUISITION_SOURCES.includes(v), '가입 경로를 선택해주세요'),
+  acquisitionDetail: z.string().max(100).optional(),      // '기타' 직접 입력
+  acquisitionReferrer: z.string().max(500).optional(),    // best-effort
+  acquisitionUtm: z.string().max(500).optional(),         // best-effort
 })
 
 // 업체 생성 액션
@@ -44,14 +54,21 @@ export const createBusinessAction = action
 
     if (existing?.business_id) return { success: true }
 
-    // 3. 업체 생성
+    // 3. 업체 생성 (가입 경로 함께 저장)
+    // 새 컬럼(acquisition_*)은 마이그레이션 후 database.ts 타입이 갱신되므로 그 전까지 단언 처리
+    const bizPayload = {
+      owner_id: user.id,
+      name: parsedInput.name,
+      phone: parsedInput.phone,
+      acquisition_source: parsedInput.acquisitionSource,
+      acquisition_detail: parsedInput.acquisitionDetail || null,
+      acquisition_referrer: parsedInput.acquisitionReferrer || null,
+      acquisition_utm: parsedInput.acquisitionUtm || null,
+    }
     const { data: business, error: bizError } = await db
       .from('businesses')
-      .insert({
-        owner_id: user.id,
-        name: parsedInput.name,
-        phone: parsedInput.phone,
-      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .insert(bizPayload as any)
       .select('id')
       .single()
 

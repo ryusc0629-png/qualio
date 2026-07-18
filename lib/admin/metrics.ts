@@ -34,6 +34,7 @@ export interface AdminMetrics {
     newBusinessesThisMonth: number
     activeBusinesses: number // 견적·예약·고객 중 1건 이상 보유
     activationRate: number // 활성 / 전체
+    acquisitionBreakdown: { source: string; label: string; count: number }[] // 가입 경로별 분포
   }
 
   /** 매출 — 밸류에이션의 출발점(ARR × 멀티플) */
@@ -129,7 +130,8 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
     quoteBizRes,
     customerBizRes,
   ] = await Promise.all([
-    db.from('businesses').select('id, created_at'),
+    // acquisition_source는 신규 컬럼 — 타입 갱신 전까지 as never 로 조회
+    db.from('businesses').select('id, created_at, acquisition_source' as never),
     db.from('subscriptions').select('business_id, plan, status'),
     db.from('bookings').select('status, final_price, created_at, deleted_at'),
     db.from('contracts').select('status, contract_price, frequency'),
@@ -138,7 +140,11 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
     db.from('customers').select('business_id'),
   ])
 
-  const businesses = businessesRes.data ?? []
+  const businesses = (businessesRes.data ?? []) as unknown as {
+    id: string
+    created_at: string
+    acquisition_source: string | null
+  }[]
   const subscriptions = subscriptionsRes.data ?? []
   const bookings = bookingsRes.data ?? []
   const contracts = contractsRes.data ?? []
@@ -154,6 +160,29 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
   for (const c of customerBizRes.data ?? []) if (c.business_id) activeBizIds.add(c.business_id)
   // 예약은 business_id를 따로 안 가져왔으므로, 예약 보유 여부는 위 두 신호로 대체한다.
   const activeBusinesses = activeBizIds.size
+
+  // 가입 경로별 분포 (어떤 채널에서 유입되는지 = 홍보 전략 판단 근거)
+  const ACQUISITION_LABELS: Record<string, string> = {
+    youtube: '유튜브',
+    search: '검색(네이버·구글)',
+    referral: '지인 소개',
+    sns: '인스타·SNS',
+    community: '블로그·카페',
+    etc: '기타',
+    unknown: '미기록', // 경로 추적 도입 전 가입 업체
+  }
+  const acqCounts = new Map<string, number>()
+  for (const b of businesses) {
+    const key = b.acquisition_source ?? 'unknown'
+    acqCounts.set(key, (acqCounts.get(key) ?? 0) + 1)
+  }
+  const acquisitionBreakdown = Array.from(acqCounts.entries())
+    .map(([sourceKey, count]) => ({
+      source: sourceKey,
+      label: ACQUISITION_LABELS[sourceKey] ?? sourceKey,
+      count,
+    }))
+    .sort((a, b) => b.count - a.count)
 
   // ── 매출 ──
   const paidSubs = subscriptions.filter(
@@ -211,6 +240,7 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
       newBusinessesThisMonth,
       activeBusinesses,
       activationRate: rate(activeBusinesses, totalBusinesses),
+      acquisitionBreakdown,
     },
     revenue: {
       payingBusinesses,
