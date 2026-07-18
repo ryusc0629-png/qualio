@@ -37,7 +37,7 @@ export default function ChallengeLandingPage() {
 
           <p className="text-muted-foreground text-base leading-relaxed break-keep">
             직접 오더를 못 따면, 실력이 있어도 결국 <b className="text-foreground">남의 팀장</b>으로 들어가거나{' '}
-            <b className="text-foreground">숨고·미소·아정당</b> 같은 플랫폼에 매달리게 돼요. 매칭비는 계속 오르고,
+            <b className="text-foreground">숨X·미X·아정X</b> 같은 플랫폼에 매달리게 돼요. 매칭비는 계속 오르고,
             단가 경쟁은 갈수록 심해지죠.
           </p>
 
