@@ -47,7 +47,7 @@ export default function ChallengeLandingPage() {
           </p>
 
           {/* 워크플로우 — 이 모든 걸 대신합니다 */}
-          <div className="space-y-4">
+          <div className="space-y-4 pt-4">
             <p className="text-lg sm:text-xl font-bold text-foreground">이 모든 걸 퀄리오가 대신해요</p>
             <div className="space-y-2.5">
               {WORKFLOW.map(({ emoji, title, desc }) => (
@@ -60,7 +60,7 @@ export default function ChallengeLandingPage() {
                 </div>
               ))}
             </div>
-            <div className="flex items-start gap-2 pt-3 text-base sm:text-lg font-bold text-primary break-keep">
+            <div className="flex items-start gap-2 pt-6 text-base sm:text-lg font-bold text-primary break-keep">
               <ArrowRight className="w-5 h-5 shrink-0 mt-0.5" />
               <span>
                 사장님은 청소만.
@@ -87,7 +87,7 @@ export default function ChallengeLandingPage() {
               <p className="text-sm text-muted-foreground break-keep">
                 미리 신청해 두세요. 챌린지 결과가 좋으면 신청하신 분들께{' '}
                 <b className="text-foreground">가장 먼저 알림</b>을 드려요.{' '}
-                <b className="text-foreground">첫 달 무료 · 가격 평생 고정</b>.
+                <b className="text-foreground">첫 달 무료</b>.
               </p>
             </div>
             <PreRegistrationForm />

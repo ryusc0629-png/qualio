@@ -118,7 +118,7 @@ export function PreRegistrationForm() {
         {isPending ? '신청 중...' : '사전 알림 신청하기'}
       </Button>
       <p className="text-xs text-center text-muted-foreground break-keep">
-        지금 신청하면 <b className="text-foreground">첫 달 무료 · 가격 평생 고정</b> 혜택을 드려요.
+        지금 신청하면 <b className="text-foreground">첫 달 무료</b> 혜택을 드려요.
       </p>
     </form>
   )
