@@ -110,7 +110,7 @@ export function PreRegistrationForm() {
         />
         {errors.phone && <p className="text-sm text-red-500">{errors.phone.message}</p>}
         <p className="text-xs text-muted-foreground break-keep">
-          번호는 출시 안내에만 써요. 광고 문자는 보내지 않아요.
+          챌린지 중 좋은 성과가 나오면 알려드려요! 광고 문자는 보내지 않아요.
         </p>
       </div>
 
