@@ -60,9 +60,13 @@ export default function ChallengeLandingPage() {
                 </div>
               ))}
             </div>
-            <div className="flex items-center gap-2 pt-1 text-base sm:text-lg font-bold text-primary break-keep">
-              <ArrowRight className="w-5 h-5 shrink-0" />
-              사장님은 청소만. 오더와 운영은 퀄리오가 다 합니다.
+            <div className="flex items-start gap-2 pt-3 text-base sm:text-lg font-bold text-primary break-keep">
+              <ArrowRight className="w-5 h-5 shrink-0 mt-0.5" />
+              <span>
+                사장님은 청소만.
+                <br />
+                오더와 운영은 퀄리오가 다 합니다.
+              </span>
             </div>
           </div>
 
