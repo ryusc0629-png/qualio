@@ -22,7 +22,7 @@ export default function ChallengeLandingPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <section className="flex-1">
-        <div className="max-w-xl mx-auto px-5 pt-12 pb-10 space-y-6">
+        <div className="max-w-xl mx-auto px-5 pt-12 pb-10 space-y-8">
           {/* 배지 */}
           <div className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-sm font-medium rounded-full px-3 py-1">
             <Sparkles className="w-4 h-4" /> 90일 챌린지 · 사전 알림
@@ -47,18 +47,20 @@ export default function ChallengeLandingPage() {
           </p>
 
           {/* 워크플로우 — 이 모든 걸 대신합니다 */}
-          <div className="space-y-2.5">
+          <div className="space-y-4">
             <p className="text-lg sm:text-xl font-bold text-foreground">이 모든 걸 퀄리오가 대신해요</p>
-            {WORKFLOW.map(({ emoji, title, desc }) => (
-              <div key={title} className="flex items-start gap-3 bg-muted/50 rounded-xl px-4 py-3">
-                <span className="text-lg shrink-0">{emoji}</span>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold break-keep">{title}</p>
-                  <p className="text-xs text-muted-foreground break-keep">{desc}</p>
+            <div className="space-y-2.5">
+              {WORKFLOW.map(({ emoji, title, desc }) => (
+                <div key={title} className="flex items-start gap-3 bg-muted/50 rounded-xl px-4 py-3">
+                  <span className="text-lg shrink-0">{emoji}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold break-keep">{title}</p>
+                    <p className="text-xs text-muted-foreground break-keep">{desc}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-            <div className="flex items-center gap-2 pt-2 text-base sm:text-lg font-bold text-primary break-keep">
+              ))}
+            </div>
+            <div className="flex items-center gap-2 pt-1 text-base sm:text-lg font-bold text-primary break-keep">
               <ArrowRight className="w-5 h-5 shrink-0" />
               사장님은 청소만. 오더와 운영은 퀄리오가 다 합니다.
             </div>
