@@ -41,7 +41,7 @@ export function PreRegistrationForm() {
         </div>
         <p className="font-bold text-lg">사전신청이 접수됐어요!</p>
         <p className="text-sm text-muted-foreground break-keep">
-          챌린지 결과가 좋으면 1기로 가장 먼저 연락드릴게요.
+          챌린지 결과가 좋으면 가장 먼저 알림 드릴게요.
           조금만 기다려 주세요.
         </p>
       </div>
@@ -110,15 +110,15 @@ export function PreRegistrationForm() {
         />
         {errors.phone && <p className="text-sm text-red-500">{errors.phone.message}</p>}
         <p className="text-xs text-muted-foreground break-keep">
-          번호는 1기 안내 연락에만 써요. 광고 문자는 보내지 않아요.
+          번호는 출시 안내에만 써요. 광고 문자는 보내지 않아요.
         </p>
       </div>
 
       <Button type="submit" disabled={isPending} className="w-full h-12 text-base font-bold">
-        {isPending ? '신청 중...' : '1기 사전신청하기'}
+        {isPending ? '신청 중...' : '사전 알림 신청하기'}
       </Button>
       <p className="text-xs text-center text-muted-foreground break-keep">
-        지금 신청하면 <b className="text-foreground">첫 달 무료 · 1기 가격 평생 고정</b> 혜택을 드려요.
+        지금 신청하면 <b className="text-foreground">첫 달 무료 · 가격 평생 고정</b> 혜택을 드려요.
       </p>
     </form>
   )
