@@ -67,9 +67,10 @@ interface Business {
 interface Props {
   business: Business
   serviceCount: number
+  hasGeneratedPage: boolean
 }
 
-export function SettingsForm({ business, serviceCount }: Props) {
+export function SettingsForm({ business, serviceCount, hasGeneratedPage }: Props) {
   // 할인 세부 타입 (discount_amount | discount_rate) 초기값
   const initialType = business.review_reward_type as RewardType
   const [activePlatform, setActivePlatform] = useState<ReviewPlatform>(
@@ -131,6 +132,7 @@ export function SettingsForm({ business, serviceCount }: Props) {
     { key: 'hero_title',    label: '페이지 제목',        done: !!heroTitle.trim() },
     { key: 'hero_subtitle', label: '페이지 소개글',      done: !!heroSubtitle.trim() },
     { key: 'hero_image',    label: '대표 사진',         done: !!heroImageUrl.trim() },
+    { key: 'geo',           label: '홍보 페이지 내용 만들기 (FAQ·검색 소개)', done: hasGeneratedPage },
   ]
   const allReady = checklist.every((c) => c.done)
 
@@ -148,6 +150,7 @@ export function SettingsForm({ business, serviceCount }: Props) {
       hero_title: 'field-hero-title',
       hero_subtitle: 'field-hero-subtitle',
       hero_image: 'field-hero-image',
+      geo: 'field-geo',
       save: 'field-save',
     }
     const el = document.getElementById(idMap[key])
@@ -157,8 +160,11 @@ export function SettingsForm({ business, serviceCount }: Props) {
     el.style.outline = '2px solid #ef4444'
     el.style.outlineOffset = '4px'
     el.style.borderRadius = '10px'
-    const input = el.querySelector('input, textarea') as HTMLElement | null
-    window.setTimeout(() => input?.focus(), 350)
+    // GEO 패널은 내부에 여러 입력칸이 있어 자동 포커스가 오히려 헷갈림 → 스크롤+강조만
+    if (key !== 'geo') {
+      const input = el.querySelector('input, textarea') as HTMLElement | null
+      window.setTimeout(() => input?.focus(), 350)
+    }
     window.setTimeout(() => {
       el.style.outline = ''
       el.style.outlineOffset = ''

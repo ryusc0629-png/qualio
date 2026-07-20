@@ -134,7 +134,8 @@ export default async function SettingsPage() {
         </div>
       )}
 
-      {/* GEO 자동화 패널 */}
+      {/* GEO 자동화 패널 — 미리보기 체크리스트에서 여기로 이동시키기 위해 id 부여 */}
+      <div id="field-geo">
       <GeoPanel
         businessId={business.id}
         businessName={business.name ?? null}
@@ -147,9 +148,14 @@ export default async function SettingsPage() {
         seoFaqs={(business.seo_faqs as unknown as FaqItem[]) ?? []}
         seoGeneratedAt={business.seo_generated_at ?? null}
       />
+      </div>
 
       {/* 업체 정보 */}
-      <SettingsForm business={business} serviceCount={serviceCount} />
+      <SettingsForm
+        business={business}
+        serviceCount={serviceCount}
+        hasGeneratedPage={!!business.seo_generated_at}
+      />
     </div>
   )
 }

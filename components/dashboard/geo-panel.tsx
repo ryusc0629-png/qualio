@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -76,6 +77,8 @@ export function GeoPanel({
   const publicUrl = slug ? `${appUrl}/biz/${slug}` : null
 
   // AI GEO 콘텐츠 생성
+  const router = useRouter()
+
   const { execute: generate, isPending: isGenerating } = useAction(generateGeoContentAction, {
     onSuccess: ({ data }) => {
       if (!data) return
@@ -88,6 +91,9 @@ export function GeoPanel({
       setEditingKeywords(false)
       setFaqs(data.geoContent.faqs)
       toast.success('GEO 콘텐츠가 생성되었습니다!')
+      // 생성 완료 → 설정 페이지 서버 데이터 새로고침(seo_generated_at 갱신)
+      // → 미리보기 체크리스트의 '홍보 페이지 내용 만들기'가 즉시 ✅로 바뀜
+      router.refresh()
     },
     onError: ({ error }) => toast.error(error.serverError ?? 'GEO 콘텐츠 생성에 실패했습니다'),
   })
