@@ -76,6 +76,10 @@ export function GeoPanel({
 
   const publicUrl = slug ? `${appUrl}/biz/${slug}` : null
 
+  // 실제로 홍보 페이지 내용을 만든 적이 있는지 — slug 유무가 아니라 생성 기록/제목으로 판단
+  // (slug는 저장 시 자동 생성돼 있을 수 있어, slug로 판단하면 생성 전인데 '재생성'으로 잘못 뜸)
+  const hasGenerated = !!seoGeneratedAt || !!seoTitle
+
   // AI GEO 콘텐츠 생성
   const router = useRouter()
 
@@ -147,7 +151,7 @@ export function GeoPanel({
           ) : (
             <Sparkles className="h-3.5 w-3.5" />
           )}
-          {isGenerating ? '생성 중...' : (slug ? '재생성' : '생성하기')}
+          {isGenerating ? '생성 중...' : (hasGenerated ? '재생성' : '생성하기')}
         </Button>
       </div>
 
@@ -370,11 +374,24 @@ export function GeoPanel({
         </div>
       )}
 
-      {/* 준비는 됐는데 아직 생성 전 */}
-      {canGenerate && !slug && !isGenerating && (
-        <div className="text-center py-4 text-sm text-muted-foreground">
-          <p>아직 공개 페이지가 없습니다.</p>
-          <p className="mt-1">&quot;생성하기&quot; 버튼을 누르면 자동으로 만들어집니다.</p>
+      {/* 준비는 됐는데 아직 생성 전 — 다음에 뭘 눌러야 하는지 크게 안내 */}
+      {canGenerate && !hasGenerated && !isGenerating && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-4 space-y-2">
+          <p className="text-sm font-semibold text-foreground">
+            마지막 한 단계만 남았어요!
+          </p>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            오른쪽 위 <span className="font-semibold text-primary">&quot;생성하기&quot;</span> 버튼을 누르면
+            자주 묻는 질문·검색 소개글이 자동으로 채워져 홍보 페이지가 완성돼요.
+          </p>
+          <Button
+            type="button"
+            onClick={() => generate({})}
+            className="w-full h-11 gap-2 mt-1 font-bold"
+          >
+            <Sparkles className="h-4 w-4" />
+            지금 홍보 페이지 만들기
+          </Button>
         </div>
       )}
     </div>
