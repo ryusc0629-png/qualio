@@ -10,10 +10,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { updateServiceItemAction, aiSuggestServiceTierItemsAction } from '@/lib/actions/services'
+import { updateServiceItemAction } from '@/lib/actions/services'
 import { createClient } from '@/lib/supabase/client'
-import { Pencil, X, ImagePlus, Loader2, Zap, ListPlus, Trash2, Plus, Sparkles } from 'lucide-react'
-import { isAcService } from '@/lib/utils'
+import { Pencil, X, ImagePlus, Loader2, Zap, ListPlus, Trash2, Plus, Users, Check } from 'lucide-react'
+import { getApplianceTypes, isApplianceService } from '@/lib/utils'
+import { getTemplatesForService } from '@/lib/config/quote-templates'
 
 const VARIANT_PRESETS = ['신축', '구축', '아파트', '빌라', '오피스텔', '상가']
 
@@ -97,15 +98,7 @@ const UNITS = [
   { value: '상담', label: '현장 견적 (방문 후 산출)' },
 ] as const
 
-const AC_TYPE_LIST = [
-  { id: 'wall_standard',  label: '벽걸이형',     sub: '일반',       placeholder: '75000' },
-  { id: 'wall_baramless', label: '벽걸이형',     sub: '무풍',       placeholder: '95000' },
-  { id: 'stand_standard', label: '스탠드형',     sub: '일반',       placeholder: '100000' },
-  { id: 'stand_smart',    label: '스탠드형',     sub: '스마트·무풍', placeholder: '125000' },
-  { id: 'system_1way',    label: '시스템에어컨', sub: '1way·2way',  placeholder: '110000' },
-  { id: 'system_4way',    label: '시스템에어컨', sub: '4way',       placeholder: '130000' },
-  { id: 'commercial',     label: '업소형',       sub: '',           placeholder: '150000' },
-] as const
+// 에어컨·냉장고 등 유형별 단가 프리셋은 lib/utils.ts(APPLIANCE_PRESETS)에서 관리
 
 const schema = z.object({
   name:       z.string().min(1, '서비스명을 입력해주세요'),
@@ -359,7 +352,8 @@ export function EditServiceButton({
 
   const currentName  = watch('name') ?? ''
   const currentUnit  = watch('unit')
-  const isAcByName   = isAcService(currentName)
+  const applianceTypes = getApplianceTypes(currentName)
+  const isAcByName     = isApplianceService(currentName)  // 가전(에어컨·냉장고 등) 유형별 단가
 
   // ── 가격 가이드 ── 기본가 × 배수 × 할인으로 플랜별 예시 가격 실시간 계산
   const currentBase = Number(watch('base_price')) || service.base_price
@@ -672,14 +666,14 @@ export function EditServiceButton({
               </div>
             )}
 
-            {/* 에어컨 유형별 단가 */}
-            {isAcByName && (
+            {/* 가전(에어컨·냉장고 등) 유형별 단가 */}
+            {isAcByName && applianceTypes && (
               <div className="space-y-2">
                 <div className="flex items-center gap-1.5 mb-1">
                   <Zap className="h-3.5 w-3.5 text-primary shrink-0" />
                   <Label className="text-primary">유형별 단가 설정</Label>
                 </div>
-                {AC_TYPE_LIST.map((t) => (
+                {applianceTypes.map((t) => (
                   <div key={t.id} className="flex items-center gap-2">
                     <div className="w-32 shrink-0">
                       <p className="text-xs font-semibold">{t.label}</p>
@@ -689,7 +683,7 @@ export function EditServiceButton({
                       <Input
                         type="text"
                         inputMode="numeric"
-                        placeholder={t.placeholder}
+                        placeholder={t.defaultPrice.toLocaleString('ko-KR')}
                         value={acPrices[t.id] ? Number(acPrices[t.id]).toLocaleString('ko-KR') : ''}
                         onChange={(e) => setAcPrices((prev) => ({ ...prev, [t.id]: e.target.value.replace(/[^0-9]/g, '') }))}
                         className="h-9 text-sm pr-8"

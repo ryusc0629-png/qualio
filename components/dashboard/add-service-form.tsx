@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createServiceItemAction } from '@/lib/actions/services'
 import { Plus, X, Zap, ListPlus, Trash2 } from 'lucide-react'
-import { isAcService } from '@/lib/utils'
+import { getApplianceTypes, getAppliancePreset } from '@/lib/utils'
 
 // 구분 설정에서 빠른 선택 가능한 자주 쓰는 구분 프리셋
 const VARIANT_PRESETS = ['신축', '구축', '아파트', '빌라', '오피스텔', '상가']
@@ -89,16 +89,7 @@ function VariantSelector({
   )
 }
 
-// 에어컨 유형 목록 (견적 폼과 동일한 ID 사용)
-const AC_TYPE_LIST = [
-  { id: 'wall_standard',  label: '벽걸이형', sub: '일반',       placeholder: '75,000' },
-  { id: 'wall_baramless', label: '벽걸이형', sub: '무풍',       placeholder: '95,000' },
-  { id: 'stand_standard', label: '스탠드형', sub: '일반',       placeholder: '100,000' },
-  { id: 'stand_smart',    label: '스탠드형', sub: '스마트·무풍', placeholder: '125,000' },
-  { id: 'system_1way',    label: '시스템에어컨', sub: '1way·2way', placeholder: '110,000' },
-  { id: 'system_4way',    label: '시스템에어컨', sub: '4way',    placeholder: '130,000' },
-  { id: 'commercial',     label: '업소형',   sub: '',           placeholder: '150,000' },
-] as const
+// 에어컨·냉장고 등 유형별 단가 프리셋은 lib/utils.ts(APPLIANCE_PRESETS)에서 관리
 
 // 표준 카테고리 목록 (데이터 일관성을 위해 고정값 사용)
 const CATEGORIES = [
@@ -128,6 +119,7 @@ const PRESETS = [
   { name: '입주 청소',   category: '주거 공간', unit: '평당', base_price: 18000 },
   { name: '거주 청소',   category: '주거 공간', unit: '정액', base_price: 80000 },
   { name: '에어컨 청소', category: '가전 케어', unit: '개',   base_price: 80000 },
+  { name: '냉장고 청소', category: '가전 케어', unit: '개',   base_price: 70000 },
   { name: '줄눈 시공',   category: '특수/시공', unit: '평당', base_price: 30000 },
 ] as const
 
@@ -174,22 +166,12 @@ export function AddServiceForm() {
     },
   })
 
-  // 프리셋 클릭 시 모든 필드 자동 채우기
+  // 프리셋 클릭 시 모든 필드 자동 채우기 (가전 유형별 단가는 아래 useEffect가 자동 채움)
   const applyPreset = (preset: typeof PRESETS[number]) => {
     setValue('name', preset.name)
     setValue('category', preset.category)
     setValue('unit', preset.unit as UnitValue)
     setValue('base_price', String(preset.base_price))
-    // 에어컨 프리셋이면 유형별 기본 단가 자동 세팅
-    if (isAcService(preset.name)) {
-      const defaults: Partial<Record<string, string>> = {}
-      AC_TYPE_LIST.forEach((t) => {
-        defaults[t.id] = t.placeholder.replace(',', '')
-      })
-      setAcPrices(defaults)
-    } else {
-      setAcPrices({})
-    }
     setShowUnitPrices(false)
     setUnitVariants([])
     setNewVariantInput('')
@@ -239,8 +221,25 @@ export function AddServiceForm() {
 
   const currentUnit = watch('unit')
   const currentName = watch('name') ?? ''
-  const isAc        = isAcService(currentName)
-  const isUnit      = !isAc && showUnitPrices
+  // 가전(에어컨·냉장고 등) 유형별 단가 프리셋 감지
+  const applianceTypes = getApplianceTypes(currentName)
+  const applianceKey   = getAppliancePreset(currentName)?.key ?? null
+  const isAppliance    = applianceTypes != null
+  const isUnit         = !isAppliance && showUnitPrices
+
+  // 가전이 감지되면 유형별 기본 단가를 제안값으로 자동 채움 (프리셋이 바뀔 때만 → 사용자가 고친 값은 유지)
+  const [filledApplianceKey, setFilledApplianceKey] = useState<string | null>(null)
+  useEffect(() => {
+    if (applianceKey && applianceKey !== filledApplianceKey) {
+      const defaults: Partial<Record<string, string>> = {}
+      applianceTypes!.forEach((t) => { defaults[t.id] = String(t.defaultPrice) })
+      setAcPrices(defaults)
+      setFilledApplianceKey(applianceKey)
+    } else if (!applianceKey && filledApplianceKey) {
+      setAcPrices({})
+      setFilledApplianceKey(null)
+    }
+  }, [applianceKey, applianceTypes, filledApplianceKey])
 
   if (!open) {
     return (
@@ -259,8 +258,8 @@ export function AddServiceForm() {
         // 현장 견적(상담)은 미리 가격이 없으므로 0으로 저장
         let basePrice = data.unit === '상담' ? 0 : Number(data.base_price)
 
-        if (isAc) {
-          // 에어컨: 유형별 단가에서 최저 단가를 base_price로 설정
+        if (isAppliance) {
+          // 가전(에어컨·냉장고 등): 유형별 단가에서 최저 단가를 base_price로 설정
           const parsed: Record<string, number> = {}
           let minPrice = Infinity
           for (const [id, val] of Object.entries(acPrices)) {
@@ -336,8 +335,8 @@ export function AddServiceForm() {
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
 
-        {/* 항목별 단가 토글 (에어컨이 아닐 때만 표시) */}
-        {!isAc && (
+        {/* 항목별 단가 토글 (가전 유형별 단가가 아닐 때만 표시) */}
+        {!isAppliance && (
           <button
             type="button"
             onClick={() => setShowUnitPrices((v) => !v)}
@@ -415,8 +414,8 @@ export function AddServiceForm() {
           </div>
         )}
 
-        {/* 에어컨 서비스 안내 + 유형별 단가 입력 */}
-        {isAc && (
+        {/* 가전(에어컨·냉장고 등) 안내 + 유형별 단가 입력 */}
+        {isAppliance && applianceTypes && (
           <div className="space-y-3">
             <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-1">
               <div className="flex items-center gap-1.5">
@@ -430,7 +429,7 @@ export function AddServiceForm() {
 
             {/* 유형별 단가 입력 그리드 */}
             <div className="space-y-2">
-              {AC_TYPE_LIST.map((t) => (
+              {applianceTypes.map((t) => (
                 <div key={t.id} className="flex items-center gap-2">
                   <div className="w-36 shrink-0">
                     <p className="text-xs font-semibold text-foreground">{t.label}</p>
@@ -440,7 +439,7 @@ export function AddServiceForm() {
                     <Input
                       type="text"
                       inputMode="numeric"
-                      placeholder={t.placeholder}
+                      placeholder={t.defaultPrice.toLocaleString('ko-KR')}
                       value={acPrices[t.id] ? Number(acPrices[t.id]).toLocaleString('ko-KR') : ''}
                       onChange={(e) => setAcPrices((prev) => ({ ...prev, [t.id]: e.target.value.replace(/[^0-9]/g, '') }))}
                       className="h-9 text-sm pr-8"
@@ -493,8 +492,8 @@ export function AddServiceForm() {
           </p>
         )}
 
-        {/* 기본가 — 에어컨/항목별 단가/현장견적 모드에서는 숨김 */}
-        {!isAc && !isUnit && currentUnit !== '상담' && (
+        {/* 기본가 — 가전 유형별/항목별 단가/현장견적 모드에서는 숨김 */}
+        {!isAppliance && !isUnit && currentUnit !== '상담' && (
           <div className="space-y-1">
             <Label htmlFor="base_price">
               기본 가격 (원) *

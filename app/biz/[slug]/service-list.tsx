@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowRight, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { isAcService } from '@/lib/utils'
+import { isApplianceService } from '@/lib/utils'
 
 interface Service {
   id: string
@@ -16,7 +16,7 @@ interface Service {
 
 function serviceEmoji(category: string | null, name: string): string {
   const text = (category ?? name).toLowerCase()
-  if (isAcService(text)) return '❄️'
+  if (isApplianceService(name)) return '❄️'  // 에어컨·냉장고 등 가전 청소
   if (text.includes('입주') || text.includes('이사')) return '🏠'
   if (text.includes('정기')) return '🔄'
   if (text.includes('사무') || text.includes('오피스')) return '🏢'

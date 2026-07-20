@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { ChevronRight, ChevronLeft, Star } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { calculateAndCreateQuoteAction, createConsultationRequestAction } from '@/lib/actions/quotes'
-import { isAcService } from '@/lib/utils'
+import { getApplianceTypes, getAppliancePreset, isApplianceService, type ApplianceType } from '@/lib/utils'
 import { trackFunnel } from '@/lib/utils/track-funnel'
 
 // 서비스 유형에 따라 스텝 분기
@@ -26,19 +26,8 @@ const SPACE_CHIP_VALUES: Record<string, number> = {
 
 const CONTEXT_OPTIONS = ['아파트', '빌라·다세대', '단독주택', '오피스텔', '상업시설·사무실']
 
-// 에어컨 유형 (한스클린 단가표 기준)
-const AC_TYPES = [
-  { id: 'wall_standard',  label: '벽걸이형',     sub: '일반' },
-  { id: 'wall_baramless', label: '벽걸이형',     sub: '무풍' },
-  { id: 'stand_standard', label: '스탠드형',     sub: '일반' },
-  { id: 'stand_smart',    label: '스탠드형',     sub: '스마트·무풍' },
-  { id: 'system_1way',    label: '시스템에어컨', sub: '1way·2way' },
-  { id: 'system_4way',    label: '시스템에어컨', sub: '4way' },
-  { id: 'commercial',     label: '업소형',       sub: '' },
-] as const
-
-type AcTypeId = typeof AC_TYPES[number]['id']
-type AcCounts = Partial<Record<AcTypeId, number>>
+// 에어컨·냉장고 등 가전 유형 목록은 lib/utils.ts(APPLIANCE_PRESETS)에서 서비스명으로 resolve
+type AcCounts = Record<string, number>
 
 interface ServiceItem {
   id: string
@@ -69,17 +58,21 @@ function formatDateLabel(date: Date) {
   return `${date.getMonth() + 1}월 ${date.getDate()}일(${DOW[date.getDay()]})`
 }
 
-// 에어컨 유형별 수량 선택 컴포넌트
+// 가전(에어컨·냉장고 등) 유형별 수량 선택 컴포넌트 — 유형 목록(types)은 서비스별로 주입
 function AcDetailSelector({
+  types,
+  noun,
   acTypePrices,
   onConfirm,
 }: {
+  types: ApplianceType[]
+  noun: string
   acTypePrices: Record<string, number> | null
   onConfirm: (summary: string, totalCount: number, selections: Record<string, number>) => void
 }) {
   const [counts, setCounts] = useState<AcCounts>({})
 
-  const change = (id: AcTypeId, delta: number) => {
+  const change = (id: string, delta: number) => {
     setCounts((prev) => {
       const next = Math.max(0, (prev[id] ?? 0) + delta)
       if (next === 0) {
@@ -94,7 +87,7 @@ function AcDetailSelector({
 
   const handleConfirm = () => {
     if (totalCount === 0) return
-    const selected = AC_TYPES.filter((t) => (counts[t.id] ?? 0) > 0)
+    const selected = types.filter((t) => (counts[t.id] ?? 0) > 0)
     const summary = selected
       .map((t) => `${t.label}${t.sub ? ` ${t.sub}` : ''} ${counts[t.id]}대`)
       .join(', ')
@@ -106,7 +99,7 @@ function AcDetailSelector({
   return (
     <div className="space-y-3">
       <div className="space-y-2">
-        {AC_TYPES.map((t) => {
+        {types.map((t) => {
           const count = counts[t.id] ?? 0
           return (
             <div
@@ -158,7 +151,7 @@ function AcDetailSelector({
         disabled={totalCount === 0}
         className="w-full h-13 rounded-2xl bg-primary disabled:opacity-30 text-white font-bold text-sm transition-opacity py-3.5"
       >
-        {totalCount > 0 ? `총 ${totalCount}대 선택 완료 →` : '에어컨을 1대 이상 선택해주세요'}
+        {totalCount > 0 ? `총 ${totalCount}대 선택 완료 →` : `${noun} 1대 이상 선택해주세요`}
       </button>
     </div>
   )
@@ -450,6 +443,9 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
   const [acTotalCount, setAcTotalCount] = useState(0)
   const [acSelections, setAcSelections] = useState<Record<string, number>>({})
   const [acTypePrices, setAcTypePrices] = useState<Record<string, number> | null>(null)
+  // 선택된 가전 서비스의 유형 목록 + 명사(에어컨/냉장고 등) — 서비스명으로 resolve
+  const [acTypes, setAcTypes] = useState<ApplianceType[]>([])
+  const [acNoun, setAcNoun] = useState('에어컨')
   const [unitPrices, setUnitPrices] = useState<Array<{ name: string; price: number; variant?: string }> | null>(null)
   const [unitVariants, setUnitVariants] = useState<string[] | null>(null)
   const [selectedUnitVariant, setSelectedUnitVariant] = useState<string | null>(null)
@@ -508,7 +504,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
     switch (step) {
       case 'service':   return '안녕하세요! 어떤 청소 서비스가 필요하신가요?'
       case 'space':     return '공간이 몇 평인가요?'
-      case 'ac_detail':     return '에어컨 유형과 대수를 알려주세요'
+      case 'ac_detail':     return `${acNoun} 유형과 대수를 알려주세요`
       case 'unit_variant':  return '해당되는 구분을 선택해주세요'
       case 'unit_detail':   return '항목별 수량을 선택해주세요'
       case 'context':   return '주거 형태가 어떻게 되세요?'
@@ -551,7 +547,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
 
   const handleServiceSelect = (service: ServiceItem) => {
     const isConsult = service.unit === '상담' // 현장 방문 후 견적 서비스
-    const isAc   = !isConsult && isAcService(service.name)
+    const isAc   = !isConsult && isApplianceService(service.name)
     const isUnit = !isConsult && !isAc && Array.isArray(service.unit_prices) && service.unit_prices.length > 0
     const hasVariants = isUnit && Array.isArray(service.unit_variants) && service.unit_variants.length > 0
     setSelectedServiceId(service.id)
@@ -559,6 +555,9 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
     setIsConsultMode(isConsult)
     setIsAcMode(isAc)
     setIsUnitMode(isUnit)
+    // 가전 유형 목록·명사 resolve (에어컨/냉장고 등)
+    setAcTypes(getApplianceTypes(service.name) ?? [])
+    setAcNoun(getAppliancePreset(service.name)?.noun ?? '유형')
     setAcTypePrices(service.ac_type_prices)
     setUnitPrices(isUnit ? service.unit_prices : null)
     setUnitVariants(hasVariants ? (service.unit_variants as string[]) : null)
@@ -644,7 +643,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
     // 컨텍스트 + 에어컨 상세 + 요청사항 합산
     const combinedNotes = [
       contextAnswer ? `주거형태: ${contextAnswer}` : '',
-      isAcMode && acSummary ? `에어컨: ${acSummary}` : '',
+      isAcMode && acSummary ? `${acNoun}: ${acSummary}` : '',
       notes.trim(),
     ].filter(Boolean).join(' | ')
 
@@ -797,7 +796,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
 
           {/* 에어컨 유형·대수 선택 */}
           {!isTyping && !isPending && currentStep === 'ac_detail' && (
-            <AcDetailSelector acTypePrices={acTypePrices} onConfirm={handleAcDetail} />
+            <AcDetailSelector types={acTypes} noun={acNoun} acTypePrices={acTypePrices} onConfirm={handleAcDetail} />
           )}
 
           {/* 구분 선택 (신축/구축 등) */}

@@ -5,7 +5,7 @@ import { DeleteServiceButton } from '@/components/dashboard/delete-service-butto
 import { EditServiceButton } from '@/components/dashboard/edit-service-button'
 import { ServicesGuideCard } from '@/components/dashboard/services-guide-card'
 import { Image, Zap } from 'lucide-react'
-import { isAcService } from '@/lib/utils'
+import { isApplianceService, getApplianceTypes } from '@/lib/utils'
 
 export default async function ServicesPage() {
   const authClient = await createClient()
@@ -105,7 +105,7 @@ export default async function ServicesPage() {
                           {service.category}
                         </span>
                       )}
-                      {isAcService(service.name) && (
+                      {isApplianceService(service.name) && (
                         <span className="inline-flex items-center gap-1 text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
                           <Zap className="h-2.5 w-2.5" />
                           유형·대수 자동 선택
@@ -117,19 +117,15 @@ export default async function ServicesPage() {
                         </span>
                       )}
                     </div>
-                    {/* 에어컨 유형별 단가 표시 */}
-                    {isAcService(service.name) && service.ac_type_prices && typeof service.ac_type_prices === 'object' && !Array.isArray(service.ac_type_prices) ? (
+                    {/* 가전(에어컨·냉장고 등) 유형별 단가 표시 */}
+                    {isApplianceService(service.name) && service.ac_type_prices && typeof service.ac_type_prices === 'object' && !Array.isArray(service.ac_type_prices) ? (
                       <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
                         {(Object.entries(service.ac_type_prices as Record<string, number>)).map(([id, price]) => {
-                          const labelMap: Record<string, string> = {
-                            wall_standard: '벽걸이 일반', wall_baramless: '벽걸이 무풍',
-                            stand_standard: '스탠드 일반', stand_smart: '스탠드 스마트',
-                            system_1way: '시스템 1way', system_4way: '시스템 4way',
-                            commercial: '업소형',
-                          }
+                          const t = (getApplianceTypes(service.name) ?? []).find((x) => x.id === id)
+                          const label = t ? `${t.label}${t.sub ? ` ${t.sub}` : ''}` : id
                           return (
                             <span key={id} className="text-xs text-muted-foreground tabular-nums">
-                              {labelMap[id] ?? id}: <span className="font-semibold text-foreground">{price.toLocaleString('ko-KR')}원</span>
+                              {label}: <span className="font-semibold text-foreground">{price.toLocaleString('ko-KR')}원</span>
                             </span>
                           )
                         })}
