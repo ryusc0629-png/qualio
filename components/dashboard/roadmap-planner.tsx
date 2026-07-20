@@ -39,6 +39,7 @@ interface RoadmapResult {
   failedCount: number
   failedNames: string[]
   totalKm: number
+  capped?: boolean
 }
 
 interface RoadmapPlannerProps {
@@ -137,8 +138,35 @@ function kakaoNav(name: string, lat: number, lng: number): string {
   return `https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat},${lng}`
 }
 
-// 퀄리오가 알아서 하루치로 나누는 기준(방문영업 현실 감안 하루 약 20곳)
-const DEFAULT_PER_DAY = 20
+// 퀄리오가 알아서 하루치로 나누는 기준(방문영업 현실 감안 하루 약 25곳)
+const DEFAULT_PER_DAY = 25
+
+// 시군구 원본 목록 → 드롭다운 옵션(전체 / 시 전체 / 개별 구·군)
+function buildSigunguOptions(list: string[]): { label: string; value: string }[] {
+  const opts: { label: string; value: string }[] = [{ label: '이 지역 전체', value: '' }]
+  // 여러 구로 나뉜 시(예: 창원시 의창구/성산구…)는 '창원시 전체'를 추가
+  const multiGuCities = new Set<string>()
+  const seen = new Set<string>()
+  for (const s of list) {
+    const sp = s.indexOf(' ')
+    if (sp > 0) {
+      const city = s.slice(0, sp)
+      if (seen.has(city)) multiGuCities.add(city)
+      seen.add(city)
+    }
+  }
+  const cityAdded = new Set<string>()
+  for (const s of list) {
+    const sp = s.indexOf(' ')
+    const city = sp > 0 ? s.slice(0, sp) : ''
+    if (city && multiGuCities.has(city) && !cityAdded.has(city)) {
+      opts.push({ label: `${city} 전체`, value: city })
+      cityAdded.add(city)
+    }
+    opts.push({ label: `  ${s}`, value: s })
+  }
+  return opts
+}
 
 // 청소업체가 자주 노리는 업종 — 칩으로 빠르게 선택(자유입력도 가능)
 const TARGET_CATEGORIES = [
@@ -231,8 +259,8 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
   const handleBuild = () => {
     // 지역+업종 자동 모드
     if (mode === 'directory') {
-      if (!dirSido || !dirSigungu) {
-        toast.error('지역과 시·군·구를 골라주세요')
+      if (!dirSido) {
+        toast.error('지역을 골라주세요')
         return
       }
       if (!dirKeyword.trim()) {
@@ -339,7 +367,7 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
               </select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="dirSigungu">시·군·구</Label>
+              <Label htmlFor="dirSigungu">범위</Label>
               <select
                 id="dirSigungu"
                 value={dirSigungu}
@@ -347,12 +375,15 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
                 disabled={!dirSido || loadingSigungu}
                 className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
               >
-                <option value="">{loadingSigungu ? '불러오는 중...' : '고르기'}</option>
-                {sigunguList.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
+                {loadingSigungu ? (
+                  <option value="">불러오는 중...</option>
+                ) : (
+                  buildSigunguOptions(sigunguList).map((o) => (
+                    <option key={o.value || '__all'} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
           </div>
@@ -471,6 +502,11 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
           <div className="text-sm text-muted-foreground">
             총 {result.geocodedCount}곳 · {result.courses.length}일 코스 · 이동 약{' '}
             {Math.round(result.totalKm)}km
+            {result.capped && (
+              <span className="block text-xs text-amber-600 mt-1">
+                너무 많아 1,500곳까지만 담았어요. 범위를 좁히거나(구 단위) 업종을 더 구체적으로 골라보세요.
+              </span>
+            )}
             {result.failedCount > 0 && (
               <span className="block text-xs text-amber-600 mt-1">
                 주소를 못 찾은 {result.failedCount}곳은 빠졌어요

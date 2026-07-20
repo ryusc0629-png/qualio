@@ -102,10 +102,13 @@ export const listSigunguAction = action.schema(sigunguSchema).action(async ({ pa
   return { sigungu: list.map((r) => r.sigungu) }
 })
 
+// 지역+업종 자동 모드는 이미 좌표가 있어 한 번에 더 많이 처리 가능 (시 전체/시도 전체)
+const DIRECTORY_MAX = 1500
+
 // 지역+업종 → 방문 대상 조회 → 동선 코스 생성 (좌표가 이미 있어 지오코딩 불필요)
 const directorySchema = z.object({
   sido: z.string().min(1, '지역을 골라주세요'),
-  sigungu: z.string().min(1, '시·군·구를 골라주세요'),
+  sigungu: z.string().optional(), // 비우면 시도 전체, '창원시'면 창원 전체 구
   keyword: z.string().optional(),
   perDay: z.number().int().min(1).max(100),
   startAddress: z.string().optional(),
@@ -125,9 +128,9 @@ export const buildDirectoryRoadmapAction = action
 
     const { data, error } = await rpcClient()('prospect_search', {
       p_sido: parsedInput.sido,
-      p_sigungu: parsedInput.sigungu,
+      p_sigungu: parsedInput.sigungu?.trim() || null,
       p_keyword: parsedInput.keyword?.trim() || null,
-      p_limit: MAX_STOPS,
+      p_limit: DIRECTORY_MAX,
     })
     if (error) throw new Error('[APP] 명단을 못 불러왔어요. 잠시 후 다시 시도해주세요')
 
@@ -156,6 +159,6 @@ export const buildDirectoryRoadmapAction = action
       failedCount: 0,
       failedNames: [] as string[],
       totalKm: courses.reduce((s, c) => s + c.km, 0),
-      capped: stops.length >= MAX_STOPS,
+      capped: stops.length >= DIRECTORY_MAX,
     }
   })
