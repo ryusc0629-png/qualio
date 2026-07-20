@@ -62,7 +62,7 @@ export const calculateAndCreateQuoteAction = publicAction
     // 선택한 서비스 조회 (에어컨·항목별 단가 포함)
     const { data: service } = await db
       .from('service_items')
-      .select('id, name, base_price, unit, ac_type_prices, unit_prices, unit_variants, tier_good_discount_rate, tier_good_discount_amount, tier_better_discount_rate, tier_better_discount_amount, tier_best_discount_rate, tier_best_discount_amount' as never)
+      .select('id, name, base_price, unit, ac_type_prices, unit_prices, unit_variants, tier_good_items, tier_better_items, tier_best_items, tier_good_price, tier_better_price, tier_best_price, tier_good_discount_rate, tier_good_discount_amount, tier_better_discount_rate, tier_better_discount_amount, tier_best_discount_rate, tier_best_discount_amount' as never)
       .eq('id', parsedInput.service_id)
       .eq('business_id', parsedInput.business_id)
       .eq('is_active', true)
@@ -70,6 +70,8 @@ export const calculateAndCreateQuoteAction = publicAction
       .maybeSingle() as unknown as { data: {
         id: string; name: string; base_price: number; unit: string
         ac_type_prices: unknown; unit_prices: unknown; unit_variants: unknown
+        tier_good_items?: string[] | null; tier_better_items?: string[] | null; tier_best_items?: string[] | null
+        tier_good_price?: number | null; tier_better_price?: number | null; tier_best_price?: number | null
         tier_good_discount_rate?: number | null;   tier_good_discount_amount?: number | null
         tier_better_discount_rate?: number | null; tier_better_discount_amount?: number | null
         tier_best_discount_rate?: number | null;   tier_best_discount_amount?: number | null
@@ -152,10 +154,19 @@ export const calculateAndCreateQuoteAction = publicAction
           .in('tier_id', tierIds)
       : { data: [] }
 
-    // 업체가 직접 플랜(번들)을 구성했는지 여부.
-    // 미설정이면 가짜 3단계 플랜을 만들지 않고, 선택한 서비스의 계산 금액만 단일 금액으로 안내한다.
-    // (예전에는 서비스가 2개 이상이면 서로 무관한 서비스까지 묶어 자동 번들을 만들어 금액이 부풀려졌음)
-    const plansConfigured = !!tierServicesRows && tierServicesRows.length > 0
+    // 업체가 이 서비스에 3단계 플랜을 설정했는지 여부. 미설정이면 단일 금액으로 안내한다.
+    // 설정 신호 = ① 번들(quote_tier_services) 또는
+    //           ② 서비스 자체의 플랜 구성(포함 항목 tier_*_items · 직접 가격 tier_*_price)
+    // (예전엔 번들만 봐서, 서비스 편집에서 플랜 항목을 채워도 단일 금액만 나오던 버그가 있었음)
+    const hasBundle = !!tierServicesRows && tierServicesRows.length > 0
+    const hasServiceTiers =
+      (service.tier_good_items?.length   ?? 0) > 0 ||
+      (service.tier_better_items?.length ?? 0) > 0 ||
+      (service.tier_best_items?.length   ?? 0) > 0 ||
+      service.tier_good_price   != null ||
+      service.tier_better_price != null ||
+      service.tier_best_price   != null
+    const plansConfigured = hasBundle || hasServiceTiers
 
     const goodTier   = tiers.find((t) => t.tier === 'good')
     const betterTier = tiers.find((t) => t.tier === 'better')
@@ -213,10 +224,17 @@ export const calculateAndCreateQuoteAction = publicAction
         bestId   ? calcBundlePrice(bestId)   : Promise.resolve(null),
       ])
 
-      // 번들 가격 없으면 multiplier 방식 fallback → 이후 서비스별 플랜 할인 적용
-      goodPrice   = applyDiscount(bundleGood   ?? roundToThousand(baseCalc * Number(goodTier?.price_multiplier   ?? 1.0)), 'good')
-      betterPrice = applyDiscount(bundleBetter ?? roundToThousand(baseCalc * Number(betterTier?.price_multiplier ?? 1.2)), 'better')
-      bestPrice   = applyDiscount(bundleBest   ?? roundToThousand(baseCalc * Number(bestTier?.price_multiplier   ?? 1.5)), 'best')
+      // 번들 없으면: 서비스별 직접 가격(tier_*_price)이 있으면 그 값 우선, 없으면 기본가 × 배수.
+      // 직접 가격은 원/평(평당) 또는 정액 단가이므로 평당이면 평수만큼 곱한다.
+      const sizeMult = service.unit === '평당' ? (parsedInput.space_size || 1) : 1
+      const tierByPriceOrMult = (override: number | null | undefined, mult: number) =>
+        override != null && override > 0
+          ? roundToThousand(override * sizeMult)
+          : roundToThousand(baseCalc * mult)
+
+      goodPrice   = applyDiscount(bundleGood   ?? tierByPriceOrMult(service.tier_good_price,   Number(goodTier?.price_multiplier   ?? 1.0)), 'good')
+      betterPrice = applyDiscount(bundleBetter ?? tierByPriceOrMult(service.tier_better_price, Number(betterTier?.price_multiplier ?? 1.2)), 'better')
+      bestPrice   = applyDiscount(bundleBest   ?? tierByPriceOrMult(service.tier_best_price,   Number(bestTier?.price_multiplier   ?? 1.5)), 'best')
 
       // AI 설명에 전달할 번들 서비스 목록
       const getBundleServiceNames = async (tierId: string | null): Promise<string[]> => {
@@ -649,8 +667,8 @@ export const confirmBookingFromQuoteAction = authAction
     // 선택한 번들에 변동형 서비스가 있으면 '검토 필요'로 표시
     const review = await detectBundleReview(db, quote.business_id, parsedInput.selected_tier)
 
-    // 예약 생성
-    const { error: bookingError } = await db.from('bookings').insert({
+    // 예약 생성 (알림톡·이력용으로 id 확보)
+    const { data: newBooking, error: bookingError } = await db.from('bookings').insert({
       business_id:     quote.business_id,
       quote_id:        quote.id,
       customer_name:   quote.customer_name ?? '고객',
@@ -662,9 +680,9 @@ export const confirmBookingFromQuoteAction = authAction
       status:          'confirmed',
       needs_review:    review.needsReview,
       review_reason:   review.reason,
-    } as never)
+    } as never).select('id').single() as unknown as { data: { id: string } | null; error: unknown }
 
-    if (bookingError) throw new Error('[APP] 예약 생성에 실패했습니다')
+    if (bookingError || !newBooking) throw new Error('[APP] 예약 생성에 실패했습니다')
 
     // 견적 상태 → booked
     await db
@@ -689,6 +707,41 @@ export const confirmBookingFromQuoteAction = authAction
           address: parsedInput.service_address ?? null,
           type: 'one_time',
         })
+      }
+    }
+
+    // 대시보드에서 예약 확정할 때도 고객에게 예약 확정 알림톡 발송
+    // (기존엔 고객이 직접 예약할 때만 발송돼, 대표가 확정하면 고객이 확정 안내를 못 받던 문제)
+    if (quote.customer_phone) {
+      const { data: business } = await db
+        .from('businesses')
+        .select('name, phone')
+        .eq('id', quote.business_id)
+        .maybeSingle()
+
+      if (business) {
+        try {
+          await sendBookingConfirmAlimtalk({
+            customerPhone:  quote.customer_phone,
+            businessName:   business.name,
+            businessPhone:  business.phone ?? null,
+            cleaningType:   quote.cleaning_type ?? '청소 서비스',
+            scheduledAt:    new Date(parsedInput.scheduled_at).toISOString(),
+            serviceAddress: parsedInput.service_address ?? '',
+            selectedTier:   parsedInput.selected_tier as 'good' | 'better' | 'best',
+            finalPrice:     parsedInput.final_price,
+            bookingId:      newBooking.id,
+            businessId:     quote.business_id,
+          })
+
+          await db.from('reports').insert({
+            booking_id:    newBooking.id,
+            business_id:   quote.business_id,
+            kakao_sent_at: new Date().toISOString(),
+          })
+        } catch (e) {
+          console.error('[Alimtalk] 예약 확정 알림톡 발송 실패 — 예약은 정상 완료됨', e)
+        }
       }
     }
 

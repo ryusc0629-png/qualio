@@ -43,6 +43,8 @@ interface QuoteFormProps {
   businessId: string
   businessName: string
   services: ServiceItem[]
+  // 견적서 알림톡이 실제 발송 가능한 상태(템플릿 설정됨)인지 — 문구를 정직하게 노출하기 위함
+  quoteAlimtalkEnabled?: boolean
   // 실제 고객 후기 요약(사회적 증거) — 전환율용
   reviewSummary?: {
     count: number
@@ -428,7 +430,7 @@ function TypingBubble({ initial }: { initial: string }) {
   )
 }
 
-export function QuoteForm({ businessId, businessName, services, reviewSummary }: QuoteFormProps) {
+export function QuoteForm({ businessId, businessName, services, reviewSummary, quoteAlimtalkEnabled = false }: QuoteFormProps) {
   const [currentStep, setCurrentStep] = useState<Step>('service')
   const [completedSteps, setCompletedSteps] = useState<Step[]>([])
   const [isTyping, setIsTyping] = useState(false)
@@ -511,7 +513,12 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary }:
       case 'date':      return '언제 방문해 드릴까요?'
       case 'notes':     return isConsultMode ? '어떤 작업이 필요하신가요? 편하게 적어주세요' : '특별히 신경 써드릴 부분이 있나요?'
       case 'name':      return '성함이 어떻게 되세요?'
-      case 'phone':     return isConsultMode ? '사장님이 방문 견적을 위해 연락드릴게요 📞\n연락처를 알려주세요' : '카카오톡으로 견적서를 보내드릴게요 📱\n연락처를 알려주세요'
+      case 'phone':
+        if (isConsultMode) return '사장님이 방문 견적을 위해 연락드릴게요 📞\n연락처를 알려주세요'
+        // 알림톡 발송이 켜져 있으면 "카톡으로 보내드릴게요", 아니면 화면에 바로 보여주고 사장님이 확인하는 정직한 안내
+        return quoteAlimtalkEnabled
+          ? '카카오톡으로 견적서를 보내드릴게요 📱\n연락처를 알려주세요'
+          : '견적 결과를 바로 보여드릴게요 📱\n연락처를 남겨주시면 사장님이 확인해요'
     }
   }
 
