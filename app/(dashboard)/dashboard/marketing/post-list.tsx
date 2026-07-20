@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Sparkles, Plus, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send, SkipForward, Save, ChevronUp } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
+import { copyRichText, markdownToPlain } from '@/lib/utils/rich-text'
 import { toast } from 'sonner'
 
 interface TopicSuggestion {
@@ -474,11 +475,17 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   }, [])
 
   const handleCopy = (content: string) => {
-    navigator.clipboard.writeText(content)
+    // 당근·인스타 등 서식 없는 채널 — 마크다운 기호(##, ** 등)를 제거한 깔끔한 텍스트로 복사
+    navigator.clipboard.writeText(markdownToPlain(content))
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-  const handleNaverCopy = (content: string) => handleCopy(content)
+  // 네이버 블로그 — 서식 HTML을 함께 복사해 붙여넣으면 소제목·인용구가 자동 적용됨
+  const handleNaverCopy = async (content: string, title?: string) => {
+    await copyRichText(content, title)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   const now = new Date()
   const postsThisMonth = posts.filter((p) => {
@@ -1148,7 +1155,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
             </div>
             <div className="px-5 py-5 flex-1">
               <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed bg-orange-50 rounded-xl p-4 border border-orange-100">
-                {daangnPost.daangn_content}
+                {markdownToPlain(daangnPost.daangn_content ?? '')}
               </pre>
             </div>
             <div className="px-5 py-4 border-t flex gap-2 shrink-0">
@@ -1197,7 +1204,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
               <div>
                 <p className="text-xs text-muted-foreground mb-1.5">본문 캡션</p>
                 <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed bg-pink-50 rounded-xl p-4 border border-pink-100">
-                  {instaPost.instagram_content}
+                  {markdownToPlain(instaPost.instagram_content ?? '')}
                 </pre>
               </div>
               {/* 해시태그 */}
@@ -1290,10 +1297,10 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
               </div>
             )}
 
-            {/* 본문 스크롤 영역 */}
+            {/* 본문 스크롤 영역 — 마크다운 기호(##, ** 등)를 정리해 실제 보이는 모습으로 미리보기 */}
             <div className="flex-1 overflow-y-auto px-5 py-4">
               <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed">
-                {naverPost.naver_content}
+                {markdownToPlain(naverPost.naver_content ?? '')}
               </pre>
             </div>
 
@@ -1301,7 +1308,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
             <div className="px-5 py-4 border-t flex gap-2 shrink-0">
               <Button
                 className="flex-1 h-12 gap-2"
-                onClick={() => handleNaverCopy(`${naverPost.naver_title}\n\n${naverPost.naver_content}`)}
+                onClick={() => handleNaverCopy(naverPost.naver_content!, naverPost.naver_title ?? undefined)}
               >
                 {copied
                   ? <><CheckCircle2 className="h-4 w-4" />복사됐어요!</>
