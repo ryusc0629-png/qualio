@@ -149,7 +149,7 @@ export default async function SettingsPage() {
       />
 
       {/* 업체 정보 */}
-      <SettingsForm business={business} />
+      <SettingsForm business={business} serviceCount={serviceCount} />
     </div>
   )
 }

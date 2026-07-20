@@ -66,9 +66,10 @@ interface Business {
 
 interface Props {
   business: Business
+  serviceCount: number
 }
 
-export function SettingsForm({ business }: Props) {
+export function SettingsForm({ business, serviceCount }: Props) {
   // 할인 세부 타입 (discount_amount | discount_rate) 초기값
   const initialType = business.review_reward_type as RewardType
   const [activePlatform, setActivePlatform] = useState<ReviewPlatform>(
@@ -98,16 +99,90 @@ export function SettingsForm({ business }: Props) {
     business.testimonials ?? []
   )
 
+  // 업체 기본 정보 — 실시간 체크리스트 판정을 위해 상태로 관리
+  const [name, setName] = useState(business.name ?? '')
+  const [phone, setPhone] = useState(business.phone ?? '')
+  const [description, setDescription] = useState(business.description ?? '')
+
   // 업체 주소 — 시/도·시군구 선택 기반 (상태로 들고 자동 지역 즉시 반영)
   const [address, setAddress] = useState(business.address ?? '')
   // 출장 지역 — 주소 기준 자동 노출 지역 + 사장님이 선택하는 추가 지역
   const autoAreas = buildAreaServed(address, [])
   const [serviceAreas, setServiceAreas] = useState<string[]>(business.service_areas ?? [])
 
+  // 홈페이지 주소(slug) — 저장 시 서버가 생성/반환하면 즉시 갱신해 미리보기 잠금 해제
+  const [slug, setSlug] = useState<string | null>(business.slug)
+
   const { execute, isPending } = useAction(updateBusinessAction, {
-    onSuccess: () => toast.success('설정이 저장됐어요!'),
+    onSuccess: ({ data }) => {
+      if (data?.slug) setSlug(data.slug)
+      toast.success('설정이 저장됐어요!')
+    },
     onError: ({ error }) => toast.error(error.serverError ?? '저장 못 했어요. 다시 눌러주세요'),
   })
+
+  // ── 홈페이지 공개 준비 체크리스트 (로고만 선택, 나머지는 필수) ──
+  const checklist = [
+    { key: 'services',      label: '서비스와 가격 등록', done: serviceCount > 0 },
+    { key: 'name',          label: '업체명',           done: !!name.trim() },
+    { key: 'phone',         label: '전화번호',          done: !!phone.trim() },
+    { key: 'address',       label: '주소',             done: !!address.trim() },
+    { key: 'description',   label: '업체 소개',         done: !!description.trim() },
+    { key: 'hero_title',    label: '페이지 제목',        done: !!heroTitle.trim() },
+    { key: 'hero_subtitle', label: '페이지 소개글',      done: !!heroSubtitle.trim() },
+    { key: 'hero_image',    label: '대표 사진',         done: !!heroImageUrl.trim() },
+  ]
+  const allReady = checklist.every((c) => c.done)
+
+  // 안 채운 칸으로 데려가기 — 같은 페이지면 스크롤+포커스+빨간 테두리 강조, 서비스는 등록 페이지로 이동
+  const jumpTo = (key: string) => {
+    if (key === 'services') {
+      window.location.href = '/dashboard/services'
+      return
+    }
+    const idMap: Record<string, string> = {
+      name: 'field-name',
+      phone: 'field-phone',
+      address: 'field-address',
+      description: 'field-description',
+      hero_title: 'field-hero-title',
+      hero_subtitle: 'field-hero-subtitle',
+      hero_image: 'field-hero-image',
+      save: 'field-save',
+    }
+    const el = document.getElementById(idMap[key])
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    // Tailwind purge 영향 없이 인라인 스타일로 잠깐 강조
+    el.style.outline = '2px solid #ef4444'
+    el.style.outlineOffset = '4px'
+    el.style.borderRadius = '10px'
+    const input = el.querySelector('input, textarea') as HTMLElement | null
+    window.setTimeout(() => input?.focus(), 350)
+    window.setTimeout(() => {
+      el.style.outline = ''
+      el.style.outlineOffset = ''
+    }, 2600)
+  }
+
+  // "내 홈페이지 열어보기" 클릭 — 준비 안 됐으면 열지 않고 안 채운 곳으로 안내
+  const handlePreviewClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    const firstMissing = checklist.find((c) => !c.done)
+    if (firstMissing) {
+      e.preventDefault()
+      toast.error(`아직 '${firstMissing.label}'을(를) 안 채우셨어요`)
+      jumpTo(firstMissing.key)
+      return
+    }
+    if (!slug) {
+      // 항목은 다 채웠지만 아직 저장 전 → 저장해야 홈페이지가 만들어짐
+      e.preventDefault()
+      toast.error('먼저 아래 저장하기를 눌러 홈페이지를 만들어 주세요')
+      jumpTo('save')
+      return
+    }
+    // 준비 완료 → 앵커가 /biz/[slug]를 새 창으로 정상 오픈
+  }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -120,10 +195,10 @@ export function SettingsForm({ business }: Props) {
     else if (rewardCategory === 'gifticon') rewardType = 'gifticon'
 
     execute({
-      name:                      data.get('name') as string,
-      phone:                     data.get('phone') as string,
+      name:                      name,
+      phone:                     phone,
       address:                   address,
-      description:               data.get('description') as string,
+      description:               description,
       naver_place_url:           data.get('naver_place_url') as string,
       google_place_url:          data.get('google_place_url') as string,
       danggeun_review_url:       data.get('danggeun_review_url') as string,
@@ -153,38 +228,42 @@ export function SettingsForm({ business }: Props) {
       <div className="rounded-lg border bg-card p-5 space-y-4">
         <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">기본 정보</h2>
 
-        <div className="space-y-2">
-          <Label htmlFor="name">업체명 <span className="text-destructive">*</span></Label>
+        <div id="field-name" className="space-y-2">
+          <Label htmlFor="name">업체명 <span className="text-destructive">(필수)</span></Label>
           <Input
             id="name"
             name="name"
-            defaultValue={business.name}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
             placeholder="예: 깔끔청소 홍길동"
             required
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="phone">전화번호</Label>
+        <div id="field-phone" className="space-y-2">
+          <Label htmlFor="phone">전화번호 <span className="text-destructive">(필수)</span></Label>
           <Input
             id="phone"
             name="phone"
-            defaultValue={business.phone ?? ''}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            inputMode="tel"
             placeholder="01012345678"
           />
         </div>
 
-        <div className="space-y-2">
-          <Label>주소</Label>
+        <div id="field-address" className="space-y-2">
+          <Label>주소 <span className="text-destructive">(필수)</span></Label>
           <BaseAddressPicker value={address} onChange={setAddress} />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="description">업체 소개</Label>
+        <div id="field-description" className="space-y-2">
+          <Label htmlFor="description">업체 소개 <span className="text-destructive">(필수)</span></Label>
           <Input
             id="description"
             name="description"
-            defaultValue={business.description ?? ''}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
             placeholder="10년 경력의 청소 전문 업체입니다"
           />
           <p className="text-xs text-muted-foreground">고객 견적 폼 상단에 표시됩니다</p>
@@ -230,8 +309,12 @@ export function SettingsForm({ business }: Props) {
       {/* 웹사이트 디자인 (브랜드 커스터마이징) */}
       <BrandDesignSection
         businessId={business.id}
-        businessName={business.name}
-        slug={business.slug}
+        businessName={name || business.name}
+        slug={slug}
+        checklist={checklist}
+        allReady={allReady}
+        onJump={jumpTo}
+        onPreviewClick={handlePreviewClick}
         brandColor={brandColor}
         brandSecondary={brandSecondary}
         heroStyle={heroStyle}
@@ -560,7 +643,7 @@ export function SettingsForm({ business }: Props) {
 
       {/* 저장 버튼 — 화면 하단 고정(fixed). 모바일은 탭바 위, 데스크탑은 사이드바 옆 정렬 */}
       <div className="fixed left-0 right-0 md:left-56 z-30 bottom-[calc(3.5rem_+_env(safe-area-inset-bottom))] md:bottom-0 border-t bg-background/95 backdrop-blur px-4 py-3 md:px-6">
-        <div className="max-w-xl">
+        <div id="field-save" className="max-w-xl">
           <Button type="submit" disabled={isPending} className="w-full h-12 text-base font-bold">
             {isPending ? '저장 중...' : '설정 저장하기'}
           </Button>

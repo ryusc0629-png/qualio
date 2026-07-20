@@ -14,10 +14,20 @@ import {
 } from '@/lib/brand'
 import { Input } from '@/components/ui/input'
 
+interface ChecklistItem {
+  key: string
+  label: string
+  done: boolean
+}
+
 interface Props {
   businessId: string
   businessName: string
   slug: string | null
+  checklist: ChecklistItem[]
+  allReady: boolean
+  onJump: (key: string) => void
+  onPreviewClick: (e: React.MouseEvent<HTMLAnchorElement>) => void
   brandColor: string
   brandSecondary: string
   heroStyle: HeroStyle
@@ -40,6 +50,10 @@ export function BrandDesignSection({
   businessId,
   businessName,
   slug,
+  checklist,
+  allReady,
+  onJump,
+  onPreviewClick,
   brandColor,
   brandSecondary,
   heroStyle,
@@ -102,7 +116,9 @@ export function BrandDesignSection({
     }
   }
 
-  const previewUrl = slug ? `/biz/${slug}` : `/q/${businessId}`
+  // slug가 없으면 홈페이지가 아직 없는 것 — 견적 폼(/q)으로 빠지지 않도록 링크를 비운다.
+  // (게이트에서 저장을 먼저 유도하므로 slug 없는 채로 열리지 않음)
+  const previewHref = slug ? `/biz/${slug}` : undefined
 
   return (
     <div className="rounded-lg border bg-card p-5 space-y-5">
@@ -119,7 +135,7 @@ export function BrandDesignSection({
       <div className="space-y-3">
         <div>
           <div className="flex items-center justify-between">
-            <Label className="text-xs">페이지 제목</Label>
+            <Label className="text-xs">페이지 제목 <span className="text-destructive">(필수)</span></Label>
             {/* 글자 수 카운터 */}
             <span className={`text-[11px] tabular-nums ${
               heroTitle.length === 0
@@ -152,16 +168,18 @@ export function BrandDesignSection({
           </span>
         </div>
 
-        <Input
-          value={heroTitle}
-          onChange={(e) => onChange({ heroTitle: e.target.value })}
-          placeholder={`예: ${businessName || '다트클린'} | 입주청소 전문`}
-          maxLength={30}
-        />
+        <div id="field-hero-title">
+          <Input
+            value={heroTitle}
+            onChange={(e) => onChange({ heroTitle: e.target.value })}
+            placeholder={`예: ${businessName || '다트클린'} | 입주청소 전문`}
+            maxLength={30}
+          />
+        </div>
 
         <div>
           <div className="flex items-center justify-between">
-            <Label className="text-xs">페이지 소개글</Label>
+            <Label className="text-xs">페이지 소개글 <span className="text-destructive">(필수)</span></Label>
             <span className={`text-[11px] tabular-nums ${
               heroSubtitle.length === 0
                 ? 'text-muted-foreground'
@@ -176,14 +194,16 @@ export function BrandDesignSection({
           </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">제목 아래 한두 줄 설명이에요 — 50자 이내를 추천해요</p>
         </div>
-        <textarea
-          value={heroSubtitle}
-          onChange={(e) => onChange({ heroSubtitle: e.target.value })}
-          placeholder="예: 10년 경력 전문 청소팀이 꼼꼼하게 작업해드려요. 당일 견적, 빠른 방문!"
-          maxLength={100}
-          rows={2}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-        />
+        <div id="field-hero-subtitle">
+          <textarea
+            value={heroSubtitle}
+            onChange={(e) => onChange({ heroSubtitle: e.target.value })}
+            placeholder="예: 10년 경력 전문 청소팀이 꼼꼼하게 작업해드려요. 당일 견적, 빠른 방문!"
+            maxLength={100}
+            rows={2}
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+          />
+        </div>
       </div>
 
       {/* ── 실시간 미리보기 ── */}
@@ -236,15 +256,53 @@ export function BrandDesignSection({
             </div>
           </div>
         </div>
-        {/* 실제 홈페이지를 새 탭에서 열기 — a 태그라 팝업 차단 없이 항상 열림 (window.open은 모바일/팝업차단 시 안 열림) */}
+        {/* 준비 안 된 항목 안내 — 다 채워야 홈페이지를 열 수 있음 (로고만 선택) */}
+        {!allReady && (
+          <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+            <p className="text-xs font-semibold text-amber-800">
+              홈페이지를 열려면 아래를 먼저 채워주세요 (로고만 선택이에요)
+            </p>
+            <ul className="grid grid-cols-1 gap-1">
+              {checklist.map((c) => (
+                <li key={c.key}>
+                  {c.done ? (
+                    <span className="flex items-center gap-1.5 text-xs text-emerald-700">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      {c.label}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onJump(c.key)}
+                      className="flex items-center gap-1.5 text-xs text-amber-800 hover:underline"
+                    >
+                      <span className="inline-block h-3.5 w-3.5 rounded-full border-2 border-amber-400 shrink-0" />
+                      {c.label}
+                      <span className="text-amber-600">— 채우러 가기</span>
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* 실제 홈페이지를 새 탭에서 열기 — a 태그라 팝업 차단 없이 항상 열림.
+            준비 전이면 onPreviewClick이 열지 않고 안 채운 칸으로 데려간다. */}
         <a
-          href={previewUrl}
+          href={previewHref}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-1 flex items-center justify-center gap-2 h-12 rounded-lg border border-primary/40 bg-primary/5 text-sm font-bold text-primary hover:bg-primary/10 transition-colors"
+          onClick={onPreviewClick}
+          aria-disabled={!allReady || !slug}
+          className={`mt-1 flex items-center justify-center gap-2 h-12 rounded-lg border text-sm font-bold transition-colors ${
+            allReady && slug
+              ? 'border-primary/40 bg-primary/5 text-primary hover:bg-primary/10'
+              : 'border-muted-foreground/20 bg-muted/40 text-muted-foreground'
+          }`}
         >
           <ExternalLink className="h-4 w-4" />
-          내 홈페이지 새 창으로 열어보기
+          {allReady && slug ? '내 홈페이지 새 창으로 열어보기' : '홈페이지 열어보기 (준비 중)'}
         </a>
       </div>
 
@@ -403,9 +461,9 @@ export function BrandDesignSection({
       </div>
 
       {/* ── 히어로 배경 이미지 업로드 ── */}
-      <div className="space-y-2">
+      <div id="field-hero-image" className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label className="text-xs">대표 사진 (선택)</Label>
+          <Label className="text-xs">대표 사진 <span className="text-destructive">(필수)</span></Label>
           <button
             type="button"
             onClick={() => setShowHeroGuide((v) => !v)}

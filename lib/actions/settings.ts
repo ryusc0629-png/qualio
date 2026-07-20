@@ -124,5 +124,6 @@ export const updateBusinessAction = action
 
     revalidatePath('/dashboard/settings')
     revalidatePath('/dashboard', 'layout')
-    return { success: true }
+    // 확정된 홈페이지 주소(slug)를 함께 반환 — 저장 직후 미리보기 잠금을 바로 풀기 위함
+    return { success: true, slug: newSlug ?? bizRow?.slug ?? null }
   })
