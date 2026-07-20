@@ -236,7 +236,13 @@ function TierItemsEditor({
         <div className="space-y-1.5">
           {items.map((item, i) => (
             <div key={i} className="flex items-center gap-1.5">
-              <div className="flex-1 bg-white border border-zinc-200 rounded-lg px-3 py-1.5 text-xs text-zinc-700 shadow-sm">{item}</div>
+              {/* 이미 입력한 항목도 그 자리에서 바로 수정 가능 */}
+              <Input
+                value={item}
+                onChange={(e) => onChange(items.map((it, j) => (j === i ? e.target.value : it)))}
+                placeholder={placeholder}
+                className="flex-1 h-8 text-xs bg-white"
+              />
               <button
                 type="button"
                 onClick={() => onChange(items.filter((_, j) => j !== i))}
