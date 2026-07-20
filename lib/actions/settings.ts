@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { generateSlug } from '@/lib/ai/geo-content'
 import { revalidatePath } from 'next/cache'
 
 // 한국 전화번호 검증 (빈 문자열 허용 — 선택 입력)
@@ -64,9 +65,32 @@ export const updateBusinessAction = action
 
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
+    // 홈페이지 주소(slug)가 아직 없으면 자동 생성 —
+    // 색상/문구(브랜드 디자인)만 저장해도 공개 홈페이지(/biz/[slug])가 살아있도록.
+    // slug가 없으면 미리보기가 홈페이지 대신 견적 폼(/q/...)으로 빠지는 문제 방지.
+    const { data: bizRow } = await db
+      .from('businesses')
+      .select('slug')
+      .eq('id', profile.business_id)
+      .maybeSingle()
+
+    let newSlug: string | null = null
+    if (!bizRow?.slug) {
+      let candidate = generateSlug(parsedInput.name, Math.random().toString(36).slice(2, 7))
+      // 혹시 같은 slug가 이미 있으면 다른 suffix로 한 번 더 시도
+      const { data: dup } = await db
+        .from('businesses')
+        .select('id')
+        .eq('slug', candidate)
+        .maybeSingle()
+      if (dup) candidate = generateSlug(parsedInput.name, Math.random().toString(36).slice(2, 7))
+      newSlug = candidate
+    }
+
     const { error } = await db
       .from('businesses')
       .update({
+        ...(newSlug ? { slug: newSlug } : {}),
         name:             parsedInput.name,
         phone:            parsedInput.phone || null,
         address:          parsedInput.address || null,
