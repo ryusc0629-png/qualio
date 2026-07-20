@@ -20,8 +20,14 @@ export default async function RoadmapPage() {
   const businessId = profile?.business_id
   if (!businessId) redirect('/dashboard')
 
-  // 주소가 있는 리드만 (방문 대상 후보) + 기본 출발지(업체 주소)
-  const [leadsRes, bizRes] = await Promise.all([
+  // database.ts 타입에 아직 없는 RPC 호출 (any 금지 → unknown 캐스팅)
+  const rpc = db.rpc.bind(db) as unknown as (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{ data: unknown }>
+
+  // 주소가 있는 리드 + 기본 출발지(업체 주소) + 상가정보가 적재된 시도 목록
+  const [leadsRes, bizRes, sidoRes] = await Promise.all([
     db
       .from('leads')
       .select('id, company_name, address, phone')
@@ -29,7 +35,10 @@ export default async function RoadmapPage() {
       .not('address', 'is', null)
       .order('created_at', { ascending: false }),
     db.from('businesses').select('address').eq('id', businessId).maybeSingle(),
+    rpc('prospect_sido_list'),
   ])
+
+  const sidoOptions = ((sidoRes.data ?? []) as { sido: string }[]).map((r) => r.sido)
 
   const leads: LeadOption[] = (leadsRes.data ?? [])
     .filter((l) => (l.address ?? '').trim().length > 0)
@@ -52,7 +61,11 @@ export default async function RoadmapPage() {
         </p>
       </div>
 
-      <RoadmapPlanner leads={leads} defaultStart={bizRes.data?.address ?? ''} />
+      <RoadmapPlanner
+        leads={leads}
+        defaultStart={bizRes.data?.address ?? ''}
+        sidoOptions={sidoOptions}
+      />
     </div>
   )
 }

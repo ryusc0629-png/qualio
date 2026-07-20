@@ -2,12 +2,16 @@
 
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
-import { buildRoadmapAction } from '@/lib/actions/roadmap'
+import {
+  buildRoadmapAction,
+  buildDirectoryRoadmapAction,
+  listSigunguAction,
+} from '@/lib/actions/roadmap'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { MapPin, Phone, Navigation, Users, ClipboardList, Map, Upload } from 'lucide-react'
+import { MapPin, Phone, Navigation, Users, ClipboardList, Map, Upload, Sparkles } from 'lucide-react'
 
 export interface LeadOption {
   id: string
@@ -40,6 +44,7 @@ interface RoadmapResult {
 interface RoadmapPlannerProps {
   leads: LeadOption[]
   defaultStart: string
+  sidoOptions: string[]
 }
 
 // 붙여넣은 텍스트를 한 줄씩 (상호 / 주소 / 전화)로 파싱. 탭·쉼표 구분 모두 허용.
@@ -132,14 +137,37 @@ function kakaoNav(name: string, lat: number, lng: number): string {
   return `https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat},${lng}`
 }
 
-export function RoadmapPlanner({ leads, defaultStart }: RoadmapPlannerProps) {
-  const [mode, setMode] = useState<'leads' | 'paste'>(leads.length > 0 ? 'leads' : 'paste')
+type Mode = 'directory' | 'leads' | 'paste'
+
+export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlannerProps) {
+  const [mode, setMode] = useState<Mode>(sidoOptions.length > 0 ? 'directory' : leads.length > 0 ? 'leads' : 'paste')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [paste, setPaste] = useState('')
   const [perDay, setPerDay] = useState(25)
   const [start, setStart] = useState(defaultStart)
   const [result, setResult] = useState<RoadmapResult | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  // 지역+업종 자동 모드 상태
+  const [dirSido, setDirSido] = useState('')
+  const [dirSigungu, setDirSigungu] = useState('')
+  const [dirKeyword, setDirKeyword] = useState('')
+  const [sigunguList, setSigunguList] = useState<string[]>([])
+  const [loadingSigungu, setLoadingSigungu] = useState(false)
+
+  const handleSidoChange = (sido: string) => {
+    setDirSido(sido)
+    setDirSigungu('')
+    setSigunguList([])
+    if (!sido) return
+    setLoadingSigungu(true)
+    startTransition(async () => {
+      const res = await listSigunguAction({ sido })
+      setLoadingSigungu(false)
+      if (res?.data?.sigungu) setSigunguList(res.data.sigungu)
+      else if (res?.serverError) toast.error(res.serverError)
+    })
+  }
 
   const toggleLead = (id: string) => {
     setSelected((prev) => {
@@ -179,7 +207,36 @@ export function RoadmapPlanner({ leads, defaultStart }: RoadmapPlannerProps) {
     reader.readAsText(file, 'utf-8')
   }
 
+  const applyResult = (data: RoadmapResult) => {
+    setResult(data)
+    toast.success(`${data.courses.length}개 코스로 짰어요!`)
+  }
+
   const handleBuild = () => {
+    // 지역+업종 자동 모드
+    if (mode === 'directory') {
+      if (!dirSido || !dirSigungu) {
+        toast.error('지역과 시·군·구를 골라주세요')
+        return
+      }
+      startTransition(async () => {
+        const res = await buildDirectoryRoadmapAction({
+          sido: dirSido,
+          sigungu: dirSigungu,
+          keyword: dirKeyword.trim() || undefined,
+          perDay,
+          startAddress: start.trim() || undefined,
+        })
+        if (res?.serverError) {
+          toast.error(res.serverError)
+          return
+        }
+        if (res?.data) applyResult(res.data)
+      })
+      return
+    }
+
+    // 리드 선택 / 명단 붙여넣기 모드
     const stops =
       mode === 'leads'
         ? leads
@@ -202,40 +259,108 @@ export function RoadmapPlanner({ leads, defaultStart }: RoadmapPlannerProps) {
         toast.error(res.serverError)
         return
       }
-      if (res?.data) {
-        setResult(res.data)
-        toast.success(`${res.data.courses.length}개 코스로 짰어요!`)
-      }
+      if (res?.data) applyResult(res.data)
     })
   }
 
   return (
     <div className="space-y-5">
       {/* 입력 방식 선택 */}
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => setMode('leads')}
-          className={`h-12 rounded-lg border text-sm font-semibold flex items-center justify-center gap-2 ${
-            mode === 'leads'
-              ? 'border-primary bg-primary/10 text-primary'
-              : 'border-border text-muted-foreground'
-          }`}
-        >
-          <Users className="h-4 w-4" /> 내 리드에서
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode('paste')}
-          className={`h-12 rounded-lg border text-sm font-semibold flex items-center justify-center gap-2 ${
-            mode === 'paste'
-              ? 'border-primary bg-primary/10 text-primary'
-              : 'border-border text-muted-foreground'
-          }`}
-        >
-          <ClipboardList className="h-4 w-4" /> 명단 붙여넣기
-        </button>
+      <div className="space-y-2">
+        {sidoOptions.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setMode('directory')}
+            className={`w-full h-12 rounded-lg border text-sm font-semibold flex items-center justify-center gap-2 ${
+              mode === 'directory'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground'
+            }`}
+          >
+            <Sparkles className="h-4 w-4" /> 지역+업종으로 자동 찾기
+          </button>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setMode('leads')}
+            className={`h-11 rounded-lg border text-sm font-semibold flex items-center justify-center gap-2 ${
+              mode === 'leads'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground'
+            }`}
+          >
+            <Users className="h-4 w-4" /> 내 리드에서
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('paste')}
+            className={`h-11 rounded-lg border text-sm font-semibold flex items-center justify-center gap-2 ${
+              mode === 'paste'
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border text-muted-foreground'
+            }`}
+          >
+            <ClipboardList className="h-4 w-4" /> 명단 붙여넣기
+          </button>
+        </div>
       </div>
+
+      {/* 지역+업종 자동 */}
+      {mode === 'directory' && (
+        <div className="space-y-3 rounded-lg border p-4">
+          <p className="text-xs text-muted-foreground">
+            우리 지역과 찾는 업종만 고르면, 그 지역 업체를 자동으로 모아 코스를 짜드려요.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="dirSido">지역(시·도)</Label>
+              <select
+                id="dirSido"
+                value={dirSido}
+                onChange={(e) => handleSidoChange(e.target.value)}
+                className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">고르기</option>
+                {sidoOptions.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="dirSigungu">시·군·구</Label>
+              <select
+                id="dirSigungu"
+                value={dirSigungu}
+                onChange={(e) => setDirSigungu(e.target.value)}
+                disabled={!dirSido || loadingSigungu}
+                className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-50"
+              >
+                <option value="">{loadingSigungu ? '불러오는 중...' : '고르기'}</option>
+                {sigunguList.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="dirKeyword">어떤 업체를 찾으세요? (선택)</Label>
+            <Input
+              id="dirKeyword"
+              value={dirKeyword}
+              onChange={(e) => setDirKeyword(e.target.value)}
+              placeholder="예) 인테리어, 카페, 병원, 미용실"
+            />
+            <p className="text-xs text-muted-foreground">
+              비워두면 그 지역 전체 업체로 코스를 짜요. 상가정보엔 전화번호가 없어 내비만 제공돼요.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* 리드 선택 */}
       {mode === 'leads' &&
