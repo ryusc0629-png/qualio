@@ -76,7 +76,8 @@ function VariantSelector({
             className="h-7 text-xs w-28"
           />
           {newInput.trim() && (
-            <Button type="button" variant="outline" size="sm" onClick={onAdd} className="h-7 text-xs px-2">추가</Button>
+            // onMouseDown preventDefault: 입력창 포커스를 떼지 않아 맥북에서 첫 클릭이 삼켜지는 문제 방지
+            <Button type="button" variant="outline" size="sm" onMouseDown={(e) => e.preventDefault()} onClick={onAdd} className="h-7 text-xs px-2">추가</Button>
           )}
         </div>
       </div>
@@ -280,7 +281,7 @@ function TierItemsEditor({
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
           className="h-8 text-xs bg-white"
         />
-        <Button type="button" variant="outline" size="sm" onClick={add} className="h-8 shrink-0 text-xs px-3 bg-white">
+        <Button type="button" variant="outline" size="sm" onMouseDown={(e) => e.preventDefault()} onClick={add} className="h-8 shrink-0 text-xs px-3 bg-white">
           추가
         </Button>
       </div>

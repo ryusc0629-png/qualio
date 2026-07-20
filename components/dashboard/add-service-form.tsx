@@ -77,7 +77,8 @@ function VariantSelector({
             className="h-7 text-xs w-28"
           />
           {newInput.trim() && (
-            <Button type="button" variant="outline" size="sm" onClick={onAdd} className="h-7 text-xs px-2">추가</Button>
+            // onMouseDown preventDefault: 입력창 포커스를 떼지 않아 맥북에서 첫 클릭이 삼켜지는 문제 방지
+            <Button type="button" variant="outline" size="sm" onMouseDown={(e) => e.preventDefault()} onClick={onAdd} className="h-7 text-xs px-2">추가</Button>
           )}
         </div>
       </div>
