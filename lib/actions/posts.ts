@@ -417,6 +417,23 @@ export const publishTodayAction = action
       return { success: true, published: 0, message: '오늘 발행할 포스트가 없어요 (이미 목표 달성)' }
     }
 
+    // 중복 발행 방지 락 — 원자적 조건부 업데이트(락 없음 또는 만료된 경우에만 획득).
+    // 딜레이 중 버튼을 두 번 누르거나 새로고침 후 다시 눌러도, 두 번째 요청은 여기서 막힌다.
+    // 락은 3분 뒤 자동 만료 → 도중에 프로세스가 죽어도 스스로 풀린다.
+    const nowIso = new Date().toISOString()
+    const lockUntilIso = new Date(Date.now() + 3 * 60 * 1000).toISOString()
+    const { data: lockRow } = await db
+      .from('businesses')
+      .update({ auto_post_lock_until: lockUntilIso } as never)
+      .eq('id', businessId)
+      .or(`auto_post_lock_until.is.null,auto_post_lock_until.lt.${nowIso}`)
+      .select('id')
+      .maybeSingle()
+    if (!lockRow) {
+      return { success: true, published: 0, message: '이미 홍보 글을 작성 중이에요. 20초쯤 걸리니 잠시만 기다려 주세요' }
+    }
+
+    try {
     // 업체 정보 + 서비스 조회
     const [businessResult, servicesResult] = await Promise.all([
       db.from('businesses').select('name, address, description, service_areas' as never).eq('id', businessId).maybeSingle() as unknown as Promise<{ data: { name: string; address: string | null; description: string | null; service_areas: string[] | null } | null }>,
@@ -532,6 +549,10 @@ export const publishTodayAction = action
 
     revalidatePath('/dashboard/marketing')
     return { success: true, published: needed, titles }
+    } finally {
+      // 발행 성공/실패와 무관하게 락 해제 (예외 시에도 반드시 풀림)
+      await db.from('businesses').update({ auto_post_lock_until: null } as never).eq('id', businessId)
+    }
   })
 
 // 포스트 이미지 생성 액션 — "이미지 생성" 버튼용

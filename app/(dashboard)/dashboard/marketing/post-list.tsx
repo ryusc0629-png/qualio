@@ -460,6 +460,14 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   const [genId, setGenId] = useState<string | null>(null)
   const [postingId, setPostingId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // 오늘 자동 발행 시간(오전 9시 KST)이 지났는지 — 하이드레이션 불일치 방지 위해 마운트 후 계산
+  const [autoTimePassed, setAutoTimePassed] = useState(false)
+  useEffect(() => {
+    const h = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Seoul', hour: '2-digit', hour12: false, hourCycle: 'h23',
+    }).format(new Date())
+    setAutoTimePassed(parseInt(h, 10) >= 9)
+  }, [])
 
   const handleCopy = (content: string) => {
     navigator.clipboard.writeText(content)
@@ -968,6 +976,16 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
         </div>
       </div>
 
+      {/* 자동 발행 시간이 지났는데 오늘 글이 아직이면 — 직접 발행하도록 안내 */}
+      {schedule.some((s) => s.status === 'today') && autoTimePassed && !isTodayComplete && !isPublishing && publishResult === null && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-2">
+          <Clock className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+          <p className="text-sm text-amber-800 leading-relaxed">
+            오늘 자동 발행 시간(오전 9시)이 지났어요. 아래 <span className="font-semibold">&quot;지금 발행&quot;</span>을 누르면 오늘 글이 바로 올라가요.
+          </p>
+        </div>
+      )}
+
       {/* 액션 버튼 */}
       <div className="flex gap-2 flex-wrap">
         <Button
@@ -987,6 +1005,13 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           <Plus className="h-4 w-4" />직접 작성
         </Button>
       </div>
+
+      {/* 발행 중 안내 — 오래 걸려도 새로고침·재클릭하지 않도록 (중복 발행 방지) */}
+      {isPublishing && (
+        <p className="text-xs text-muted-foreground -mt-1">
+          글과 이미지를 만드는 중이라 20초쯤 걸려요. 새로고침하거나 다시 누르지 말고 잠시만 기다려 주세요.
+        </p>
+      )}
 
       {/* 직접 작성 패널 */}
       {showEditor && !editingPost && (
