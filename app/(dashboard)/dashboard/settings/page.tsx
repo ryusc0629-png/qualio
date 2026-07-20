@@ -32,7 +32,7 @@ export default async function SettingsPage() {
   const [businessResult, subscriptionResult, serviceCountResult] = await Promise.all([
     db
       .from('businesses')
-      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, service_areas, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials' as never)
+      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials' as never)
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
@@ -57,7 +57,7 @@ export default async function SettingsPage() {
     id: string; name: string; phone: string | null; address: string | null; description: string | null
     naver_place_url: string | null; google_place_url: string | null; danggeun_review_url: string | null
     kakao_place_url: string | null; active_review_platform: string; youtube_url: string | null
-    instagram_url: string | null; naver_blog_id: string | null; service_areas: string[] | null
+    instagram_url: string | null; naver_blog_id: string | null; danggeun_business_url: string | null; service_areas: string[] | null
     review_reward_type: string; review_reward_description: string | null
     slug: string | null; seo_title: string | null; seo_description: string | null
     seo_keywords: string | null; seo_faqs: unknown; seo_generated_at: string | null

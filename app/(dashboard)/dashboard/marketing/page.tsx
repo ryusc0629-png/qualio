@@ -35,9 +35,9 @@ export default async function MarketingPage({
   const [businessResult, postsResult, subResult, pendingPortfolioResult, doneReelsResult] = await Promise.all([
     db
       .from('businesses')
-      .select('slug, name, monthly_post_target, auto_image_generation, topic_suggestions, topic_suggestions_month, naver_blog_id' as never)
+      .select('slug, name, monthly_post_target, auto_image_generation, topic_suggestions, topic_suggestions_month, naver_blog_id, danggeun_business_url' as never)
       .eq('id', profile.business_id)
-      .maybeSingle() as unknown as { data: { slug: string | null; name: string | null; monthly_post_target: number; auto_image_generation: boolean; topic_suggestions: { title: string; reason: string; topic: string }[] | null; topic_suggestions_month: string | null; naver_blog_id: string | null } | null },
+      .maybeSingle() as unknown as { data: { slug: string | null; name: string | null; monthly_post_target: number; auto_image_generation: boolean; topic_suggestions: { title: string; reason: string; topic: string }[] | null; topic_suggestions_month: string | null; naver_blog_id: string | null; danggeun_business_url: string | null } | null },
     db
       .from('biz_posts' as never)
       .select('id, slug, title, content, summary, published, ai_generated, published_at, image_url, image_urls, naver_title, naver_content, naver_tags, daangn_content, instagram_content, instagram_hashtags, post_type, before_image_urls, after_image_urls, channel_posted_at' as never)
@@ -137,6 +137,7 @@ export default async function MarketingPage({
         autoImageGeneration={business?.auto_image_generation ?? true}
         initialSuggestions={initialSuggestions}
         naverBlogId={business?.naver_blog_id ?? null}
+        danggeunBusinessUrl={business?.danggeun_business_url ?? null}
       />
 
       <div className="border-t pt-6 space-y-5">
