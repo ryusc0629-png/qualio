@@ -40,7 +40,10 @@ export function ConfirmBookingButton({
   preferredDate,
 }: ConfirmBookingButtonProps) {
   const [open, setOpen]             = useState(false)
-  const [tier, setTier]             = useState<'good' | 'better' | 'best'>('better')
+  // 플랜 미설정 견적은 better/best 금액이 없음 → 금액이 있는 플랜을 기본 선택
+  const [tier, setTier]             = useState<'good' | 'better' | 'best'>(
+    betterPrice != null ? 'better' : 'good'
+  )
   const [date, setDate]             = useState(preferredDate ?? '')
   const [time, setTime]             = useState('10:00')
   const [finalPrice, setFinalPrice] = useState<string>('')

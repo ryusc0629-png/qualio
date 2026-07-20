@@ -111,11 +111,17 @@ export default async function QuoteLandingPage({ params }: PageProps) {
     }
   }
 
-  const tiers = [
-    { tier: 'good',   label: '기본',     price: quote.good_price   ?? 0, highlight: false },
-    { tier: 'better', label: '추천',     price: quote.better_price ?? 0, highlight: true  },
-    { tier: 'best',   label: '프리미엄', price: quote.best_price   ?? 0, highlight: false },
-  ]
+  // 업체가 플랜을 설정하지 않은 견적은 better/best 가격이 비어 있음 → 단일 금액 카드 하나만 표시
+  const hasPlans = quote.better_price != null && quote.best_price != null
+  const tiers = hasPlans
+    ? [
+        { tier: 'good',   label: '기본',     price: quote.good_price   ?? 0, highlight: false },
+        { tier: 'better', label: '추천',     price: quote.better_price ?? 0, highlight: true  },
+        { tier: 'best',   label: '프리미엄', price: quote.best_price   ?? 0, highlight: false },
+      ]
+    : [
+        { tier: 'good', label: '견적 금액', price: quote.good_price ?? 0, highlight: false },
+      ]
 
   const isBooked = quote.status === 'booked'
 
@@ -214,8 +220,14 @@ export default async function QuoteLandingPage({ params }: PageProps) {
         {/* 플랜 선택 */}
         <div className="bg-white rounded-3xl p-5 shadow-sm">
           <div className="mb-5">
-            <p className="font-extrabold text-[17px] text-zinc-900">플랜을 선택하고 예약하세요</p>
-            <p className="text-xs text-zinc-500 mt-0.5">3가지 플랜 모두 동일한 최고 품질로 시공됩니다</p>
+            <p className="font-extrabold text-[17px] text-zinc-900">
+              {hasPlans ? '플랜을 선택하고 예약하세요' : '견적 확인하고 예약하세요'}
+            </p>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              {hasPlans
+                ? '3가지 플랜 모두 동일한 최고 품질로 시공됩니다'
+                : '아래 정보를 입력하면 바로 예약이 완료돼요'}
+            </p>
           </div>
 
           {isBooked ? (

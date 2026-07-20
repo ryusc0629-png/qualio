@@ -428,17 +428,19 @@ export function EditServiceButton({
     onError: ({ error }) => toast.error(error.serverError ?? '수정에 실패했습니다'),
   })
 
-  // 이 서비스 한 항목의 플랜 구성 항목을 AI가 추천 → 그 자리에서 수정 가능
-  const { execute: suggestTierItems, isPending: isSuggesting } = useAction(aiSuggestServiceTierItemsAction, {
-    onSuccess: ({ data }) => {
-      if (!data) return
-      setTierGood(data.good)
-      setTierBetter(data.better)
-      setTierBest(data.best)
-      toast.success('전문가 추천을 채웠어요. 필요하면 수정한 뒤 저장하세요')
-    },
-    onError: ({ error }) => toast.error(error.serverError ?? '추천에 실패했어요'),
-  })
+  // 다른 업체들이 많이 쓰는 구성(템플릿)에서 골라 불러오기 → 그 자리에서 수정 가능
+  const [showTemplates, setShowTemplates] = useState(false)
+  const templates = getTemplatesForService(service.name, service.category)
+
+  const applyTemplate = (templateId: string) => {
+    const tpl = templates.find((t) => t.id === templateId)
+    if (!tpl) return
+    setTierGood(tpl.good)
+    setTierBetter(tpl.better)
+    setTierBest(tpl.best)
+    setShowTemplates(false)
+    toast.success('구성을 불러왔어요. 필요하면 수정한 뒤 저장하세요')
+  }
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -759,13 +761,10 @@ export function EditServiceButton({
                     variant="outline"
                     size="sm"
                     className="h-8 shrink-0 gap-1.5 text-xs"
-                    disabled={isSuggesting}
-                    onClick={() => suggestTierItems({ id: service.id })}
+                    onClick={() => setShowTemplates((v) => !v)}
                   >
-                    {isSuggesting
-                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      : <Sparkles className="h-3.5 w-3.5" />}
-                    {isSuggesting ? '추천 중...' : '전문가 추천받기'}
+                    <Users className="h-3.5 w-3.5" />
+                    많이 쓰는 구성 불러오기
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -774,6 +773,51 @@ export function EditServiceButton({
                 <p className="text-xs text-amber-600 mt-1">
                   ✏️ 짧은 명사형으로 입력해주세요 — &ldquo;필터 세척&rdquo; O, &ldquo;필터를 세척해드립니다&rdquo; X
                 </p>
+
+                {/* 많이 쓰는 구성 템플릿 고르기 — 불러온 뒤 자유롭게 수정 가능 */}
+                {showTemplates && (
+                  <div className="mt-3 space-y-2 rounded-lg border bg-muted/40 p-3">
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      다른 청소업체들이 많이 쓰는 구성이에요. 골라서 불러온 뒤 자유롭게 고치세요.
+                    </p>
+                    {templates.map((tpl) => (
+                      <div key={tpl.id} className="rounded-lg border bg-background p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold">{tpl.label}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{tpl.description}</p>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-8 shrink-0 gap-1 text-xs"
+                            onClick={() => applyTemplate(tpl.id)}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            이 구성 적용
+                          </Button>
+                        </div>
+                        {/* 미리보기 — 각 플랜 대표 항목 */}
+                        <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+                          {([
+                            { label: '기본', items: tpl.good },
+                            { label: '추천', items: tpl.better },
+                            { label: '프리미엄', items: tpl.best },
+                          ] as const).map((col) => (
+                            <div key={col.label} className="min-w-0">
+                              <p className="font-semibold text-foreground mb-0.5">{col.label}</p>
+                              <ul className="space-y-0.5 text-muted-foreground">
+                                {col.items.slice(0, 3).map((it, i) => (
+                                  <li key={i} className="truncate">· {it}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <TierItemsEditor

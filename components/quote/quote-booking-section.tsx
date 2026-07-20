@@ -61,7 +61,10 @@ export function QuoteBookingSection({
   tierReasons,
   tierIncludes,
 }: QuoteBookingSectionProps) {
-  const [selectedTier, setSelectedTier] = useState<string | null>(null)
+  // 플랜이 하나뿐이면(업체 플랜 미설정) 자동 선택 — 고객이 카드를 한 번 더 누르는 수고를 없앰
+  const [selectedTier, setSelectedTier] = useState<string | null>(
+    tiers.length === 1 ? tiers[0].tier : null
+  )
   const [done, setDone] = useState(false)
   const formRef = useRef<HTMLDivElement>(null)
   const addressTrackedRef = useRef(false) // 주소 입력은 1회만 기록
