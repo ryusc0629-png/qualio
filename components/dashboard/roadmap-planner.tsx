@@ -137,13 +137,29 @@ function kakaoNav(name: string, lat: number, lng: number): string {
   return `https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat},${lng}`
 }
 
+// 퀄리오가 알아서 하루치로 나누는 기준(방문영업 현실 감안 하루 약 20곳)
+const DEFAULT_PER_DAY = 20
+
+// 청소업체가 자주 노리는 업종 — 칩으로 빠르게 선택(자유입력도 가능)
+const TARGET_CATEGORIES = [
+  '인테리어',
+  '병원',
+  '카페',
+  '학원',
+  '미용실',
+  '헬스장',
+  '예식장',
+  '펜션',
+  '부동산',
+  '어린이집',
+]
+
 type Mode = 'directory' | 'leads' | 'paste'
 
 export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlannerProps) {
   const [mode, setMode] = useState<Mode>(sidoOptions.length > 0 ? 'directory' : leads.length > 0 ? 'leads' : 'paste')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [paste, setPaste] = useState('')
-  const [perDay, setPerDay] = useState(25)
   const [start, setStart] = useState(defaultStart)
   const [result, setResult] = useState<RoadmapResult | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -219,12 +235,16 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
         toast.error('지역과 시·군·구를 골라주세요')
         return
       }
+      if (!dirKeyword.trim()) {
+        toast.error('어떤 업체를 찾을지 골라주세요')
+        return
+      }
       startTransition(async () => {
         const res = await buildDirectoryRoadmapAction({
           sido: dirSido,
           sigungu: dirSigungu,
-          keyword: dirKeyword.trim() || undefined,
-          perDay,
+          keyword: dirKeyword.trim(),
+          perDay: DEFAULT_PER_DAY,
           startAddress: start.trim() || undefined,
         })
         if (res?.serverError) {
@@ -252,7 +272,7 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
     startTransition(async () => {
       const res = await buildRoadmapAction({
         stops,
-        perDay,
+        perDay: DEFAULT_PER_DAY,
         startAddress: start.trim() || undefined,
       })
       if (res?.serverError) {
@@ -263,54 +283,43 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
     })
   }
 
+  // 데이터 있는 지역이 없으면 지역+업종 모드는 숨김
+  const modeTabs: { key: Mode; label: string; icon: typeof Sparkles }[] = [
+    ...(sidoOptions.length > 0
+      ? [{ key: 'directory' as Mode, label: '지역+업종 자동', icon: Sparkles }]
+      : []),
+    { key: 'leads', label: '내 리드에서', icon: Users },
+    { key: 'paste', label: '명단 붙여넣기', icon: ClipboardList },
+  ]
+
   return (
     <div className="space-y-5">
-      {/* 입력 방식 선택 */}
-      <div className="space-y-2">
-        {sidoOptions.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setMode('directory')}
-            className={`w-full h-12 rounded-lg border text-sm font-semibold flex items-center justify-center gap-2 ${
-              mode === 'directory'
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border text-muted-foreground'
-            }`}
-          >
-            <Sparkles className="h-4 w-4" /> 지역+업종으로 자동 찾기
-          </button>
-        )}
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setMode('leads')}
-            className={`h-11 rounded-lg border text-sm font-semibold flex items-center justify-center gap-2 ${
-              mode === 'leads'
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border text-muted-foreground'
-            }`}
-          >
-            <Users className="h-4 w-4" /> 내 리드에서
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('paste')}
-            className={`h-11 rounded-lg border text-sm font-semibold flex items-center justify-center gap-2 ${
-              mode === 'paste'
-                ? 'border-primary bg-primary/10 text-primary'
-                : 'border-border text-muted-foreground'
-            }`}
-          >
-            <ClipboardList className="h-4 w-4" /> 명단 붙여넣기
-          </button>
+      {/* 방법 전환 — 작은 탭(큰 버튼 아님) */}
+      {modeTabs.length > 1 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm border-b pb-3">
+          {modeTabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setMode(t.key)}
+              className={`inline-flex items-center gap-1.5 ${
+                mode === t.key
+                  ? 'font-bold text-primary'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <t.icon className="h-4 w-4" />
+              {t.label}
+            </button>
+          ))}
         </div>
-      </div>
+      )}
 
-      {/* 지역+업종 자동 */}
+      {/* 지역+업종 자동 (기본·메인) */}
       {mode === 'directory' && (
         <div className="space-y-3 rounded-lg border p-4">
           <p className="text-xs text-muted-foreground">
-            우리 지역과 찾는 업종만 고르면, 그 지역 업체를 자동으로 모아 코스를 짜드려요.
+            우리 지역과 찾는 업종만 고르면, 그 지역 전체를 하루씩 돌기 좋게 며칠 코스로 나눠 짜드려요.
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -348,15 +357,31 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="dirKeyword">어떤 업체를 찾으세요? (선택)</Label>
+            <Label htmlFor="dirKeyword">어떤 업체를 찾으세요? (필수)</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {TARGET_CATEGORIES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setDirKeyword(c)}
+                  className={`px-3 h-8 rounded-full border text-xs font-medium ${
+                    dirKeyword === c
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
             <Input
               id="dirKeyword"
               value={dirKeyword}
               onChange={(e) => setDirKeyword(e.target.value)}
-              placeholder="예) 인테리어, 카페, 병원, 미용실"
+              placeholder="직접 입력도 돼요 (예: 요양원, 독서실)"
             />
             <p className="text-xs text-muted-foreground">
-              비워두면 그 지역 전체 업체로 코스를 짜요. 상가정보엔 전화번호가 없어 내비만 제공돼요.
+              위에서 고르거나 직접 입력하세요. 상가정보엔 전화번호가 없어 내비만 제공돼요.
             </p>
           </div>
         </div>
@@ -422,29 +447,18 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
         </div>
       )}
 
-      {/* 옵션 */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="perDay">하루 방문 개수</Label>
-          <Input
-            id="perDay"
-            type="number"
-            inputMode="numeric"
-            min={1}
-            max={100}
-            value={perDay}
-            onChange={(e) => setPerDay(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="start">출발지 (선택)</Label>
-          <Input
-            id="start"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-            placeholder="예) 울산 남구 삼산로 300"
-          />
-        </div>
+      {/* 출발지 — 설정의 업체 주소가 자동으로 채워짐 */}
+      <div className="space-y-1.5">
+        <Label htmlFor="start">출발지</Label>
+        <Input
+          id="start"
+          value={start}
+          onChange={(e) => setStart(e.target.value)}
+          placeholder="예) 울산 남구 삼산로 300"
+        />
+        <p className="text-xs text-muted-foreground">
+          설정에 저장된 업체 주소가 자동으로 들어가요. 그날 다른 곳에서 출발하면 여기만 바꾸세요.
+        </p>
       </div>
 
       <Button onClick={handleBuild} disabled={isPending} className="w-full h-12 text-base font-bold">
