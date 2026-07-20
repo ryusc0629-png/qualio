@@ -55,6 +55,16 @@ export const APPLIANCE_PRESETS: AppliancePreset[] = [
       { id: 'fridge_commercial', label: '업소용',     sub: '워크인·쇼케이스', defaultPrice: 120000 },
     ],
   },
+  {
+    key: 'washer',
+    noun: '세탁기',
+    match: /세탁기/,
+    types: [
+      { id: 'washer_toploader', label: '통돌이 세탁기', sub: '일반',        defaultPrice: 60000 },
+      { id: 'washer_drum',      label: '드럼 세탁기',   sub: '',           defaultPrice: 80000 },
+      { id: 'washer_mini',      label: '미니 세탁기',   sub: '벽걸이·아기옷', defaultPrice: 50000 },
+    ],
+  },
 ]
 
 // 서비스명으로 가전 프리셋을 찾는다. 여러 개가 매칭되면 첫 번째(등록 순).

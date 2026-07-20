@@ -120,6 +120,7 @@ const PRESETS = [
   { name: '거주 청소',   category: '주거 공간', unit: '정액', base_price: 80000 },
   { name: '에어컨 청소', category: '가전 케어', unit: '개',   base_price: 80000 },
   { name: '냉장고 청소', category: '가전 케어', unit: '개',   base_price: 70000 },
+  { name: '세탁기 청소', category: '가전 케어', unit: '개',   base_price: 60000 },
   { name: '줄눈 시공',   category: '특수/시공', unit: '평당', base_price: 30000 },
 ] as const
 
