@@ -1,7 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { SOURCE_LABELS, isAiSource } from '@/lib/utils/detect-view-source'
 import type { ViewSource } from '@/lib/utils/detect-view-source'
-import { MARKETING_CHANNELS, channelLabel } from '@/lib/utils/marketing-channels'
+import { ALL_CHANNELS, AD_CHANNELS, channelLabel } from '@/lib/utils/marketing-channels'
 import { getReviewSummary } from '@/lib/reviews/get-reviews'
 import { StatsCharts } from './stats-charts'
 
@@ -136,12 +136,19 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
     acc[p.channel] = (acc[p.channel] ?? 0) + 1
     return acc
   }, {})
-  const channelStats = MARKETING_CHANNELS
+  const channelStats = ALL_CHANNELS
     .map((c) => ({ key: c.key, label: c.label, emoji: c.emoji, count: channelCounts[c.key] ?? 0 }))
     .filter((c) => c.count > 0)
     .sort((a, b) => b.count - a.count)
   const channelTaggedTotal = channelStats.reduce((s, c) => s + c.count, 0)
   const channelMax = channelStats.reduce((m, c) => Math.max(m, c.count), 0)
+
+  // ── 광고 유입(유료) — 네이버 파워링크·구글 검색광고로 웹사이트에 들어온 방문 ──
+  // 광고비를 쓰는 채널만 따로 강조. 검수 전이거나 노출 전이면 방문 0.
+  const adChannelStats = AD_CHANNELS.map((c) => ({
+    key: c.key, label: c.label, emoji: c.emoji, count: channelCounts[c.key] ?? 0,
+  }))
+  const adTotal = adChannelStats.reduce((s, c) => s + c.count, 0)
 
   // ── 견적 퍼널 (선택 기간) — 방문 → 작성 시작 → 견적 → 열람 → 플랜 선택 → 예약 ──
   const funnelEvents = funnelResult.data ?? []
@@ -458,6 +465,29 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
           <span className="font-medium">{directOtherViews.toLocaleString()}회</span>
         </div>
       </div>
+
+      {/* 광고 유입(유료) — 네이버 파워링크·구글 검색광고로 웹사이트에 들어온 방문. 광고비 쓴 채널만 강조 */}
+      {adTotal > 0 && (
+        <div className="rounded-xl border border-primary/30 bg-primary/[0.03] overflow-hidden">
+          <div className="px-5 py-3 border-b border-primary/20 bg-primary/5 flex items-baseline justify-between gap-2">
+            <p className="font-semibold text-sm">💳 광고 유입</p>
+            <p className="text-xs text-muted-foreground">네이버·구글 검색광고 · {periodLabel}</p>
+          </div>
+          <div className="grid grid-cols-2 divide-x">
+            {adChannelStats.map((c) => (
+              <div key={c.key} className="px-2 py-5 text-center">
+                <p className="text-2xl font-bold text-primary">{c.count.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">{c.emoji} {c.label}</p>
+                <p className="text-[10px] text-muted-foreground/70 mt-0.5">웹사이트 방문</p>
+              </div>
+            ))}
+          </div>
+          <p className="px-5 py-2.5 border-t border-primary/15 bg-primary/[0.04] text-xs text-muted-foreground leading-relaxed">
+            광고로 웹사이트에 들어온 방문이 모두 <b className="text-primary">{adTotal.toLocaleString()}회</b>예요.
+            이 중 몇 건이 매출로 이어졌는지는 위 &lsquo;채널별 매출&rsquo;에서 확인하세요.
+          </p>
+        </div>
+      )}
 
       {/* 채널별 유입 — 홍보 링크(?ch=)로 들어온 방문을 채널별로 분리 (네이버·당근·인스타 등) */}
       <div className="rounded-xl border bg-white overflow-hidden">
