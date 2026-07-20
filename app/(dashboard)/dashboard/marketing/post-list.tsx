@@ -1308,8 +1308,8 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
               </Button>
               <a
                 href={naverBlogId
-                  ? `https://blog.naver.com/${naverBlogId}?Redirect=Write`
-                  : 'https://blog.naver.com/compose/write'}
+                  ? `https://blog.naver.com/${naverBlogId}/postwrite`
+                  : 'https://blog.naver.com'}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 px-4 h-12 rounded-md border border-[#03C75A] text-[#03C75A] text-sm font-medium hover:bg-[#03C75A]/10 transition-colors"
