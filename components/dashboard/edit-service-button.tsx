@@ -355,6 +355,10 @@ export function EditServiceButton({
   const applianceTypes = getApplianceTypes(currentName)
   const isAcByName     = isApplianceService(currentName)  // 가전(에어컨·냉장고 등) 유형별 단가
 
+  // 3단계(기본/추천/프리미엄) 플랜은 입주·이사 같은 평당 거주지 청소에만 자연스러움.
+  // 대수·개수·정액·상담 단위(에어컨·가전·줄눈·B2B)는 단일 금액이 맞아 플랜 설정을 숨긴다.
+  const supportsTiers = currentUnit === '평당'
+
   // ── 가격 가이드 ── 기본가 × 배수 × 할인으로 플랜별 예시 가격 실시간 계산
   const currentBase = Number(watch('base_price')) || service.base_price
   const roundK = (n: number) => Math.round(n / 1000) * 1000
@@ -751,8 +755,10 @@ export function EditServiceButton({
               />
             </div>
 
-            {/* 플랜 구성 항목 */}
+            {/* 플랜 구성 항목 — 평당(거주지) 청소만 3단계 사용, 그 외엔 단일 금액 안내 */}
             <div className="space-y-4 border-t pt-4">
+              {supportsTiers ? (
+              <>
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-semibold">플랜 구성 항목 설정</p>
@@ -892,6 +898,16 @@ export function EditServiceButton({
                   {priceNudge.msg}
                 </div>
               </div>
+              </>
+              ) : (
+                <div className="rounded-lg border bg-muted/30 p-4 text-center space-y-1">
+                  <p className="text-sm font-medium">이 서비스는 단일 금액으로 안내돼요</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed break-keep">
+                    기본·추천·프리미엄 3단계 플랜은 입주·이사 같은 평당 거주지 청소에서 사용해요.
+                    단위를 &lsquo;평당&rsquo;으로 바꾸면 3단계 구성을 설정할 수 있어요.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
