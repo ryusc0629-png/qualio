@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: '퀄리오 구독 요금제 안내 — Starter, Pro, Scale',
 }
 
-// 공개 가격 안내 페이지 — 토스페이먼츠 심사 필수
+// 공개 가격 안내 페이지 — KCP 결제 심사 필수
 export default function PricingPage() {
   return (
     <div className="min-h-screen bg-background">
@@ -38,7 +38,7 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* 서비스 제공 기간 안내 — 토스페이먼츠 심사 요건 */}
+        {/* 서비스 제공 기간 안내 — KCP 결제 심사 요건 */}
         <div className="max-w-2xl mx-auto mb-10 rounded-lg border border-border bg-muted/40 px-6 py-4 text-sm text-muted-foreground text-center">
           <p>
             <span className="font-semibold text-foreground">서비스 제공 기간:</span> 결제 1건당 <span className="font-semibold text-foreground">1개월</span> (30일) 이용권 제공 · 자동 갱신 없음 · 언제든지 해지 가능
@@ -125,7 +125,7 @@ export default function PricingPage() {
               },
               {
                 q: '결제 수단은 무엇을 지원하나요?',
-                a: '신용카드, 체크카드를 지원합니다. 토스페이먼츠를 통해 안전하게 처리됩니다.',
+                a: '신용카드, 체크카드를 지원합니다. KCP를 통해 안전하게 처리됩니다.',
               },
             ].map((item) => (
               <div key={item.q} className="border-b pb-6">

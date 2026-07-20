@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: '퀄리오 서비스 이용약관',
 }
 
-// 퀄리오 이용약관 — 토스페이먼츠 심사 필수 페이지
+// 퀄리오 이용약관 — KCP 결제 심사 필수 페이지
 export default function TermsPage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
@@ -57,7 +57,7 @@ export default function TermsPage() {
         <section>
           <h2 className="text-lg font-semibold mb-3">제5조 (구독 요금 및 결제)</h2>
           <p className="text-muted-foreground leading-relaxed mb-3">
-            서비스는 아래와 같은 구독 플랜을 제공합니다. 결제는 토스페이먼츠를 통해 처리됩니다.
+            서비스는 아래와 같은 구독 플랜을 제공합니다. 결제는 KCP(NHN KCP)를 통해 처리됩니다.
           </p>
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
@@ -82,12 +82,13 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold mb-3">제6조 (환불 정책)</h2>
+          <h2 className="text-lg font-semibold mb-3">제6조 (청약철회 및 환불 정책)</h2>
           <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-            <li>구독 결제 후 7일 이내 미사용 시 전액 환불이 가능합니다.</li>
-            <li>구독 기간 중 서비스 이용 내역이 있는 경우, 남은 기간에 대한 일할 계산 환불이 가능합니다.</li>
-            <li>환불 요청은 고객센터(ryusc0628@naver.com) 또는 서비스 내 문의를 통해 접수하시기 바랍니다.</li>
-            <li>환불은 결제 수단으로 영업일 기준 3~5일 이내 처리됩니다.</li>
+            <li><b>청약철회</b>: 구독 결제 후 7일 이내 서비스를 이용하지 않은 경우, 청약을 철회하고 전액 환불받을 수 있습니다.</li>
+            <li><b>환불 사유</b>: 서비스 장애, 7일 이내 미사용(단순 변심), 중복·오결제 등의 경우 환불이 가능합니다. 구독 기간 중 이용 내역이 있으면 남은 기간에 대해 일할 계산하여 환불합니다.</li>
+            <li><b>신청 방법</b>: 고객센터(전화 010-2912-2881, 이메일 ryusc0628@naver.com) 또는 서비스 내 문의를 통해 접수합니다.</li>
+            <li><b>처리 절차</b>: 환불 신청 접수 → 이용 내역 확인 → 환불 금액 산정(일할 계산) → 결제 수단으로 환불 처리.</li>
+            <li><b>소요 기간</b>: 환불 승인 후 결제 수단 기준 영업일 3~5일 이내에 처리됩니다.</li>
           </ul>
         </section>
 
