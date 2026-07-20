@@ -157,6 +157,9 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
   const faqs = (business.seo_faqs as unknown as FaqItem[]) ?? []
 
+  // 견적폼 링크에 유입 채널(ch) 전달 — 광고 유입이 견적 단계까지 추적되도록
+  const quoteHref = ch ? `/q/${business.id}?ch=${encodeURIComponent(ch)}` : `/q/${business.id}`
+
   // YouTube URL → embed ID 추출
   function getYoutubeId(url: string | null): string | null {
     if (!url) return null
@@ -314,7 +317,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
                   {business.phone}
                 </a>
               )}
-              <Link href={`/q/${business.id}`}>
+              <Link href={quoteHref}>
                 <Button size="sm" className="gap-1.5">
                   무료 견적 받기
                 </Button>
@@ -401,7 +404,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
 
             {/* CTA 버튼 — 모바일 풀 너비 */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-              <Link href={`/q/${business.id}`} className="w-full sm:w-auto">
+              <Link href={quoteHref} className="w-full sm:w-auto">
                 <Button size="lg" className="w-full sm:w-auto gap-2 h-14 px-8 text-base font-bold shadow-xl shadow-primary/25 rounded-2xl">
                   <Star className="h-4 w-4" />
                   무료 견적 받기
@@ -491,7 +494,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
 
             <div className="text-center mt-10">
               <p className="text-muted-foreground text-sm mb-5">걱정 마세요. {business.name}이 도와드릴게요.</p>
-              <Link href={`/q/${business.id}`}>
+              <Link href={quoteHref}>
                 <Button size="lg" className="gap-2 h-12 px-8 rounded-xl font-bold">
                   지금 무료로 견적 받기
                   <ArrowRight className="h-4 w-4" />
@@ -530,7 +533,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
             </div>
 
             <div className="text-center mt-12">
-              <Link href={`/q/${business.id}`}>
+              <Link href={quoteHref}>
                 <Button size="lg" className="gap-2 h-12 px-8 rounded-xl font-bold">
                   지금 바로 시작하기
                   <ArrowRight className="h-4 w-4" />
@@ -556,7 +559,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
                 </p>
               </div>
 
-              <ServiceList services={services} quoteUrl={`/q/${business.id}`} />
+              <ServiceList services={services} quoteUrl={quoteHref} />
             </div>
             </FadeIn>
           </section>
@@ -827,7 +830,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
               서비스 정보를 입력하면 즉시 3가지 견적을 확인할 수 있어요.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-              <Link href={`/q/${business.id}`}>
+              <Link href={quoteHref}>
                 <Button size="lg" className="h-12 px-8 text-base font-bold gap-2 shadow-lg shadow-primary/30">
                   <Star className="h-4 w-4" />
                   무료 견적 받기
@@ -887,7 +890,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
             전화 문의
           </a>
         )}
-        <Link href={`/q/${business.id}`} className={business.phone ? 'flex-1' : 'w-full'}>
+        <Link href={quoteHref} className={business.phone ? 'flex-1' : 'w-full'}>
           <Button className="w-full h-12 text-sm font-bold gap-2">
             <Star className="h-4 w-4" />
             무료 견적 받기
