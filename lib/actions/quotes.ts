@@ -544,6 +544,38 @@ export const restoreQuoteAction = authAction
     return { success: true }
   })
 
+// 견적 취소 — pending → cancelled (전화해보니 고객이 안 한다고 할 때)
+export const cancelQuoteAction = authAction
+  .schema(quoteIdSchema)
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+
+    // 본인 업체 견적인지 확인
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const { error } = await db
+      .from('quotes')
+      .update({ status: 'cancelled' })
+      .eq('id', parsedInput.quote_id)
+      .eq('business_id', profile.business_id)
+      .eq('status', 'pending')  // 아직 예약 확정 안 된 견적만 취소 가능
+
+    if (error) throw new Error('[APP] 취소 처리에 실패했습니다')
+
+    revalidatePath('/dashboard/clients')
+    revalidatePath('/dashboard/work')
+    return { success: true }
+  })
+
 // 견적 → 예약 확정 (업체가 직접 예약 생성) ─────────────────────────
 const confirmBookingSchema = z.object({
   quote_id:        z.string().uuid(),

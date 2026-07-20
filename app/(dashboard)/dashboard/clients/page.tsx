@@ -6,6 +6,7 @@ import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { DeleteCustomerButton } from '@/components/dashboard/delete-customer-button'
 import { ContractStatusSelect } from '@/components/dashboard/contract-status-select'
 import { ConfirmBookingButton } from '@/components/dashboard/confirm-booking-button'
+import { CancelQuoteButton } from '@/components/dashboard/cancel-quote-button'
 import { formatFrequency } from '@/lib/utils/frequency'
 import { contractAccruedRevenue } from '@/lib/utils/ltv'
 import { ClientSearchInput } from '@/components/dashboard/client-search-input'
@@ -414,7 +415,7 @@ export default async function ClientsPage({
                         )}
                       </div>
                     </div>
-                    <div className="shrink-0">
+                    <div className="shrink-0 flex flex-col items-end gap-1">
                       <ConfirmBookingButton
                         quoteId={quote.id}
                         goodPrice={quote.good_price}
@@ -422,6 +423,7 @@ export default async function ClientsPage({
                         bestPrice={quote.best_price}
                         preferredDate={quote.preferred_date}
                       />
+                      <CancelQuoteButton quoteId={quote.id} />
                     </div>
                   </div>
                 </div>
