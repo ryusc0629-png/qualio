@@ -168,19 +168,8 @@ function buildSigunguOptions(list: string[]): { label: string; value: string }[]
   return opts
 }
 
-// 청소업체가 자주 노리는 업종 — 칩으로 빠르게 선택(자유입력도 가능)
-const TARGET_CATEGORIES = [
-  '인테리어',
-  '병원',
-  '카페',
-  '학원',
-  '미용실',
-  '헬스장',
-  '예식장',
-  '펜션',
-  '부동산',
-  '어린이집',
-]
+// 타겟 업종 — 고정 선택(자유입력 없음). DB엔 이 업종들만 저장돼 있음.
+const TARGET_CATEGORIES = ['인테리어', '병의원', '학원', '공장']
 
 type Mode = 'directory' | 'leads' | 'paste'
 
@@ -195,7 +184,7 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
   // 지역+업종 자동 모드 상태
   const [dirSido, setDirSido] = useState('')
   const [dirSigungu, setDirSigungu] = useState('')
-  const [dirKeyword, setDirKeyword] = useState('')
+  const [dirTarget, setDirTarget] = useState('')
   const [sigunguList, setSigunguList] = useState<string[]>([])
   const [loadingSigungu, setLoadingSigungu] = useState(false)
 
@@ -263,15 +252,15 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
         toast.error('지역을 골라주세요')
         return
       }
-      if (!dirKeyword.trim()) {
-        toast.error('어떤 업체를 찾을지 골라주세요')
+      if (!dirTarget) {
+        toast.error('어떤 업종을 돌지 골라주세요')
         return
       }
       startTransition(async () => {
         const res = await buildDirectoryRoadmapAction({
           sido: dirSido,
           sigungu: dirSigungu,
-          keyword: dirKeyword.trim(),
+          target: dirTarget,
           perDay: DEFAULT_PER_DAY,
           startAddress: start.trim() || undefined,
         })
@@ -388,15 +377,15 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="dirKeyword">어떤 업체를 찾으세요? (필수)</Label>
-            <div className="flex flex-wrap gap-1.5">
+            <Label>어떤 업종을 도시겠어요? (필수)</Label>
+            <div className="grid grid-cols-2 gap-2">
               {TARGET_CATEGORIES.map((c) => (
                 <button
                   key={c}
                   type="button"
-                  onClick={() => setDirKeyword(c)}
-                  className={`px-3 h-8 rounded-full border text-xs font-medium ${
-                    dirKeyword === c
+                  onClick={() => setDirTarget(c)}
+                  className={`h-11 rounded-lg border text-sm font-semibold ${
+                    dirTarget === c
                       ? 'border-primary bg-primary/10 text-primary'
                       : 'border-border text-muted-foreground hover:bg-muted'
                   }`}
@@ -405,14 +394,8 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
                 </button>
               ))}
             </div>
-            <Input
-              id="dirKeyword"
-              value={dirKeyword}
-              onChange={(e) => setDirKeyword(e.target.value)}
-              placeholder="직접 입력도 돼요 (예: 요양원, 독서실)"
-            />
             <p className="text-xs text-muted-foreground">
-              위에서 고르거나 직접 입력하세요. 상가정보엔 전화번호가 없어 내비만 제공돼요.
+              상가정보엔 전화번호가 없어 내비만 제공돼요.
             </p>
           </div>
         </div>

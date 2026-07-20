@@ -105,11 +105,14 @@ export const listSigunguAction = action.schema(sigunguSchema).action(async ({ pa
 // 지역+업종 자동 모드는 이미 좌표가 있어 한 번에 더 많이 처리 가능 (시 전체/시도 전체)
 const DIRECTORY_MAX = 1500
 
-// 지역+업종 → 방문 대상 조회 → 동선 코스 생성 (좌표가 이미 있어 지오코딩 불필요)
+// 타겟 업종은 고정 선택(인테리어·병의원·학원·공장)
+const TARGETS = ['인테리어', '병의원', '학원', '공장']
+
+// 지역+타겟 → 방문 대상 조회 → 동선 코스 생성 (좌표가 이미 있어 지오코딩 불필요)
 const directorySchema = z.object({
   sido: z.string().min(1, '지역을 골라주세요'),
   sigungu: z.string().optional(), // 비우면 시도 전체, '창원시'면 창원 전체 구
-  keyword: z.string().optional(),
+  target: z.string().refine((v) => TARGETS.includes(v), '업종을 골라주세요'),
   perDay: z.number().int().min(1).max(100),
   startAddress: z.string().optional(),
 })
@@ -129,7 +132,7 @@ export const buildDirectoryRoadmapAction = action
     const { data, error } = await rpcClient()('prospect_search', {
       p_sido: parsedInput.sido,
       p_sigungu: parsedInput.sigungu?.trim() || null,
-      p_keyword: parsedInput.keyword?.trim() || null,
+      p_target: parsedInput.target,
       p_limit: DIRECTORY_MAX,
     })
     if (error) throw new Error('[APP] 명단을 못 불러왔어요. 잠시 후 다시 시도해주세요')
@@ -143,7 +146,7 @@ export const buildDirectoryRoadmapAction = action
     }))
 
     if (stops.length === 0) {
-      throw new Error('[APP] 그 지역에 해당하는 업체가 없어요. 업종 키워드를 바꿔보세요')
+      throw new Error('[APP] 그 지역엔 해당 업종 업체가 없어요. 지역이나 업종을 바꿔보세요')
     }
 
     const start = parsedInput.startAddress?.trim()

@@ -11,7 +11,7 @@
 
 환경변수: .env.local 의 NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY 사용
 """
-import csv, json, os, sys, ssl, urllib.request, urllib.error
+import csv, json, os, sys, ssl, time, urllib.request, urllib.error
 
 # .env.local 로드 (간단 파서)
 def load_env(path=".env.local"):
@@ -55,6 +55,28 @@ COLMAP = {
     "위도": "lat",
 }
 
+# 타겟 업종만 적재(전체 저장 안 함 → DB 대폭 축소). (target, 매칭 키워드들)
+# 상호명·업종 대/중/소분류 중 하나라도 키워드를 포함하면 그 타겟으로 태깅.
+TARGETS = [
+    ("인테리어", ["인테리어", "실내건축", "리모델링"]),
+    ("병의원", ["병원", "의원", "치과", "한의원", "내과", "외과", "피부과", "안과",
+              "이비인후과", "산부인과", "소아", "정형외과", "신경과", "비뇨", "클리닉"]),
+    ("학원", ["학원", "교습소"]),
+    ("공장", ["공장", "제조"]),
+]
+
+def classify_target(rec):
+    hay = " ".join([
+        (rec.get("상호명") or ""),
+        (rec.get("상권업종대분류명") or ""),
+        (rec.get("상권업종중분류명") or ""),
+        (rec.get("상권업종소분류명") or ""),
+    ])
+    for target, kws in TARGETS:
+        if any(kw in hay for kw in kws):
+            return target
+    return None
+
 def open_csv(path):
     # 상가정보 최신본은 UTF-8. 혹시 모를 CP949 폴백.
     for enc in ("utf-8-sig", "cp949"):
@@ -68,7 +90,10 @@ def open_csv(path):
     return open(path, encoding="utf-8", errors="replace", newline="")
 
 def to_row(rec):
-    out = {}
+    target = classify_target(rec)
+    if target is None:  # 타겟 업종 아니면 저장 안 함
+        return None
+    out = {"target": target}
     for src, dst in COLMAP.items():
         val = (rec.get(src) or "").strip()
         out[dst] = val or None
@@ -83,7 +108,7 @@ def to_row(rec):
         return None
     return out
 
-def send(batch):
+def _post_once(batch):
     body = json.dumps(batch, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(ENDPOINT, data=body, method="POST", headers={
         "apikey": SERVICE_KEY,
@@ -95,13 +120,48 @@ def send(batch):
         with urllib.request.urlopen(req, timeout=60, context=_CTX) as r:
             return r.status, ""
     except urllib.error.HTTPError as e:
-        return e.code, e.read().decode("utf-8", "replace")[:300]
+        return e.code, e.read().decode("utf-8", "replace")[:200]
+    except Exception as e:  # 연결 실패(DB 다운 등)
+        return 0, repr(e)[:200]
 
-def ingest(path):
+def send(batch, retries=5):
+    """5xx/연결오류는 백오프 재시도. 끝까지 실패하면 (code,msg) 반환(데이터 유실 방지)."""
+    code, msg = 0, ""
+    for attempt in range(retries):
+        code, msg = _post_once(batch)
+        if code in (200, 201, 204):
+            return code, ""
+        # 4xx(요청 오류)는 재시도해도 소용없음 → 즉시 반환
+        if 400 <= code < 500:
+            return code, msg
+        # 5xx / 0(연결불가) → DB 과부하·다운. 백오프 후 재시도(2,4,8,16,32초)
+        time.sleep(2 ** (attempt + 1))
+    return code, msg
+
+class DbOverloaded(Exception):
+    pass
+
+def _flush(batch, stats):
+    code, msg = send(batch)
+    if code in (200, 201, 204):
+        stats["ok"] += len(batch)
+        stats["consec"] = 0
+    else:
+        stats["failed"] += len(batch)
+        stats["consec"] += 1
+        print(f"  ⚠ {code} {msg}")
+        # DB가 계속 실패 응답 → 과부하/다운. 더 밀어넣지 말고 즉시 중단(악화 방지)
+        if stats["consec"] >= 3:
+            raise DbOverloaded(
+                f"연속 {stats['consec']}배치 실패(마지막 {code}). DB 과부하/디스크 의심 — 중단."
+            )
+    time.sleep(0.03)  # 살짝 텀
+
+def ingest(path, stats):
     print(f"\n▶ {path}")
     f = open_csv(path)
     reader = csv.DictReader(f)
-    batch, sent, skipped, errors = [], 0, 0, 0
+    batch, skipped, start_ok = [], 0, stats["ok"]
     for rec in reader:
         row = to_row(rec)
         if row is None:
@@ -109,30 +169,28 @@ def ingest(path):
             continue
         batch.append(row)
         if len(batch) >= 500:
-            code, msg = send(batch)
-            if code not in (200, 201, 204):
-                errors += 1
-                print(f"  ⚠ {code} {msg}")
-            sent += len(batch)
+            _flush(batch, stats)
             batch = []
-            if sent % 10000 == 0:
-                print(f"  {sent:,}건 전송")
+            if (stats["ok"] - start_ok) % 20000 < 500:
+                print(f"  {stats['ok'] - start_ok:,}건 적재")
     if batch:
-        code, msg = send(batch)
-        if code not in (200, 201, 204):
-            errors += 1
-            print(f"  ⚠ {code} {msg}")
-        sent += len(batch)
+        _flush(batch, stats)
     f.close()
-    print(f"  완료: 전송 {sent:,} / 스킵(좌표·번호 없음) {skipped:,} / 배치오류 {errors}")
+    print(f"  완료: 적재 {stats['ok'] - start_ok:,} / 스킵 {skipped:,}")
 
 if __name__ == "__main__":
     files = [os.path.expanduser(p) for p in sys.argv[1:]]
     if not files:
         sys.exit("사용법: python3 scripts/ingest_sangga.py <상가정보CSV> [<CSV2> ...]")
-    for p in files:
-        if not os.path.exists(p):
-            print(f"파일 없음: {p}")
-            continue
-        ingest(p)
-    print("\n전체 적재 완료.")
+    stats = {"ok": 0, "failed": 0, "consec": 0}
+    try:
+        for p in files:
+            if not os.path.exists(p):
+                print(f"파일 없음: {p}")
+                continue
+            ingest(p, stats)
+    except DbOverloaded as e:
+        print(f"\n🛑 중단: {e}")
+        print(f"   지금까지 적재 {stats['ok']:,} / 실패 {stats['failed']:,}")
+        sys.exit(1)
+    print(f"\n전체 적재 완료. 적재 {stats['ok']:,} / 실패 {stats['failed']:,}")
