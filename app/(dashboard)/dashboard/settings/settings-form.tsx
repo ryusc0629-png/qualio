@@ -50,6 +50,7 @@ interface Business {
   active_review_platform: string
   youtube_url: string | null
   instagram_url: string | null
+  naver_blog_id: string | null
   service_areas: string[] | null
   review_reward_type: string
   review_reward_description: string | null
@@ -212,6 +213,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage }: Props
       active_review_platform:    activePlatform,
       youtube_url:               data.get('youtube_url') as string,
       instagram_url:             data.get('instagram_url') as string,
+      naver_blog_url:            data.get('naver_blog_url') as string,
       service_areas:             serviceAreas.join(','),
       review_reward_type:        rewardType,
       review_reward_description: rewardCategory === 'none' ? '' : rewardValue,
@@ -458,6 +460,18 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage }: Props
             defaultValue={business.instagram_url ?? ''}
             placeholder="https://www.instagram.com/내계정"
           />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="naver_blog_url">내 네이버 블로그 주소</Label>
+          <Input
+            id="naver_blog_url"
+            name="naver_blog_url"
+            defaultValue={business.naver_blog_id ? `https://blog.naver.com/${business.naver_blog_id}` : ''}
+            placeholder="https://blog.naver.com/내아이디"
+          />
+          <p className="text-xs text-muted-foreground">
+            홍보 글을 복사한 뒤 <span className="font-medium text-foreground">블로그 열기</span>를 누르면 이 블로그의 글쓰기 화면으로 바로 연결돼요
+          </p>
         </div>
       </div>
 

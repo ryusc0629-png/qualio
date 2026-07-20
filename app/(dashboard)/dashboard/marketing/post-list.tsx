@@ -107,6 +107,8 @@ interface PostListProps {
   autoImageGeneration?: boolean
   // 서버가 이번 달 저장된 주제를 넘겨줌 — 있으면 재조회·스피너 없이 바로 표시
   initialSuggestions?: TopicSuggestion[] | null
+  // 사장님 네이버 블로그 아이디 — '블로그 열기'가 이 블로그 글쓰기로 연결 (없으면 일반 글쓰기)
+  naverBlogId?: string | null
 }
 
 interface ScheduleSlot {
@@ -392,7 +394,7 @@ function ReelCard({
   )
 }
 
-export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], autoImageGeneration = true, initialSuggestions = null }: PostListProps) {
+export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], autoImageGeneration = true, initialSuggestions = null, naverBlogId = null }: PostListProps) {
   const [posts] = useState(initialPosts)
   // 오름차순 정렬 (오래된 글 위 → 최신 글 아래) + 오늘 위치로 자동 스크롤
   const sortedPosts = [...posts].sort((a, b) => new Date(a.published_at).getTime() - new Date(b.published_at).getTime())
@@ -1305,7 +1307,9 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                 }
               </Button>
               <a
-                href="https://blog.naver.com/compose/write"
+                href={naverBlogId
+                  ? `https://blog.naver.com/${naverBlogId}?Redirect=Write`
+                  : 'https://blog.naver.com/compose/write'}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 px-4 h-12 rounded-md border border-[#03C75A] text-[#03C75A] text-sm font-medium hover:bg-[#03C75A]/10 transition-colors"

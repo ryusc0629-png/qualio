@@ -25,6 +25,7 @@ const updateBusinessSchema = z.object({
   active_review_platform:    z.string().max(20).optional(),
   youtube_url:               z.string().max(300).optional(),
   instagram_url:             z.string().max(300).optional(),
+  naver_blog_url:            z.string().max(300).optional(), // 내 네이버 블로그 주소 (아이디만 추출해 저장)
   service_areas:             z.string().max(500).optional(), // 쉼표 구분 지역명
 
   review_reward_type:        z.string().max(20).optional(),
@@ -102,6 +103,13 @@ export const updateBusinessAction = action
         active_review_platform:    (parsedInput.active_review_platform    || 'naver') as never,
         youtube_url:               parsedInput.youtube_url               || null,
         instagram_url:             (parsedInput.instagram_url             || null) as never,
+        // 네이버 블로그 주소에서 아이디만 추출해 저장 (예: https://blog.naver.com/dartclean → dartclean)
+        naver_blog_id:             (() => {
+          const raw = (parsedInput.naver_blog_url ?? '').trim()
+          if (!raw) return null
+          const m = raw.match(/blog\.naver\.com\/([A-Za-z0-9_-]+)/)
+          return (m ? m[1] : raw.replace(/^@/, '').split('/')[0].split('?')[0]) || null
+        })() as never,
         service_areas:             (parsedInput.service_areas
           ? parsedInput.service_areas.split(',').map((s) => s.trim()).filter(Boolean)
           : []) as never,
