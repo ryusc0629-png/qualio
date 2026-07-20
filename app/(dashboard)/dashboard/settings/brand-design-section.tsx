@@ -188,17 +188,7 @@ export function BrandDesignSection({
 
       {/* ── 실시간 미리보기 ── */}
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label className="text-xs">미리보기</Label>
-          <button
-            type="button"
-            onClick={() => window.open(previewUrl, '_blank')}
-            className="flex items-center gap-1 text-xs text-primary hover:underline"
-          >
-            <ExternalLink className="h-3 w-3" />
-            전체 화면으로 보기
-          </button>
-        </div>
+        <Label className="text-xs">미리보기</Label>
         <div
           className="rounded-xl overflow-hidden border"
           style={{ background: isDark ? '#0f172a' : '#ffffff' }}
@@ -246,6 +236,16 @@ export function BrandDesignSection({
             </div>
           </div>
         </div>
+        {/* 실제 홈페이지를 새 탭에서 열기 — a 태그라 팝업 차단 없이 항상 열림 (window.open은 모바일/팝업차단 시 안 열림) */}
+        <a
+          href={previewUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1 flex items-center justify-center gap-2 h-12 rounded-lg border border-primary/40 bg-primary/5 text-sm font-bold text-primary hover:bg-primary/10 transition-colors"
+        >
+          <ExternalLink className="h-4 w-4" />
+          내 홈페이지 새 창으로 열어보기
+        </a>
       </div>
 
       {/* ── 색상 프리셋 ── */}
