@@ -576,6 +576,37 @@ export const cancelQuoteAction = authAction
     return { success: true }
   })
 
+// 취소한 견적 되살리기 — cancelled → pending (실수로 취소했거나 고객이 다시 하겠다고 할 때)
+export const restoreCancelledQuoteAction = authAction
+  .schema(quoteIdSchema)
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const { error } = await db
+      .from('quotes')
+      .update({ status: 'pending' })
+      .eq('id', parsedInput.quote_id)
+      .eq('business_id', profile.business_id)
+      .eq('status', 'cancelled')
+
+    if (error) throw new Error('[APP] 되살리기에 실패했습니다')
+
+    revalidatePath('/dashboard/clients')
+    revalidatePath('/dashboard/work')
+    return { success: true }
+  })
+
 // 견적 → 예약 확정 (업체가 직접 예약 생성) ─────────────────────────
 const confirmBookingSchema = z.object({
   quote_id:        z.string().uuid(),

@@ -7,6 +7,7 @@ import { DeleteCustomerButton } from '@/components/dashboard/delete-customer-but
 import { ContractStatusSelect } from '@/components/dashboard/contract-status-select'
 import { ConfirmBookingButton } from '@/components/dashboard/confirm-booking-button'
 import { CancelQuoteButton } from '@/components/dashboard/cancel-quote-button'
+import { CancelledQuotesSection, type CancelledQuote } from '@/components/dashboard/cancelled-quotes-section'
 import { formatFrequency } from '@/lib/utils/frequency'
 import { contractAccruedRevenue } from '@/lib/utils/ltv'
 import { ClientSearchInput } from '@/components/dashboard/client-search-input'
@@ -150,6 +151,7 @@ export default async function ClientsPage({
     reviewClaimsResult,
     { data: pendingQuotes },
     { data: serviceItems },
+    { data: cancelledQuotes },
   ] = await Promise.all([
     db.from('customers')
       .select('id, name, phone, address, category, type, notes, lead_id, created_at')
@@ -197,6 +199,14 @@ export default async function ClientsPage({
       .eq('business_id', businessId)
       .eq('is_active', true)
       .order('name', { ascending: true }),
+
+    // 취소한 견적 요청 (되살리기 가능) — 최근 30건
+    db.from('quotes')
+      .select('id, customer_name, customer_phone, cleaning_type, space_size, good_price')
+      .eq('business_id', businessId)
+      .eq('status', 'cancelled')
+      .order('created_at', { ascending: false })
+      .limit(30),
   ])
 
   // 폼 서비스 선택용 — 이름+가격+단위, 이름 기준 중복 제거 (첫 항목 유지)
@@ -430,6 +440,9 @@ export default async function ClientsPage({
               ))}
             </div>
           )}
+
+          {/* 취소한 견적 (되살리기 가능) — 평소엔 접혀 있음 */}
+          <CancelledQuotesSection quotes={(cancelledQuotes ?? []) as CancelledQuote[]} />
 
           {/* 상담·문의 중 개인 (leads) — AI 상담·현장견적 문의 */}
           {individualLeads.length > 0 && (
