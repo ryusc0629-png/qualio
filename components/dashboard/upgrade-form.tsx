@@ -1,13 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import * as PortOne from '@portone/browser-sdk/v2'
 import { useAction } from 'next-safe-action/hooks'
 import { Check, Star, Loader2, ArrowUp, ArrowDown, CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PAID_PLANS, PLANS, formatPrice } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { schedulePlanChangeAction } from '@/lib/actions/subscription'
+import { registerKcpPaymentAction } from '@/lib/actions/payment'
 import { toast } from 'sonner'
 
 interface UpgradeFormProps {
@@ -67,58 +67,30 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
     },
   })
 
-  // 베타 사용자: 포트원(PortOne) V2 결제 플로우
-  const handlePayment = async () => {
+  // KCP 결제 플로우 — 서버에서 거래등록 후 결제창(pay_url)으로 이동
+  const { execute: registerPayment } = useAction(registerKcpPaymentAction, {
+    onSuccess: ({ data }) => {
+      if (data?.payUrl) {
+        // KCP 결제창으로 이동 (이후 리턴 핸들러가 승인·활성화 처리)
+        window.location.href = data.payUrl
+      } else {
+        toast.error('결제창을 열지 못했어요. 다시 시도해주세요.')
+        setIsPaying(false)
+      }
+    },
+    onError: ({ error }) => {
+      toast.error(error.serverError ?? '결제 진행 중 오류가 발생했습니다')
+      setIsPaying(false)
+    },
+  })
+
+  const handlePayment = () => {
     if (!selectedPlanId) {
       toast.error('플랜을 선택해주세요')
       return
     }
-
-    const plan = PAID_PLANS.find((p) => p.id === selectedPlanId)
-    if (!plan) return
-
-    const storeId = process.env.NEXT_PUBLIC_PORTONE_STORE_ID
-    const channelKey = process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY
-    if (!storeId || !channelKey) {
-      toast.error('결제 설정 오류입니다. 관리자에게 문의해주세요.')
-      return
-    }
-
     setIsPaying(true)
-    try {
-      // paymentId 형식은 서버(confirm)에서 businessId/planId 파싱에 사용됨
-      const paymentId = `${businessId}_${selectedPlanId}_${Date.now()}`
-
-      const response = await PortOne.requestPayment({
-        storeId,
-        channelKey,
-        paymentId,
-        orderName: `퀄리오 ${plan.label} 플랜 1개월`,
-        totalAmount: plan.price,
-        currency: 'CURRENCY_KRW',
-        payMethod: 'CARD',
-        customer: { fullName: businessName },
-        // 모바일은 이 URL로 리다이렉트되며 paymentId·code가 쿼리로 붙는다
-        redirectUrl: `${window.location.origin}/upgrade/success`,
-      })
-
-      // 모바일 리다이렉트 시엔 여기 도달하지 않음(위 redirectUrl로 이동)
-      // PC(팝업/iframe)는 결과가 반환됨
-      if (!response) return
-
-      // code가 있으면 실패/취소
-      if (response.code != null) {
-        toast.error(response.message ?? '결제가 취소되었어요')
-        setIsPaying(false)
-        return
-      }
-
-      // 성공 — 서버 검증 페이지로 이동(구독 활성화)
-      window.location.replace(`/upgrade/success?paymentId=${encodeURIComponent(response.paymentId)}`)
-    } catch {
-      toast.error('결제 진행 중 오류가 발생했습니다')
-      setIsPaying(false)
-    }
+    registerPayment({ planId: selectedPlanId })
   }
 
   // 유료 사용자: 플랜 변경 예약
@@ -285,7 +257,7 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
           {showPaymentFlow ? (
             <>
               결제 1건당 <strong>1개월(30일)</strong> 이용권이 제공됩니다. 자동 갱신 없음.<br />
-              포트원(PortOne)을 통해 안전하게 결제됩니다.
+              KCP(NHN KCP)를 통해 안전하게 결제됩니다.
               결제 후 7일 이내 미사용 시 전액 환불 가능합니다.
             </>
           ) : (
