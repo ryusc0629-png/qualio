@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { MapPin, Phone, Navigation, Users, ClipboardList, Map } from 'lucide-react'
+import { MapPin, Phone, Navigation, Users, ClipboardList, Map, Upload } from 'lucide-react'
 
 export interface LeadOption {
   id: string
@@ -55,6 +55,66 @@ function parsePaste(text: string): { name: string; address: string; phone?: stri
     .filter((r) => r.name && r.address)
 }
 
+// CSV 한 줄을 컬럼으로 분리 (따옴표 감싼 필드 안의 쉼표 보호)
+function splitCsvLine(line: string): string[] {
+  const out: string[] = []
+  let cur = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        cur += '"'
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (ch === ',' && !inQuotes) {
+      out.push(cur)
+      cur = ''
+    } else {
+      cur += ch
+    }
+  }
+  out.push(cur)
+  return out.map((c) => c.trim())
+}
+
+// 업로드한 CSV → "상호, 주소, 전화" 정규화 텍스트. 헤더에서 컬럼 위치를 찾고, 없으면 앞 3칸 사용.
+function csvToPasteText(raw: string): { text: string; count: number } {
+  const clean = raw.replace(/^﻿/, '')
+  const lines = clean.split(/\r?\n/).filter((l) => l.trim())
+  if (lines.length === 0) return { text: '', count: 0 }
+
+  const header = splitCsvLine(lines[0])
+  const findIdx = (keys: string[]) =>
+    header.findIndex((h) => keys.some((k) => h.includes(k)))
+  const nameIdx = findIdx(['상호', '업체', '이름', 'company', 'name'])
+  const addrIdx = findIdx(['주소', 'address'])
+  const phoneIdx = findIdx(['전화', '연락처', 'phone', 'tel'])
+  const hasHeader = nameIdx !== -1 && addrIdx !== -1
+
+  const ni = hasHeader ? nameIdx : 0
+  const ai = hasHeader ? addrIdx : 1
+  const pi = hasHeader ? phoneIdx : 2
+  const body = hasHeader ? lines.slice(1) : lines
+
+  const rows = body
+    .map((line) => {
+      const cols = splitCsvLine(line)
+      const name = (cols[ni] ?? '').trim()
+      const address = (cols[ai] ?? '').trim()
+      const phone = pi >= 0 ? (cols[pi] ?? '').trim() : ''
+      return { name, address, phone }
+    })
+    .filter((r) => r.name && r.address)
+
+  const text = rows
+    .map((r) => [r.name, r.address, r.phone].filter(Boolean).join(', '))
+    .join('\n')
+  return { text, count: rows.length }
+}
+
 // 구글맵 경로 URL — 앱에서 열림. 구글은 URL당 약 10곳 제한이라 겹쳐서 분할.
 function gmapsUrls(stops: GeoStop[]): string[] {
   const coords = stops.map((s) => `${s.lat.toFixed(6)},${s.lng.toFixed(6)}`)
@@ -93,6 +153,30 @@ export function RoadmapPlanner({ leads, defaultStart }: RoadmapPlannerProps) {
   const allSelected = leads.length > 0 && selected.size === leads.length
   const toggleAll = () => {
     setSelected(allSelected ? new Set() : new Set(leads.map((l) => l.id)))
+  }
+
+  // CSV 파일 업로드 → 붙여넣기 칸에 자동 정리
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // 같은 파일 재선택 허용
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const { text, count } = csvToPasteText(String(reader.result ?? ''))
+      if (count === 0) {
+        toast.error('파일에서 상호·주소를 못 찾았어요. 컬럼을 확인해주세요')
+        return
+      }
+      setMode('paste')
+      setPaste(text)
+      if (count > 400) {
+        toast.warning(`${count}곳을 불러왔어요. 한 번에 400곳까지만 되니 시·군·구별로 나눠서 짜주세요`)
+      } else {
+        toast.success(`${count}곳을 불러왔어요`)
+      }
+    }
+    reader.onerror = () => toast.error('파일을 못 읽었어요')
+    reader.readAsText(file, 'utf-8')
   }
 
   const handleBuild = () => {
@@ -192,7 +276,13 @@ export function RoadmapPlanner({ leads, defaultStart }: RoadmapPlannerProps) {
       {/* 명단 붙여넣기 */}
       {mode === 'paste' && (
         <div className="space-y-1.5">
-          <Label htmlFor="paste">방문할 곳 명단</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="paste">방문할 곳 명단</Label>
+            <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary cursor-pointer">
+              <Upload className="h-3.5 w-3.5" /> CSV 파일 올리기
+              <input type="file" accept=".csv,text/csv" onChange={handleFile} className="hidden" />
+            </label>
+          </div>
           <Textarea
             id="paste"
             value={paste}
