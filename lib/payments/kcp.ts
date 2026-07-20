@@ -43,6 +43,7 @@ export interface KcpRegisterParams {
   payMethod?: string // 기본 CARD
   regType?: string   // 기본 web
   retUrl: string     // 인증결과 수신 서버 URL (KCP가 폼 POST)
+  failUrl: string    // 결제 실패/취소 시 이동할 URL (필수)
 }
 
 export interface KcpRegisterResult {
@@ -69,6 +70,7 @@ export async function registerPayment(p: KcpRegisterParams): Promise<KcpRegister
     good_name: p.goodName,
     reg_type: regType,
     ret_URL: p.retUrl,
+    fail_url: p.failUrl,
   }
   const res = await fetch(`${host}/std/brpay/treg`, {
     method: 'POST',

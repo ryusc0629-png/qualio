@@ -62,13 +62,13 @@ export const registerKcpPaymentAction = action
     const h = await headers()
     const host = h.get('host')
     const proto = h.get('x-forwarded-proto') ?? 'https'
-    const retUrl = `${proto}://${host}/api/payment/kcp-return`
-
+    const baseUrl = `${proto}://${host}`
     const result = await registerPayment({
       ordrIdxx,
       goodMny: amount,
       goodName: `퀄리오 ${planLabel} 플랜 1개월`,
-      retUrl,
+      retUrl: `${baseUrl}/api/payment/kcp-return`,
+      failUrl: `${baseUrl}/upgrade/success?status=fail`,
     })
 
     if (!result.ok || !result.payUrl) {

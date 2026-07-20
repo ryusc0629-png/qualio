@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
       goodMny: 100,
       goodName: '퀄리오 결제 연동 테스트',
       retUrl: `${proto}://${host}/api/payment/kcp-return`,
+      failUrl: `${proto}://${host}/upgrade/success?status=fail`,
     })
     return NextResponse.json({ ok: r.ok, payUrl: r.payUrl ?? null, raw: r.raw })
   } catch (e) {
