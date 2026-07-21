@@ -1316,8 +1316,9 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                 }
               </Button>
               <a
+                // /postwrite는 404(네이버가 게시물 경로로 해석) → ?Redirect=Write가 정식 글쓰기 폼(PostWriteForm)으로 302
                 href={naverBlogId
-                  ? `https://blog.naver.com/${naverBlogId}/postwrite`
+                  ? `https://blog.naver.com/${naverBlogId}?Redirect=Write`
                   : 'https://blog.naver.com'}
                 target="_blank"
                 rel="noopener noreferrer"
