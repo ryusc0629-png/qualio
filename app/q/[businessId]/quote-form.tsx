@@ -9,6 +9,7 @@ import { QuoteChatWidget } from '@/components/quote/quote-chat-widget'
 import { calculateAndCreateQuoteAction, createConsultationRequestAction } from '@/lib/actions/quotes'
 import { getApplianceTypes, getAppliancePreset, isApplianceService, type ApplianceType } from '@/lib/utils'
 import { trackFunnel } from '@/lib/utils/track-funnel'
+import { trackMetaPixel } from '@/lib/utils/meta-pixel'
 
 // 서비스 유형에 따라 스텝 분기
 const STEP_SEQUENCE_DEFAULT      = ['service', 'space', 'context', 'date', 'notes', 'name', 'phone'] as const
@@ -487,6 +488,8 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
       if (!data) return
       // 견적 제출 완료 기록(이동 전 sendBeacon). quoteId를 함께 남겨 예약→세션→채널 매출 연결
       trackFunnel(businessId, 'quote_submitted', { meta: { quoteId: data.quoteId } })
+      // Meta 픽셀 핵심 전환 — 광고 최적화가 '견적 완료'를 목표로 삼게
+      trackMetaPixel('CompleteRegistration')
       window.location.replace(`/q/${businessId}/quote/${data.quoteId}`)
     },
     onError: ({ error }) => toast.error(error.serverError ?? '견적 계산에 실패했습니다'),
@@ -496,6 +499,8 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
   const { execute: executeConsult, isPending: isConsultPending } = useAction(createConsultationRequestAction, {
     onSuccess: () => {
       trackFunnel(businessId, 'quote_submitted', { meta: { consult: 1 } })
+      // Meta 픽셀 — 상담(현장 견적) 접수는 Contact 전환으로
+      trackMetaPixel('Contact')
       setConsultDone(true)
     },
     onError: ({ error }) => toast.error(error.serverError ?? '접수에 실패했어요. 다시 시도해주세요'),
@@ -544,6 +549,8 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
     if (!startedRef.current) {
       startedRef.current = true
       trackFunnel(businessId, 'form_started')
+      // Meta 픽셀 — 견적 폼 시작을 Lead로(전환 희소 초기에 Meta에 이른 신호 제공)
+      trackMetaPixel('Lead')
     }
     trackFunnel(businessId, 'step_completed', { step: from })
     setCompletedSteps(prev => [...prev, from])
