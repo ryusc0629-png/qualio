@@ -127,7 +127,9 @@ export function QuoteChatWidget({ businessId, businessName }: Props) {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed bottom-4 right-4 z-40 flex h-14 items-center gap-2 rounded-full bg-emerald-600 pl-4 pr-5 text-white shadow-lg shadow-emerald-600/30 transition hover:bg-emerald-700 active:scale-95"
+          // 모바일: 견적 폼 하단 액션 바(--quote-bar-h) 위로 띄워 빠른답변 버튼을 가리지 않게.
+          // 데스크탑(sm+)이나 폼이 없는 페이지: 기존 우하단(bottom-4) 유지.
+          className="fixed bottom-[calc(var(--quote-bar-h,0px)+1rem)] right-4 z-40 flex h-14 items-center gap-2 rounded-full bg-emerald-600 pl-4 pr-5 text-white shadow-lg shadow-emerald-600/30 transition-all hover:bg-emerald-700 active:scale-95 sm:bottom-4"
           aria-label="상담 시작하기"
         >
           <MessageCircle className="h-6 w-6" />

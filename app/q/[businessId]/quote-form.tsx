@@ -473,6 +473,23 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const startedRef = useRef(false) // 폼 시작(form_started) 1회만 기록
+  const actionBarRef = useRef<HTMLDivElement>(null) // 하단 고정 액션 바 (높이를 AI 상담 버튼에 알려줌)
+
+  // 하단 액션 바 높이를 CSS 변수(--quote-bar-h)로 노출 → 우하단 상담 FAB가 그만큼 위로 떠서
+  // 빠른답변 버튼을 가리지 않게 한다(단계마다 바 높이가 달라지므로 ResizeObserver로 추적)
+  useEffect(() => {
+    const bar = actionBarRef.current
+    if (!bar) return
+    const root = document.documentElement
+    const apply = () => root.style.setProperty('--quote-bar-h', `${bar.offsetHeight}px`)
+    apply()
+    const ro = new ResizeObserver(apply)
+    ro.observe(bar)
+    return () => {
+      ro.disconnect()
+      root.style.removeProperty('--quote-bar-h')
+    }
+  }, [])
 
   useEffect(() => {
     setTimeout(() => {
@@ -767,7 +784,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
       </div>
 
       {/* 입력 영역 — 항상 하단 고정 */}
-      <div className="sticky bottom-0 bg-white border-t border-border px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+      <div ref={actionBarRef} className="sticky bottom-0 bg-white border-t border-border px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
         <div className="max-w-md mx-auto space-y-3">
 
           {/* 타이핑/처리 중엔 입력 영역 숨김 */}
