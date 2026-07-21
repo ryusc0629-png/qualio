@@ -11,7 +11,8 @@ interface KcpCredentials {
   host: string         // 결제 API 호스트 (운영: https://spl.kcp.co.kr)
 }
 
-function loadCredentials(): KcpCredentials {
+// 정기결제(빌키) 모듈에서도 재사용 — export
+export function loadCredentials(): KcpCredentials {
   const siteCd = process.env.KCP_SITE_CD
   const certB64 = process.env.KCP_CERT_PEM_BASE64
   const keyB64 = process.env.KCP_PRIVATE_KEY_BASE64
