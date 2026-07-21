@@ -102,8 +102,9 @@ export const listSigunguAction = action.schema(sigunguSchema).action(async ({ pa
   return { sigungu: list.map((r) => r.sigungu) }
 })
 
-// 지역+업종 자동 모드는 이미 좌표가 있어 한 번에 더 많이 처리 가능 (시 전체/시도 전체)
-const DIRECTORY_MAX = 1500
+// 지역+업종 자동 모드 상한. Supabase(PostgREST) 기본 응답이 1000행이라 그에 맞춤.
+// (1000곳이면 이미 40일 코스라 실무상 충분. 더 완전히 보려면 구·군 단위로 좁히면 됨)
+const DIRECTORY_MAX = 1000
 
 // 타겟 업종은 고정 선택 (공장=전국등록공장현황 데이터 기반)
 const TARGETS = ['인테리어', '병의원', '학원', '공장']

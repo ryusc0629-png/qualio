@@ -591,7 +591,7 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
             {Math.round(result.totalKm)}km
             {result.capped && (
               <span className="block text-xs text-amber-600 mt-1">
-                너무 많아 1,500곳까지만 담았어요. 범위를 좁히거나(구 단위) 업종을 더 구체적으로 골라보세요.
+                이 지역에 더 많지만 한 번에 1,000곳까지만 보여드려요. 빠짐없이 보시려면 범위를 구·군 단위로 좁혀주세요.
               </span>
             )}
             {result.failedCount > 0 && (
