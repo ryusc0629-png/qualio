@@ -121,25 +121,35 @@ function csvToPasteText(raw: string): { text: string; count: number } {
   return { text, count: rows.length }
 }
 
-// 구글맵 경로 URL — 앱에서 열림. 구글은 URL당 약 10곳 제한이라 겹쳐서 분할.
+// 카카오맵 구간 길안내 URL — 실제 한국 도로 내비 됨(구글은 한국 자동차 길안내 불가).
+// 카카오는 경유지(vp~vp5) 최대 5개 → 한 링크에 출발+경유5+도착 = 최대 7곳. 초과분은 겹쳐서 분할.
 // 각 구간이 몇 번째~몇 번째 방문지인지(from~to)도 함께 반환해 버튼에 표시.
-function gmapsUrls(stops: GeoStop[]): { url: string; from: number; to: number }[] {
-  const coords = stops.map((s) => `${s.lat.toFixed(6)},${s.lng.toFixed(6)}`)
-  if (coords.length <= 1)
-    return coords.length
-      ? [{ url: `https://www.google.com/maps/search/${coords[0]}`, from: 1, to: 1 }]
-      : []
+function kakaoRouteUrls(stops: GeoStop[]): { url: string; from: number; to: number }[] {
+  if (stops.length === 0) return []
+  if (stops.length === 1) {
+    const s = stops[0]
+    return [{ url: `https://map.kakao.com/link/to/${encodeURIComponent(s.name)},${s.lat},${s.lng}`, from: 1, to: 1 }]
+  }
   const out: { url: string; from: number; to: number }[] = []
-  const CHUNK = 10
-  for (let i = 0; i < coords.length - 1; i += CHUNK - 1) {
-    const seg = coords.slice(i, i + CHUNK)
-    out.push({
-      url: `https://www.google.com/maps/dir/${seg.join('/')}`,
-      from: i + 1,
-      to: i + seg.length,
+  const CHUNK = 7 // 출발 + 경유 최대5 + 도착
+  for (let i = 0; i < stops.length - 1; i += CHUNK - 1) {
+    const seg = stops.slice(i, i + CHUNK)
+    const sp = seg[0]
+    const ep = seg[seg.length - 1]
+    const mids = seg.slice(1, -1) // 경유지 (최대 5)
+    const params = [`sp=${sp.lat},${sp.lng}`, `ep=${ep.lat},${ep.lng}`]
+    mids.forEach((m, idx) => {
+      params.push(`${idx === 0 ? 'vp' : `vp${idx + 1}`}=${m.lat},${m.lng}`)
     })
+    params.push('by=CAR')
+    out.push({ url: `kakaomap://route?${params.join('&')}`, from: i + 1, to: i + seg.length })
   }
   return out
+}
+
+// 티맵 한 목적지 안내 (goalname/goalx/goaly 형식은 iOS·Android 모두 동작)
+function tmapUrl(name: string, lat: number, lng: number): string {
+  return `tmap://route?goalname=${encodeURIComponent(name)}&goalx=${lng}&goaly=${lat}`
 }
 
 function kakaoNav(name: string, lat: number, lng: number): string {
@@ -592,7 +602,7 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
           </div>
 
           {result.courses.map((course, ci) => {
-            const urls = gmapsUrls(course.stops)
+            const urls = kakaoRouteUrls(course.stops)
             return (
               <div key={ci} className="border rounded-xl p-4 space-y-3 bg-white shadow-sm">
                 <div className="flex items-center justify-between">
@@ -612,13 +622,13 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
                   >
                     <Map className="h-4 w-4" />
                     {urls.length > 1
-                      ? `지도로 열기 (${u.from}~${u.to}번째)`
-                      : '전체 경로 지도로 열기'}
+                      ? `카카오맵 길안내 (${u.from}~${u.to}번째)`
+                      : '카카오맵으로 전체 길안내'}
                   </a>
                 ))}
                 {urls.length > 1 && (
                   <p className="text-xs text-muted-foreground text-center -mt-1">
-                    한 지도에 10곳까지만 들어가서, 하루 코스를 구간별로 나눠 열어드려요.
+                    카카오맵은 한 번에 7곳까지 안내돼서, 하루 코스를 구간별로 나눠 열어드려요.
                   </p>
                 )}
 
@@ -636,12 +646,18 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
                         </p>
                         <div className="flex gap-2 mt-1.5">
                           <a
+                            href={tmapUrl(s.name, s.lat, s.lng)}
+                            className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-[#1a4ff5] text-white font-medium"
+                          >
+                            <Navigation className="h-3 w-3" /> 티맵
+                          </a>
+                          <a
                             href={kakaoNav(s.name, s.lat, s.lng)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-[#fee500] text-black font-medium"
                           >
-                            <Navigation className="h-3 w-3" /> 내비
+                            <Navigation className="h-3 w-3" /> 카카오맵
                           </a>
                           {s.phone && (
                             <a
