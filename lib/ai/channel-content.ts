@@ -16,10 +16,11 @@ interface ChannelContentInput {
 // 사장님이 네이버 블로그·당근에 복사해 올리면, 이 링크로 들어온 방문이 대시보드에서
 // 네이버 블로그·당근으로 각각 집계됨(맨 URL 한 줄 — 두 채널 모두 붙여넣으면 자동 하이퍼링크).
 // 마크다운 링크 문법 [텍스트](url)은 rich-text 변환기가 미지원하므로 쓰지 않는다.
-// ctaQuestion: 글 주제 맞춤 유도 질문(예: "우리 에어컨 청소 비용은 얼마일까요?")
+// ctaQuestion(주제 맞춤 질문)으로 후킹 → "확인해 보세요" 행동 지시로 다음 행동을 단정 → 링크.
+// 질문만 남기면 이탈하므로 반드시 다음 행동을 명확히 지시한다.
 function appendQuoteCta(content: string, quoteBaseUrl: string, channel: string, ctaQuestion: string): string {
   const link = `${quoteBaseUrl}?ch=${channel}`
-  return `${content.trimEnd()}\n\n${ctaQuestion}\n${link}`
+  return `${content.trimEnd()}\n\n${ctaQuestion}\n지금 바로 확인해 보세요 👇\n${link}`
 }
 
 // GEO 글을 바탕으로 네이버·당근·인스타 채널 텍스트를 생성해 biz_posts에 저장한다.
