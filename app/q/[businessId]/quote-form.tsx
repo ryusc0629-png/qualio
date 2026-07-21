@@ -525,19 +525,20 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
         ? (unitVariants && unitVariants.length > 0 ? STEP_SEQUENCE_UNIT_VARIANT : STEP_SEQUENCE_UNIT)
         : STEP_SEQUENCE_DEFAULT
 
-  const chatEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null) // 채팅 스크롤 컨테이너 — 새 메시지마다 맨 아래로
   const startedRef = useRef(false) // 폼 시작(form_started) 1회만 기록
   const submitStartRef = useRef(0) // 제출 시각 — 계산 애니메이션 최소 노출 시간 계산용
   const [finalizing, setFinalizing] = useState(false) // 제출~결과이동 사이 로딩 연속 유지(깜빡임 방지)
   const [chatOpen, setChatOpen] = useState(false) // 헤더 '문의' 버튼으로 여는 상담창
 
-  // 단계 이동·타이핑·계산 시작(finalizing) 때마다 맨 아래로 스크롤 —
-  // 계산 로딩 카드가 화면 밖에 생기지 않고 항상 눈앞에 보이도록 유도
+  // 새 메시지·단계이동·타이핑·계산시작마다 스크롤 컨테이너를 맨 아래로 —
+  // 채팅이 항상 최신 메시지를 따라가도록(마지막 봇 질문이 입력창에 가리지 않게)
   useEffect(() => {
-    setTimeout(() => {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-    }, 50)
-  }, [currentStep, isTyping, finalizing])
+    const el = scrollContainerRef.current
+    if (!el) return
+    const t = setTimeout(() => { el.scrollTop = el.scrollHeight }, 50)
+    return () => clearTimeout(t)
+  }, [currentStep, isTyping, finalizing, completedSteps.length])
 
   const { execute, isPending } = useAction(calculateAndCreateQuoteAction, {
     onSuccess: ({ data }) => {
@@ -763,7 +764,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="h-dvh bg-slate-50 flex flex-col">
 
       {/* 상단 헤더 */}
       <header className="bg-white border-b border-border sticky top-0 z-10">
@@ -824,8 +825,8 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
       )}
 
       {/* 채팅 스레드 — 카카오톡처럼 메시지가 하단부터 쌓임 */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4 flex flex-col justify-end">
-        <div className="max-w-md mx-auto w-full space-y-3 pt-4">
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 flex flex-col">
+        <div className="max-w-md mx-auto w-full space-y-3 pt-4 mt-auto">
 
           {completedSteps.map((step) => (
             <div key={step} className="space-y-2">
@@ -860,7 +861,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
               : <BotBubble text={getQuestion(currentStep)} initial={initial} />
           )}
 
-          <div ref={chatEndRef} className="h-1" />
+          <div className="h-1" />
         </div>
       </div>
 
