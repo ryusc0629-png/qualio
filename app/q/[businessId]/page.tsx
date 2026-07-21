@@ -1,7 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound, permanentRedirect } from 'next/navigation'
 import { QuoteForm } from './quote-form'
-import { QuoteChatWidget } from '@/components/quote/quote-chat-widget'
 import { trackPageView } from '@/lib/utils/track-page-view'
 import { getReviewSummary } from '@/lib/reviews/get-reviews'
 
@@ -72,16 +71,13 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
   }))
 
   return (
-    <>
-      <QuoteForm
-        businessId={business.id}
-        businessName={business.name}
-        services={typedServices}
-        reviewSummary={reviewSummary}
-        // 견적서 알림톡 템플릿이 실제 설정된 경우에만 "카톡으로 보내드릴게요" 안내 (미승인 시 거짓 약속 방지)
-        quoteAlimtalkEnabled={!!process.env.SOLAPI_TEMPLATE_ID_QUOTE_SENT}
-      />
-      <QuoteChatWidget businessId={business.id} businessName={business.name} />
-    </>
+    <QuoteForm
+      businessId={business.id}
+      businessName={business.name}
+      services={typedServices}
+      reviewSummary={reviewSummary}
+      // 견적서 알림톡 템플릿이 실제 설정된 경우에만 "카톡으로 보내드릴게요" 안내 (미승인 시 거짓 약속 방지)
+      quoteAlimtalkEnabled={!!process.env.SOLAPI_TEMPLATE_ID_QUOTE_SENT}
+    />
   )
 }

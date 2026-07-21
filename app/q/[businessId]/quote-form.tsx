@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
-import { ChevronRight, ChevronLeft, Star } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Star, MessageCircle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { QuoteChatWidget } from '@/components/quote/quote-chat-widget'
 import { calculateAndCreateQuoteAction, createConsultationRequestAction } from '@/lib/actions/quotes'
 import { getApplianceTypes, getAppliancePreset, isApplianceService, type ApplianceType } from '@/lib/utils'
 import { trackFunnel } from '@/lib/utils/track-funnel'
@@ -473,23 +474,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const startedRef = useRef(false) // 폼 시작(form_started) 1회만 기록
-  const actionBarRef = useRef<HTMLDivElement>(null) // 하단 고정 액션 바 (높이를 AI 상담 버튼에 알려줌)
-
-  // 하단 액션 바 높이를 CSS 변수(--quote-bar-h)로 노출 → 우하단 상담 FAB가 그만큼 위로 떠서
-  // 빠른답변 버튼을 가리지 않게 한다(단계마다 바 높이가 달라지므로 ResizeObserver로 추적)
-  useEffect(() => {
-    const bar = actionBarRef.current
-    if (!bar) return
-    const root = document.documentElement
-    const apply = () => root.style.setProperty('--quote-bar-h', `${bar.offsetHeight}px`)
-    apply()
-    const ro = new ResizeObserver(apply)
-    ro.observe(bar)
-    return () => {
-      ro.disconnect()
-      root.style.removeProperty('--quote-bar-h')
-    }
-  }, [])
+  const [chatOpen, setChatOpen] = useState(false) // 헤더 '문의' 버튼으로 여는 상담창
 
   useEffect(() => {
     setTimeout(() => {
@@ -706,27 +691,37 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
 
       {/* 상단 헤더 */}
       <header className="bg-white border-b border-border sticky top-0 z-10">
-        <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+        <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
               {initial}
             </div>
-            <div>
-              <p className="font-bold text-sm text-[#1A1A1A] leading-tight">{businessName}</p>
+            <div className="min-w-0">
+              <p className="font-bold text-sm text-[#1A1A1A] leading-tight truncate">{businessName}</p>
               <p className="text-[11px] text-[#8D8D8D]">견적 문의</p>
             </div>
           </div>
-          {/* 진행 바 + 단계 수치 */}
-          <div className="flex items-center gap-2">
+          {/* 진행 바 + 단계 수치 + 상담 버튼 */}
+          <div className="flex items-center gap-2 shrink-0">
             <p className="text-[11px] text-zinc-400 tabular-nums shrink-0">
               {completedSteps.length}/{stepSequence.length}
             </p>
-            <div className="w-20 h-1.5 bg-border rounded-full overflow-hidden">
+            <div className="w-12 sm:w-20 h-1.5 bg-border rounded-full overflow-hidden">
               <div
                 className="h-full bg-primary rounded-full transition-all duration-500"
                 style={{ width: `${progressPct}%` }}
               />
             </div>
+            {/* 궁금한 점 상담 — 화면을 안 가리도록 헤더에 고정 */}
+            <button
+              type="button"
+              onClick={() => setChatOpen(true)}
+              className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 h-8 pl-2 pr-2.5 text-xs font-semibold text-emerald-700 active:scale-95 transition-transform shrink-0"
+              aria-label="상담 시작하기"
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+              문의
+            </button>
           </div>
         </div>
       </header>
@@ -784,7 +779,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
       </div>
 
       {/* 입력 영역 — 항상 하단 고정 */}
-      <div ref={actionBarRef} className="sticky bottom-0 bg-white border-t border-border px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+      <div className="sticky bottom-0 bg-white border-t border-border px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
         <div className="max-w-md mx-auto space-y-3">
 
           {/* 타이핑/처리 중엔 입력 영역 숨김 */}
@@ -988,6 +983,13 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
         </div>
       </div>
 
+      {/* 상담창 — 헤더 '문의' 버튼으로 열림(전체화면). 화면을 상시 가리지 않도록 떠다니는 버튼은 두지 않음 */}
+      <QuoteChatWidget
+        businessId={businessId}
+        businessName={businessName}
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+      />
     </div>
   )
 }

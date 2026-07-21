@@ -1,12 +1,15 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { MessageCircle, X, Send, ArrowRight } from 'lucide-react'
+import { X, Send, ArrowRight } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 
 interface Props {
   businessId: string
   businessName: string
+  // 열림 상태는 부모(견적 폼 헤더의 '문의' 버튼)가 제어한다 — 떠다니는 런처 대신
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
 interface ChatMessage {
@@ -33,8 +36,7 @@ const SUGGESTIONS = [
 ]
 
 // 고객용 AI 상담 위젯 — 견적 페이지 우하단에 떠 있는 채팅
-export function QuoteChatWidget({ businessId, businessName }: Props) {
-  const [open, setOpen] = useState(false)
+export function QuoteChatWidget({ businessId, businessName, open, onOpenChange }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -114,7 +116,7 @@ export function QuoteChatWidget({ businessId, businessName }: Props) {
 
   // 간편 견적으로 이동 — 상담창 닫고 페이지 맨 위(견적 폼)로 스크롤
   function goToQuoteForm() {
-    setOpen(false)
+    onOpenChange(false)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -122,22 +124,7 @@ export function QuoteChatWidget({ businessId, businessName }: Props) {
 
   return (
     <>
-      {/* 닫혀 있을 때: 플로팅 런처 버튼 */}
-      {!open && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          // 모바일: 견적 폼 하단 액션 바(--quote-bar-h) 위로 띄워 빠른답변 버튼을 가리지 않게.
-          // 데스크탑(sm+)이나 폼이 없는 페이지: 기존 우하단(bottom-4) 유지.
-          className="fixed bottom-[calc(var(--quote-bar-h,0px)+1rem)] right-4 z-40 flex h-14 items-center gap-2 rounded-full bg-emerald-600 pl-4 pr-5 text-white shadow-lg shadow-emerald-600/30 transition-all hover:bg-emerald-700 active:scale-95 sm:bottom-4"
-          aria-label="상담 시작하기"
-        >
-          <MessageCircle className="h-6 w-6" />
-          <span className="text-sm font-semibold">무엇이든 물어보세요</span>
-        </button>
-      )}
-
-      {/* 열려 있을 때: 채팅 패널 (모바일 전체화면 / 데스크탑 우하단 카드) */}
+      {/* 열려 있을 때: 채팅 패널 (모바일 전체화면 / 데스크탑 우하단 카드). 열기는 부모의 '문의' 버튼이 담당 */}
       {open && (
         <div className="fixed inset-0 z-50 sm:inset-auto sm:bottom-4 sm:right-4">
           <ScrollLock />
@@ -156,7 +143,7 @@ export function QuoteChatWidget({ businessId, businessName }: Props) {
               </div>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={() => onOpenChange(false)}
                 className="rounded-full p-1.5 transition hover:bg-white/20"
                 aria-label="상담창 닫기"
               >
