@@ -424,15 +424,9 @@ export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): 
         '#{최종금액}':   priceFormatted,
         '#{업체연락처}': contactInfo,
       },
-      // V2 버튼: 전화 연결 + 일정 변경 요청
-      ...(useV2 && params.businessPhone && rescheduleUrl !== undefined ? {
+      // V2 버튼: 일정 변경 요청 (전화 연결은 카카오가 tel: 웹링크를 막아 제외 — 전화번호는 본문 '문의:'로 안내)
+      ...(useV2 && rescheduleUrl !== undefined ? {
         buttons: [
-          {
-            buttonType: 'WL' as const,
-            buttonName: '전화 연결',
-            linkMo: `tel:${params.businessPhone}`,
-            linkPc: `tel:${params.businessPhone}`,
-          },
           {
             buttonType: 'WL' as const,
             buttonName: '일정 변경 요청',
