@@ -531,11 +531,13 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
   const [finalizing, setFinalizing] = useState(false) // 제출~결과이동 사이 로딩 연속 유지(깜빡임 방지)
   const [chatOpen, setChatOpen] = useState(false) // 헤더 '문의' 버튼으로 여는 상담창
 
+  // 단계 이동·타이핑·계산 시작(finalizing) 때마다 맨 아래로 스크롤 —
+  // 계산 로딩 카드가 화면 밖에 생기지 않고 항상 눈앞에 보이도록 유도
   useEffect(() => {
     setTimeout(() => {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }, 50)
-  }, [currentStep, isTyping])
+  }, [currentStep, isTyping, finalizing])
 
   const { execute, isPending } = useAction(calculateAndCreateQuoteAction, {
     onSuccess: ({ data }) => {
