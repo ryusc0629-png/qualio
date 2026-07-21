@@ -17,6 +17,16 @@ interface SocialContentOutput {
   daangn: string
   instagram: string
   instagramHashtags: string[]
+  ctaQuestion: string  // 글 주제 맞춤 견적 유도 질문(예: "우리 에어컨 청소 비용은 얼마일까요?")
+}
+
+// ctaQuestion을 모델이 비워서 보낼 때를 대비한 결정적 폴백 — 글 제목 키워드로 주제 치환
+function fallbackCtaQuestion(title: string): string {
+  const t = title ?? ''
+  const appliance = ['에어컨', '세탁기', '냉장고', '소파', '매트리스', '침대'].find((a) => t.includes(a))
+  if (appliance) return `우리 ${appliance} 청소 비용은 얼마일까요?`
+  if (/매장|상가|사무실|오피스|상업|점포|병원|의원|카페|식당/.test(t)) return '우리 매장 청소 비용은 얼마일까요?'
+  return '우리 집 청소 비용은 얼마일까요?'
 }
 
 function extractContent(raw: string): string {
@@ -90,6 +100,11 @@ ${pureContent.slice(0, 2500)}
 - 마지막 CTA: "프로필 링크 클릭" 또는 "DM 주세요".
 - 해시태그 12개: 대형(#청소) + 중형(#에어컨청소) + 지역소형(#${region.replace(/\\s/g, '')}청소) 믹스로 도달 극대화.
 
+[견적 유도 질문 — ctaQuestion]
+- 이 글 주제에 딱 맞춰 독자의 궁금증을 자극하는 짧은 질문 1개. 형식: "우리 OO 청소 비용은 얼마일까요?"
+- OO는 이 글의 주제로 치환: 집·입주·이사 청소글→"집", 상가·사무실·매장·상업공간 청소글→"매장", 에어컨글→"에어컨", 세탁기글→"세탁기", 냉장고글→"냉장고" 등.
+- 고객 유형이 분명하면 그에 맞게(가정=집, 상업=매장/사무실). 15~25자, 반드시 물음표로 끝낼 것.
+
 반드시 아래 JSON 형식으로만 응답하세요. 문자열 안에서 줄바꿈은 \\n 으로 이스케이프하세요:
 {
   "naverTitle": "네이버 블로그 제목",
@@ -97,7 +112,8 @@ ${pureContent.slice(0, 2500)}
   "naverTags": ["태그1", "태그2", "태그3", "태그4", "태그5", "태그6", "태그7", "태그8", "태그9", "태그10"],
   "daangn": "당근마켓 글 전체",
   "instagram": "인스타그램 본문 (해시태그 제외)",
-  "instagramHashtags": ["태그1", "태그2", "태그3", "태그4", "태그5", "태그6", "태그7", "태그8", "태그9", "태그10", "태그11", "태그12"]
+  "instagramHashtags": ["태그1", "태그2", "태그3", "태그4", "태그5", "태그6", "태그7", "태그8", "태그9", "태그10", "태그11", "태그12"],
+  "ctaQuestion": "우리 OO 청소 비용은 얼마일까요?"
 }`
 
   // max_tokens는 넉넉히 — 네이버 본문(~2,000자)+당근+인스타+태그 22개를 한 JSON으로 받으므로
@@ -120,6 +136,9 @@ ${pureContent.slice(0, 2500)}
 
   parsed.naverTags = cleanTags(parsed.naverTags)
   parsed.instagramHashtags = cleanTags(parsed.instagramHashtags)
+
+  // 견적 유도 질문 — 모델이 비웠으면 제목 키워드로 주제 치환(집/매장/에어컨/세탁기…)
+  parsed.ctaQuestion = (parsed.ctaQuestion ?? '').trim() || fallbackCtaQuestion(geoTitle)
 
   // 실검색량 기반 키워드가 있으면 네이버 태그 앞쪽에 우선 배치(실제 검색되는 태그) + 중복 제거, 최대 12개
   if (seoKeywords && seoKeywords.length > 0) {
