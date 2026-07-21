@@ -11,11 +11,13 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-// 인라인 마크다운 → HTML (**굵게**, `코드`)
+// 인라인 마크다운 → HTML (**굵게**, `코드`) + 맨 URL을 클릭 가능한 링크로
+// (네이버 에디터에 붙여넣을 때 견적 링크가 실제 하이퍼링크로 들어가도록)
 function inlineToHtml(s: string): string {
   return esc(s)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`(.+?)`/g, '$1')
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')
 }
 
 // 인라인 마크다운 제거 → 순수 텍스트

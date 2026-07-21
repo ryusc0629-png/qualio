@@ -45,9 +45,9 @@ export const generatePostAction = action
     const [businessResult, servicesResult, subResult] = await Promise.all([
       db
         .from('businesses')
-        .select('name, address, description, service_areas' as never)
+        .select('name, address, description, service_areas, slug' as never)
         .eq('id', businessId)
-        .maybeSingle() as unknown as Promise<{ data: { name: string; address: string | null; description: string | null; service_areas: string[] | null } | null }>,
+        .maybeSingle() as unknown as Promise<{ data: { name: string; address: string | null; description: string | null; service_areas: string[] | null; slug: string | null } | null }>,
       db
         .from('service_items')
         .select('name, base_price, unit')
@@ -143,12 +143,15 @@ export const generatePostAction = action
 
     // 네이버·당근·인스타 채널 텍스트 자동 생성 (플랜에 포함된 경우만, 실패해도 GEO 발행은 유지)
     if (channelsEnabled) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
       await generateAndSaveChannelContent(db, post.id, {
         businessName: business.name,
         address: business.address,
         geoTitle: postContent.title,
         geoContent: fullContent,
         seoKeywords,
+        // 견적 링크는 슬러그(깔끔) 우선, 없으면 UUID 폴백 — 둘 다 /q 라우트가 처리
+        quoteBaseUrl: `${appUrl}/q/${business.slug ?? businessId}`,
       })
     }
 

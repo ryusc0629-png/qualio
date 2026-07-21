@@ -39,7 +39,7 @@ function getDaysInMonth(year: number, month: number): number {
 // 포스트 1건 생성 및 저장
 async function publishOnePost(
   db: ReturnType<typeof createServiceClient>,
-  business: { id: string; name: string; address: string | null; description: string | null; serviceAreas: string[] | null; autoImageGeneration: boolean },
+  business: { id: string; name: string; address: string | null; description: string | null; serviceAreas: string[] | null; autoImageGeneration: boolean; slug: string | null },
   services: { name: string; base_price: number; unit: string }[],
   publishedTitles: string[],
   month: number,
@@ -115,11 +115,14 @@ async function publishOnePost(
 
   // 네이버·당근·인스타 채널 텍스트 자동 생성 (플랜에 포함된 경우만, 실패해도 GEO 발행은 유지)
   if (channelsEnabled && saved?.id) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
     await generateAndSaveChannelContent(db, saved.id, {
       businessName: business.name,
       address: business.address,
       geoTitle: postContent.title,
       geoContent: fullContent,
+      // 견적 링크는 슬러그(깔끔) 우선, 없으면 UUID 폴백 — 둘 다 /q 라우트가 처리
+      quoteBaseUrl: `${appUrl}/q/${business.slug ?? business.id}`,
     })
   }
 
@@ -147,9 +150,9 @@ export async function GET(request: NextRequest) {
 
   const { data: businesses, error: bizError } = await db
     .from('businesses' as never)
-    .select('id, name, address, description, service_areas, monthly_post_target, auto_image_generation' as never)
+    .select('id, name, address, description, service_areas, monthly_post_target, auto_image_generation, slug' as never)
     .gt('monthly_post_target' as never, 0) as unknown as {
-      data: { id: string; name: string; address: string | null; description: string | null; service_areas: string[] | null; monthly_post_target: number; auto_image_generation: boolean }[] | null
+      data: { id: string; name: string; address: string | null; description: string | null; service_areas: string[] | null; monthly_post_target: number; auto_image_generation: boolean; slug: string | null }[] | null
       error: { message: string } | null
     }
 
