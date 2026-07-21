@@ -720,7 +720,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
               aria-label="상담 시작하기"
             >
               <MessageCircle className="h-3.5 w-3.5" />
-              문의
+              상담
             </button>
           </div>
         </div>
@@ -866,7 +866,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
                   value={customSpace}
                   onChange={(e) => setCustomSpace(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSpaceCustom()}
-                  className="h-12 rounded-2xl border-border text-sm"
+                  className="h-12 rounded-2xl border-border"
                 />
                 <button
                   type="button"
@@ -910,7 +910,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
                 placeholder="예) 에어컨 포함, 주방 기름때 심함, 반려동물 있음"
                 rows={3}
                 autoFocus
-                className="w-full rounded-2xl border border-border bg-[#FAFAFA] px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-30"
+                className="w-full rounded-2xl border border-border bg-[#FAFAFA] px-4 py-3 text-base md:text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-30"
               />
               <div className="flex gap-2">
                 <button
@@ -941,7 +941,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
                 onChange={(e) => setCustomerName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleName()}
                 autoFocus
-                className="h-12 rounded-2xl border-border text-sm"
+                className="h-12 rounded-2xl border-border"
               />
               <button
                 type="button"
@@ -964,7 +964,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
                 onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
                 onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
                 autoFocus
-                className="h-12 rounded-2xl border-border text-sm"
+                className="h-12 rounded-2xl border-border"
               />
               <button
                 type="button"

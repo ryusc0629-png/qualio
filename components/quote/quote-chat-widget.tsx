@@ -234,7 +234,8 @@ export function QuoteChatWidget({ businessId, businessName, open, onOpenChange }
                   onKeyDown={handleKeyDown}
                   rows={1}
                   placeholder="메시지를 입력하세요"
-                  className="max-h-24 flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400"
+                  // 모바일 16px(text-base)로 iOS 사파리 포커스 시 자동 확대 방지, 데스크탑은 14px
+                  className="max-h-24 flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2.5 text-base md:text-sm outline-none focus:border-emerald-400"
                 />
                 <button
                   type="button"
