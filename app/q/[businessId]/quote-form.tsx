@@ -432,6 +432,58 @@ function TypingBubble({ initial }: { initial: string }) {
   )
 }
 
+// 견적 계산 중 — '열심히 만드는 중' 느낌을 주는 생생한 로딩 카드.
+// 상태 메시지를 순차로 넘기고(펄스 스파클·통통 튀는 점·차오르는 진행바), 실제 계산이
+// 끝나면 상위에서 언마운트된다. 정적 문구가 멈춘 듯 보이던 문제 해결.
+function QuoteCalculatingBubble({ initial, steps }: { initial: string; steps: string[] }) {
+  const [idx, setIdx] = useState(0)
+  useEffect(() => {
+    if (idx >= steps.length - 1) return // 마지막 메시지에서 멈춰 대기
+    const t = setTimeout(() => setIdx((i) => i + 1), 650)
+    return () => clearTimeout(t)
+  }, [idx, steps.length])
+
+  const pct = Math.round(((idx + 1) / steps.length) * 100)
+
+  return (
+    <div className="flex items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0 mb-0.5">
+        {initial}
+      </div>
+      <div className="max-w-[85%] w-full bg-white rounded-3xl rounded-bl-lg px-4 py-4 shadow-sm space-y-3">
+        {/* 헤더 — 펄스 스파클 + 제목 */}
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-5 w-5 shrink-0">
+            <span className="absolute inline-flex h-full w-full rounded-full bg-primary/30 animate-ping" />
+            <span className="relative inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px]">✨</span>
+          </span>
+          <p className="text-sm font-bold text-[#1A1A1A]">맞춤 견적서를 만들고 있어요</p>
+        </div>
+
+        {/* 순환 상태 메시지 — 통통 튀는 점 + 페이드 전환 */}
+        <div className="flex items-center gap-2 min-h-[20px]">
+          <span className="flex items-center gap-1 shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:0ms]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:160ms]" />
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:320ms]" />
+          </span>
+          <p key={idx} className="text-sm text-[#5A5A5A] break-keep animate-in fade-in slide-in-from-bottom-1 duration-300">
+            {steps[idx]}
+          </p>
+        </div>
+
+        {/* 차오르는 진행바 */}
+        <div className="h-1.5 w-full bg-[#EFEFEF] rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary rounded-full transition-all duration-700 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function QuoteForm({ businessId, businessName, services, reviewSummary, quoteAlimtalkEnabled = false }: QuoteFormProps) {
   const [currentStep, setCurrentStep] = useState<Step>('service')
   const [completedSteps, setCompletedSteps] = useState<Step[]>([])
@@ -475,6 +527,8 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
 
   const chatEndRef = useRef<HTMLDivElement>(null)
   const startedRef = useRef(false) // 폼 시작(form_started) 1회만 기록
+  const submitStartRef = useRef(0) // 제출 시각 — 계산 애니메이션 최소 노출 시간 계산용
+  const [finalizing, setFinalizing] = useState(false) // 제출~결과이동 사이 로딩 연속 유지(깜빡임 방지)
   const [chatOpen, setChatOpen] = useState(false) // 헤더 '문의' 버튼으로 여는 상담창
 
   useEffect(() => {
@@ -490,10 +544,21 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
       trackFunnel(businessId, 'quote_submitted', { meta: { quoteId: data.quoteId } })
       // Meta 픽셀 핵심 전환 — 광고 최적화가 '견적 완료'를 목표로 삼게
       trackMetaPixel('CompleteRegistration')
-      window.location.replace(`/q/${businessId}/quote/${data.quoteId}`)
+      // 계산 애니메이션이 '휙' 지나가지 않도록 최소 1.6초는 보여준 뒤 이동(신뢰감·기대감)
+      const elapsed = Date.now() - submitStartRef.current
+      setTimeout(
+        () => window.location.replace(`/q/${businessId}/quote/${data.quoteId}`),
+        Math.max(0, 1600 - elapsed),
+      )
     },
-    onError: ({ error }) => toast.error(error.serverError ?? '견적 계산에 실패했습니다'),
+    onError: ({ error }) => {
+      setFinalizing(false)
+      toast.error(error.serverError ?? '견적 계산에 실패했습니다')
+    },
   })
+
+  // 제출 시작~결과 이동까지 연속으로 로딩을 보여주는 플래그(isPending은 액션 완료 순간 꺼져 깜빡임 발생)
+  const calculating = isPending || finalizing
 
   // 현장 견적(상담) 접수 액션
   const { execute: executeConsult, isPending: isConsultPending } = useAction(createConsultationRequestAction, {
@@ -663,6 +728,8 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
       notes.trim(),
     ].filter(Boolean).join(' | ')
 
+    submitStartRef.current = Date.now()
+    setFinalizing(true) // 즉시 로딩 표시(액션 pending 이전부터 켜 깜빡임 방지)
     execute({
       business_id:    businessId,
       service_id:     selectedServiceId,
@@ -765,17 +832,27 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
             </div>
           ))}
 
-          {/* 제출 중 — 연락처 답변 + 계산 중 메시지 */}
-          {isPending && (
+          {/* 제출 중 — 연락처 답변 + 생생한 계산 애니메이션 */}
+          {calculating && (
             <div className="space-y-2">
               <BotBubble text={getQuestion('phone')} initial={initial} />
               <UserBubble text={customerPhone} />
-              <BotBubble text={'맞춤 견적을 계산하고 있어요 ✨\n잠깐만 기다려 주세요'} initial={initial} />
+              <QuoteCalculatingBubble
+                initial={initial}
+                steps={[
+                  '입력하신 내용을 확인하고 있어요',
+                  spaceSize
+                    ? `${selectedServiceName} · ${spaceSize}평 기준으로 계산하고 있어요`
+                    : `${selectedServiceName} 기준으로 계산하고 있어요`,
+                  '가장 합리적인 3단계 가격을 맞추고 있어요',
+                  '거의 다 됐어요, 곧 보여드릴게요',
+                ]}
+              />
             </div>
           )}
 
           {/* 타이핑 중 또는 현재 질문 */}
-          {!isPending && (
+          {!calculating && (
             isTyping
               ? <TypingBubble initial={initial} />
               : <BotBubble text={getQuestion(currentStep)} initial={initial} />
@@ -790,16 +867,16 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
         <div className="max-w-md mx-auto space-y-3">
 
           {/* 타이핑/처리 중엔 입력 영역 숨김 */}
-          {(isTyping || isPending) && (
+          {(isTyping || calculating) && (
             <div className="h-12 flex items-center justify-center">
               <p className="text-xs text-[#B0B0B0]">
-                {isPending ? '견적을 계산하고 있어요...' : '답변을 입력하고 있어요...'}
+                {calculating ? '견적서를 만들고 있어요...' : '답변을 입력하고 있어요...'}
               </p>
             </div>
           )}
 
           {/* 서비스 선택 */}
-          {!isTyping && !isPending && currentStep === 'service' && (
+          {!isTyping && !calculating && currentStep === 'service' && (
             services.length > 0 ? (
               <div className="grid grid-cols-2 gap-2">
                 {services.map((s) => {
@@ -821,12 +898,12 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
           )}
 
           {/* 에어컨 유형·대수 선택 */}
-          {!isTyping && !isPending && currentStep === 'ac_detail' && (
+          {!isTyping && !calculating && currentStep === 'ac_detail' && (
             <AcDetailSelector types={acTypes} noun={acNoun} acTypePrices={acTypePrices} onConfirm={handleAcDetail} />
           )}
 
           {/* 구분 선택 (신축/구축 등) */}
-          {!isTyping && !isPending && currentStep === 'unit_variant' && unitVariants && (
+          {!isTyping && !calculating && currentStep === 'unit_variant' && unitVariants && (
             <div className="flex flex-wrap gap-2">
               {unitVariants.map((v) => (
                 <button
@@ -842,7 +919,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
           )}
 
           {/* 항목별 수량 선택 (줄눌 시공 등) */}
-          {!isTyping && !isPending && currentStep === 'unit_detail' && unitPrices && (() => {
+          {!isTyping && !calculating && currentStep === 'unit_detail' && unitPrices && (() => {
             // variant가 선택된 경우 해당 항목만 필터링
             const filteredPrices = selectedUnitVariant
               ? unitPrices.filter((item) => item.variant === selectedUnitVariant)
@@ -851,7 +928,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
           })()}
 
           {/* 평수 선택 */}
-          {!isTyping && !isPending && currentStep === 'space' && (
+          {!isTyping && !calculating && currentStep === 'space' && (
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 {SPACE_CHIPS.map((chip) => (
@@ -888,7 +965,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
           )}
 
           {/* 주거 형태 선택 */}
-          {!isTyping && !isPending && currentStep === 'context' && (
+          {!isTyping && !calculating && currentStep === 'context' && (
             <div className="grid grid-cols-2 gap-2">
               {CONTEXT_OPTIONS.map((option) => (
                 <button
@@ -904,12 +981,12 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
           )}
 
           {/* 희망 날짜 선택 — 인라인 달력 */}
-          {!isTyping && !isPending && currentStep === 'date' && (
+          {!isTyping && !calculating && currentStep === 'date' && (
             <InlineCalendar onSelect={handleDateSelect} />
           )}
 
           {/* 요청사항 */}
-          {!isTyping && !isPending && currentStep === 'notes' && (
+          {!isTyping && !calculating && currentStep === 'notes' && (
             <div className="space-y-2">
               <textarea
                 value={notes}
@@ -940,7 +1017,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
           )}
 
           {/* 이름 */}
-          {!isTyping && !isPending && currentStep === 'name' && (
+          {!isTyping && !calculating && currentStep === 'name' && (
             <div className="flex gap-2">
               <Input
                 placeholder="홍길동"
@@ -962,7 +1039,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
           )}
 
           {/* 연락처 + 최종 제출 */}
-          {!isTyping && !isPending && currentStep === 'phone' && (
+          {!isTyping && !calculating && currentStep === 'phone' && (
             <div className="space-y-2">
               <Input
                 placeholder="01012345678"
@@ -976,7 +1053,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={isPending || isConsultPending || customerPhone.length < 10}
+                disabled={calculating || isConsultPending || customerPhone.length < 10}
                 className="w-full h-14 rounded-2xl bg-primary text-white font-extrabold text-base disabled:opacity-50 active:scale-[0.98] transition-all"
               >
                 {isConsultMode ? '상담 요청 보내기 →' : '내 견적서 바로 받기 →'}
