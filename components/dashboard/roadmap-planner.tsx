@@ -122,16 +122,24 @@ function csvToPasteText(raw: string): { text: string; count: number } {
 }
 
 // 구글맵 경로 URL — 앱에서 열림. 구글은 URL당 약 10곳 제한이라 겹쳐서 분할.
-function gmapsUrls(stops: GeoStop[]): string[] {
+// 각 구간이 몇 번째~몇 번째 방문지인지(from~to)도 함께 반환해 버튼에 표시.
+function gmapsUrls(stops: GeoStop[]): { url: string; from: number; to: number }[] {
   const coords = stops.map((s) => `${s.lat.toFixed(6)},${s.lng.toFixed(6)}`)
-  if (coords.length <= 1) return coords.length ? [`https://www.google.com/maps/search/${coords[0]}`] : []
-  const urls: string[] = []
+  if (coords.length <= 1)
+    return coords.length
+      ? [{ url: `https://www.google.com/maps/search/${coords[0]}`, from: 1, to: 1 }]
+      : []
+  const out: { url: string; from: number; to: number }[] = []
   const CHUNK = 10
   for (let i = 0; i < coords.length - 1; i += CHUNK - 1) {
     const seg = coords.slice(i, i + CHUNK)
-    urls.push(`https://www.google.com/maps/dir/${seg.join('/')}`)
+    out.push({
+      url: `https://www.google.com/maps/dir/${seg.join('/')}`,
+      from: i + 1,
+      to: i + seg.length,
+    })
   }
-  return urls
+  return out
 }
 
 function kakaoNav(name: string, lat: number, lng: number): string {
@@ -594,18 +602,25 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
                   </span>
                 </div>
 
-                {urls.map((url, ui) => (
+                {urls.map((u, ui) => (
                   <a
                     key={ui}
-                    href={url}
+                    href={u.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-center gap-2 h-11 rounded-lg bg-primary text-primary-foreground text-sm font-semibold"
                   >
                     <Map className="h-4 w-4" />
-                    전체 경로 지도로 열기{urls.length > 1 ? ` (${ui + 1}/${urls.length})` : ''}
+                    {urls.length > 1
+                      ? `지도로 열기 (${u.from}~${u.to}번째)`
+                      : '전체 경로 지도로 열기'}
                   </a>
                 ))}
+                {urls.length > 1 && (
+                  <p className="text-xs text-muted-foreground text-center -mt-1">
+                    한 지도에 10곳까지만 들어가서, 하루 코스를 구간별로 나눠 열어드려요.
+                  </p>
+                )}
 
                 <div className="divide-y">
                   {course.stops.map((s, si) => (
