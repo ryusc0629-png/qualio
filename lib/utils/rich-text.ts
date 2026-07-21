@@ -44,21 +44,24 @@ export function markdownToRich(md: string, title?: string): { html: string; text
   let quote: string[] = []       // 인용구
   let para: string[] = []        // 일반 문단
 
+  // 네이버 에디터는 <p> 문단을 한 줄 간격으로 딱 붙여 렌더해 빽빽해 보임.
+  // 문단·인용·목록 뒤에 빈 문단을 넣어 문단 사이 '빈 줄'을 만든다(소제목 뒤엔 안 넣어 본문과 붙임).
+  const SPACER = '<p>&nbsp;</p>'
   const flushUl = () => {
     if (ul.length === 0) return
-    htmlBlocks.push(`<ul>${ul.map((t) => `<li>${inlineToHtml(t)}</li>`).join('')}</ul>`)
+    htmlBlocks.push(`<ul>${ul.map((t) => `<li>${inlineToHtml(t)}</li>`).join('')}</ul>`, SPACER)
     textBlocks.push(ul.map((t) => `· ${inlineToText(t)}`).join('\n'))
     ul = []
   }
   const flushQuote = () => {
     if (quote.length === 0) return
-    htmlBlocks.push(`<blockquote>${quote.map((t) => inlineToHtml(t)).join('<br>')}</blockquote>`)
+    htmlBlocks.push(`<blockquote>${quote.map((t) => inlineToHtml(t)).join('<br>')}</blockquote>`, SPACER)
     textBlocks.push(quote.map((t) => `❝ ${inlineToText(t)}`).join('\n'))
     quote = []
   }
   const flushPara = () => {
     if (para.length === 0) return
-    htmlBlocks.push(`<p>${para.map((t) => inlineToHtml(t)).join('<br>')}</p>`)
+    htmlBlocks.push(`<p>${para.map((t) => inlineToHtml(t)).join('<br>')}</p>`, SPACER)
     textBlocks.push(para.map((t) => inlineToText(t)).join('\n'))
     para = []
   }
@@ -96,7 +99,8 @@ export function markdownToRich(md: string, title?: string): { html: string; text
   }
   flushAll()
 
-  let html = htmlBlocks.join('')
+  // 맨 끝의 빈 문단(스페이서)은 제거 — 글 뒤에 불필요한 빈 줄이 남지 않게
+  let html = htmlBlocks.join('').replace(/(?:<p>&nbsp;<\/p>)+$/, '')
   let text = textBlocks.join('\n\n')
 
   // 제목이 있으면 맨 위에 큰 제목으로 얹기 (본문에도 노출되던 기존 동작 유지)
