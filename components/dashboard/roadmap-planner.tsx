@@ -187,7 +187,8 @@ function buildSigunguOptions(list: string[]): { label: string; value: string }[]
 }
 
 // 타겟 업종 — 고정 선택(자유입력 없음). DB엔 이 업종들만 저장돼 있음.
-const TARGET_CATEGORIES = ['인테리어', '병의원', '학원', '공장']
+// 공장은 상가정보에 실제 데이터가 없어(산업단지 미포함) 제외. 필요시 공장등록현황 별도 연동.
+const TARGET_CATEGORIES = ['인테리어', '병의원', '학원']
 
 type Mode = 'directory' | 'leads' | 'paste'
 
