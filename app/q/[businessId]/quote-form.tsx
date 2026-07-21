@@ -720,7 +720,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
               aria-label="상담 시작하기"
             >
               <MessageCircle className="h-3.5 w-3.5" />
-              상담
+              물어보기
             </button>
           </div>
         </div>
