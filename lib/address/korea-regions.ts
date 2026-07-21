@@ -84,6 +84,21 @@ export function toAreaValue(region: KoreaRegion, sigungu: string | null): string
   return sigungu ? `${region.short} ${sigungu}` : region.short
 }
 
+// 주소 문자열의 시/도를 찾아 그 시/도 전체(모든 구·군)의 지역값 배열을 반환.
+// 출장업은 본인이 속한 시/도 전체를 기본 서비스 지역으로 포함한다
+// (예: 울주군 주소 → 울산 전체 5개 구·군 / 강남 주소 → 서울 전체 / 경주 주소 → 경북 전체).
+export function homeSidoAreaValues(address: string | null | undefined): string[] {
+  if (!address) return []
+  const a = address.normalize('NFC')
+  const region =
+    KOREA_REGIONS.find((r) => a.includes(r.sido)) ??
+    KOREA_REGIONS.find((r) => a.startsWith(r.short))
+  if (!region) return []
+  return region.sigungu.length > 0
+    ? region.sigungu.map((sg) => toAreaValue(region, sg))
+    : [toAreaValue(region, null)] // 세종(단층제)
+}
+
 // 수도권(서울·경기·인천)은 서로 가깝다고 본다 — 출장 정상 범위.
 const CAPITAL_AREA = new Set(['서울', '경기', '인천'])
 

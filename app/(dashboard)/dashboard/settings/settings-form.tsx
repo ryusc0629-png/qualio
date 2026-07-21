@@ -12,7 +12,8 @@ import { BrandDesignSection } from './brand-design-section'
 import { ServiceAreaPicker } from './service-area-picker'
 import { BaseAddressPicker } from './base-address-picker'
 import { normalizeHex, type HeroStyle } from '@/lib/brand'
-import { buildAreaServed, parseKoreanRegion } from '@/lib/address/parse-region'
+import { parseKoreanRegion } from '@/lib/address/parse-region'
+import { homeSidoAreaValues } from '@/lib/address/korea-regions'
 
 interface Testimonial {
   quote: string
@@ -110,8 +111,13 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage }: Props
   // 업체 주소 — 시/도·시군구 선택 기반 (상태로 들고 자동 지역 즉시 반영)
   const [address, setAddress] = useState(business.address ?? '')
   // 출장 지역 — 주소 기준 자동 노출 지역 + 사장님이 선택하는 추가 지역
-  const autoAreas = buildAreaServed(address, [])
-  const [serviceAreas, setServiceAreas] = useState<string[]>(business.service_areas ?? [])
+  // 내 시/도 전체(모든 구·군) — 출장업 기본 서비스 지역(주소 시/도 기준 자동, 주소 바꾸면 갱신)
+  const homeAreas = homeSidoAreaValues(address)
+  // '더 출장 가는 지역' — 내 시/도 밖의 추가 지역만(초기값에서 내 시/도 중복 제거)
+  const [serviceAreas, setServiceAreas] = useState<string[]>(() => {
+    const home = new Set(homeSidoAreaValues(business.address))
+    return (business.service_areas ?? []).filter((a) => !home.has(a))
+  })
 
   // 홈페이지 주소(slug) — 저장 시 서버가 생성/반환하면 즉시 갱신해 미리보기 잠금 해제
   const [slug, setSlug] = useState<string | null>(business.slug)
@@ -216,7 +222,8 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage }: Props
       instagram_url:             data.get('instagram_url') as string,
       naver_blog_url:            data.get('naver_blog_url') as string,
       danggeun_business_url:     data.get('danggeun_business_url') as string,
-      service_areas:             serviceAreas.join(','),
+      // 내 시/도 전체(자동) + 더 출장 가는 지역(수동)을 합쳐 저장
+      service_areas:             [...new Set([...homeAreas, ...serviceAreas])].join(','),
       review_reward_type:        rewardType,
       review_reward_description: rewardCategory === 'none' ? '' : rewardValue,
       brand_color:               normalizeHex(brandColor) ?? '',
@@ -289,12 +296,12 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage }: Props
           </p>
         </div>
 
-        {/* 주소 기준 자동 설정 지역 */}
-        {autoAreas.length > 0 ? (
+        {/* 내 시/도 전체 — 주소 기준 자동 설정(출장업이라 내 지역은 전부 포함) */}
+        {homeAreas.length > 0 ? (
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">자동 설정된 지역 (주소 기준)</Label>
+            <Label className="text-xs text-muted-foreground">자동 설정된 지역 (내 지역 전체)</Label>
             <div className="flex flex-wrap gap-1.5">
-              {autoAreas.map((a) => (
+              {homeAreas.map((a) => (
                 <span key={a} className="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
                   {a}
                 </span>
