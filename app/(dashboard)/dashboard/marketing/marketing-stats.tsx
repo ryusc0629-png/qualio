@@ -69,9 +69,9 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
     // 공개 페이지 방문 (견적 페이지·브랜드 홈) — page_views 타입 미반영이라 단언 사용
     db
       .from('page_views' as never)
-      .select('source, page_type, channel' as never)
+      .select('source, page_type, channel, viewed_at' as never)
       .eq('business_id' as never, businessId)
-      .gte('viewed_at' as never, periodStart) as unknown as Promise<{ data: { source: string; page_type: string; channel: string | null }[] | null }>,
+      .gte('viewed_at' as never, periodStart) as unknown as Promise<{ data: { source: string; page_type: string; channel: string | null; viewed_at: string }[] | null }>,
 
     // 견적 퍼널 이벤트 (전체 여정) — 타입 미반영이라 단언 사용
     db
@@ -238,6 +238,29 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
     .map((s) => ({ key: s, label: SOURCE_LABELS[s], emoji: AI_ENGINE_EMOJI[s] ?? '🤖', count: sourceCounts[s] ?? 0 }))
     .filter((s) => s.count > 0)
     .sort((a, b) => b.count - a.count)
+
+  // ── 유입 방문 기록(상세) — "어떻게 들어왔나": AI·검색에서 온 방문을 시간순으로 ──
+  // 이미 쌓인 데이터(블로그 글 조회 + 공개 페이지 방문)를 합쳐 최신순 목록. 검색어·질문은
+  // 플랫폼이 안 알려줘 표시 불가 — 대신 '어느 글/페이지로 왔나'가 AI 인용 신호가 됨.
+  const VISIT_SOURCE_EMOJI: Record<string, string> = {
+    ...AI_ENGINE_EMOJI, google: '🔵', naver: '🟢', daum: '🟡',
+  }
+  interface VisitRow { at: string; source: string; where: string }
+  const visitRows: VisitRow[] = []
+  for (const v of views) {
+    const post = Array.isArray(v.biz_posts) ? v.biz_posts[0] : v.biz_posts
+    const title = (post as { title?: string } | null)?.title ?? '홍보 글'
+    visitRows.push({ at: v.viewed_at, source: v.source, where: title })
+  }
+  for (const p of pageViews) {
+    const where = p.page_type === 'brand_home' ? '브랜드 홈' : p.page_type === 'quote' ? '견적 페이지' : '페이지'
+    visitRows.push({ at: p.viewed_at, source: p.source, where })
+  }
+  // AI·검색 유입만(어떻게 왔는지 식별 가능한 것) — 최신순 최대 40건
+  const identifiableVisits = visitRows
+    .filter((r) => isAiSource(r.source) || ['google', 'naver', 'daum'].includes(r.source))
+    .sort((a, b) => (a.at < b.at ? 1 : -1))
+    .slice(0, 40)
 
   // 포스트별 조회수 집계 (상위 5개)
   interface PostViewAgg { title: string; count: number }
@@ -512,6 +535,38 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
           <span className="font-medium">{directOtherViews.toLocaleString()}회</span>
         </div>
       </div>
+
+      {/* 유입 방문 기록 — "어떻게 들어왔나" 상세: AI·검색 방문을 시간순으로(접이식) */}
+      {identifiableVisits.length > 0 && (
+        <details className="rounded-xl border bg-white overflow-hidden group">
+          <summary className="px-5 py-3 border-b bg-slate-50 flex items-center justify-between gap-2 cursor-pointer list-none">
+            <div>
+              <p className="font-semibold text-sm">유입 방문 기록</p>
+              <p className="text-xs text-muted-foreground">AI·검색에서 온 방문 · 최신순</p>
+            </div>
+            <span className="text-xs text-muted-foreground group-open:hidden">펼치기 ▾</span>
+            <span className="text-xs text-muted-foreground hidden group-open:inline">접기 ▴</span>
+          </summary>
+          <ul className="divide-y max-h-80 overflow-y-auto overscroll-contain">
+            {identifiableVisits.map((r, i) => {
+              const when = new Date(r.at).toLocaleString('ko-KR', {
+                month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul',
+              })
+              return (
+                <li key={i} className="px-4 py-2.5 flex items-center gap-2.5 text-sm">
+                  <span className="text-base shrink-0" aria-hidden>{VISIT_SOURCE_EMOJI[r.source] ?? '🌐'}</span>
+                  <span className="font-medium shrink-0 w-20 truncate">{SOURCE_LABELS[r.source as ViewSource] ?? r.source}</span>
+                  <span className="text-muted-foreground truncate flex-1">→ {r.where}</span>
+                  <span className="text-[11px] text-muted-foreground shrink-0 tabular-nums">{when}</span>
+                </li>
+              )
+            })}
+          </ul>
+          <p className="px-5 py-2.5 border-t bg-slate-50/50 text-[11px] text-muted-foreground leading-relaxed">
+            무슨 검색어·질문으로 왔는지는 구글·네이버·AI가 알려주지 않아 표시할 수 없어요. 대신 &lsquo;어느 글을 보고 왔나&rsquo;가 AI·검색이 우리를 인용하는 신호예요.
+          </p>
+        </details>
+      )}
 
       {/* 광고 유입(유료) — 네이버 파워링크·구글 검색광고로 웹사이트에 들어온 방문. 광고비 쓴 채널만 강조 */}
       {adTotal > 0 && (
