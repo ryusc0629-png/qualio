@@ -228,6 +228,17 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
     return acc
   }, {})
 
+  // ── AI가 데려온 손님(GEO Phase 0) — ChatGPT·Perplexity 등 AI 검색 유입을 엔진별로 분해 ──
+  // page_views.source(ai_*)를 그대로 활용 — 새 비용·측정 없이 "AI 검색이 손님을 데려온다"를 증명
+  const AI_ENGINE_EMOJI: Record<string, string> = {
+    ai_chatgpt: '🤖', ai_perplexity: '🔮', ai_claude: '✳️', ai_you: '🔎',
+  }
+  const aiBreakdown = (Object.keys(sourceCounts) as ViewSource[])
+    .filter((s) => isAiSource(s))
+    .map((s) => ({ key: s, label: SOURCE_LABELS[s], emoji: AI_ENGINE_EMOJI[s] ?? '🤖', count: sourceCounts[s] ?? 0 }))
+    .filter((s) => s.count > 0)
+    .sort((a, b) => b.count - a.count)
+
   // 포스트별 조회수 집계 (상위 5개)
   interface PostViewAgg { title: string; count: number }
   const postCounts = views.reduce<Record<string, PostViewAgg>>((acc, v) => {
@@ -435,6 +446,42 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
             })}
             <p className="text-[11px] text-muted-foreground/80 pt-1">
               많이 눌리는 플랜의 구성·가격이 고객 눈높이에 맞다는 신호예요
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* AI가 데려온 손님(GEO Phase 0) — ChatGPT·Perplexity 등 AI 검색 유입을 엔진별로 */}
+      {aiViews > 0 && (
+        <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white overflow-hidden">
+          <div className="px-5 py-3 border-b border-emerald-100 flex items-baseline justify-between gap-2">
+            <p className="font-semibold text-sm">🤖 AI가 데려온 손님</p>
+            <p className="text-xs text-muted-foreground">{periodLabel}</p>
+          </div>
+          <div className="px-5 py-4">
+            <p className="text-sm text-emerald-900/80">
+              ChatGPT·Perplexity 같은 <b>AI 검색</b>에서 우리 페이지로 <b>{aiViews.toLocaleString()}번</b> 들어왔어요
+            </p>
+            <div className="mt-3 space-y-2">
+              {aiBreakdown.map((e) => {
+                const pct = aiViews > 0 ? Math.round((e.count / aiViews) * 100) : 0
+                const widthPct = Math.max(pct, e.count > 0 ? 6 : 0)
+                return (
+                  <div key={e.key} className="flex items-center gap-2">
+                    <span className="text-base shrink-0" aria-hidden>{e.emoji}</span>
+                    <span className="text-xs font-medium w-24 shrink-0 truncate">{e.label}</span>
+                    <div className="flex-1 h-2.5 bg-emerald-100/70 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${widthPct}%` }} />
+                    </div>
+                    <span className="text-xs font-medium tabular-nums w-16 text-right shrink-0">
+                      {e.count}번 ({pct}%)
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="text-[11px] text-muted-foreground/80 pt-3">
+              AI 검색에 우리 업체가 자주 추천될수록 이 숫자가 올라가요. 홍보 글을 꾸준히 발행하면 AI가 우리를 더 잘 인용해요.
             </p>
           </div>
         </div>
