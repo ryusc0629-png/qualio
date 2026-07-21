@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { toast } from 'sonner'
 import {
   buildRoadmapAction,
@@ -173,13 +173,59 @@ const TARGET_CATEGORIES = ['인테리어', '병의원', '학원', '공장']
 
 type Mode = 'directory' | 'leads' | 'paste'
 
+// 짜둔 코스를 브라우저에 저장 → 페이지를 떠났다 와도, 새로고침해도 그대로 유지
+const STORAGE_KEY = 'qualio_roadmap_v1'
+
+interface SavedRoadmap {
+  savedAt: number
+  summary: string
+  result: RoadmapResult
+}
+
+function loadSavedRoadmap(): SavedRoadmap | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? (JSON.parse(raw) as SavedRoadmap) : null
+  } catch {
+    return null
+  }
+}
+
+function persistRoadmap(v: SavedRoadmap) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(v))
+  } catch {
+    // 용량 초과 등은 조용히 무시 (저장 실패해도 기능은 정상)
+  }
+}
+
+function removeSavedRoadmap() {
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // noop
+  }
+}
+
 export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlannerProps) {
   const [mode, setMode] = useState<Mode>(sidoOptions.length > 0 ? 'directory' : leads.length > 0 ? 'leads' : 'paste')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [paste, setPaste] = useState('')
   const [start, setStart] = useState(defaultStart)
   const [result, setResult] = useState<RoadmapResult | null>(null)
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+  const [summary, setSummary] = useState('')
   const [isPending, startTransition] = useTransition()
+
+  // 저장해둔 코스가 있으면 복원 (페이지 재진입·새로고침해도 유지)
+  useEffect(() => {
+    const saved = loadSavedRoadmap()
+    if (saved) {
+      setResult(saved.result)
+      setSavedAt(saved.savedAt)
+      setSummary(saved.summary)
+    }
+  }, [])
 
   // 지역+업종 자동 모드 상태
   const [dirSido, setDirSido] = useState('')
@@ -240,9 +286,21 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
     reader.readAsText(file, 'utf-8')
   }
 
-  const applyResult = (data: RoadmapResult) => {
+  const applyResult = (data: RoadmapResult, label: string) => {
+    const now = Date.now()
     setResult(data)
+    setSummary(label)
+    setSavedAt(now)
+    persistRoadmap({ savedAt: now, summary: label, result: data })
     toast.success(`${data.courses.length}개 코스로 짰어요!`)
+  }
+
+  // 저장된 코스 지우기 (다시 짜기 전까지는 유지되므로, 지울 때만 사라짐)
+  const clearSavedRoadmap = () => {
+    setResult(null)
+    setSavedAt(null)
+    setSummary('')
+    removeSavedRoadmap()
   }
 
   const handleBuild = () => {
@@ -268,7 +326,7 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
           toast.error(res.serverError)
           return
         }
-        if (res?.data) applyResult(res.data)
+        if (res?.data) applyResult(res.data, `${dirSido} ${dirSigungu || '전체'} · ${dirTarget}`)
       })
       return
     }
@@ -296,7 +354,11 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
         toast.error(res.serverError)
         return
       }
-      if (res?.data) applyResult(res.data)
+      if (res?.data)
+        applyResult(
+          res.data,
+          mode === 'leads' ? `내 리드 ${stops.length}곳` : `붙여넣은 명단 ${stops.length}곳`,
+        )
     })
   }
 
@@ -482,6 +544,29 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
       {/* 결과 */}
       {result && (
         <div className="space-y-4 pt-2">
+          {/* 저장된 코스 안내 — 다시 짜기 전까지 유지됨 */}
+          {savedAt && (
+            <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/60 px-3 py-2">
+              <span className="text-xs text-muted-foreground min-w-0 truncate">
+                {summary ? `${summary} · ` : ''}
+                {new Date(savedAt).toLocaleString('ko-KR', {
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  timeZone: 'Asia/Seoul',
+                })}
+                에 짠 코스예요
+              </span>
+              <button
+                type="button"
+                onClick={clearSavedRoadmap}
+                className="text-xs text-muted-foreground underline shrink-0"
+              >
+                지우기
+              </button>
+            </div>
+          )}
           <div className="text-sm text-muted-foreground">
             총 {result.geocodedCount}곳 · {result.courses.length}일 코스 · 이동 약{' '}
             {Math.round(result.totalKm)}km
