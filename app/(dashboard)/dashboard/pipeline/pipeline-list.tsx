@@ -288,7 +288,7 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
               고객 추가
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>고객 추가</DialogTitle>
             </DialogHeader>
@@ -542,7 +542,7 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
 
       {/* 수정 다이얼로그 */}
       <Dialog open={!!editLead} onOpenChange={(o) => { if (!o) setEditLead(null) }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>고객 수정</DialogTitle>
           </DialogHeader>

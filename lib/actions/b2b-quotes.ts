@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateSpecSheet } from '@/lib/ai/spec-sheet'
+import { extractQuoteFromMeeting } from '@/lib/ai/extract-quote-from-meeting'
 import { revalidatePath } from 'next/cache'
 
 const quoteItemSchema = z.object({
@@ -53,6 +54,10 @@ const generateSpecSchema = z.object({
   ).optional(),
 })
 
+const extractFromMeetingSchema = z.object({
+  leadId: z.string().uuid(),
+})
+
 async function getAuth() {
   const authClient = await createClient()
   const { data: { user } } = await authClient.auth.getUser()
@@ -69,6 +74,31 @@ async function getAuth() {
   return { db, businessId: profile.business_id }
 }
 
+// 이 리드의 최근 미팅 기록(요약 우선, 없으면 원문)을 하나의 텍스트로 모음 — 없으면 null
+async function getLeadMeetingText(
+  db: ReturnType<typeof createServiceClient>,
+  businessId: string,
+  leadId: string,
+): Promise<string | null> {
+  const { data: meetings } = await db
+    .from('lead_activities')
+    .select('content, transcript, activity_at')
+    .eq('lead_id', leadId)
+    .eq('business_id', businessId)
+    .eq('type', 'meeting')
+    .order('activity_at', { ascending: false })
+    .limit(3)
+
+  if (!meetings || meetings.length === 0) return null
+
+  const text = meetings
+    .map((m) => (m.content?.trim() || m.transcript?.trim() || ''))
+    .filter(Boolean)
+    .join('\n\n---\n\n')
+
+  return text.trim() || null
+}
+
 // 시방서 AI 생성
 export const generateSpecAction = action
   .schema(generateSpecSchema)
@@ -81,6 +111,12 @@ export const generateSpecAction = action
       .eq('id', businessId)
       .maybeSingle()
 
+    // 리드에 미팅 기록이 있으면 시방서가 실제 미팅 내용을 따라가도록 함께 주입
+    // (단, 견적 항목에 없는 서비스는 미팅에 나와도 시방서에 넣지 않음 — spec-sheet.ts 가드레일)
+    const meetingNotes = parsedInput.leadId
+      ? await getLeadMeetingText(db, businessId, parsedInput.leadId)
+      : null
+
     const specContent = await generateSpecSheet({
       businessName: business?.name ?? '청소업체',
       clientName:   parsedInput.clientName,
@@ -92,9 +128,26 @@ export const generateSpecAction = action
       serviceItems: parsedInput.serviceItems,
       conditions:   parsedInput.conditions ?? null,
       jobType:      parsedInput.jobType === 'one_off' ? 'one_off' : 'recurring',
+      meetingNotes,
     })
 
     return { specContent }
+  })
+
+// 미팅 기록 → 견적서·시방서 입력칸 자동 채우기
+// 이 리드의 최근 미팅 기록(요약 우선, 없으면 원문)을 모아 분석해 구조화된 항목으로 반환
+export const extractQuoteFromMeetingAction = action
+  .schema(extractFromMeetingSchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuth()
+
+    const meetingText = await getLeadMeetingText(db, businessId, parsedInput.leadId)
+    if (!meetingText) {
+      throw new Error('[APP] 불러올 미팅 기록이 없어요. 먼저 미팅 녹음을 정리해 저장해주세요')
+    }
+
+    const fields = await extractQuoteFromMeeting(meetingText)
+    return { fields }
   })
 
 // 견적서 저장

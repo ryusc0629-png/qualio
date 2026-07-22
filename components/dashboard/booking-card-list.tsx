@@ -139,7 +139,7 @@ export function BookingCardList({ bookings, businessId }: { bookings: BookingIte
 
       {/* 예약 상세 Dialog */}
       <Dialog open={!!selected} onOpenChange={(open: boolean) => { if (!open) setSelected(null) }}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           {selected && (() => {
             const status = BOOKING_STATUS[selected.status] ?? { text: selected.status, className: 'bg-gray-100 text-gray-600' }
             const isActive = selected.status === 'confirmed' || selected.status === 'in_progress'

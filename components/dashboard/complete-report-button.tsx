@@ -171,7 +171,7 @@ export function CompleteReportButton({ bookingId, customerName, businessId }: Co
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>작업 완료 보고서</DialogTitle>
             <p className="text-sm text-muted-foreground">{customerName} 고객님</p>

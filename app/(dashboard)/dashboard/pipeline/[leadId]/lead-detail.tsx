@@ -251,6 +251,7 @@ export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, 
                 leadId={lead.id}
                 clientName={lead.company_name}
                 existingQuote={existingQuote}
+                hasMeeting={activities.some((a) => a.type === 'meeting')}
               />
             )}
           </div>

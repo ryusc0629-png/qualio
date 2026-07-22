@@ -15,6 +15,8 @@ export interface SpecSheetInput {
   conditions: string | null
   // 'recurring' = 정기 계약(주기 있음) / 'one_off' = 일회성 작업(준공청소·외벽청소 등)
   jobType?: 'recurring' | 'one_off'
+  // 미팅에서 논의된 실제 요구사항(요약/원문). 있으면 시방서가 이 내용을 따라가도록 반영
+  meetingNotes?: string | null
 }
 
 export async function generateSpecSheet(input: SpecSheetInput): Promise<string> {
@@ -29,6 +31,7 @@ export async function generateSpecSheet(input: SpecSheetInput): Promise<string> 
     serviceItems,
     conditions,
     jobType = 'recurring',
+    meetingNotes,
   } = input
 
   const isOneOff = jobType === 'one_off'
@@ -50,6 +53,18 @@ export async function generateSpecSheet(input: SpecSheetInput): Promise<string> 
     : '- 작업 성격: 정기 계약 (지정 주기로 반복 방문)'
   const section4Title = isOneOff ? '4. 작업 일정 및 투입 인원' : '4. 작업 주기·빈도·투입 인원'
 
+  // 미팅에서 논의된 실제 요구사항이 있으면 함께 제공 (시방서가 이 내용을 따라가도록)
+  const meetingBlock = meetingNotes?.trim()
+    ? `
+
+## 미팅에서 논의된 실제 요구사항 (반드시 반영)
+아래는 이 고객과의 실제 상담/미팅 내용입니다. 시방서의 작업 범위·방법·순서·특이사항이 이 내용을 최대한 따라가도록 반영하세요.
+단, 아래 "절대 금지" 규칙은 이 미팅 내용보다 우선합니다 — 미팅에서 언급됐더라도 위 '청소 항목'에 없는 유료 서비스는 시방서에 넣지 마세요.
+"""
+${meetingNotes.trim()}
+"""`
+    : ''
+
   const prompt = `당신은 청소·홈케어 전문 업체의 영업 담당자입니다.
 아래 정보를 바탕으로 법인 고객에게 제출할 **청소 시방서**를 작성해주세요.
 
@@ -60,11 +75,18 @@ ${jobTypeNote}
 ${siteInfo}
 - 청소 항목: ${serviceItems.join(', ')}
 ${conditions ? `- 특이사항: ${conditions}` : ''}
+${meetingBlock}
+
+## 절대 금지 (가장 중요 — 어떤 경우에도 위반 금지)
+- 시방서에서 다루는 작업은 위 '청소 항목'에 있는 것으로 **엄격히 한정**하세요. 견적서에 없는 서비스를 시방서에 넣으면, 고객이 계약 범위로 오해해 분쟁이 생깁니다.
+- 아래처럼 **별도 견적이 필요한 유료·부가 서비스는 절대 추가하거나 언급하지 마세요** (예시이며 이에 국한되지 않음): 바닥 광택(왁스/코팅) 시공, 에어컨·필터 청소, 유리·외벽 청소, 카펫·소파 스팀 청소, 방역·해충 방제, 특수 약품·특수 장비 작업.
+- "선택사항", "권장", "추가로 진행 가능", "월 1회 권장" 같은 표현으로도 위 유료 서비스를 끼워 넣지 마세요. 존재 자체를 언급하지 마세요.
+- 표준 청소 순서를 설명하되, 위 '청소 항목' 범위를 벗어나는 단계·작업은 넣지 마세요.
 
 ## 작성 규칙
 1. 전문적이고 신뢰감 있는 문체 (존댓말, 격식체)
 2. 각 항목은 번호 목록으로 명확하게 작성
-3. 사용 약품·장비는 친환경·안전성 강조
+3. 사용 약품·장비는 친환경·안전성 강조 (단, 위 '청소 항목'에 필요한 것만)
 4. 각 항목을 현장에서 바로 활용할 수 있을 만큼 구체적으로 작성 — 작업 범위·방법·순서·${isOneOff ? '일정' : '주기'}·수량·안전 기준 등을 빠짐없이 담을 것 (분량 제한 없음, 상세할수록 좋음)
 5. 마크다운 없이 **순수 텍스트**만 출력
 6. 아래 구조를 반드시 따르고, 문서를 마지막 항목까지 반드시 완결할 것 (중간에 끊지 말 것)

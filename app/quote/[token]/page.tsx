@@ -40,6 +40,7 @@ export default async function PublicQuotePage({
         frequency: string | null
         worker_count: number | null
         spec_content: string | null
+        created_at: string | null
       } | null
     }
 

@@ -9,8 +9,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { saveB2bQuoteAction, generateSpecAction } from '@/lib/actions/b2b-quotes'
-import { FileText, Plus, Trash2, Sparkles, MapPin, Loader2 } from 'lucide-react'
+import { saveB2bQuoteAction, generateSpecAction, extractQuoteFromMeetingAction } from '@/lib/actions/b2b-quotes'
+import type { ExtractedQuoteFields } from '@/lib/ai/extract-quote-from-meeting'
+import { FileText, Plus, Trash2, Sparkles, MapPin, Loader2, Mic, AlertTriangle } from 'lucide-react'
 import { openAddressSearch } from '@/lib/address/postcode'
 import {
   AREA_UNITS,
@@ -52,6 +53,8 @@ interface Props {
   customerId?: string
   clientName: string
   existingQuote: ExistingQuote | null
+  // 이 리드에 저장된 미팅 기록이 있으면 '미팅 내용으로 채우기' 버튼 노출
+  hasMeeting?: boolean
 }
 
 type JobType = 'recurring' | 'one_off'
@@ -80,7 +83,7 @@ const SPEC_STEPS = [
 // 스켈레톤 줄 너비 — 문단·소제목이 섞인 것처럼 보이게
 const SPEC_SKELETON = ['w-1/3', 'w-11/12', 'w-10/12', 'w-9/12', 'w-1/4', 'w-11/12', 'w-8/12', 'w-10/12', 'w-1/3', 'w-9/12']
 
-export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: Props) {
+export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, hasMeeting }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [, startTransition] = useTransition()
@@ -161,6 +164,43 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: 
     onError: ({ error }) => toast.error(error.serverError ?? '초안 생성에 실패했습니다'),
   })
 
+  // 미팅 기록에서 뽑은 값으로 '빈칸만' 채운다 (사용자가 이미 입력한 값은 건드리지 않음)
+  const applyExtracted = (f: ExtractedQuoteFields) => {
+    let filled = 0
+
+    if (f.jobType) setJobType(f.jobType)
+
+    // 서비스 항목: 아직 이름이 하나도 없을 때(기본 빈 줄만)만 통째로 교체
+    if (!items.some((it) => it.name.trim()) && f.serviceItems.length > 0) {
+      setItems(f.serviceItems.map((s) => ({ name: s.name, unit: s.unit, qty: 1, unit_price: 0 })))
+      filled += f.serviceItems.length
+    }
+
+    if (!siteName && f.siteName) { setSiteName(f.siteName); filled++ }
+    if (!siteAddress && f.siteAddress) { setSiteAddress(f.siteAddress); filled++ }
+    if (!frequency && f.frequency) { setFrequency(f.frequency); filled++ }
+    if (!workerCount && f.workerCount) { setWorkerCount(String(f.workerCount)); filled++ }
+    if (!conditions && f.conditions) { setConditions(f.conditions); filled++ }
+    if (!areaValue && f.siteArea) {
+      const parsed = parseArea(f.siteArea)
+      if (parsed.value) { setAreaValue(parsed.value); setAreaUnit(parsed.unit); filled++ }
+    }
+
+    if (filled === 0) {
+      toast('미팅에서 새로 채울 내용을 못 찾았어요. 직접 입력해 주세요')
+    } else {
+      toast.success('미팅 내용을 불러왔어요! 금액만 확인해서 채워주세요')
+    }
+  }
+
+  const { execute: executeExtract, isPending: extracting } = useAction(extractQuoteFromMeetingAction, {
+    onSuccess: ({ data }) => {
+      if (data?.fields) applyExtracted(data.fields)
+      else toast.error('불러오지 못했어요. 다시 시도해주세요')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
   // 생성 중 진행 문구를 2.2초마다 다음 단계로 넘김 (마지막 단계에서 멈춤)
   const [specStep, setSpecStep] = useState(0)
   useEffect(() => {
@@ -213,6 +253,14 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: 
   }
 
   const handlePreview = async () => {
+    // 보내기 전 마지막 확인 — 시방서에 견적 밖 서비스가 섞였는지 사장님이 한 번 더 검토하게 함
+    // (고객이 계약 범위로 오해해 나중에 문제 삼는 걸 막기 위함)
+    if (specContent.trim() && !window.confirm(
+      '시방서를 다시 확인하셨나요?\n\n견적 항목에 없는 서비스(예: 바닥 광택, 에어컨·필터 청소)가 시방서에 들어가 있으면 고객이 계약에 포함된 것으로 오해할 수 있어요.\n\n확인했으면 [확인]을 눌러 미리보기로 넘어가세요.'
+    )) {
+      return
+    }
+
     // 새 탭을 클릭 즉시(동기) 열어 팝업 차단을 피하고, 저장이 끝난 뒤에 주소를 미리보기로 바꿔치기.
     // (예전엔 저장을 기다리지 않고 바로 열어서, DB 기록 전이면 미리보기가 404를 냈음)
     const win = window.open('', '_blank')
@@ -241,12 +289,37 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: 
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      {/* sm:max-w-3xl — DialogContent 기본값 sm:max-w-sm(384px)을 반드시 sm: 접두로 덮어써야 넓어짐
+          (비반응형 max-w-2xl는 tailwind-merge상 sm:max-w-sm과 공존해 PC에서 좁게 눌려 가로 스크롤이 났음).
+          overflow-x-hidden으로 PC 가로 스크롤을 확실히 차단 */}
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-3xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>견적서 + 시방서</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
+
+          {/* 미팅 기록에서 자동 채우기 — 저장된 미팅이 있는 리드에서만 노출 */}
+          {leadId && hasMeeting && (
+            <button
+              type="button"
+              onClick={() => executeExtract({ leadId })}
+              disabled={extracting}
+              className="w-full flex items-center gap-2.5 rounded-lg border border-primary/30 bg-primary/5 p-3 text-left transition-colors hover:bg-primary/10 disabled:opacity-60"
+            >
+              {extracting
+                ? <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
+                : <Mic className="h-4 w-4 text-primary shrink-0" />}
+              <span className="flex-1">
+                <span className="block text-sm font-medium">
+                  {extracting ? '미팅 내용을 불러오는 중...' : '미팅 내용으로 채우기'}
+                </span>
+                <span className="block text-[11px] text-muted-foreground">
+                  저장한 미팅 기록에서 현장·주기·특이사항을 자동으로 넣어드려요 (빈칸만)
+                </span>
+              </span>
+            </button>
+          )}
 
           {/* 작업 유형 — 정기 계약 vs 일회성 작업 (청소 주기는 정기에만 해당) */}
           <section className="space-y-2">
@@ -524,6 +597,18 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote }: 
                 rows={10}
                 className="resize-none font-mono text-xs leading-relaxed"
               />
+            )}
+
+            {/* 보내기 전 확인 — 견적에 없는 서비스가 시방서에 섞이면 분쟁 소지 */}
+            {specContent.trim() && !generatingSpec && (
+              <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-[13px] leading-relaxed text-amber-800">
+                  <span className="font-semibold">보내기 전에 꼭 확인하세요.</span> 시방서에{' '}
+                  <span className="font-semibold">견적 항목에 없는 서비스</span>(예: 바닥 광택, 에어컨·필터 청소)가
+                  들어가 있으면 지우세요. 고객이 계약에 포함된 것으로 오해하면 나중에 문제가 될 수 있어요.
+                </p>
+              </div>
             )}
           </section>
 

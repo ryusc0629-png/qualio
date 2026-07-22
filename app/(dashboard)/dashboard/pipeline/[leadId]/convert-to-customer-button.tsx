@@ -104,7 +104,7 @@ export function ConvertToCustomerButton({ lead, quote, alreadyConverted }: Props
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>계약 고객으로 전환</DialogTitle>
         </DialogHeader>

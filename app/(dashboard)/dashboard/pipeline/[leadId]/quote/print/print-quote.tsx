@@ -31,6 +31,8 @@ interface Quote {
   frequency: string | null
   worker_count: number | null
   spec_content: string | null
+  // 견적 최초 저장일 — 발행일/작성일로 사용(재열람해도 바뀌지 않게 저장값 기준)
+  created_at?: string | null
 }
 
 interface Business {
@@ -75,8 +77,10 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', public
   const showQuote = mode !== 'spec'
   const showSpec = hasSpec && mode !== 'quote'
 
-  const today = new Date().toLocaleDateString('ko-KR', {
-    year: 'numeric', month: 'long', day: 'numeric',
+  // 발행일/작성일 — 견적 저장일(created_at)을 KST로 표시. 저장값이 없으면 오늘 날짜로 폴백.
+  // (예전엔 항상 렌더 시점 new Date()라 재열람할 때마다 날짜가 바뀌었고, 시방서 작성일이 견적서와 어긋났음)
+  const issueDate = new Date(quote.created_at ?? Date.now()).toLocaleDateString('ko-KR', {
+    year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Seoul',
   })
 
   const docLabel = mode === 'quote' ? '견적서' : mode === 'spec' ? '시방서' : '견적서·시방서'
@@ -170,7 +174,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', public
             </div>
             <div className="text-right text-sm text-gray-600 space-y-0.5">
               {quote.quote_number && <p>견적번호: <span className="font-medium text-gray-900">{quote.quote_number}</span></p>}
-              <p>발행일: <span className="font-medium text-gray-900">{today}</span></p>
+              <p>발행일: <span className="font-medium text-gray-900">{issueDate}</span></p>
               {quote.valid_until && (
                 <p>유효기간: <span className="font-medium text-gray-900">
                   {new Date(quote.valid_until).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' })}
@@ -288,7 +292,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', public
             {/* 서명란 */}
             <div className="mt-16 flex justify-end">
               <div className="text-center space-y-2">
-                <p className="text-sm text-gray-600">{today}</p>
+                <p className="text-sm text-gray-600">{issueDate}</p>
                 <p className="font-bold text-base">{business?.name ?? '업체명'}</p>
                 <div className="border-t border-gray-400 mt-8 pt-2 w-40 text-xs text-gray-500">대표자 (인)</div>
               </div>
