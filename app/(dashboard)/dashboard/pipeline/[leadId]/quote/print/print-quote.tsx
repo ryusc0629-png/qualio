@@ -96,11 +96,9 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', public
     year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Seoul',
   })
 
-  const docLabel = mode === 'quote' ? '견적서' : mode === 'spec' ? '시방서' : '견적서·시방서'
-
-  useEffect(() => {
-    document.title = `${docLabel}_${lead.company_name}_${quote.quote_number ?? ''}`
-  }, [docLabel, lead.company_name, quote.quote_number])
+  // 탭 제목/PDF 파일명은 서버 metadata('견적서·시방서')로 고정한다.
+  // (예전엔 여기서 document.title을 직접 바꿨는데, Next.js metadata와 충돌해
+  //  인쇄 시 탭 제목이 잠깐 '무제'로 깜빡였음 → 서버 제목만 쓰도록 제거)
 
   // 공개 링크로 고객이 열람하면 조회 기록 → 재열람 시 대표에게 알림
   useEffect(() => {
