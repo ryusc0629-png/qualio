@@ -145,17 +145,13 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', public
           </div>
         )}
 
-        <button
-          onClick={() => window.print()}
-          className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium shadow-lg hover:bg-primary/90"
-        >
-          PDF로 저장
-        </button>
+        {/* PDF 저장 버튼은 제거함 — 사파리 window.print()가 백지로 저장되는 버그가 있어,
+            전달은 '고객 링크'로만 한다(고객이 링크로 그대로 열람). */}
 
         {variant === 'internal' && publicToken && (
           <button
             onClick={handleCopyLink}
-            className="bg-white border px-4 py-2 rounded-lg text-sm font-medium shadow-lg hover:bg-muted"
+            className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium shadow-lg hover:bg-primary/90"
           >
             {copied ? '✓ 복사됐어요' : '고객 링크 복사'}
           </button>
