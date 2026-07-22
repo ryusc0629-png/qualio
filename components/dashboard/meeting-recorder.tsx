@@ -11,7 +11,13 @@ import { toast } from 'sonner'
 import { createLeadActivityAction } from '@/lib/actions/crm'
 import { Mic, Square, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 
-const MAX_SECONDS = 25 * 60 // 25분 (OpenAI 처리 한도)
+const MAX_SECONDS = 15 * 60 // 15분 — 이보다 길면 파일이 서버 업로드 한도를 넘어 저장이 안 됨
+
+// 음성은 32kbps면 받아쓰기에 충분 — 브라우저 기본 비트레이트(수백 kbps)로 두면
+// 3분만 녹음해도 파일이 4.5MB를 넘어 Vercel이 요청을 거부한다(413). 낮게 고정해 용량을 줄인다.
+const AUDIO_BITS_PER_SECOND = 32000
+// 업로드 전 안전 상한 — Vercel 서버리스 요청 본문 한도(4.5MB)보다 여유 있게 잡는다
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024
 
 type Phase = 'idle' | 'recording' | 'processing' | 'review'
 
@@ -67,7 +73,10 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
           ? 'audio/mp4'
           : ''
 
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+      const recorder = new MediaRecorder(stream, {
+        ...(mimeType ? { mimeType } : {}),
+        audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
+      })
       chunksRef.current = []
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data)
@@ -80,10 +89,10 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
       setSeconds(0)
       timerRef.current = setInterval(() => {
         setSeconds((prev) => {
-          // 25분 도달 시 자동 종료
+          // 15분 도달 시 자동 종료
           if (prev + 1 >= MAX_SECONDS) {
             stopRecording()
-            toast.info('25분이 넘어 녹음을 자동으로 마쳤어요')
+            toast.info('15분이 넘어 녹음을 자동으로 마쳤어요')
           }
           return prev + 1
         })
@@ -111,6 +120,19 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     const mime = mediaRecorderRef.current?.mimeType ?? 'audio/webm'
     const ext = mime.includes('mp4') ? 'mp4' : 'webm'
     const blob = new Blob(chunksRef.current, { type: mime })
+
+    // 녹음이 없거나(0바이트) 서버 한도를 넘으면 미리 걸러 명확히 안내
+    if (blob.size === 0) {
+      toast.error('녹음된 소리가 없어요. 마이크를 확인하고 다시 녹음해주세요')
+      setPhase('idle')
+      return
+    }
+    if (blob.size > MAX_UPLOAD_BYTES) {
+      toast.error('녹음이 너무 길어요. 15분 안쪽으로 나눠서 정리해주세요')
+      setPhase('idle')
+      return
+    }
+
     const file = new File([blob], `meeting.${ext}`, { type: mime })
 
     const form = new FormData()
@@ -118,8 +140,13 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
 
     try {
       const res = await fetch('/api/meeting-transcribe', { method: 'POST', body: form })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? '정리하지 못했어요')
+
+      // 413(용량 초과)·504(시간 초과) 등은 JSON이 아닌 응답이 올 수 있어 안전하게 파싱
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data) {
+        if (res.status === 413) throw new Error('녹음이 너무 길어요. 15분 안쪽으로 나눠서 정리해주세요')
+        throw new Error(data?.error ?? '정리하지 못했어요. 잠시 후 다시 시도해주세요')
+      }
 
       setTranscript(data.transcript ?? '')
       setSummary(data.summary ?? '')
@@ -172,7 +199,7 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
 
         <div className="text-4xl font-bold tabular-nums">{formatTime(seconds)}</div>
         <p className="text-xs text-muted-foreground">
-          최대 25분까지 녹음할 수 있어요
+          최대 15분까지 녹음할 수 있어요
         </p>
 
         <Button

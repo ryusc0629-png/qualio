@@ -5,7 +5,9 @@ import { summarizeMeeting } from '@/lib/ai/meeting-summary'
 
 // 미팅 녹음 → 받아쓰기 → 회의록 요약
 // 오디오는 저장하지 않고 처리 후 버림(텍스트만 클라이언트로 반환)
-const MAX_SIZE = 25 * 1024 * 1024 // 25MB — OpenAI 한 번 처리 한도
+// ⚠️ Vercel 서버리스 함수의 요청 본문 한도는 4.5MB. 이보다 크면 이 핸들러가 실행되기도 전에
+//    플랫폼이 413으로 거부하므로, 클라이언트에서 32kbps·15분으로 용량을 미리 제한한다.
+const MAX_SIZE = 4.4 * 1024 * 1024 // 4.4MB — Vercel 요청 본문 한도(4.5MB) 바로 아래
 
 export const maxDuration = 300 // 긴 녹음 전사 대비
 
@@ -21,8 +23,8 @@ export async function POST(request: NextRequest) {
 
   if (file.size > MAX_SIZE) {
     return NextResponse.json(
-      { error: '녹음이 너무 길어요. 25분 이내로 나눠서 녹음해주세요' },
-      { status: 400 },
+      { error: '녹음이 너무 길어요. 15분 안쪽으로 나눠서 정리해주세요' },
+      { status: 413 },
     )
   }
 
