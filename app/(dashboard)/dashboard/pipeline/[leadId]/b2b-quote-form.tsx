@@ -410,7 +410,9 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
                   </div>
                   {!isLump && (
                     <div className="col-span-2">
-                      {idx === 0 && <Label className="text-xs">{countLabelForUnit(items[0]?.unit)}</Label>}
+                      {/* 정기 계약은 방문 '횟수'가 핵심이라 단위(주·월·년)와 무관하게 '횟수'로 통일.
+                          일회성은 단위에 맞춰 표시(식→수량 등) */}
+                      {idx === 0 && <Label className="text-xs">{isOneOff ? countLabelForUnit(items[0]?.unit) : '횟수'}</Label>}
                       <Input
                         type="text"
                         inputMode="numeric"

@@ -31,6 +31,8 @@ interface Quote {
   frequency: string | null
   worker_count: number | null
   spec_content: string | null
+  // 정기(recurring) / 일회성(one_off) — 횟수 열 라벨 결정에 사용
+  job_type?: string | null
   // 견적 최초 저장일 — 발행일/작성일로 사용(재열람해도 바뀌지 않게 저장값 기준)
   created_at?: string | null
 }
@@ -60,11 +62,13 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', public
   const items = (Array.isArray(quote.items) ? quote.items : []) as QuoteItem[]
   // 총액 계약(모든 항목 수량 1) — 수량·단가 열을 숨기고 금액만 보여 깔끔하게
   const isLumpQuote = items.length > 0 && items.every((it) => (it.qty ?? 1) === 1)
-  // 입력된 단위에 맞춰 '횟수' 열 라벨을 자동 조정 (월→개월, 주→주, 회→횟수 …)
+  // 정기 계약은 방문 '횟수'가 핵심이라 단위(주·월·년)와 무관하게 '횟수'로 통일.
+  // 일회성은 입력 단위에 맞춰 조정 (식→수량 등)
   const UNIT_COUNT_LABEL: Record<string, string> = {
     월: '개월', 개월: '개월', 주: '주', 일: '일', 년: '년', 회: '횟수', 차: '횟수', 번: '횟수',
   }
-  const countLabel = UNIT_COUNT_LABEL[(items[0]?.unit ?? '').trim()] ?? '횟수'
+  const isOneOff = quote.job_type === 'one_off'
+  const countLabel = isOneOff ? (UNIT_COUNT_LABEL[(items[0]?.unit ?? '').trim()] ?? '수량') : '횟수'
   const subtotal = items.reduce((s, it) => s + it.qty * it.unit_price, 0)
   const tax = quote.tax_included ? Math.floor(subtotal * 0.1) : 0
   const total = subtotal + tax
