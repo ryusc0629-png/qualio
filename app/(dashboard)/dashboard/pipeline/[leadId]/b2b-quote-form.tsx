@@ -416,24 +416,31 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
       return
     }
 
-    // 빈 탭을 클릭 즉시(동기) 예약해 팝업 차단을 피한다.
-    // ⚠️ 사파리 주의: (1) document.write 를 하면 이후 이동해도 제목이 '무제'로 굳고,
-    //   (2) 탭을 두 번 이동하면(로딩 중 재이동) 빈 화면으로 굳는다.
-    //   → write 없이 빈 탭만 열어두고, 저장이 끝난 뒤 '딱 한 번' 미리보기 주소로 이동한다.
-    const win = window.open('', '_blank')
+    // ⚠️ 사파리 핵심: window.open('', '_blank') 로 빈 탭을 연 뒤 나중에 이동시키면
+    //   그 이동이 무시돼 '무제' 빈 페이지로 굳는다(공개 링크는 주소를 직접 열어서 정상이었음).
+    //   → 목록 눈아이콘·공개 링크와 똑같이 '처음부터 실제 주소로' 새 탭을 연다.
+    //   기존 견적서는 그 견적서 주소를 즉시(동기) 열고, 저장이 끝나면 새로고침해 수정본 반영.
+    const preOpened = existingQuote?.id
+      ? window.open(`/quote-doc/${existingQuote.id}`, '_blank')
+      : null
 
     const res = await executeSaveAsync(buildPayload())
-    if (res?.data?.success) {
-      // 방금 저장된 견적서만 콕 집어 미리보기 (여러 장 중 이 장)
-      // 껍데기 없는 단독 미리보기 라우트(/quote-doc)로 열어 인쇄가 항상 정상 동작하게 함
-      const savedId = res.data.quoteId ?? existingQuote?.id
-      const href = savedId ? `/quote-doc/${savedId}` : printHref
-      // 사용자가 미리 탭을 닫았을 수 있으니 win.closed 확인 후 '한 번만' 이동
-      if (win && !win.closed) win.location.replace(href)
-      else window.open(href, '_blank') // 팝업이 막혔던 경우 대비(사용자 제스처 직후라 대개 허용)
-    } else if (win && !win.closed) {
-      // 저장 실패 — onError 토스트는 이미 표시됨. 빈 탭은 닫아줌
-      win.close()
+    if (!res?.data?.success) {
+      // 저장 실패 — onError 토스트는 이미 표시됨. 미리 연 탭은 닫아줌
+      if (preOpened && !preOpened.closed) preOpened.close()
+      return
+    }
+
+    // 방금 저장된 견적서만 콕 집어 미리보기 (여러 장 중 이 장)
+    const savedId = res.data.quoteId ?? existingQuote?.id
+    const href = savedId ? `/quote-doc/${savedId}` : printHref
+    if (preOpened && !preOpened.closed) {
+      // 이미 실제 페이지가 뜬 탭이라 이동/새로고침이 정상 동작 → 방금 수정본 반영
+      preOpened.location.href = href
+    } else {
+      // 새 견적서 등 미리 못 연 경우 — 저장 후 새 탭 시도(차단되면 목록 눈아이콘으로 안내)
+      const opened = window.open(href, '_blank')
+      if (!opened) toast('미리보기 창이 막혔어요. 목록에서 👁 미리보기를 눌러 열어주세요')
     }
   }
 
