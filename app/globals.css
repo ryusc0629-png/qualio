@@ -199,3 +199,20 @@ button:not(:disabled):active,
   button:not(:disabled):active,
   [role="button"]:not([aria-disabled="true"]):active { transform: none; }
 }
+
+/* ── 인쇄(PDF 저장) 레이아웃 보정 ──────────────────────────────
+   증상: 견적서/시방서 미리보기는 화면·인쇄 미리보기에 정상인데,
+   실제로 저장된 PDF는 백지 1장만 나옴.
+   원인: 루트 <body>가 'flex flex-col + min-height:100%' 라, 사파리가
+   실제 인쇄 렌더에서 flex 자식(문서)을 0 높이로 접어버려 빈 페이지 1장이 됨.
+   해결: 인쇄 시 html/body를 일반 블록·자동 높이로 되돌려 문서가 정상 페이지네이션되게 함. */
+@media print {
+  html, body {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+  /* 인쇄 시 버튼 눌림 축소 효과 제거(레이아웃 영향 방지) */
+  button, [role="button"] { transform: none !important; }
+}
