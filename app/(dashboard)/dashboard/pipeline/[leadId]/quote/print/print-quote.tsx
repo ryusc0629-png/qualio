@@ -302,12 +302,11 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', public
               {quote.spec_content}
             </div>
 
-            {/* 서명란 */}
+            {/* 서명란 — 디지털 발송이 많아 '대표자 (인)' 도장 자리는 두지 않고 작성일·업체명만 표기 */}
             <div className="mt-16 flex justify-end">
-              <div className="text-center space-y-2">
+              <div className="text-center space-y-1">
                 <p className="text-sm text-gray-600">{issueDate}</p>
                 <p className="font-bold text-base">{business?.name ?? '업체명'}</p>
-                <div className="border-t border-gray-400 mt-8 pt-2 w-40 text-xs text-gray-500">대표자 (인)</div>
               </div>
             </div>
           </div>
