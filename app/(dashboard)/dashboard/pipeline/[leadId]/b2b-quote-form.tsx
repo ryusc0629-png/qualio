@@ -425,8 +425,9 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
     const res = await executeSaveAsync(buildPayload())
     if (res?.data?.success) {
       // 방금 저장된 견적서만 콕 집어 미리보기 (여러 장 중 이 장)
+      // 껍데기 없는 단독 미리보기 라우트(/quote-doc)로 열어 인쇄가 항상 정상 동작하게 함
       const savedId = res.data.quoteId ?? existingQuote?.id
-      const href = savedId ? `${printHref}?quoteId=${savedId}` : printHref
+      const href = savedId ? `/quote-doc/${savedId}` : printHref
       // 사용자가 미리 탭을 닫았을 수 있으니 win.closed 확인 후 '한 번만' 이동
       if (win && !win.closed) win.location.replace(href)
       else window.open(href, '_blank') // 팝업이 막혔던 경우 대비(사용자 제스처 직후라 대개 허용)

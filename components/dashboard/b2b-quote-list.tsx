@@ -42,11 +42,6 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, hasMeetin
   const router = useRouter()
   const [, startTransition] = useTransition()
 
-  // 미리보기(인쇄) 경로 — 고객이면 고객 경로, 아니면 리드 경로
-  const printBase = customerId
-    ? `/dashboard/clients/${customerId}/quote/print`
-    : `/dashboard/pipeline/${leadId}/quote/print`
-
   const { execute: executeDelete, isPending: deleting } = useAction(deleteB2bQuoteAction, {
     onSuccess: () => {
       toast.success('견적서를 삭제했어요')
@@ -142,9 +137,10 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, hasMeetin
                       </button>
                     }
                   />
-                  {/* 미리보기 — 이 견적서만 새 탭에서 열기(링크 복사·PDF 저장은 그 화면에서) */}
+                  {/* 미리보기 — 이 견적서만 새 탭에서 열기(링크 복사·PDF 저장은 그 화면에서).
+                      껍데기 없는 단독 라우트(/quote-doc)라 인쇄가 항상 정상 동작 */}
                   <a
-                    href={`${printBase}?quoteId=${quote.id}`}
+                    href={`/quote-doc/${quote.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted"
