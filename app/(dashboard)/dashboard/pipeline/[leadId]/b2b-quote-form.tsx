@@ -11,8 +11,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { toast } from 'sonner'
 import { saveB2bQuoteAction, generateSpecAction, extractQuoteFromMeetingAction } from '@/lib/actions/b2b-quotes'
 import type { ExtractedQuoteFields } from '@/lib/ai/extract-quote-from-meeting'
-import { FileText, Plus, Trash2, Sparkles, MapPin, Loader2, Mic, AlertTriangle } from 'lucide-react'
+import { FileText, Plus, Trash2, Sparkles, MapPin, Loader2, Mic, AlertTriangle, GripVertical } from 'lucide-react'
 import { openAddressSearch } from '@/lib/address/postcode'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import { SortableContext, useSortable, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import {
   AREA_UNITS,
   AREA_UNIT_LABELS,
@@ -65,6 +76,15 @@ const defaultItem = (jobType: JobType = 'recurring'): QuoteItem => ({
   name: '', unit: jobType === 'one_off' ? '식' : '월', qty: 1, unit_price: 0,
 })
 
+// 드래그 정렬용 안정 id를 붙인 폼 전용 항목 타입 (_id는 저장 시 제외)
+interface FormItem extends QuoteItem {
+  _id: string
+}
+let _quoteItemUid = 0
+const genItemId = () => `qi-${++_quoteItemUid}`
+const withId = (it: QuoteItem): FormItem => ({ ...it, _id: genItemId() })
+const newFormItem = (jobType: JobType = 'recurring'): FormItem => withId(defaultItem(jobType))
+
 // 입력된 단위에 맞춰 수량 열 라벨을 자동 조정 (월→개월, 회→횟수 …)
 // 시간 반복 단위만 별칭을 쓰고, 면적·개수 등(평·㎡·개·대)은 '수량'으로 통일
 // (예전엔 기본값이 '횟수'라 단위가 '평'일 때도 '횟수 40'으로 어색했음)
@@ -85,6 +105,114 @@ const SPEC_STEPS = [
 // 스켈레톤 줄 너비 — 문단·소제목이 섞인 것처럼 보이게
 const SPEC_SKELETON = ['w-1/3', 'w-11/12', 'w-10/12', 'w-9/12', 'w-1/4', 'w-11/12', 'w-8/12', 'w-10/12', 'w-1/3', 'w-9/12']
 
+// 드래그로 순서를 바꿀 수 있는 견적 항목 한 줄 + 개별 합계 표시
+function SortableQuoteItem({
+  item, idx, isLump, isOneOff, qtyLabel, priceLabel, lineTotal, canRemove, onChange, onRemove,
+}: {
+  item: FormItem
+  idx: number
+  isLump: boolean
+  isOneOff: boolean
+  qtyLabel: string
+  priceLabel: string
+  lineTotal: number
+  canRemove: boolean
+  onChange: (key: keyof QuoteItem, val: string | number) => void
+  onRemove: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item._id })
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    position: isDragging ? 'relative' : undefined,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="rounded-lg">
+      <div className="flex items-end gap-1">
+        {/* 드래그 손잡이 — 이 부분을 잡고 위아래로 옮기면 순서가 바뀜 */}
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label="항목 순서 이동"
+          className="shrink-0 mb-1 p-1.5 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+
+        <div className="flex-1 grid grid-cols-12 gap-2 items-end">
+          <div className={isLump ? 'col-span-5' : 'col-span-4'}>
+            {idx === 0 && <Label className="text-xs">서비스 내용</Label>}
+            <Input
+              value={item.name}
+              onChange={(e) => onChange('name', e.target.value)}
+              placeholder={isLump ? '예: 월 정기 미화관리' : '예: 사무실 정기청소'}
+              className="mt-1 h-9"
+            />
+          </div>
+          <div className="col-span-2">
+            {idx === 0 && <Label className="text-xs">단위</Label>}
+            <Input
+              value={item.unit}
+              onChange={(e) => onChange('unit', e.target.value)}
+              placeholder="월"
+              className="mt-1 h-9"
+            />
+          </div>
+          {!isLump && (
+            <div className="col-span-2">
+              {/* 정기 계약은 방문 '횟수'가 핵심이라 단위(주·월·년)와 무관하게 '횟수'로 통일.
+                  일회성은 단위에 맞춰 표시(식→수량 등) */}
+              {idx === 0 && <Label className="text-xs">{qtyLabel}</Label>}
+              <Input
+                type="text"
+                inputMode="numeric"
+                value={item.qty || ''}
+                onChange={(e) => onChange('qty', Number(e.target.value.replace(/[^0-9]/g, '')))}
+                placeholder="1"
+                className="mt-1 h-9"
+              />
+            </div>
+          )}
+          <div className={isLump ? 'col-span-4' : 'col-span-3'}>
+            {/* 정기계약은 회당 단가가 아니라 '한 주기 금액'이라 '금액'으로 표기 (횟수는 곱하지 않음) */}
+            {idx === 0 && <Label className="text-xs">{priceLabel}</Label>}
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={item.unit_price || ''}
+              onChange={(e) => onChange('unit_price', Number(e.target.value.replace(/[^0-9]/g, '')))}
+              placeholder={isLump ? '2500000' : '700000'}
+              className="mt-1 h-9"
+            />
+          </div>
+          <div className="col-span-1 flex justify-end">
+            {idx === 0 && <div className="text-xs invisible">X</div>}
+            <button
+              type="button"
+              onClick={onRemove}
+              disabled={!canRemove}
+              className="mt-1 p-2 text-muted-foreground hover:text-destructive disabled:opacity-30"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 개별 항목 합계 — 정기는 금액(횟수 안 곱함), 일회성은 수량×단가 */}
+      {item.name.trim() && lineTotal > 0 && (
+        <p className="mt-1 pr-9 text-right text-xs text-muted-foreground">
+          {!isLump && !isOneOff ? '월 ' : ''}합계 <span className="font-semibold text-foreground">{lineTotal.toLocaleString()}원</span>
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, hasMeeting, trigger }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -100,11 +228,27 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
 
   const [quoteNumber, setQuoteNumber] = useState(existingQuote?.quote_number ?? defaultQuoteNumber)
   const [validUntil, setValidUntil] = useState(existingQuote?.valid_until ?? '')
-  const [items, setItems] = useState<QuoteItem[]>(
+  const [items, setItems] = useState<FormItem[]>(
     existingQuote?.items && (existingQuote.items as QuoteItem[]).length > 0
-      ? (existingQuote.items as QuoteItem[])
-      : [defaultItem()]
+      ? (existingQuote.items as QuoteItem[]).map(withId)
+      : [newFormItem()]
   )
+
+  // 드래그 정렬 센서 — 손잡이를 8px 이상 움직이면 시작(클릭과 구분), 터치는 200ms 길게 눌러 시작
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+  )
+  const handleItemsDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setItems((prev) => {
+      const oldIndex = prev.findIndex((i) => i._id === active.id)
+      const newIndex = prev.findIndex((i) => i._id === over.id)
+      if (oldIndex < 0 || newIndex < 0) return prev
+      return arrayMove(prev, oldIndex, newIndex)
+    })
+  }
   const [taxIncluded, setTaxIncluded] = useState(existingQuote?.tax_included ?? false)
   const [conditions, setConditions] = useState(existingQuote?.conditions ?? '')
   const [siteName, setSiteName] = useState(existingQuote?.site_name ?? '')
@@ -177,7 +321,7 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
 
     // 서비스 항목: 아직 이름이 하나도 없을 때(기본 빈 줄만)만 통째로 교체
     if (!items.some((it) => it.name.trim()) && f.serviceItems.length > 0) {
-      setItems(f.serviceItems.map((s) => ({ name: s.name, unit: s.unit, qty: 1, unit_price: 0 })))
+      setItems(f.serviceItems.map((s) => withId({ name: s.name, unit: s.unit, qty: 1, unit_price: 0 })))
       filled += f.serviceItems.length
     }
 
@@ -226,7 +370,8 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
     quoteId:      existingQuote?.id,
     quoteNumber:  quoteNumber || undefined,
     validUntil:   validUntil || undefined,
-    items:        items.filter((it) => it.name),
+    // _id는 폼 전용(드래그 정렬용)이라 저장 시 제외하고 순수 QuoteItem만 전송
+    items:        items.filter((it) => it.name).map((it) => ({ name: it.name, unit: it.unit, qty: it.qty, unit_price: it.unit_price })),
     totalAmount:  total,
     taxIncluded,
     conditions:   conditions || undefined,
@@ -394,74 +539,35 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
               ))}
             </div>
 
-            <div className="space-y-2">
-              {items.map((item, idx) => (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                  <div className={isLump ? 'col-span-5' : 'col-span-4'}>
-                    {idx === 0 && <Label className="text-xs">서비스 내용</Label>}
-                    <Input
-                      value={item.name}
-                      onChange={(e) => updateItem(idx, 'name', e.target.value)}
-                      placeholder={isLump ? '예: 월 정기 미화관리' : '예: 사무실 정기청소'}
-                      className="mt-1 h-9"
+            {/* 손잡이(≡)를 잡고 위아래로 끌어 항목 순서를 바꿀 수 있음 */}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleItemsDragEnd}>
+              <SortableContext items={items.map((it) => it._id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {items.map((item, idx) => (
+                    <SortableQuoteItem
+                      key={item._id}
+                      item={item}
+                      idx={idx}
+                      isLump={isLump}
+                      isOneOff={isOneOff}
+                      qtyLabel={isOneOff ? countLabelForUnit(items[0]?.unit) : '횟수'}
+                      priceLabel={isOneOff && !isLump ? '단가 (원)' : '금액 (원)'}
+                      lineTotal={lineAmount(item)}
+                      canRemove={items.length > 1}
+                      onChange={(key, val) => updateItem(idx, key, val)}
+                      onRemove={() => setItems((prev) => prev.filter((x) => x._id !== item._id))}
                     />
-                  </div>
-                  <div className="col-span-2">
-                    {idx === 0 && <Label className="text-xs">단위</Label>}
-                    <Input
-                      value={item.unit}
-                      onChange={(e) => updateItem(idx, 'unit', e.target.value)}
-                      placeholder="월"
-                      className="mt-1 h-9"
-                    />
-                  </div>
-                  {!isLump && (
-                    <div className="col-span-2">
-                      {/* 정기 계약은 방문 '횟수'가 핵심이라 단위(주·월·년)와 무관하게 '횟수'로 통일.
-                          일회성은 단위에 맞춰 표시(식→수량 등) */}
-                      {idx === 0 && <Label className="text-xs">{isOneOff ? countLabelForUnit(items[0]?.unit) : '횟수'}</Label>}
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        value={item.qty || ''}
-                        onChange={(e) => updateItem(idx, 'qty', Number(e.target.value.replace(/[^0-9]/g, '')))}
-                        placeholder="1"
-                        className="mt-1 h-9"
-                      />
-                    </div>
-                  )}
-                  <div className={isLump ? 'col-span-4' : 'col-span-3'}>
-                    {/* 정기계약은 회당 단가가 아니라 '한 주기 금액'이라 '금액'으로 표기 (횟수는 곱하지 않음) */}
-                    {idx === 0 && <Label className="text-xs">{isOneOff && !isLump ? '단가 (원)' : '금액 (원)'}</Label>}
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      value={item.unit_price || ''}
-                      onChange={(e) => updateItem(idx, 'unit_price', Number(e.target.value.replace(/[^0-9]/g, '')))}
-                      placeholder={isLump ? '2500000' : '700000'}
-                      className="mt-1 h-9"
-                    />
-                  </div>
-                  <div className="col-span-1 flex justify-end">
-                    {idx === 0 && <div className="text-xs invisible">X</div>}
-                    <button
-                      onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
-                      disabled={items.length === 1}
-                      className="mt-1 p-2 text-muted-foreground hover:text-destructive disabled:opacity-30"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </SortableContext>
+            </DndContext>
 
             <Button
               type="button"
               variant="outline"
               size="sm"
               className="h-8"
-              onClick={() => setItems((prev) => [...prev, defaultItem(jobType)])}
+              onClick={() => setItems((prev) => [...prev, newFormItem(jobType)])}
             >
               <Plus className="h-3.5 w-3.5 mr-1" />
               항목 추가
