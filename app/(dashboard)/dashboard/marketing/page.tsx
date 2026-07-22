@@ -143,8 +143,7 @@ export default async function MarketingPage({
       <div className="border-t pt-6 space-y-5">
         {business?.slug && (
           <ChannelLinksCard
-            baseUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'}/q/${business.slug}`}
-            landingBaseUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'}/biz/${business.slug}`}
+            baseUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'}/biz/${business.slug}`}
           />
         )}
 
