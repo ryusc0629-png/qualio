@@ -5,10 +5,13 @@ import { PrintQuote } from '@/app/(dashboard)/dashboard/pipeline/[leadId]/quote/
 // 계약 중인 거래처(고객)용 견적서/시방서 미리보기 — 리드용 print 페이지와 동일 컴포넌트 재사용
 export default async function CustomerQuotePrintPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ customerId: string }>
+  searchParams: Promise<{ quoteId?: string }>
 }) {
   const { customerId } = await params
+  const { quoteId } = await searchParams
 
   const authClient = await createClient()
   const { data: { user } } = await authClient.auth.getUser()
@@ -23,6 +26,13 @@ export default async function CustomerQuotePrintPage({
 
   if (!profile?.business_id) redirect('/onboarding')
 
+  // quoteId가 있으면 그 견적서를, 없으면(옛 링크 호환) 가장 최근 견적서를 보여줌
+  const quoteQuery = db
+    .from('b2b_quotes')
+    .select('*')
+    .eq('customer_id' as never, customerId)
+    .eq('business_id', profile.business_id)
+
   const [customerResult, quoteResult, businessResult] = await Promise.all([
     db
       .from('customers')
@@ -30,12 +40,9 @@ export default async function CustomerQuotePrintPage({
       .eq('id', customerId)
       .eq('business_id', profile.business_id)
       .maybeSingle(),
-    db
-      .from('b2b_quotes')
-      .select('*')
-      .eq('customer_id' as never, customerId)
-      .eq('business_id', profile.business_id)
-      .maybeSingle(),
+    quoteId
+      ? quoteQuery.eq('id', quoteId).maybeSingle()
+      : quoteQuery.order('created_at', { ascending: false }).limit(1).maybeSingle(),
     db
       .from('businesses')
       .select('name, phone, address')

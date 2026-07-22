@@ -55,6 +55,8 @@ interface Props {
   existingQuote: ExistingQuote | null
   // 이 리드에 저장된 미팅 기록이 있으면 '미팅 내용으로 채우기' 버튼 노출
   hasMeeting?: boolean
+  // 다이얼로그 여는 버튼을 직접 지정 (견적서 목록의 '수정'·'새 견적서 만들기' 등). 없으면 기본 버튼
+  trigger?: React.ReactNode
 }
 
 type JobType = 'recurring' | 'one_off'
@@ -83,7 +85,7 @@ const SPEC_STEPS = [
 // 스켈레톤 줄 너비 — 문단·소제목이 섞인 것처럼 보이게
 const SPEC_SKELETON = ['w-1/3', 'w-11/12', 'w-10/12', 'w-9/12', 'w-1/4', 'w-11/12', 'w-8/12', 'w-10/12', 'w-1/3', 'w-9/12']
 
-export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, hasMeeting }: Props) {
+export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, hasMeeting, trigger }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [, startTransition] = useTransition()
@@ -217,6 +219,8 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
   const buildPayload = () => ({
     leadId,
     customerId,
+    // 기존 견적서 수정이면 그 id를 함께 보내 그 장만 갱신 (없으면 새 견적서로 추가)
+    quoteId:      existingQuote?.id,
     quoteNumber:  quoteNumber || undefined,
     validUntil:   validUntil || undefined,
     items:        items.filter((it) => it.name),
@@ -272,8 +276,11 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
     }
     const res = await executeSaveAsync(buildPayload())
     if (res?.data?.success) {
-      if (win) win.location.href = printHref
-      else window.open(printHref, '_blank') // 팝업이 막혔던 경우 대비(사용자 제스처 직후라 대개 허용)
+      // 방금 저장된 견적서만 콕 집어 미리보기 (여러 장 중 이 장)
+      const savedId = res.data.quoteId ?? existingQuote?.id
+      const href = savedId ? `${printHref}?quoteId=${savedId}` : printHref
+      if (win) win.location.href = href
+      else window.open(href, '_blank') // 팝업이 막혔던 경우 대비(사용자 제스처 직후라 대개 허용)
     } else if (win) {
       // 저장 실패 — onError 토스트는 이미 표시됨. 빈 탭은 닫아줌
       win.close()
@@ -283,10 +290,12 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8">
-          <FileText className="h-3.5 w-3.5 mr-1.5" />
-          {existingQuote ? '견적서 수정' : '견적서 만들기'}
-        </Button>
+        {trigger ?? (
+          <Button variant="outline" size="sm" className="h-8">
+            <FileText className="h-3.5 w-3.5 mr-1.5" />
+            {existingQuote ? '견적서 수정' : '견적서 만들기'}
+          </Button>
+        )}
       </DialogTrigger>
 
       {/* sm:max-w-3xl — DialogContent 기본값 sm:max-w-sm(384px)을 반드시 sm: 접두로 덮어써야 넓어짐
@@ -294,7 +303,7 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
           overflow-x-hidden으로 PC 가로 스크롤을 확실히 차단 */}
       <DialogContent className="w-[calc(100%-2rem)] sm:max-w-3xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
-          <DialogTitle>견적서 + 시방서</DialogTitle>
+          <DialogTitle>{existingQuote ? '견적서 수정' : '새 견적서 만들기'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">

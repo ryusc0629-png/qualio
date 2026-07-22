@@ -4,10 +4,13 @@ import { PrintQuote } from './print-quote'
 
 export default async function QuotePrintPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ leadId: string }>
+  searchParams: Promise<{ quoteId?: string }>
 }) {
   const { leadId } = await params
+  const { quoteId } = await searchParams
 
   const authClient = await createClient()
   const { data: { user } } = await authClient.auth.getUser()
@@ -22,6 +25,13 @@ export default async function QuotePrintPage({
 
   if (!profile?.business_id) redirect('/onboarding')
 
+  // quoteId가 있으면 그 견적서를, 없으면(옛 링크 호환) 가장 최근 견적서를 보여줌
+  const quoteQuery = db
+    .from('b2b_quotes')
+    .select('*')
+    .eq('lead_id', leadId)
+    .eq('business_id', profile.business_id)
+
   const [leadResult, quoteResult, businessResult] = await Promise.all([
     db
       .from('leads')
@@ -29,12 +39,9 @@ export default async function QuotePrintPage({
       .eq('id', leadId)
       .eq('business_id', profile.business_id)
       .maybeSingle(),
-    db
-      .from('b2b_quotes')
-      .select('*')
-      .eq('lead_id', leadId)
-      .eq('business_id', profile.business_id)
-      .maybeSingle(),
+    quoteId
+      ? quoteQuery.eq('id', quoteId).maybeSingle()
+      : quoteQuery.order('created_at', { ascending: false }).limit(1).maybeSingle(),
     db
       .from('businesses')
       .select('name, phone, address')

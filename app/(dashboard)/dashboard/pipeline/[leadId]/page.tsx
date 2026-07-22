@@ -40,10 +40,11 @@ export default async function LeadDetailPage({
     db
       .from('b2b_quotes')
       // job_type은 database.ts 타입 미반영 → select 문자열 as never, 결과는 아래서 명시 타입 단언
-      .select('id, quote_number, valid_until, items, total_amount, tax_included, conditions, site_name, site_address, site_area, frequency, worker_count, spec_content, job_type' as never)
+      // 한 거래처에 여러 장 가능 → 전부 가져와 만든 순서(오래된→최신)로 목록에 표시
+      .select('id, quote_number, valid_until, items, total_amount, tax_included, conditions, site_name, site_address, site_area, frequency, worker_count, spec_content, job_type, created_at' as never)
       .eq('lead_id', leadId)
       .eq('business_id', profile.business_id)
-      .maybeSingle(),
+      .order('created_at' as never, { ascending: true }),
     // 이미 고객으로 전환됐는지 확인 (customers.lead_id 연결)
     db
       .from('customers')
@@ -73,7 +74,7 @@ export default async function LeadDetailPage({
     ? null
     : getLiveStatusForPhone(leadData.phone, publicQuotesResult.data ?? [], bookingsResult.data ?? [])
 
-  const rawQuote = quoteResult.data as {
+  const rawQuotes = (quoteResult.data ?? []) as unknown as {
     id: string
     quote_number: string | null
     valid_until: string | null
@@ -88,22 +89,20 @@ export default async function LeadDetailPage({
     worker_count: number | null
     spec_content: string | null
     job_type: string | null
-  } | null
-  const existingQuote = rawQuote
-    ? {
-        ...rawQuote,
-        items: (Array.isArray(rawQuote.items) ? rawQuote.items : []) as {
-          name: string; unit: string; qty: number; unit_price: number
-        }[],
-      }
-    : null
+  }[]
+  const quotes = rawQuotes.map((q) => ({
+    ...q,
+    items: (Array.isArray(q.items) ? q.items : []) as {
+      name: string; unit: string; qty: number; unit_price: number
+    }[],
+  }))
 
   return (
     <div className="max-w-2xl mx-auto">
       <LeadDetail
         lead={leadData}
         activities={activitiesResult.data ?? []}
-        existingQuote={existingQuote}
+        quotes={quotes}
         alreadyConverted={alreadyConverted}
         liveStatus={liveStatus}
       />

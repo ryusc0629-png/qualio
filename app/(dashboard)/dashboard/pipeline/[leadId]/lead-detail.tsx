@@ -17,8 +17,8 @@ import {
 import { toast } from 'sonner'
 import { createLeadActivityAction, updateLeadStatusAction } from '@/lib/actions/crm'
 import { STAGE_CONFIG } from '../pipeline-list'
-import { B2bQuoteForm } from './b2b-quote-form'
 import { ConvertToCustomerButton } from './convert-to-customer-button'
+import { B2bQuoteList } from '@/components/dashboard/b2b-quote-list'
 import type { LiveStatus } from '@/lib/utils/lead-live-status'
 import { Calendar, ArrowLeft, Plus, PhoneCall, MapPin as VisitIcon, FileText, StickyNote, Mic } from 'lucide-react'
 import Link from 'next/link'
@@ -87,7 +87,9 @@ const STAGE_ORDER = ['new', 'contacted', 'follow_up', 'quoted', 'negotiating', '
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────
 
-export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, liveStatus }: { lead: Lead; activities: Activity[]; existingQuote: ExistingQuote | null; alreadyConverted: boolean; liveStatus: LiveStatus | null }) {
+export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveStatus }: { lead: Lead; activities: Activity[]; quotes: ExistingQuote[]; alreadyConverted: boolean; liveStatus: LiveStatus | null }) {
+  // 고객 전환 시 프리필용 대표 견적서 — 가장 최근에 만든 것 (여러 장 중)
+  const primaryQuote = quotes.length > 0 ? quotes[quotes.length - 1] : null
   const router = useRouter()
   const [, startTransition] = useTransition()
   const [showAddForm, setShowAddForm] = useState(false)
@@ -246,14 +248,6 @@ export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, 
                 </SelectContent>
               </Select>
             )}
-            {isCompany && (
-              <B2bQuoteForm
-                leadId={lead.id}
-                clientName={lead.company_name}
-                existingQuote={existingQuote}
-                hasMeeting={activities.some((a) => a.type === 'meeting')}
-              />
-            )}
           </div>
         </div>
 
@@ -322,18 +316,28 @@ export function LeadDetail({ lead, activities, existingQuote, alreadyConverted, 
               address: lead.address,
             }}
             quote={
-              existingQuote
+              primaryQuote
                 ? {
-                    total_amount: existingQuote.total_amount,
-                    frequency: existingQuote.frequency,
-                    serviceName: existingQuote.items[0]?.name ?? null,
-                    jobType: existingQuote.job_type,
+                    total_amount: primaryQuote.total_amount,
+                    frequency: primaryQuote.frequency,
+                    serviceName: primaryQuote.items[0]?.name ?? null,
+                    jobType: primaryQuote.job_type,
                   }
                 : null
             }
             alreadyConverted={alreadyConverted}
           />
         </div>
+      )}
+
+      {/* 견적서·시방서 — 한 거래처에 여러 장 만들고 각각 수정·미리보기·삭제 */}
+      {isCompany && (
+        <B2bQuoteList
+          quotes={quotes}
+          leadId={lead.id}
+          clientName={lead.company_name}
+          hasMeeting={activities.some((a) => a.type === 'meeting')}
+        />
       )}
 
       {/* 상담 기록 */}

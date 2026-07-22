@@ -18,6 +18,8 @@ const saveB2bQuoteSchema = z.object({
   // 리드(영업 중) 또는 고객(계약 중) 중 하나에 연결 — 둘 중 하나는 필수
   leadId:       z.string().uuid().optional(),
   customerId:   z.string().uuid().optional(),
+  // 수정할 기존 견적서 id — 있으면 그 견적서만 수정, 없으면 새 견적서로 추가(한 거래처에 여러 장 가능)
+  quoteId:      z.string().uuid().optional(),
   quoteNumber:  z.string().optional(),
   validUntil:   z.string().optional(),
   items:        z.array(quoteItemSchema).min(1, '항목을 하나 이상 입력해주세요'),
@@ -161,14 +163,17 @@ export const saveB2bQuoteAction = action
       throw new Error('[APP] 견적 대상(거래처)이 지정되지 않았습니다')
     }
 
-    // 대상(리드 또는 고객)별로 기존 견적서 1건을 찾아 있으면 수정, 없으면 새로 생성
-    const existingLookup = db
-      .from('b2b_quotes')
-      .select('id')
-      .eq('business_id', businessId)
-    const { data: existing } = isCustomer
-      ? await existingLookup.eq('customer_id' as never, parsedInput.customerId!).maybeSingle()
-      : await existingLookup.eq('lead_id', parsedInput.leadId!).maybeSingle()
+    // quoteId가 오면 그 견적서만 수정, 없으면 새 견적서로 추가 (한 거래처에 여러 장 가능)
+    let existing: { id: string } | null = null
+    if (parsedInput.quoteId) {
+      const { data } = await db
+        .from('b2b_quotes')
+        .select('id')
+        .eq('id', parsedInput.quoteId)
+        .eq('business_id', businessId)
+        .maybeSingle()
+      existing = data
+    }
 
     const payload = {
       lead_id:      parsedInput.leadId ?? null,
@@ -192,6 +197,7 @@ export const saveB2bQuoteAction = action
     }
 
     // job_type 컬럼이 database.ts 타입에 아직 반영 안 됨 → as never 단언
+    let quoteId = existing?.id
     if (existing) {
       const { error } = await db
         .from('b2b_quotes')
@@ -199,11 +205,42 @@ export const saveB2bQuoteAction = action
         .eq('id', existing.id)
       if (error) throw new Error('[APP] 견적서 저장에 실패했습니다')
     } else {
-      const { error } = await db.from('b2b_quotes').insert(payload as never)
-      if (error) throw new Error('[APP] 견적서 저장에 실패했습니다')
+      // 새 견적서 — 삽입 후 생성된 id를 받아 미리보기에 사용 (public_token은 DB 기본값이 자동 생성)
+      const { data: inserted, error } = await db
+        .from('b2b_quotes')
+        .insert(payload as never)
+        .select('id')
+        .single() as unknown as { data: { id: string } | null; error: unknown }
+      if (error || !inserted) throw new Error('[APP] 견적서 저장에 실패했습니다')
+      quoteId = inserted.id
     }
 
     if (isCustomer) revalidatePath(`/dashboard/clients/${parsedInput.customerId}`)
     else revalidatePath(`/dashboard/pipeline/${parsedInput.leadId}`)
+    return { success: true, quoteId }
+  })
+
+// 견적서 삭제 — 한 거래처에 여러 장이 있을 때 개별 삭제
+const deleteB2bQuoteSchema = z.object({
+  quoteId:    z.string().uuid(),
+  leadId:     z.string().uuid().optional(),
+  customerId: z.string().uuid().optional(),
+})
+
+export const deleteB2bQuoteAction = action
+  .schema(deleteB2bQuoteSchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuth()
+
+    const { error } = await db
+      .from('b2b_quotes')
+      .delete()
+      .eq('id', parsedInput.quoteId)
+      .eq('business_id', businessId)
+
+    if (error) throw new Error('[APP] 견적서 삭제에 실패했습니다')
+
+    if (parsedInput.customerId) revalidatePath(`/dashboard/clients/${parsedInput.customerId}`)
+    if (parsedInput.leadId) revalidatePath(`/dashboard/pipeline/${parsedInput.leadId}`)
     return { success: true }
   })
