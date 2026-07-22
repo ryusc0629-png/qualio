@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button'
 import { PAID_PLANS, PLANS, formatPrice } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { schedulePlanChangeAction } from '@/lib/actions/subscription'
-import { registerKcpPaymentAction } from '@/lib/actions/payment'
+import { createBillingOrderAction } from '@/lib/actions/portone-billing'
+import type { PaymentProvider } from '@/lib/payments/provider'
+import { buildPaymentId } from '@/lib/payments/provider'
 import { toast } from 'sonner'
 
 interface UpgradeFormProps {
@@ -17,13 +19,15 @@ interface UpgradeFormProps {
   nextPlan?: string | null
   currentPeriodEnd?: string | null
   needsPayment?: boolean
+  // 결제 PG (기본 포트원 / ?pg=toss 이면 토스). 페이지에서 결정해 내려준다.
+  provider: PaymentProvider
 }
 
 // 플랜 순서 (업그레이드/다운그레이드 판별용)
 const PLAN_ORDER: Record<string, number> = { beta: 0, starter: 1, pro: 2, scale: 3 }
 
 // 결제 위젯 클라이언트 컴포넌트
-export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, currentPeriodEnd, needsPayment = false }: UpgradeFormProps) {
+export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, currentPeriodEnd, needsPayment = false, provider }: UpgradeFormProps) {
   const [selectedPlanId, setSelectedPlanId] = useState<PlanId | null>(
     nextPlan ? (nextPlan as PlanId) : null
   )
@@ -67,30 +71,101 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
     },
   })
 
-  // KCP 결제 플로우 — 서버에서 거래등록 후 결제창(pay_url)으로 이동
-  const { execute: registerPayment } = useAction(registerKcpPaymentAction, {
-    onSuccess: ({ data }) => {
-      if (data?.payUrl) {
-        // KCP 결제창으로 이동 (이후 리턴 핸들러가 승인·활성화 처리)
-        window.location.href = data.payUrl
-      } else {
-        toast.error('결제창을 열지 못했어요. 다시 시도해주세요.')
-        setIsPaying(false)
-      }
-    },
-    onError: ({ error }) => {
-      toast.error(error.serverError ?? '결제 진행 중 오류가 발생했습니다')
+  // 포트원 정기결제(빌키) — 카드 등록(빌키 발급) 후 서버가 첫 달을 청구하고 빌키를 저장한다.
+  // 데스크톱은 팝업(프로미스), 모바일은 리다이렉트(redirectUrl 복귀).
+  const startPortOneBilling = async (planId: PlanId) => {
+    // 서버에서 짧은 주문번호(KCP 제약) 채번 + 고객정보 확보
+    const orderResult = await createBillingOrderAction({ planId })
+    const order = orderResult?.data
+    if (!order) {
+      toast.error(orderResult?.serverError ?? '결제 준비에 실패했어요. 다시 시도해주세요.')
       setIsPaying(false)
-    },
-  })
+      return
+    }
 
-  const handlePayment = () => {
+    const PortOne = (await import('@portone/browser-sdk/v2')).default
+    const response = await PortOne.requestIssueBillingKey({
+      storeId: process.env.NEXT_PUBLIC_PORTONE_STORE_ID!,
+      channelKey: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY!,
+      billingKeyMethod: 'CARD',
+      issueId: order.orderId, // KCP 필수 — 주문 고유번호
+      issueName: order.issueName, // KCP 모바일 발급 필수
+      displayAmount: order.displayAmount,
+      currency: 'KRW',
+      customer: order.customer,
+      // 모바일 리다이렉트 복귀 지점 (orderId를 실어 보내 서버가 조회·청구)
+      redirectUrl: `${window.location.origin}/api/payment/portone-billing-return?orderId=${encodeURIComponent(order.orderId)}`,
+    })
+
+    // 모바일이면 위에서 이미 리다이렉트됨. 아래는 데스크톱 팝업 흐름.
+    if (!response || response.code != null) {
+      toast.error(response?.message ?? '카드 등록이 취소되었어요')
+      setIsPaying(false)
+      return
+    }
+
+    // 발급된 빌키로 서버에서 첫 달 청구 + 구독 활성화
+    const res = await fetch('/api/payment/portone-billing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId: order.orderId, billingKey: response.billingKey }),
+    })
+    const data = (await res.json().catch(() => ({}))) as { error?: string }
+    if (!res.ok) {
+      toast.error(data.error ?? '정기결제 등록에 실패했어요. 다시 시도해주세요.')
+      setIsPaying(false)
+      return
+    }
+
+    window.location.replace(
+      `/upgrade/success?status=paid&ordr=${encodeURIComponent(order.orderId)}&amount=${order.displayAmount}&plan=${planId}`
+    )
+  }
+
+  // 토스 결제창 — 리다이렉트 방식(성공 시 successUrl로 이동, 서버가 승인 처리)
+  const startTossPayment = async (planId: PlanId) => {
+    const clientKey = process.env.NEXT_PUBLIC_TOSSPAYMENTS_CLIENT_KEY
+    if (!clientKey) {
+      toast.error('결제 설정을 불러오지 못했어요. 잠시 후 다시 시도해주세요.')
+      setIsPaying(false)
+      return
+    }
+    const { loadTossPayments } = await import('@tosspayments/tosspayments-sdk')
+    const plan = PLANS[planId]
+    const orderId = buildPaymentId(businessId, planId)
+
+    const tossPayments = await loadTossPayments(clientKey)
+    const payment = tossPayments.payment({ customerKey: businessId })
+    await payment.requestPayment({
+      method: 'CARD',
+      amount: { currency: 'KRW', value: plan.price },
+      orderId,
+      orderName: `퀄리오 ${plan.label} 플랜 1개월`,
+      successUrl: `${window.location.origin}/api/payment/toss-return`,
+      failUrl: `${window.location.origin}/upgrade/success?status=fail`,
+      customerName: businessName,
+    })
+    // 리다이렉트 방식이라 성공/실패 모두 페이지 이동으로 처리됨 (여기로 돌아오지 않음)
+  }
+
+  const handlePayment = async () => {
     if (!selectedPlanId) {
       toast.error('플랜을 선택해주세요')
       return
     }
     setIsPaying(true)
-    registerPayment({ planId: selectedPlanId })
+    try {
+      if (provider === 'toss') {
+        await startTossPayment(selectedPlanId)
+      } else {
+        await startPortOneBilling(selectedPlanId)
+      }
+    } catch (e) {
+      // 사용자가 결제창을 닫으면 SDK가 에러를 던짐 — 조용히 되돌린다
+      console.error('[Payment] 결제 진행 오류:', e)
+      toast.error('결제가 취소되었거나 문제가 생겼어요. 다시 시도해주세요.')
+      setIsPaying(false)
+    }
   }
 
   // 유료 사용자: 플랜 변경 예약
@@ -247,7 +322,7 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
             </>
           ) : selectedPlanId ? (
             showPaymentFlow
-              ? `${PAID_PLANS.find((p) => p.id === selectedPlanId)?.label} 플랜 결제하기`
+              ? `${PAID_PLANS.find((p) => p.id === selectedPlanId)?.label} 플랜 구독 시작하기`
               : `${PAID_PLANS.find((p) => p.id === selectedPlanId)?.label} 플랜으로 변경 예약하기`
           ) : (
             '변경할 플랜을 선택해주세요'
@@ -256,8 +331,8 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
         <p className="text-xs text-muted-foreground text-center">
           {showPaymentFlow ? (
             <>
-              결제 1건당 <strong>1개월(30일)</strong> 이용권이 제공됩니다. 자동 갱신 없음.<br />
-              KCP(NHN KCP)를 통해 안전하게 결제됩니다.
+              등록한 카드로 <strong>매월 자동 결제</strong>되는 정기 구독이에요. 언제든지 해지할 수 있어요.<br />
+              {provider === 'toss' ? '토스페이먼츠' : '포트원(PortOne)'}을 통해 카드로 안전하게 결제되며,
               결제 후 7일 이내 미사용 시 전액 환불 가능합니다.
             </>
           ) : (

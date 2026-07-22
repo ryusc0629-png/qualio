@@ -38,10 +38,10 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* 서비스 제공 기간 안내 — KCP 결제 심사 요건 */}
+        {/* 결제 방식 안내 — 정기결제(자동결제) 심사 요건 */}
         <div className="max-w-2xl mx-auto mb-10 rounded-lg border border-border bg-muted/40 px-6 py-4 text-sm text-muted-foreground text-center">
           <p>
-            <span className="font-semibold text-foreground">서비스 제공 기간:</span> 결제 1건당 <span className="font-semibold text-foreground">1개월</span> (30일) 이용권 제공 · 자동 갱신 없음 · 언제든지 해지 가능
+            <span className="font-semibold text-foreground">결제 방식:</span> 등록한 카드로 <span className="font-semibold text-foreground">매월 자동 결제</span>되는 정기 구독 서비스 · 언제든지 해지 가능 · 해지 시 다음 결제일부터 청구되지 않습니다
           </p>
         </div>
 
@@ -73,8 +73,8 @@ export default function PricingPage() {
                 <div className="text-3xl font-bold mb-2">
                   {formatPrice(plan.price)}
                 </div>
-                {/* 1회 결제 = 1개월 서비스 명시 */}
-                <p className="text-xs text-muted-foreground mb-1">1회 결제 시 1개월(30일) 이용</p>
+                {/* 매월 자동 결제(정기결제) 명시 */}
+                <p className="text-xs text-muted-foreground mb-1">매월 자동 결제 · 언제든 해지</p>
                 <p className="text-sm text-muted-foreground">{plan.target}</p>
                 <p className="text-sm font-medium mt-2 text-foreground">{plan.description}</p>
               </div>
@@ -108,24 +108,24 @@ export default function PricingPage() {
           <div className="space-y-6">
             {[
               {
-                q: '서비스 제공 기간은 얼마인가요?',
-                a: '결제 1건당 1개월(30일) 이용권이 제공됩니다. 이용 기간은 결제일로부터 30일이며, 최대 1개월을 초과하지 않습니다. 자동 갱신(정기결제)은 없으며, 다음 달 이용을 원하시면 직접 재결제하시면 됩니다.',
+                q: '요금은 어떻게 청구되나요?',
+                a: '등록하신 카드로 매월 결제일에 자동으로 결제되는 정기 구독(자동결제) 서비스입니다. 첫 결제일을 기준으로 매월 같은 날 자동 결제되며, 해지하시기 전까지 매월 갱신됩니다.',
               },
               {
                 q: '플랜은 언제든지 변경할 수 있나요?',
-                a: '네, 언제든지 업그레이드하거나 다운그레이드할 수 있습니다. 변경 사항은 다음 결제 시 적용됩니다.',
+                a: '네, 언제든지 업그레이드하거나 다운그레이드할 수 있습니다. 변경 사항은 다음 결제일부터 적용됩니다.',
               },
               {
                 q: '해지는 어떻게 하나요?',
-                a: '별도 해지 신청 없이 이용 기간(30일) 만료 후 재결제를 하지 않으면 자동으로 서비스가 종료됩니다. 이용 중 즉시 해지를 원하시면 대시보드 설정에서 구독 취소가 가능합니다.',
+                a: '대시보드 설정에서 언제든지 해지할 수 있습니다. 해지하면 다음 결제일부터 자동 결제가 중단되며, 이미 결제하신 이용 기간은 만료일까지 그대로 이용하실 수 있습니다. 위약금은 없습니다.',
               },
               {
                 q: '환불은 어떻게 되나요?',
-                a: '결제 후 7일 이내 미사용 시 전액 환불이 가능합니다. 이용 내역이 있는 경우 남은 기간 일할 계산으로 환불됩니다.',
+                a: '결제 후 7일 이내 서비스를 이용하지 않으셨다면 전액 환불이 가능합니다. 이용 내역이 있는 경우 남은 기간을 일할 계산하여 환불합니다. 해지하시면 다음 결제분부터는 자동으로 청구가 중단됩니다.',
               },
               {
                 q: '결제 수단은 무엇을 지원하나요?',
-                a: '신용카드, 체크카드를 지원합니다. KCP를 통해 안전하게 처리됩니다.',
+                a: '신용카드, 체크카드 자동결제(정기결제)를 지원합니다. 등록하신 카드로 매월 자동 결제되며, KCP를 통해 안전하게 처리됩니다.',
               },
             ].map((item) => (
               <div key={item.q} className="border-b pb-6">

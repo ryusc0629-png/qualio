@@ -30,7 +30,7 @@ export default function TermsPage() {
             <li>"서비스"란 회사가 제공하는 퀄리오 플랫폼 및 관련 부가 서비스를 의미합니다.</li>
             <li>"이용자"란 본 약관에 동의하고 서비스를 이용하는 사업자(청소업체 운영자)를 의미합니다.</li>
             <li>"고객"이란 이용자의 서비스를 통해 견적을 요청하거나 예약을 진행하는 최종 소비자를 의미합니다.</li>
-            <li>"구독"이란 이용자가 서비스를 이용하기 위해 결제하는 월정액 요금제를 의미합니다.</li>
+            <li>"구독"이란 이용자가 서비스를 이용하기 위해 등록한 결제 수단으로 매월 자동 결제(정기결제)하는 월정액 요금제를 의미합니다.</li>
           </ul>
         </section>
 
@@ -55,9 +55,12 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold mb-3">제5조 (구독 요금 및 결제)</h2>
+          <h2 className="text-lg font-semibold mb-3">제5조 (구독 요금 및 정기결제)</h2>
           <p className="text-muted-foreground leading-relaxed mb-3">
-            서비스는 아래와 같은 구독 플랜을 제공합니다. 결제는 KCP(NHN KCP)를 통해 처리됩니다.
+            서비스는 아래와 같은 월 구독 플랜을 제공합니다. 구독료는 이용자가 등록한 결제 수단(카드)으로
+            매월 결제일에 자동으로 결제(정기결제)되며, 이용자가 해지하기 전까지 매월 동일한 주기로 갱신됩니다.
+            이용자는 서비스 내 설정에서 언제든지 구독을 해지할 수 있으며, 해지 시 다음 결제일부터
+            자동 결제가 중단됩니다. 결제는 KCP(NHN KCP)를 통해 처리됩니다.
           </p>
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
@@ -84,6 +87,7 @@ export default function TermsPage() {
         <section>
           <h2 className="text-lg font-semibold mb-3">제6조 (청약철회 및 환불 정책)</h2>
           <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+            <li><b>정기결제 해지</b>: 이용자는 서비스 내 설정에서 언제든지 구독을 해지할 수 있으며, 해지 시 다음 결제 주기부터 요금이 청구되지 않습니다. 이미 결제된 당월 이용 기간은 만료일까지 이용할 수 있습니다. 해지에 따른 위약금은 없습니다.</li>
             <li><b>청약철회</b>: 구독 결제 후 7일 이내 서비스를 이용하지 않은 경우, 청약을 철회하고 전액 환불받을 수 있습니다.</li>
             <li><b>환불 사유</b>: 서비스 장애, 7일 이내 미사용(단순 변심), 중복·오결제 등의 경우 환불이 가능합니다. 구독 기간 중 이용 내역이 있으면 남은 기간에 대해 일할 계산하여 환불합니다.</li>
             <li><b>신청 방법</b>: 고객센터(전화 010-2912-2881, 이메일 ryusc0628@naver.com) 또는 서비스 내 문의를 통해 접수합니다.</li>

@@ -263,7 +263,7 @@ export default async function RootPage() {
           </div>
         </section>
 
-        {/* 요금제 미리보기 — 무료 베타 먼저 강조 + 토스 심사용 결제 조건 명시 */}
+        {/* 요금제 미리보기 — 무료 베타 먼저 강조 + 정기결제 심사용 결제 조건 명시 */}
         <section className="max-w-6xl mx-auto px-6 py-16 md:py-24">
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-3 break-keep text-balance">
             지금은 무료, 요금은 나중에 골라도 됩니다
@@ -271,9 +271,9 @@ export default async function RootPage() {
           <p className="text-muted-foreground text-center mb-4 break-keep text-pretty">
             베타 기간에는 모든 기능을 제한 없이 무료로 써보세요. 마음에 들면 그때 플랜을 고르시면 됩니다.
           </p>
-          {/* 결제 조건 명시 — /pricing 과 일관 (전자상거래법·토스 심사 요건) */}
+          {/* 결제 조건 명시 — /pricing 과 일관 (전자상거래법·정기결제 심사 요건) */}
           <p className="text-xs text-muted-foreground text-center mb-10">
-            유료 전환 시: 결제 1건당 1개월(30일) 이용 · 자동 갱신 없음 · 언제든지 해지 가능
+            유료 전환 시: 등록한 카드로 매월 자동 결제되는 정기 구독 · 언제든지 해지 가능 · 해지 시 다음 결제부터 청구되지 않습니다
           </p>
 
           <div className="grid md:grid-cols-3 gap-5 mb-8">
@@ -295,7 +295,7 @@ export default async function RootPage() {
                 <div className="mb-4">
                   <p className="text-sm font-medium">{plan.label}</p>
                   <p className="text-2xl font-bold mt-1">{formatPrice(plan.price)}</p>
-                  <p className="text-xs text-muted-foreground mt-1">1회 결제 시 1개월(30일) 이용</p>
+                  <p className="text-xs text-muted-foreground mt-1">매월 자동 결제 · 언제든 해지</p>
                   <p className="text-xs text-muted-foreground mt-1">{plan.target}</p>
                 </div>
                 <ul className="space-y-1.5">
@@ -323,7 +323,7 @@ export default async function RootPage() {
             <div className="grid sm:grid-cols-3 gap-6">
               {[
                 { icon: ShieldCheck, text: '카드 등록 없이 무료로 시작' },
-                { icon: Repeat, text: '자동 갱신 없음 · 언제든 해지' },
+                { icon: Repeat, text: '언제든 해지 · 위약금 없음' },
                 { icon: Check, text: '유료 전환 후 7일 이내 전액 환불' },
               ].map((item) => (
                 <div key={item.text} className="flex items-center gap-3 justify-center sm:justify-start">

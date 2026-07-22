@@ -3,10 +3,19 @@ import { redirect } from 'next/navigation'
 import { UpgradeForm } from '@/components/dashboard/upgrade-form'
 import { LogoutButton } from '@/components/dashboard/logout-button'
 import { Button } from '@/components/ui/button'
+import { resolvePaymentProvider } from '@/lib/payments/provider'
 import Link from 'next/link'
 
 // 플랜 결제 페이지 — 대시보드 밖에 위치해야 페이월 무한루프 방지
-export default async function UpgradePage() {
+// ?pg=toss 이면 토스 결제창, 그 외엔 기본 PG(포트원) — 두 심사를 동시에 통과시키기 위함
+export default async function UpgradePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ pg?: string }>
+}) {
+  const { pg } = await searchParams
+  const provider = resolvePaymentProvider(pg)
+
   const authClient = await createClient()
   const { data: { user } } = await authClient.auth.getUser()
   if (!user) redirect('/login')
@@ -79,6 +88,7 @@ export default async function UpgradePage() {
           nextPlan={subscription?.next_plan ?? null}
           currentPeriodEnd={subscription?.current_period_end ?? null}
           needsPayment={needsPayment}
+          provider={provider}
         />
       </main>
     </div>
