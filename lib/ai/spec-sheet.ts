@@ -36,6 +36,12 @@ export async function generateSpecSheet(input: SpecSheetInput): Promise<string> 
 
   const isOneOff = jobType === 'one_off'
 
+  // 오늘 날짜(KST) — 모델이 임의로 2024년 등 옛 날짜를 지어내는 것을 막기 위해 명시적으로 제공
+  // (Vercel 서버는 UTC라 timeZone 반드시 지정)
+  const todayKst = new Date().toLocaleDateString('ko-KR', {
+    year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Seoul',
+  })
+
   const siteInfo = [
     siteName && `현장명: ${siteName}`,
     siteAddress && `주소: ${siteAddress}`,
@@ -91,6 +97,10 @@ ${meetingBlock}
 5. 마크다운 없이 **순수 텍스트**만 출력
 6. 아래 구조를 반드시 따르고, 문서를 마지막 항목까지 반드시 완결할 것 (중간에 끊지 말 것)
 ${isOneOff ? '7. 일회성 작업이므로 "정기 방문 주기"를 임의로 만들어 넣지 말 것 (1회 시공 기준으로 작성)' : ''}
+
+## 머리말·날짜 규칙 (반드시 지킬 것)
+- 문서 맨 위에 제목("청소 시방서" 등)·발주처·시공사·작성일 같은 머리말을 절대 넣지 마세요. 이 정보는 시스템이 문서 상단과 서명란에 자동으로 넣습니다. 곧바로 아래 '출력 구조'의 "1. 작업 대상 및 범위"부터 시작하세요.
+- 날짜를 임의로 지어내지 마세요. 오늘은 ${todayKst}입니다. 문서에 날짜가 필요하면 반드시 이 날짜를 기준으로만 쓰세요.
 
 ## 출력 구조 (이 형식 그대로):
 1. 작업 대상 및 범위
