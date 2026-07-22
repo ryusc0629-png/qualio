@@ -20,6 +20,8 @@ const saveB2bQuoteSchema = z.object({
   customerId:   z.string().uuid().optional(),
   // 수정할 기존 견적서 id — 있으면 그 견적서만 수정, 없으면 새 견적서로 추가(한 거래처에 여러 장 가능)
   quoteId:      z.string().uuid().optional(),
+  // 견적서 이름(라벨) — 목록에서 여러 장 구분용, 선택
+  title:        z.string().optional(),
   quoteNumber:  z.string().optional(),
   validUntil:   z.string().optional(),
   items:        z.array(quoteItemSchema).min(1, '항목을 하나 이상 입력해주세요'),
@@ -179,6 +181,7 @@ export const saveB2bQuoteAction = action
       lead_id:      parsedInput.leadId ?? null,
       customer_id:  parsedInput.customerId ?? null,
       business_id:  businessId,
+      title:        parsedInput.title ?? null,
       quote_number: parsedInput.quoteNumber ?? null,
       valid_until:  parsedInput.validUntil ?? null,
       items:        parsedInput.items,

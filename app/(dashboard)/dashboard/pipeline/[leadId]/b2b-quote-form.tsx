@@ -43,6 +43,7 @@ interface QuoteItem {
 
 interface ExistingQuote {
   id: string
+  title: string | null
   quote_number: string | null
   valid_until: string | null
   items: QuoteItem[]
@@ -226,6 +227,7 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
   const today = new Date().toISOString().slice(0, 10)
   const defaultQuoteNumber = `Q-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`
 
+  const [title, setTitle] = useState(existingQuote?.title ?? '')
   const [quoteNumber, setQuoteNumber] = useState(existingQuote?.quote_number ?? defaultQuoteNumber)
   const [validUntil, setValidUntil] = useState(existingQuote?.valid_until ?? '')
   const [items, setItems] = useState<FormItem[]>(
@@ -368,6 +370,7 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
     customerId,
     // 기존 견적서 수정이면 그 id를 함께 보내 그 장만 갱신 (없으면 새 견적서로 추가)
     quoteId:      existingQuote?.id,
+    title:        title.trim() || undefined,
     quoteNumber:  quoteNumber || undefined,
     validUntil:   validUntil || undefined,
     // _id는 폼 전용(드래그 정렬용)이라 저장 시 제외하고 순수 QuoteItem만 전송
@@ -503,6 +506,16 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
           {/* 견적서 기본 정보 */}
           <section className="space-y-3">
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">견적 정보</h3>
+            <div>
+              <Label className="text-xs">견적서 이름 (선택)</Label>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="예: 사무동 정기청소 (여러 견적서를 구분할 때)"
+                className="mt-1 h-9"
+              />
+              <p className="mt-1 text-[11px] text-muted-foreground">비워두면 현장명·서비스명으로 목록에 표시돼요</p>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">견적 번호</Label>

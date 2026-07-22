@@ -12,6 +12,7 @@ import { FileText, Plus, Pencil, Eye, Trash2 } from 'lucide-react'
 // b2b-quote-form.tsx의 ExistingQuote와 동일한 형태 (한 장의 견적서)
 export interface B2bQuote {
   id: string
+  title: string | null
   quote_number: string | null
   valid_until: string | null
   items: { name: string; unit: string; qty: number; unit_price: number }[]
@@ -94,8 +95,9 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, hasMeetin
       ) : (
         <div className="space-y-2">
           {quotes.map((quote) => {
-            // 카드 제목 — 현장명 우선, 없으면 첫 서비스 항목 이름, 그것도 없으면 견적번호
+            // 카드 제목 — 사장님이 붙인 이름 우선, 없으면 현장명·첫 서비스명·견적번호 순
             const title =
+              quote.title?.trim() ||
               quote.site_name?.trim() ||
               quote.items[0]?.name?.trim() ||
               quote.quote_number ||

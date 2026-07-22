@@ -52,6 +52,7 @@ interface QuoteItem {
 
 type ExistingQuote = {
   id: string
+  title: string | null
   quote_number: string | null
   valid_until: string | null
   items: QuoteItem[]
