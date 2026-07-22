@@ -416,24 +416,20 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
       return
     }
 
-    // 새 탭을 클릭 즉시(동기) 열어 팝업 차단을 피하고, 저장이 끝난 뒤에 주소를 미리보기로 바꿔치기.
-    // (예전엔 저장을 기다리지 않고 바로 열어서, DB 기록 전이면 미리보기가 404를 냈음)
-    const win = window.open('', '_blank')
-    if (win) {
-      win.document.write(
-        '<!doctype html><meta charset="utf-8"><title>견적서 준비 중</title>' +
-        '<div style="font-family:system-ui,-apple-system,sans-serif;display:flex;height:100vh;align-items:center;justify-content:center;color:#555">견적서를 저장하고 있어요… 잠시만요</div>'
-      )
-      // ⚠️ document.close()로 쓰기 스트림을 닫아야 함. 안 닫으면 사파리에서 이후
-      // location 이동이 '무제' 빈 페이지로 멈춰버림(스트림이 계속 열린 채라 새 문서가 안 그려짐)
-      win.document.close()
-    }
+    // 새 탭을 클릭 즉시(동기) 열되, about:blank + document.write 는 쓰지 않는다.
+    // (사파리는 스크립트로 연 빈 탭에 write 하면 이후 페이지 제목을 못 잡아 '무제'로 굳어짐 →
+    //  PDF 파일명도 '무제'가 됨) 대신 처음부터 실제 미리보기 주소로 연다.
+    // 기존 견적서는 그 주소를, 새 견적서는 최신 견적서 주소(printHref)를 임시로 띄우고,
+    // 저장이 끝나면 방금 저장한 견적서 주소로 새로고침해 수정본을 반영한다.
+    const initialHref = existingQuote?.id ? `${printHref}?quoteId=${existingQuote.id}` : printHref
+    const win = window.open(initialHref, '_blank')
+
     const res = await executeSaveAsync(buildPayload())
     if (res?.data?.success) {
       // 방금 저장된 견적서만 콕 집어 미리보기 (여러 장 중 이 장)
       const savedId = res.data.quoteId ?? existingQuote?.id
       const href = savedId ? `${printHref}?quoteId=${savedId}` : printHref
-      // 사용자가 미리 탭을 닫았을 수 있으니 win.closed 확인 후 이동(replace로 히스토리에 빈 탭 안 남김)
+      // 사용자가 미리 탭을 닫았을 수 있으니 win.closed 확인 후 저장본으로 이동/새로고침
       if (win && !win.closed) win.location.replace(href)
       else window.open(href, '_blank') // 팝업이 막혔던 경우 대비(사용자 제스처 직후라 대개 허용)
     } else if (win && !win.closed) {

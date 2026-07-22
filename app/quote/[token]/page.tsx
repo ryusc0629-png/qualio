@@ -1,6 +1,10 @@
+import type { Metadata } from 'next'
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { PrintQuote } from '@/app/(dashboard)/dashboard/pipeline/[leadId]/quote/print/print-quote'
+
+// 탭 제목/PDF 저장 파일명이 '무제'가 되지 않도록 서버에서 제목을 명시
+export const metadata: Metadata = { title: '견적서·시방서' }
 
 // 고객 공개용 견적서/시방서 — 로그인 불필요, 공개 토큰으로만 접근
 // 사장님이 '고객 링크 복사'로 만든 링크를 고객이 열면 여기로 옴

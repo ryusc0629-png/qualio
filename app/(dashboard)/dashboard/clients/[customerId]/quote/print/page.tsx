@@ -1,6 +1,10 @@
+import type { Metadata } from 'next'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { PrintQuote } from '@/app/(dashboard)/dashboard/pipeline/[leadId]/quote/print/print-quote'
+
+// 탭 제목/PDF 저장 파일명이 '무제'가 되지 않도록 서버에서 제목을 명시
+export const metadata: Metadata = { title: '견적서·시방서' }
 
 // 계약 중인 거래처(고객)용 견적서/시방서 미리보기 — 리드용 print 페이지와 동일 컴포넌트 재사용
 export default async function CustomerQuotePrintPage({

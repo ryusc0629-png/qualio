@@ -1,6 +1,10 @@
+import type { Metadata } from 'next'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { PrintQuote } from './print-quote'
+
+// 탭 제목/PDF 저장 파일명이 '무제'가 되지 않도록 서버에서 제목을 명시
+export const metadata: Metadata = { title: '견적서·시방서' }
 
 export default async function QuotePrintPage({
   params,
