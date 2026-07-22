@@ -238,8 +238,13 @@ export default async function ClientsPage({
   }
 
   const b2bQuoteMap: Record<string, B2bQuoteRow> = {}
+  // 리드별 보낸 견적 장수 — 여러 장 발송한 경우 목록에서 '견적 N장 발송'으로 표시
+  const b2bQuoteCountMap: Record<string, number> = {}
   for (const q of b2bQuotes ?? []) {
-    if (q.lead_id) b2bQuoteMap[q.lead_id] = q
+    if (q.lead_id) {
+      b2bQuoteMap[q.lead_id] = q
+      b2bQuoteCountMap[q.lead_id] = (b2bQuoteCountMap[q.lead_id] ?? 0) + 1
+    }
   }
 
   const registeredLeadIds = new Set((registeredLeadRows ?? []).map((r) => r.lead_id))
@@ -598,7 +603,7 @@ export default async function ClientsPage({
           ) : (
             activeLeads.map((lead) => {
               const stage = PIPELINE_STAGE[lead.status] ?? PIPELINE_STAGE['new']!
-              const b2bQuote = b2bQuoteMap[lead.id] ?? null
+              const quoteCount = b2bQuoteCountMap[lead.id] ?? 0
               const isOverdue = Boolean(
                 lead.next_follow_up_date &&
                 lead.next_follow_up_date < today &&
@@ -615,7 +620,6 @@ export default async function ClientsPage({
                         <Link href={`/dashboard/pipeline/${lead.id}`} className="font-semibold hover:text-primary hover:underline transition-colors">
                           {lead.company_name}
                         </Link>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stage.color}`}>{stage.text}</span>
                         {isOverdue && (
                           <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-600">연락 지연</span>
                         )}
@@ -641,16 +645,13 @@ export default async function ClientsPage({
                       </div>
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-2">
-                      {b2bQuote ? (
-                        <div className="text-right">
-                          <p className="text-base font-bold tabular-nums">{b2bQuote.total_amount.toLocaleString('ko-KR')}원</p>
-                          {b2bQuote.frequency && <p className="text-xs text-muted-foreground">{formatFrequency(b2bQuote.frequency)}</p>}
-                        </div>
+                      {/* 아직 영업 중이라 견적 금액은 '확정 매출'이 아님 → 영업 단계를 크게 보여주고,
+                          금액 대신 보낸 견적 장수만 작게 표시(여러 장 발송해도 헷갈리지 않게) */}
+                      <span className={`text-sm px-3 py-1 rounded-full font-semibold ${stage.color}`}>{stage.text}</span>
+                      {quoteCount > 0 ? (
+                        <p className="text-[11px] text-muted-foreground">견적 {quoteCount}장 발송</p>
                       ) : lead.monthly_budget ? (
-                        <div className="text-right">
-                          <p className="text-sm font-semibold tabular-nums text-muted-foreground">~{lead.monthly_budget.toLocaleString('ko-KR')}원/월</p>
-                          <p className="text-[10px] text-muted-foreground">예상</p>
-                        </div>
+                        <p className="text-[11px] text-muted-foreground tabular-nums">예상 ~{lead.monthly_budget.toLocaleString('ko-KR')}원/월</p>
                       ) : null}
                       <Link href={`/dashboard/pipeline/${lead.id}`} className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:border-primary/30">
                         영업 관리<ChevronRight className="h-3 w-3" />
