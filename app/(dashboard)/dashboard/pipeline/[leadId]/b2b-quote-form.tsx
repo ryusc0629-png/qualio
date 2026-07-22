@@ -143,7 +143,10 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
     setAmountMode(mode)
   }
 
-  const subtotal = items.reduce((s, it) => s + it.qty * it.unit_price, 0)
+  // 정기계약은 '횟수'를 곱하지 않음 — 월 4회 35만원이면 라인 금액은 35만원(월 정액).
+  // 횟수는 방문 빈도를 보여주는 정보값일 뿐. 일회성만 수량×단가로 계산.
+  const lineAmount = (it: QuoteItem) => (isOneOff ? it.qty * it.unit_price : it.unit_price)
+  const subtotal = items.reduce((s, it) => s + lineAmount(it), 0)
   const tax = taxIncluded ? Math.floor(subtotal * 0.1) : 0
   const total = subtotal + tax
 
@@ -370,7 +373,7 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
             {/* 금액 입력 방식 — 항목별(수량×단가) vs 총액 직접(월 정기 등 정액) */}
             <div className="flex gap-1 rounded-lg bg-muted/50 p-1">
               {([
-                ['itemized', '항목별 계산', '수량 × 단가'],
+                ['itemized', '항목별 계산', isOneOff ? '수량 × 단가' : '항목별 금액'],
                 ['lump', '총액 직접 입력', '월 정기 등 정액'],
               ] as ['itemized' | 'lump', string, string][]).map(([mode, label, desc]) => (
                 <button
@@ -424,7 +427,8 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
                     </div>
                   )}
                   <div className={isLump ? 'col-span-4' : 'col-span-3'}>
-                    {idx === 0 && <Label className="text-xs">{isLump ? '금액 (원)' : '단가 (원)'}</Label>}
+                    {/* 정기계약은 회당 단가가 아니라 '한 주기 금액'이라 '금액'으로 표기 (횟수는 곱하지 않음) */}
+                    {idx === 0 && <Label className="text-xs">{isOneOff && !isLump ? '단가 (원)' : '금액 (원)'}</Label>}
                     <Input
                       type="text"
                       inputMode="numeric"

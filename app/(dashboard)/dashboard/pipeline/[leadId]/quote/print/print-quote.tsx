@@ -60,18 +60,27 @@ interface Props {
 
 export function PrintQuote({ lead, quote, business, variant = 'internal', publicToken, initialMode = 'both' }: Props) {
   const items = (Array.isArray(quote.items) ? quote.items : []) as QuoteItem[]
-  // 총액 계약(모든 항목 수량 1) — 수량·단가 열을 숨기고 금액만 보여 깔끔하게
-  const isLumpQuote = items.length > 0 && items.every((it) => (it.qty ?? 1) === 1)
-  // 정기 계약은 방문 '횟수'가 핵심이라 단위(주·월·년)와 무관하게 '횟수'로 통일.
-  // 일회성은 입력 단위에 맞춰 조정 (식→수량 등)
+  const isOneOff = quote.job_type === 'one_off'
+
+  // 정기계약은 '횟수'를 곱하지 않음 — 월 4회 35만원이면 라인 금액은 35만원(월 정액).
+  // 일회성만 수량×단가로 계산.
+  const lineTotal = (it: QuoteItem) => (isOneOff ? it.qty * it.unit_price : it.unit_price)
+  const subtotal = items.reduce((s, it) => s + lineTotal(it), 0)
+  const tax = quote.tax_included ? Math.floor(subtotal * 0.1) : 0
+  const total = subtotal + tax
+
+  // 일회성 단위 라벨 (식→수량 등). 정기는 항상 '횟수'
   const UNIT_COUNT_LABEL: Record<string, string> = {
     월: '개월', 개월: '개월', 주: '주', 일: '일', 년: '년', 회: '횟수', 차: '횟수', 번: '횟수',
   }
-  const isOneOff = quote.job_type === 'one_off'
   const countLabel = isOneOff ? (UNIT_COUNT_LABEL[(items[0]?.unit ?? '').trim()] ?? '수량') : '횟수'
-  const subtotal = items.reduce((s, it) => s + it.qty * it.unit_price, 0)
-  const tax = quote.tax_included ? Math.floor(subtotal * 0.1) : 0
-  const total = subtotal + tax
+
+  // 일회성 총액형(모든 수량 1) — 수량·단가 열 숨기고 금액만
+  const isLumpQuote = isOneOff && items.length > 0 && items.every((it) => (it.qty ?? 1) === 1)
+  // 정기는 방문이 2회 이상일 때만 '횟수' 열을 정보용으로 표시(곱하지 않음)
+  const showRecurringCount = !isOneOff && items.some((it) => (it.qty ?? 1) > 1)
+  const showCountCol = (isOneOff && !isLumpQuote) || showRecurringCount
+  const showUnitPriceCol = isOneOff && !isLumpQuote
 
   const hasSpec = !!quote.spec_content
   // 시방서가 없으면 견적서만 가능
@@ -211,8 +220,8 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', public
                 <th className="py-2.5 px-3 text-left font-medium w-8">No.</th>
                 <th className="py-2.5 px-3 text-left font-medium">서비스 내용</th>
                 <th className="py-2.5 px-3 text-center font-medium w-16">단위</th>
-                {!isLumpQuote && <th className="py-2.5 px-3 text-center font-medium w-16">{countLabel}</th>}
-                {!isLumpQuote && <th className="py-2.5 px-3 text-right font-medium w-28">단가</th>}
+                {showCountCol && <th className="py-2.5 px-3 text-center font-medium w-16">{countLabel}</th>}
+                {showUnitPriceCol && <th className="py-2.5 px-3 text-right font-medium w-28">단가</th>}
                 <th className="py-2.5 px-3 text-right font-medium w-28">금액</th>
               </tr>
             </thead>
@@ -222,9 +231,9 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', public
                   <td className="py-2.5 px-3 text-gray-500">{idx + 1}</td>
                   <td className="py-2.5 px-3 font-medium">{item.name}</td>
                   <td className="py-2.5 px-3 text-center text-gray-600">{item.unit}</td>
-                  {!isLumpQuote && <td className="py-2.5 px-3 text-center">{item.qty}</td>}
-                  {!isLumpQuote && <td className="py-2.5 px-3 text-right tabular-nums">{item.unit_price.toLocaleString()}</td>}
-                  <td className="py-2.5 px-3 text-right tabular-nums font-medium">{(item.qty * item.unit_price).toLocaleString()}</td>
+                  {showCountCol && <td className="py-2.5 px-3 text-center">{item.qty}</td>}
+                  {showUnitPriceCol && <td className="py-2.5 px-3 text-right tabular-nums">{item.unit_price.toLocaleString()}</td>}
+                  <td className="py-2.5 px-3 text-right tabular-nums font-medium">{lineTotal(item).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
