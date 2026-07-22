@@ -8,14 +8,23 @@ import { MARKETING_CHANNELS } from '@/lib/utils/marketing-channels'
 interface ChannelLinksCardProps {
   // 채널 태그가 붙기 전의 기본 견적 페이지 주소 (예: https://qualio.co.kr/q/clean-house)
   baseUrl: string
+  // 랜딩(홍보) 페이지 주소 (예: https://qualio.co.kr/biz/clean-house)
+  // 아래 LANDING_CHANNELS에 속한 채널은 견적 페이지 대신 이 랜딩으로 보냄
+  landingBaseUrl: string
 }
+
+// 랜딩(홍보) 페이지로 보낼 채널 — 오프라인 전단지·명함 QR은 우리를 처음 접한 낯선 사람이 많아
+// 견적 폼에 바로 떨어뜨리기보다 신뢰를 주는 랜딩을 먼저 보여주는 편이 문의로 잘 이어짐.
+// (랜딩의 견적 버튼이 ?ch= 를 그대로 견적 페이지로 넘겨줘 채널 통계는 끊기지 않음)
+const LANDING_CHANNELS = new Set<string>(['flyer'])
 
 // 채널별 전용 홍보 링크 — 사장님은 채널에 맞는 링크를 복사해 붙여넣기만 하면
 // 대시보드 "채널별 유입"에 어느 채널에서 왔는지 정확히 집계됨
-export function ChannelLinksCard({ baseUrl }: ChannelLinksCardProps) {
+export function ChannelLinksCard({ baseUrl, landingBaseUrl }: ChannelLinksCardProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
-  const buildUrl = (key: string) => `${baseUrl}?ch=${key}`
+  const buildUrl = (key: string) =>
+    `${LANDING_CHANNELS.has(key) ? landingBaseUrl : baseUrl}?ch=${key}`
 
   const handleCopy = async (key: string) => {
     try {
@@ -75,7 +84,7 @@ export function ChannelLinksCard({ baseUrl }: ChannelLinksCardProps) {
       </ul>
 
       <p className="px-5 py-3 border-t bg-slate-50/50 text-[11px] text-muted-foreground leading-relaxed">
-        같은 견적 페이지지만 링크마다 꼬리표가 달라요. 채널별로 다른 링크를 써야 통계가 나뉩니다.
+        링크마다 채널 꼬리표가 달라요. 채널별로 다른 링크를 써야 어디서 고객이 왔는지 통계가 나뉩니다.
       </p>
     </div>
   )
