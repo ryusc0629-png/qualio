@@ -165,9 +165,9 @@ export default async function DashboardPage() {
       .is('worker_id' as never, null)
       .is('deleted_at' as never, null),
 
-    // 거래처 파이프라인 전체
+    // 거래처 파이프라인 전체 (거래처 현황 카운트용 — customer_type로 거래처/개인 구분)
     db.from('leads')
-      .select('id, status')
+      .select('id, status, customer_type')
       .eq('business_id', businessId),
 
     // 연락할 거래처 — 오늘 예정 + 지난 일정(놓친 연락)까지 포함
@@ -237,9 +237,10 @@ export default async function DashboardPage() {
   const confirmedCount  = (pipelineBookings ?? []).filter((b) => b.status === 'confirmed').length
   const inProgressCount = (pipelineBookings ?? []).filter((b) => b.status === 'in_progress').length
 
-  // B2B 거래처 지표
-  const activeLeads       = (allLeads ?? []).filter((l) => l.status !== 'contracted' && l.status !== 'rejected')
-  const contractedLeads   = (allLeads ?? []).filter((l) => l.status === 'contracted')
+  // B2B 거래처 지표 — 거래처(company)만, 보관(archived)·거절(rejected)은 제외
+  const companyLeads      = (allLeads ?? []).filter((l) => l.customer_type === 'company')
+  const activeLeads       = companyLeads.filter((l) => !['contracted', 'rejected', 'archived'].includes(l.status))
+  const contractedLeads   = companyLeads.filter((l) => l.status === 'contracted')
   // 거래처 현황 '월 예상'은 상담 단계의 추정 예산(leads.monthly_budget)이 아니라
   // 실제 체결된 정기 계약 매출(monthlyContractRevenue)을 그대로 사용해 KPI 카드와 값이 일치하도록 한다
   const todayFollowUpCount = (todayFollowUps ?? []).length
