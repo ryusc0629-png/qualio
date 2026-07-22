@@ -28,14 +28,12 @@ export function DashboardShell({ businessName, children }: DashboardShellProps) 
         </>
       )}
 
-      {/* 사이드바 — 인쇄 시 숨김 */}
-      <div className="contents print:hidden">
-        <Sidebar
-          businessName={businessName}
-          isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-        />
-      </div>
+      {/* 사이드바 (인쇄 시 숨김은 Sidebar 루트의 print:hidden 으로 처리) */}
+      <Sidebar
+        businessName={businessName}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
       {/* 메인 콘텐츠 — 모바일은 상단 바 없이 본문을 꽉 채움 (업체명은 홈 인사말로 표시) */}
       <div className="flex-1 flex flex-col min-w-0 print:block">
@@ -45,10 +43,8 @@ export function DashboardShell({ businessName, children }: DashboardShellProps) 
         </main>
       </div>
 
-      {/* 모바일 하단 탭 — 더보기는 전체 메뉴(사이드바) 열기. 인쇄 시 숨김 */}
-      <div className="contents print:hidden">
-        <BottomNav onMore={() => setSidebarOpen(true)} />
-      </div>
+      {/* 모바일 하단 탭 (인쇄 시 숨김은 BottomNav 루트의 print:hidden 으로 처리) */}
+      <BottomNav onMore={() => setSidebarOpen(true)} />
     </div>
   )
 }

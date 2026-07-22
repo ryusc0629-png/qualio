@@ -56,6 +56,7 @@ export function Sidebar({ businessName, isOpen = false, onClose }: SidebarProps)
       className={cn(
         'fixed inset-y-0 left-0 z-50 w-56 border-r border-border bg-white flex flex-col h-screen transition-transform duration-200',
         'md:sticky md:top-0 md:translate-x-0 md:z-auto md:self-start',
+        'print:hidden', // PDF 저장(인쇄) 시 사이드바 제외
         isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       )}
     >

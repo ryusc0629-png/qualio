@@ -27,7 +27,7 @@ export function BottomNav({ onMore }: BottomNavProps) {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-border"
+      className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t border-border print:hidden"
       // 아이폰 홈 인디케이터 영역만큼 아래 여백 (viewportFit: cover와 함께 동작)
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
