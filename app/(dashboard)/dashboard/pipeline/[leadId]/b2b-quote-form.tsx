@@ -43,6 +43,7 @@ interface QuoteItem {
 
 interface ExistingQuote {
   id: string
+  public_token: string | null
   title: string | null
   quote_number: string | null
   valid_until: string | null
@@ -416,13 +417,12 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
       return
     }
 
-    // ⚠️ 사파리 핵심: window.open('', '_blank') 로 빈 탭을 연 뒤 나중에 이동시키면
-    //   그 이동이 무시돼 '무제' 빈 페이지로 굳는다(공개 링크는 주소를 직접 열어서 정상이었음).
-    //   → 목록 눈아이콘·공개 링크와 똑같이 '처음부터 실제 주소로' 새 탭을 연다.
-    //   기존 견적서는 그 견적서 주소를 즉시(동기) 열고, 저장이 끝나면 새로고침해 수정본 반영.
-    const preOpened = existingQuote?.id
-      ? window.open(`/quote-doc/${existingQuote.id}`, '_blank')
-      : null
+    // 미리보기는 '고객이 보는 것과 똑같은 공개 페이지(/quote/{token})'로 연다.
+    // (내부 인쇄 페이지는 사파리 PDF 저장이 백지가 되는 문제가 있어, 검증된 공개 페이지로 통일)
+    // ?preview=1 이면 조회 알림 없이 사장님 미리보기로 뜬다.
+    // 기존 견적서는 토큰을 미리 알아 즉시(동기) 열고, 저장 후 새로고침해 수정본 반영.
+    const preToken = existingQuote?.public_token
+    const preOpened = preToken ? window.open(`/quote/${preToken}?preview=1`, '_blank') : null
 
     const res = await executeSaveAsync(buildPayload())
     if (!res?.data?.success) {
@@ -431,9 +431,10 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
       return
     }
 
-    // 방금 저장된 견적서만 콕 집어 미리보기 (여러 장 중 이 장)
+    // 방금 저장된 견적서의 공개 토큰으로 미리보기 (여러 장 중 이 장)
+    const token = res.data.publicToken ?? preToken
     const savedId = res.data.quoteId ?? existingQuote?.id
-    const href = savedId ? `/quote-doc/${savedId}` : printHref
+    const href = token ? `/quote/${token}?preview=1` : (savedId ? `/quote-doc/${savedId}` : printHref)
     if (preOpened && !preOpened.closed) {
       // 이미 실제 페이지가 뜬 탭이라 이동/새로고침이 정상 동작 → 방금 수정본 반영
       preOpened.location.href = href

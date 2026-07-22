@@ -7,11 +7,12 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { B2bQuoteForm } from '@/app/(dashboard)/dashboard/pipeline/[leadId]/b2b-quote-form'
 import { deleteB2bQuoteAction } from '@/lib/actions/b2b-quotes'
-import { FileText, Plus, Pencil, Eye, Trash2 } from 'lucide-react'
+import { FileText, Plus, Pencil, Eye, Trash2, Link2 } from 'lucide-react'
 
 // b2b-quote-form.tsx의 ExistingQuote와 동일한 형태 (한 장의 견적서)
 export interface B2bQuote {
   id: string
+  public_token: string | null
   title: string | null
   quote_number: string | null
   valid_until: string | null
@@ -53,6 +54,17 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, hasMeetin
   const handleDelete = (quoteId: string) => {
     if (!window.confirm('이 견적서를 삭제할까요?\n삭제하면 되돌릴 수 없어요.')) return
     executeDelete({ quoteId, leadId, customerId })
+  }
+
+  // 고객에게 보낼 공개 링크 복사 — 이 링크만 보내면 고객이 견적서·시방서를 열람
+  const copyCustomerLink = async (token: string) => {
+    const url = `${window.location.origin}/quote/${token}`
+    try {
+      await navigator.clipboard.writeText(url)
+      toast.success('고객 링크를 복사했어요! 카톡·문자로 붙여넣어 보내세요')
+    } catch {
+      window.prompt('아래 링크를 복사해서 고객에게 보내세요', url)
+    }
   }
 
   return (
@@ -137,18 +149,31 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, hasMeetin
                       </button>
                     }
                   />
-                  {/* 미리보기 — 이 견적서만 새 탭에서 열기(링크 복사·PDF 저장은 그 화면에서).
-                      껍데기 없는 단독 라우트(/quote-doc)라 인쇄가 항상 정상 동작 */}
-                  <a
-                    href={`/quote-doc/${quote.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted"
-                    aria-label="견적서 미리보기"
-                    title="미리보기"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </a>
+                  {/* 고객 링크 복사 — 고객에게 보낼 공개 링크를 바로 복사(보내기만 하면 고객이 열람) */}
+                  {quote.public_token && (
+                    <button
+                      type="button"
+                      onClick={() => copyCustomerLink(quote.public_token!)}
+                      className="p-2 text-muted-foreground hover:text-primary rounded-md hover:bg-muted"
+                      aria-label="고객 링크 복사"
+                      title="고객 링크 복사"
+                    >
+                      <Link2 className="h-4 w-4" />
+                    </button>
+                  )}
+                  {/* 미리보기 — 고객이 보는 공개 페이지를 그대로 새 탭에서 열기(PDF 저장도 여기서) */}
+                  {quote.public_token && (
+                    <a
+                      href={`/quote/${quote.public_token}?preview=1`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted"
+                      aria-label="견적서 미리보기"
+                      title="미리보기"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </a>
+                  )}
                   {/* 삭제 */}
                   <button
                     type="button"

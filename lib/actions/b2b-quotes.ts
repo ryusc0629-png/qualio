@@ -166,14 +166,15 @@ export const saveB2bQuoteAction = action
     }
 
     // quoteId가 오면 그 견적서만 수정, 없으면 새 견적서로 추가 (한 거래처에 여러 장 가능)
-    let existing: { id: string } | null = null
+    // public_token도 함께 조회 — 저장 후 '공개 링크(/quote/{token})' 미리보기로 열기 위함
+    let existing: { id: string; public_token: string | null } | null = null
     if (parsedInput.quoteId) {
       const { data } = await db
         .from('b2b_quotes')
-        .select('id')
+        .select('id, public_token' as never)
         .eq('id', parsedInput.quoteId)
         .eq('business_id', businessId)
-        .maybeSingle()
+        .maybeSingle() as unknown as { data: { id: string; public_token: string | null } | null }
       existing = data
     }
 
@@ -201,6 +202,7 @@ export const saveB2bQuoteAction = action
 
     // job_type 컬럼이 database.ts 타입에 아직 반영 안 됨 → as never 단언
     let quoteId = existing?.id
+    let publicToken = existing?.public_token ?? null
     if (existing) {
       const { error } = await db
         .from('b2b_quotes')
@@ -208,19 +210,20 @@ export const saveB2bQuoteAction = action
         .eq('id', existing.id)
       if (error) throw new Error('[APP] 견적서 저장에 실패했습니다')
     } else {
-      // 새 견적서 — 삽입 후 생성된 id를 받아 미리보기에 사용 (public_token은 DB 기본값이 자동 생성)
+      // 새 견적서 — 삽입 후 생성된 id·public_token을 받아 미리보기·링크에 사용
       const { data: inserted, error } = await db
         .from('b2b_quotes')
         .insert(payload as never)
-        .select('id')
-        .single() as unknown as { data: { id: string } | null; error: unknown }
+        .select('id, public_token' as never)
+        .single() as unknown as { data: { id: string; public_token: string | null } | null; error: unknown }
       if (error || !inserted) throw new Error('[APP] 견적서 저장에 실패했습니다')
       quoteId = inserted.id
+      publicToken = inserted.public_token
     }
 
     if (isCustomer) revalidatePath(`/dashboard/clients/${parsedInput.customerId}`)
     else revalidatePath(`/dashboard/pipeline/${parsedInput.leadId}`)
-    return { success: true, quoteId }
+    return { success: true, quoteId, publicToken }
   })
 
 // 견적서 삭제 — 한 거래처에 여러 장이 있을 때 개별 삭제

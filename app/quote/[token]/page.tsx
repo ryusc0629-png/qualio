@@ -13,10 +13,12 @@ export default async function PublicQuotePage({
   searchParams,
 }: {
   params: Promise<{ token: string }>
-  searchParams: Promise<{ doc?: string }>
+  searchParams: Promise<{ doc?: string; preview?: string }>
 }) {
   const { token } = await params
-  const { doc } = await searchParams
+  const { doc, preview } = await searchParams
+  // 사장님이 스스로 여는 미리보기(?preview=1) — 조회 추적(고객 열람 알림) 없이, 내부 도구(링크복사·닫기) 표시
+  const isOwnerPreview = preview === '1'
 
   const db = createServiceClient()
 
@@ -85,7 +87,7 @@ export default async function PublicQuotePage({
       lead={client}
       quote={quote}
       business={businessResult.data}
-      variant="public"
+      variant={isOwnerPreview ? 'internal' : 'public'}
       publicToken={quote.public_token}
       initialMode={initialMode}
     />

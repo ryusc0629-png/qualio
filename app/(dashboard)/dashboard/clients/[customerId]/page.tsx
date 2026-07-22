@@ -169,6 +169,7 @@ export default async function CustomerDetailPage({ params }: Props) {
   // 이 고객의 B2B 견적서/시방서 — 한 거래처에 여러 장 가능(재계약·추가 견적). 만든 순서로 전부 조회
   interface B2bQuoteExisting {
     id: string
+    public_token: string | null
     title: string | null
     quote_number: string | null
     valid_until: string | null

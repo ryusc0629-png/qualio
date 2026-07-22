@@ -41,7 +41,7 @@ export default async function LeadDetailPage({
       .from('b2b_quotes')
       // job_type은 database.ts 타입 미반영 → select 문자열 as never, 결과는 아래서 명시 타입 단언
       // 한 거래처에 여러 장 가능 → 전부 가져와 만든 순서(오래된→최신)로 목록에 표시
-      .select('id, title, quote_number, valid_until, items, total_amount, tax_included, conditions, site_name, site_address, site_area, frequency, worker_count, spec_content, job_type, created_at' as never)
+      .select('id, public_token, title, quote_number, valid_until, items, total_amount, tax_included, conditions, site_name, site_address, site_area, frequency, worker_count, spec_content, job_type, created_at' as never)
       .eq('lead_id', leadId)
       .eq('business_id', profile.business_id)
       .order('created_at' as never, { ascending: true }),
@@ -76,6 +76,7 @@ export default async function LeadDetailPage({
 
   const rawQuotes = (quoteResult.data ?? []) as unknown as {
     id: string
+    public_token: string | null
     title: string | null
     quote_number: string | null
     valid_until: string | null
