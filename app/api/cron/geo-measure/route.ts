@@ -67,8 +67,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // 측정 엔진 키 없으면 휴면 — 키·비용 승인 후 자동 활성화
-  if (!process.env.PERPLEXITY_API_KEY) {
+  // 측정 엔진 키(Perplexity 또는 Gemini) 하나도 없으면 휴면 — 키·비용 승인 후 자동 활성화
+  if (!process.env.PERPLEXITY_API_KEY && !process.env.GEMINI_API_KEY) {
     return NextResponse.json({ skipped: 'no-key', measured: 0 })
   }
 

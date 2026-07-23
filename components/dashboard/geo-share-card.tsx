@@ -9,6 +9,14 @@ interface GeoCheckDetail {
   query: string
   mentioned: boolean
   topDomains: string[]
+  engines?: Record<string, boolean> // 엔진별 노출 여부(perplexity/gemini 등)
+}
+
+// 엔진 표시명
+const ENGINE_LABEL: Record<string, string> = {
+  perplexity: 'Perplexity',
+  gemini: 'Gemini',
+  openai: 'ChatGPT',
 }
 
 interface GeoCheckRow {
@@ -84,7 +92,7 @@ function TrendChart({ points }: { points: { pct: number; label: string }[] }) {
 
 export async function GeoShareCard({ businessId }: { businessId: string }) {
   const db = createServiceClient()
-  const measureEnabled = !!process.env.PERPLEXITY_API_KEY
+  const measureEnabled = !!(process.env.PERPLEXITY_API_KEY || process.env.GEMINI_API_KEY)
 
   // 최근 12건 — 추세 그래프 + 직전 대비 계산용
   const { data } = (await db
@@ -145,6 +153,14 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
   const usCount = latest.cited
   const usRank = competitorRanks.filter((c) => c.count > usCount).length + 1
 
+  // 엔진별 노출 — detail[].engines 집계(여러 엔진일 때만 의미)
+  const engineKeys = [...new Set(latest.detail.flatMap((d) => Object.keys(d.engines ?? {})))]
+  const engineStats = engineKeys.map((k) => ({
+    key: k,
+    label: ENGINE_LABEL[k] ?? k,
+    cited: latest.detail.filter((d) => d.engines?.[k]).length,
+  }))
+
   return (
     <div className="rounded-xl border bg-white p-6 space-y-5">
       <div>
@@ -172,6 +188,17 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
         손님 질문 <b>{latest.total}개</b> 중 <b className="text-foreground">{latest.cited}개</b>에서
         AI 검색에 우리 업체가 잡혔어요.
       </p>
+
+      {/* 엔진별 노출 — 여러 AI 검색엔진에서 각각 몇 개 질문에 잡혔나 */}
+      {engineStats.length >= 2 && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1 -mt-2 text-xs text-muted-foreground">
+          {engineStats.map((e) => (
+            <span key={e.key}>
+              {e.label} <b className={e.cited > 0 ? 'text-emerald-600' : 'text-foreground'}>{e.cited}/{latest.total}</b>
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* 추세 그래프 — 측정이 쌓일수록 우상향 라인 */}
       {history.length >= 2 ? (

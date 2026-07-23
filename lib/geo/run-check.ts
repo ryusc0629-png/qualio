@@ -1,7 +1,8 @@
 import 'server-only'
 import type { createServiceClient } from '@/lib/supabase/server'
 import { buildGeoQuestions } from '@/lib/geo/questions'
-import { measureGeoShareOfVoice, type GeoMeasureResult } from '@/lib/geo/measure'
+import { measureGeoShareOfVoice, type GeoMeasureResult, type GeoQuestionResult } from '@/lib/geo/measure'
+import { measureGeoShareOfVoiceGemini } from '@/lib/geo/measure-gemini'
 
 // GEO 측정 1회 실행의 "코어" — 수동 액션(버튼)과 주기 cron이 공용으로 쓴다.
 // 흐름: 질문 세트 보장(월 단위 캐시) → Perplexity 검색 측정 → geo_checks에 1행 저장.
@@ -80,8 +81,9 @@ export interface RunGeoCheckResult {
 // - PERPLEXITY_API_KEY 없으면 skipped:'no-key' (측정 안 함)
 // - 지역·서비스 부족으로 질문이 없으면 skipped:'no-questions'
 export async function runGeoCheck(db: Db, businessId: string): Promise<RunGeoCheckResult> {
-  const apiKey = process.env.PERPLEXITY_API_KEY
-  if (!apiKey) return { skipped: 'no-key' }
+  const perplexityKey = process.env.PERPLEXITY_API_KEY
+  const geminiKey = process.env.GEMINI_API_KEY
+  if (!perplexityKey && !geminiKey) return { skipped: 'no-key' }
 
   // 업체 식별 정보 + 영업지역 + 서비스 조회
   const { data: biz } = (await db
@@ -105,27 +107,60 @@ export async function runGeoCheck(db: Db, businessId: string): Promise<RunGeoChe
   const questions = await ensureGeoQuestions(db, businessId, biz.address, biz.service_areas, serviceNames)
   if (questions.length === 0) return { skipped: 'no-questions' }
 
-  // 식별 신호(needles) — 업체명·slug가 검색 결과 제목/URL/스니펫에 있으면 "노출"로 판정.
+  // 식별 신호(needles) — 업체명·slug가 검색결과/답변/인용에 있으면 "노출"로 판정.
   // 2자 미만은 오탐 위험이 커서 제외.
   const needles = [biz.name, biz.slug]
     .filter((v): v is string => !!v && v.trim().length >= 2)
     .map((v) => v.trim())
 
-  const result = await measureGeoShareOfVoice(apiKey, questions, { needles })
+  // 사용 가능한 엔진 모두로 측정(있는 키만) — Perplexity(검색결과)+Gemini(답변 그라운딩).
+  const engineResults: { engine: string; results: GeoQuestionResult[] }[] = []
+  if (perplexityKey) {
+    const r = await measureGeoShareOfVoice(perplexityKey, questions, { needles })
+    engineResults.push({ engine: 'perplexity', results: r.results })
+  }
+  if (geminiKey) {
+    const r = await measureGeoShareOfVoiceGemini(geminiKey, questions, { needles })
+    engineResults.push({ engine: 'gemini', results: r.results })
+  }
 
-  // 측정 1회 = geo_checks 1행. 질문별 상세는 detail(jsonb)에 저장.
+  // 질문별 엔진 통합 — 어느 엔진에서든 잡히면 노출(union), 인용 도메인은 합집합.
+  // detail에 엔진별 결과(engines)도 남겨 대시보드에서 "엔진별" 표시에 활용.
+  const detail = questions.map((q, i) => {
+    const engines: Record<string, boolean> = {}
+    const domains = new Set<string>()
+    let mentioned = false
+    for (const er of engineResults) {
+      const r = er.results[i]
+      const m = r?.mentioned ?? false
+      engines[er.engine] = m
+      if (m) mentioned = true
+      for (const d of r?.topDomains ?? []) if (d) domains.add(d)
+    }
+    return { query: q, mentioned, topDomains: [...domains].slice(0, 4), engines }
+  })
+
+  const cited = detail.filter((d) => d.mentioned).length
+  const total = questions.length
+  const sharePct = total ? Math.round((cited / total) * 100) : 0
+  const engineLabel = engineResults.map((e) => e.engine).join('+') // 예: 'perplexity+gemini'
+
+  // 측정 1회 = geo_checks 1행. 질문별 상세(엔진별 포함)는 detail(jsonb)에 저장.
   await db.from('geo_checks' as never).insert({
     business_id: businessId,
-    engine: 'perplexity',
-    total: result.total,
-    cited: result.cited,
-    share_pct: result.sharePct,
-    detail: result.results.map((r) => ({
-      query: r.query,
-      mentioned: r.mentioned,
-      topDomains: r.topDomains,
-    })),
+    engine: engineLabel,
+    total,
+    cited,
+    share_pct: sharePct,
+    detail,
   } as never)
 
-  return { result }
+  return {
+    result: {
+      results: detail.map((d) => ({ query: d.query, mentioned: d.mentioned, matchedUrl: null, topDomains: d.topDomains })),
+      cited,
+      total,
+      sharePct,
+    },
+  }
 }
