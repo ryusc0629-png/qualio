@@ -114,9 +114,11 @@ export default async function FinancePage({ searchParams }: PageProps) {
   const hasFixed = fixedTotal > 0
 
   // 공헌이익률 & 손익분기점
-  const margin = revenue > 0
-    ? Math.max(0.05, Math.min(1, (revenue - variableExpense) / revenue))
-    : DEFAULT_CONTRIBUTION_MARGIN
+  // 공헌이익률: 매출 기록이 있으면 실제 데이터로, 없으면 청소업 평균값(어림값)
+  const marginIsEstimated = revenue === 0
+  const margin = marginIsEstimated
+    ? DEFAULT_CONTRIBUTION_MARGIN
+    : Math.max(0.05, Math.min(1, (revenue - variableExpense) / revenue))
   const breakEvenRevenue = hasFixed ? Math.round(fixedTotal / margin) : 0
   const achievementPct = breakEvenRevenue > 0 ? (revenue / breakEvenRevenue) * 100 : revenue > 0 ? 100 : 0
   const remaining = Math.max(0, breakEvenRevenue - revenue)
@@ -277,7 +279,7 @@ export default async function FinancePage({ searchParams }: PageProps) {
               </div>
               {hasFixed && (
                 <div className="text-right">
-                  <p className="text-xs text-muted-foreground">공헌이익률</p>
+                  <p className="text-xs text-muted-foreground">공헌이익률{marginIsEstimated ? ' (어림값)' : ''}</p>
                   <p className="text-sm font-bold text-primary">{Math.round(margin * 100)}%</p>
                 </div>
               )}
@@ -289,6 +291,20 @@ export default async function FinancePage({ searchParams }: PageProps) {
               remaining={remaining}
               hasFixed={hasFixed}
             />
+            {hasFixed && (
+              <div className="mt-4 rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground leading-relaxed">
+                <p className="font-medium text-foreground/80">본전 매출은 이렇게 계산했어요</p>
+                <p className="mt-1 tabular-nums">
+                  고정비 {formatWon(fixedTotal)} ÷ 공헌이익률 {Math.round(margin * 100)}% = <span className="font-semibold text-foreground">{formatWon(breakEvenRevenue)}</span>
+                </p>
+                <p className="mt-1.5">
+                  공헌이익률은 매출에서 재료·인건비(변동비)를 뺀 비율이에요.
+                  {marginIsEstimated
+                    ? ' 지금은 기록이 없어 청소업 평균(65%)으로 어림잡았고, 실제 매출·지출을 넣으면 사장님 업체 값으로 자동으로 바뀌어요.'
+                    : ' 이번 달 실제 매출·지출로 계산한 값이에요.'}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* 일별 추이 */}
