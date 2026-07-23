@@ -31,21 +31,60 @@ function formatKstDate(iso: string): string {
   })
 }
 
+// 노출률 추세 스파크라인 — 측정할 때마다 점이 찍혀 우상향 라인이 그려진다.
+// Y축은 0~100% 고정(자동 확대로 상승을 과장하지 않음 — 정직한 추세).
+function TrendChart({ points }: { points: { pct: number; label: string }[] }) {
+  const W = 320
+  const H = 120
+  const pad = 18
+  const n = points.length
+  const xy = points.map((p, i) => ({
+    x: n === 1 ? W / 2 : pad + (i / (n - 1)) * (W - 2 * pad),
+    y: H - pad - (Math.max(0, Math.min(100, p.pct)) / 100) * (H - 2 * pad),
+    pct: p.pct,
+  }))
+  const line = xy.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+  const area = `${xy[0].x.toFixed(1)},${H - pad} ${line} ${xy[n - 1].x.toFixed(1)},${H - pad}`
+  const last = xy[n - 1]
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-32" preserveAspectRatio="none" role="img" aria-label="AI 검색 노출률 추세">
+      {/* 기준선(0%·50%·100%) */}
+      {[0, 50, 100].map((v) => {
+        const y = H - pad - (v / 100) * (H - 2 * pad)
+        return <line key={v} x1={pad} y1={y} x2={W - pad} y2={y} stroke="#f1f5f9" strokeWidth={1} />
+      })}
+      {/* 면적 채움 */}
+      <polygon points={area} fill="#059669" fillOpacity={0.08} />
+      {/* 추세선 */}
+      <polyline points={line} fill="none" stroke="#059669" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+      {/* 각 측정점 */}
+      {xy.map((p, i) => (
+        <circle key={i} cx={p.x} cy={p.y} r={i === n - 1 ? 4 : 2.5} fill="#059669" />
+      ))}
+      {/* 마지막 점 값 라벨 */}
+      <text x={last.x} y={last.y - 8} textAnchor="middle" fontSize={13} fontWeight={700} fill="#059669">
+        {last.pct}%
+      </text>
+    </svg>
+  )
+}
+
 export async function GeoShareCard({ businessId }: { businessId: string }) {
   const db = createServiceClient()
   const measureEnabled = !!process.env.PERPLEXITY_API_KEY
 
-  // 최신 2건 — 추세(직전 대비) 계산용
+  // 최근 12건 — 추세 그래프 + 직전 대비 계산용
   const { data } = (await db
     .from('geo_checks' as never)
     .select('checked_at, total, cited, share_pct, detail' as never)
     .eq('business_id' as never, businessId)
     .order('checked_at' as never, { ascending: false })
-    .limit(2)) as unknown as { data: GeoCheckRow[] | null }
+    .limit(12)) as unknown as { data: GeoCheckRow[] | null }
 
-  const checks = data ?? []
-  const latest = checks[0] ?? null
-  const prev = checks[1] ?? null
+  const history = (data ?? []).slice().reverse() // 오래된→최신(그래프 왼→오른)
+  const latest = history[history.length - 1] ?? null
+  const prev = history[history.length - 2] ?? null
 
   // ── 아직 측정 전 ──
   if (!latest) {
@@ -115,6 +154,21 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
         손님 질문 <b>{latest.total}개</b> 중 <b className="text-foreground">{latest.cited}개</b>에서
         AI 검색에 우리 업체가 잡혔어요.
       </p>
+
+      {/* 추세 그래프 — 측정이 쌓일수록 우상향 라인 */}
+      {history.length >= 2 ? (
+        <div>
+          <TrendChart points={history.map((c) => ({ pct: c.share_pct, label: formatKstDate(c.checked_at) }))} />
+          <div className="flex justify-between text-xs text-muted-foreground mt-1">
+            <span>{formatKstDate(history[0].checked_at)}</span>
+            <span>{formatKstDate(latest.checked_at)}</span>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground rounded-lg bg-slate-50 border p-3">
+          측정을 몇 번 더 하면 여기에 <b>노출률이 올라가는 그래프</b>가 그려져요. 매주 자동으로도 측정됩니다.
+        </p>
+      )}
 
       {/* 아직 안 잡히는 질문 — 다음 행동 안내 */}
       {missing.length > 0 && (
