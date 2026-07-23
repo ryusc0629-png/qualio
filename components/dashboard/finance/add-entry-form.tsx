@@ -192,6 +192,11 @@ export function AddEntryForm({ fullWidth = false, defaultType = 'revenue', trigg
               </button>
             ))}
           </div>
+          {!isRevenue && (
+            <p className="text-xs text-muted-foreground pt-0.5">
+              💡 도급·일용직 인건비도 여기 &lsquo;인건비&rsquo;로 그 달 나간 만큼 기록하세요
+            </p>
+          )}
         </div>
 
         {/* 날짜 */}

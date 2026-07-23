@@ -161,6 +161,11 @@ export function FixedCostsManager({ costs, variant = 'button' }: FixedCostsManag
           </div>
         )}
 
+        {/* 인건비 안내 — 도급/일용직은 고정비가 아님 */}
+        <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800 leading-relaxed">
+          💡 <span className="font-semibold">도급·일용직 인건비는 여기 넣지 마세요.</span> 일감에 따라 달라지는 돈이라, &lsquo;지출 → 인건비&rsquo;로 그 달 나간 만큼 기록하는 게 정확해요. 여기엔 <span className="font-semibold">매달 똑같이 나가는 정직원 급여</span>만 넣으세요.
+        </div>
+
         {/* 추가 폼 */}
         <div className="rounded-xl border bg-muted/30 p-3 space-y-3">
           <p className="text-sm font-semibold">고정비 추가</p>

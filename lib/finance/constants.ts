@@ -30,14 +30,15 @@ export const FIXED_COST_PRESETS = [
   '구독료',
 ] as const
 
-// 분류별 도넛/막대 색상(에메랄드 계열 + 보조색). CSS 변수 chart-1~5 + 회색.
+// 분류별 도넛 색상 — 한눈에 구분되도록 색상환에 골고루 퍼진 6색(서로 뚜렷이 다른 색조).
+// 지출 차트라 매출(초록)과 헷갈리지 않게 초록은 빼고 따뜻한 색부터 시작한다.
 export const CATEGORY_COLORS = [
-  'var(--chart-1)',
-  'var(--chart-2)',
-  'var(--chart-3)',
-  'var(--chart-4)',
-  'var(--chart-5)',
-  '#94a3b8', // slate-400 — '기타'용
+  '#f59e0b', // amber-500  — 주황
+  '#ef4444', // red-500    — 빨강
+  '#8b5cf6', // violet-500 — 보라
+  '#0ea5e9', // sky-500    — 파랑
+  '#84cc16', // lime-500   — 연두
+  '#64748b', // slate-500  — 회색(기타)
 ]
 
 // 데이터가 없을 때 쓸 기본 공헌이익률(청소업 서비스 특성상 높은 편)
