@@ -1,6 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { GeoMeasureButton } from './geo-measure-button'
-import { GeoWeakQuestions } from './geo-topic-button'
 
 // AI 검색 노출률 카드(GEO Phase 1) — 소비자 질문을 AI 검색에 던져 우리 업체가
 // 결과에 잡히는 비율을 측정한 결과를 사장님이 숫자로 보게 한다.
@@ -186,9 +185,13 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
         <div className="rounded-lg bg-amber-50 border border-amber-100 p-4">
           <p className="text-sm font-semibold text-amber-900">아직 안 잡히는 질문</p>
           <p className="text-xs text-amber-900/70 mt-1">
-            질문 옆 <b>‘글 쓰기’</b>를 누르면 그 주제로 홍보 글이 만들어져요. 글이 쌓이면 다음 측정 때 노출이 올라갑니다.
+            자동 발행이 <b>이 질문들부터 우선</b> 글을 씁니다. 글이 쌓이면 다음 측정 때 노출이 올라가요. (따로 하실 일 없어요)
           </p>
-          <GeoWeakQuestions questions={missing} />
+          <ul className="mt-2 space-y-1">
+            {missing.map((q) => (
+              <li key={q} className="text-sm text-amber-900/80">· {q}</li>
+            ))}
+          </ul>
         </div>
       )}
 

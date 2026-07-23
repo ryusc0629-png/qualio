@@ -5,6 +5,7 @@ import { fetchRecentJobCases } from '@/lib/ai/job-cases'
 import { generatePostImagesSmart, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
+import { pickWeakGeoTopic } from '@/lib/geo/weak-topics'
 import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContentEnabled } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
@@ -48,23 +49,37 @@ async function publishOnePost(
   channelsEnabled: boolean,
   realCases: string[],
 ): Promise<string> {
-  // AI로 주제 추천
+  // 주제 선택 — 1순위: GEO 측정에서 '안 잡히는 질문'을 우선 공략(같은 발행량으로 노출률↑)
   let selectedTopic: string | undefined
+  let selectedKeyword: string | undefined
   try {
-    const suggestions = await generateTopicSuggestions({
-      businessName: business.name,
-      services,
-      currentMonth: month,
-      // 이번 달 이미 발행한 제목(같은 실행 내 직전 발행분 포함) → AI가 유사 주제까지 제외
-      recentTitles: publishedTitles,
-      skipKeywordData: true, // 발행 경로: 검색량 배지 불필요 → 네이버 API 생략(지연·의존성 제거)
-    })
-    const unused = suggestions.find(
-      (s) => !publishedTitles.some((t) => t.includes(s.title.slice(0, 10)))
-    )
-    selectedTopic = unused?.topic ?? suggestions[0]?.topic
+    const weak = await pickWeakGeoTopic(db, business.id, publishedTitles)
+    if (weak) {
+      selectedTopic = weak.topic
+      selectedKeyword = weak.keyword
+    }
   } catch {
-    // 주제 추천 실패 시 AI 자유 선택
+    // GEO 약점 조회 실패 시 아래 일반 주제 추천으로 진행
+  }
+
+  // 2순위: 약점 질문이 없으면(모두 노출 중이거나 측정 전) 기존 월간 주제 추천
+  if (!selectedTopic) {
+    try {
+      const suggestions = await generateTopicSuggestions({
+        businessName: business.name,
+        services,
+        currentMonth: month,
+        // 이번 달 이미 발행한 제목(같은 실행 내 직전 발행분 포함) → AI가 유사 주제까지 제외
+        recentTitles: publishedTitles,
+        skipKeywordData: true, // 발행 경로: 검색량 배지 불필요 → 네이버 API 생략(지연·의존성 제거)
+      })
+      const unused = suggestions.find(
+        (s) => !publishedTitles.some((t) => t.includes(s.title.slice(0, 10)))
+      )
+      selectedTopic = unused?.topic ?? suggestions[0]?.topic
+    } catch {
+      // 주제 추천 실패 시 AI 자유 선택
+    }
   }
 
   const postContent = await generatePostContent({
@@ -73,6 +88,7 @@ async function publishOnePost(
     description: business.description,
     services,
     topic: selectedTopic,
+    keyword: selectedKeyword, // GEO 약점 질문의 핵심 검색어 — 제목·본문 최적화
     serviceAreas: business.serviceAreas,
     model,
     realCases,
