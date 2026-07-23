@@ -88,7 +88,27 @@ export function buildGeoQuestions(
   // 3) 메인 지역 일반형 — 서비스 특정 없이 던지는 질문
   push(`${home} 청소업체 추천`)
 
-  // 4) 보조 지역(다른 광역시) × 대표 서비스 1개씩 — 넓은 영업권 일부 포착
+  // 4) 신뢰 축 — 소비자가 "믿을만한/양심적인" 업체를 찾는 질문(업종 불문 안전)
+  push(`${home} 믿을만한 청소업체 추천`)
+
+  // 5) 증상·문제 축 — 서비스 키워드에서 대표 '문제'를 유추해 1개 추가(해당 서비스 있을 때만).
+  //    소비자는 서비스명보다 겪는 문제(곰팡이·냄새·새집증후군)로 검색하는 경우가 많다.
+  const svcJoined = services.join(' ')
+  const SYMPTOM_RULES: { re: RegExp; q: (h: string) => string }[] = [
+    { re: /에어컨/, q: (h) => `${h} 에어컨 곰팡이 냄새 제거 업체` },
+    { re: /입주|이사/, q: (h) => `${h} 새집증후군 청소 업체` },
+    { re: /욕실|화장실/, q: (h) => `${h} 욕실 곰팡이 제거 업체` },
+    { re: /냉장고/, q: (h) => `${h} 냉장고 냄새 제거 청소` },
+    { re: /인테리어|준공|입주/, q: (h) => `${h} 인테리어 먼지 입주 전 청소` },
+  ]
+  for (const rule of SYMPTOM_RULES) {
+    if (rule.re.test(svcJoined)) {
+      push(rule.q(home))
+      break // 문제 축은 1개만 — 질문 세트가 특정 문제로 치우치지 않게
+    }
+  }
+
+  // 6) 보조 지역(다른 광역시) × 대표 서비스 1개씩 — 넓은 영업권 일부 포착
   for (const m of metros.slice(1, 1 + MAX_SECONDARY_METROS)) {
     push(`${m} ${services[0]} 추천`)
   }

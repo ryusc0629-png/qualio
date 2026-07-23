@@ -128,6 +128,23 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
   const competitorsFor = (topDomains: string[]) =>
     topDomains.filter((d) => d && d !== APP_HOST).slice(0, 2)
 
+  // AI 추천 순위(리더보드) — 각 도메인이 '몇 개 질문'에 등장하는지 집계(질문당 1회).
+  // 우리 업체 순위(= cited 수 기준)를 함께 계산해 "이기는 감각"을 준다.
+  const domainWins = new Map<string, number>()
+  for (const d of latest.detail) {
+    const seen = new Set<string>()
+    for (const dom of d.topDomains) {
+      if (!dom || dom === APP_HOST || seen.has(dom)) continue
+      seen.add(dom)
+      domainWins.set(dom, (domainWins.get(dom) ?? 0) + 1)
+    }
+  }
+  const competitorRanks = [...domainWins.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+  const usCount = latest.cited
+  const usRank = competitorRanks.filter((c) => c.count > usCount).length + 1
+
   return (
     <div className="rounded-xl border bg-white p-6 space-y-5">
       <div>
@@ -169,6 +186,32 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
         <p className="text-xs text-muted-foreground rounded-lg bg-slate-50 border p-3">
           측정을 몇 번 더 하면 여기에 <b>노출률이 올라가는 그래프</b>가 그려져요. 매주 자동으로도 측정됩니다.
         </p>
+      )}
+
+      {/* AI 추천 순위(리더보드) — 이 질문들에서 누가 자주 추천되나 + 우리 위치 */}
+      {competitorRanks.length > 0 && (
+        <div className="rounded-lg border p-4">
+          <p className="text-sm font-semibold">
+            🏆 AI 추천 순위 <span className="text-xs font-normal text-muted-foreground">(이 질문들 기준)</span>
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {competitorRanks.slice(0, 5).map((c, i) => (
+              <li key={c.name} className="flex items-center justify-between text-sm">
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className={`w-4 text-center text-xs ${i === 0 ? 'text-amber-500 font-bold' : 'text-muted-foreground'}`}>{i + 1}</span>
+                  <span className="truncate text-foreground/80">{c.name}</span>
+                </span>
+                <span className="text-xs text-muted-foreground shrink-0">{c.count}개 질문</span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2 pt-2 border-t flex items-center justify-between text-sm font-semibold text-emerald-700">
+            <span>우리 업체</span>
+            <span className="text-xs">
+              {usCount > 0 ? `${usRank}위 · ${usCount}개 질문에서 추천` : '아직 순위 밖 — 글이 쌓이면 올라가요'}
+            </span>
+          </div>
+        </div>
       )}
 
       {/* 이미 잡히는 질문(승) — 잡힌 것도 있고 아직인 것도 있을 때만 별도 표시 */}
