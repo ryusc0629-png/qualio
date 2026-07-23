@@ -77,6 +77,17 @@ export default async function MarketingPage({
   ])
 
   const business = businessResult.data
+
+  // GEO 최신 측정의 '안 잡히는 질문' — 자동 발행 일정에 우선 배정
+  const { data: latestGeoCheck } = (await db
+    .from('geo_checks' as never)
+    .select('detail' as never)
+    .eq('business_id' as never, profile.business_id)
+    .order('checked_at' as never, { ascending: false })
+    .limit(1)
+    .maybeSingle()) as unknown as { data: { detail: { query: string; mentioned: boolean }[] } | null }
+  const geoWeakQuestions = (latestGeoCheck?.detail ?? []).filter((d) => !d.mentioned).map((d) => d.query)
+
   const doneReels = (doneReelsResult.data ?? []).map((r) => ({
     reportId: r.id,
     reelUrl: r.reel_url,
@@ -139,6 +150,7 @@ export default async function MarketingPage({
         initialSuggestions={initialSuggestions}
         naverBlogId={business?.naver_blog_id ?? null}
         danggeunBusinessUrl={business?.danggeun_business_url ?? null}
+        geoWeakQuestions={geoWeakQuestions}
       />
 
       <div className="border-t pt-6 space-y-5">

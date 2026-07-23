@@ -112,6 +112,8 @@ interface PostListProps {
   naverBlogId?: string | null
   // 사장님 당근 비즈프로필 주소 — '당근 열기'가 이 프로필로 연결 (없으면 당근 비즈니스 홈)
   danggeunBusinessUrl?: string | null
+  // GEO 측정 '안 잡히는 질문' — 예정 일정에 우선 배정 (자동 발행이 노출률 약점부터 공략)
+  geoWeakQuestions?: string[]
 }
 
 interface ScheduleSlot {
@@ -122,11 +124,17 @@ interface ScheduleSlot {
   status: 'published' | 'today' | 'upcoming'
   monthlySearches?: number  // 발행 예정 주제의 실제 월 검색량 (있으면 배지 표시)
   competition?: string      // 경쟁도 '낮음'|'중간'|'높음'
+  geoTargeted?: boolean     // GEO 측정 '안 잡히는 질문'을 공략하는 슬롯 (AI 검색 우선)
 }
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토']
 
-function buildSchedule(target: number, posts: Post[], suggestions: TopicSuggestion[] | null): ScheduleSlot[] {
+function buildSchedule(
+  target: number,
+  posts: Post[],
+  suggestions: TopicSuggestion[] | null,
+  geoWeakQuestions: string[] = [],
+): ScheduleSlot[] {
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth()
@@ -156,7 +164,9 @@ function buildSchedule(target: number, posts: Post[], suggestions: TopicSuggesti
   }
 
   const suggestionList = suggestions ?? []
-  let suggIndex = 0
+  // 예정 슬롯 배정 순서 — 실제 자동 발행과 동일하게 GEO '안 잡히는 질문'을 먼저,
+  // 그다음 월간 추천 주제를 순환. (u = 발행 예정 슬롯의 순번)
+  let u = 0
 
   return scheduledDays
     .map((day): ScheduleSlot | null => {
@@ -170,12 +180,23 @@ function buildSchedule(target: number, posts: Post[], suggestions: TopicSuggesti
       else if (day >= today) status = 'upcoming'
       else return null  // 과거 미발행 슬롯은 제외
 
-      // 발행 완료 슬롯은 실제 제목, 예정 슬롯은 추천 주제(검색량 배지 동반)를 순환 배정
-      const suggestion = post ? null : suggestionList.length > 0 ? suggestionList[suggIndex++ % suggestionList.length] : null
-      const topicLabel = post ? post.title : suggestion?.title ?? '최적 주제를 자동으로 선택해요'
+      // 발행 완료 슬롯은 실제 제목 그대로
+      if (post) {
+        return { day, date, post, topicLabel: post.title, status }
+      }
 
+      // 예정 슬롯: 앞쪽엔 GEO 약점 질문, 소진되면 월간 추천 주제 순환
+      const idx = u++
+      if (idx < geoWeakQuestions.length) {
+        return { day, date, post: null, topicLabel: geoWeakQuestions[idx], status, geoTargeted: true }
+      }
+      const suggestion = suggestionList.length > 0
+        ? suggestionList[(idx - geoWeakQuestions.length) % suggestionList.length]
+        : null
       return {
-        day, date, post, topicLabel, status,
+        day, date, post: null,
+        topicLabel: suggestion?.title ?? '최적 주제를 자동으로 선택해요',
+        status,
         monthlySearches: suggestion?.monthlySearches,
         competition: suggestion?.competition,
       }
@@ -397,7 +418,7 @@ function ReelCard({
   )
 }
 
-export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], autoImageGeneration = true, initialSuggestions = null, naverBlogId = null, danggeunBusinessUrl = null }: PostListProps) {
+export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], autoImageGeneration = true, initialSuggestions = null, naverBlogId = null, danggeunBusinessUrl = null, geoWeakQuestions = [] }: PostListProps) {
   const [posts] = useState(initialPosts)
   // 오름차순 정렬 (오래된 글 위 → 최신 글 아래) + 오늘 위치로 자동 스크롤
   const sortedPosts = [...posts].sort((a, b) => new Date(a.published_at).getTime() - new Date(b.published_at).getTime())
@@ -521,7 +542,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   }).length
   const progressPct = autoPostLimit > 0 ? Math.min((postsThisMonth / autoPostLimit) * 100, 100) : 0
   const currentMonth = now.getMonth() + 1
-  const schedule = buildSchedule(autoPostLimit, posts, suggestions)
+  const schedule = buildSchedule(autoPostLimit, posts, suggestions, geoWeakQuestions)
 
   // 아직 채널에 안 올린 글 (포트폴리오 제외, 채널 콘텐츠 있고 완료 처리 안 된 것)
   const channelTodos = posts.filter((p) => {
@@ -963,6 +984,14 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                     }`}>
                       {slot.topicLabel}
                     </p>
+                    {/* GEO 약점 공략 배지 — AI 검색에서 아직 안 잡히는 질문을 우선 발행 */}
+                    {slot.status !== 'published' && slot.geoTargeted && (
+                      <div className="mt-1">
+                        <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5">
+                          🔎 AI 검색 공략
+                        </span>
+                      </div>
+                    )}
                     {/* 실제 검색량·경쟁도 배지 — 데이터가 있을 때만 (근거 있는 주제 선정) */}
                     {slot.status !== 'published' && slot.monthlySearches !== undefined && (
                       <div className="flex items-center gap-1.5 mt-1">
