@@ -417,32 +417,16 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
       return
     }
 
-    // 미리보기는 '고객이 보는 것과 똑같은 공개 페이지(/quote/{token})'로 연다.
-    // (내부 인쇄 페이지는 사파리 PDF 저장이 백지가 되는 문제가 있어, 검증된 공개 페이지로 통일)
-    // ?preview=1 이면 조회 알림 없이 사장님 미리보기로 뜬다.
-    // 기존 견적서는 토큰을 미리 알아 즉시(동기) 열고, 저장 후 새로고침해 수정본 반영.
-    const preToken = existingQuote?.public_token
-    const preOpened = preToken ? window.open(`/quote/${preToken}?preview=1`, '_blank') : null
-
+    // 저장 후, '같은 탭'에서 공개 미리보기 페이지(/quote/{token})로 이동한다.
+    // (사파리는 '사이트가 연 새 탭'을 인쇄하면 백지가 되는 버그가 있어, 같은 탭 이동으로 PDF 저장을
+    //  항상 정상 동작시킴. 미리보기에서 브라우저 뒤로가기로 대시보드로 복귀)
     const res = await executeSaveAsync(buildPayload())
-    if (!res?.data?.success) {
-      // 저장 실패 — onError 토스트는 이미 표시됨. 미리 연 탭은 닫아줌
-      if (preOpened && !preOpened.closed) preOpened.close()
-      return
-    }
+    if (!res?.data?.success) return // 저장 실패 — onError 토스트 이미 표시됨
 
-    // 방금 저장된 견적서의 공개 토큰으로 미리보기 (여러 장 중 이 장)
-    const token = res.data.publicToken ?? preToken
+    const token = res.data.publicToken ?? existingQuote?.public_token
     const savedId = res.data.quoteId ?? existingQuote?.id
     const href = token ? `/quote/${token}?preview=1` : (savedId ? `/quote-doc/${savedId}` : printHref)
-    if (preOpened && !preOpened.closed) {
-      // 이미 실제 페이지가 뜬 탭이라 이동/새로고침이 정상 동작 → 방금 수정본 반영
-      preOpened.location.href = href
-    } else {
-      // 새 견적서 등 미리 못 연 경우 — 저장 후 새 탭 시도(차단되면 목록 눈아이콘으로 안내)
-      const opened = window.open(href, '_blank')
-      if (!opened) toast('미리보기 창이 막혔어요. 목록에서 👁 미리보기를 눌러 열어주세요')
-    }
+    window.location.href = href
   }
 
   return (

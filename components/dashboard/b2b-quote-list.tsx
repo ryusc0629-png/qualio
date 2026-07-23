@@ -161,15 +161,15 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, hasMeetin
                       <Link2 className="h-4 w-4" />
                     </button>
                   )}
-                  {/* 미리보기 — 고객이 보는 공개 페이지를 그대로 새 탭에서 열기(PDF 저장도 여기서) */}
+                  {/* 미리보기 — 같은 탭에서 공개 페이지로 이동(새 탭 X).
+                      사파리는 '사이트가 연 새 탭'을 인쇄하면 백지가 되는 버그가 있어,
+                      같은 탭에서 열어야 PDF 저장이 정상 동작함. 되돌아갈 땐 브라우저 뒤로가기. */}
                   {quote.public_token && (
                     <a
                       href={`/quote/${quote.public_token}?preview=1`}
-                      target="_blank"
-                      rel="noopener noreferrer"
                       className="p-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted"
                       aria-label="견적서 미리보기"
-                      title="미리보기"
+                      title="미리보기 (PDF 저장)"
                     >
                       <Eye className="h-4 w-4" />
                     </a>
