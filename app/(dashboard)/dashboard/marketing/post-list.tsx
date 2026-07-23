@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAction } from 'next-safe-action/hooks'
-import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, publishTodayAction, generatePostImagesAction, markChannelsPostedAction, toggleAutoImageAction } from '@/lib/actions/posts'
+import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, publishTodayAction, markChannelsPostedAction } from '@/lib/actions/posts'
 import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/portfolio'
 import { dismissReelAction } from '@/lib/actions/reports'
 import { Button } from '@/components/ui/button'
@@ -483,7 +483,6 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   const [daangnPost, setDaangnPost] = useState<Post | null>(null)
   const [instaPost, setInstaPost] = useState<Post | null>(null)
   const [galleryPost, setGalleryPost] = useState<Post | null>(null)
-  const [genId, setGenId] = useState<string | null>(null)
   const [postingId, setPostingId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   // 오늘 자동 발행 시간(오전 9시 KST)이 지났는지 — 하이드레이션 불일치 방지 위해 마운트 후 계산
@@ -587,23 +586,9 @@ const { execute: deletePost, isPending: isDeleting } = useAction(deletePostActio
     onError: ({ error }) => { toast.error(error.serverError ?? '삭제에 실패했습니다') },
   })
 
-  const { execute: generateImages } = useAction(generatePostImagesAction, {
-    onSuccess: () => {
-      toast.success('이미지가 만들어졌어요!')
-      setTimeout(() => window.location.replace(window.location.pathname), 1200)
-    },
-    onError: ({ error }) => { setGenId(null); toast.error(error.serverError ?? '이미지 생성에 실패했어요') },
-  })
-
   const { execute: markChannelsPosted } = useAction(markChannelsPostedAction, {
     onSuccess: () => { toast.success('올림 완료로 표시했어요!'); setTimeout(() => window.location.replace(window.location.pathname), 800) },
     onError: ({ error }) => { setPostingId(null); toast.error(error.serverError ?? '처리에 실패했어요') },
-  })
-
-  const [imageToggle, setImageToggle] = useState(autoImageGeneration)
-  const { execute: toggleAutoImage } = useAction(toggleAutoImageAction, {
-    onSuccess: () => { toast.success(imageToggle ? '홍보 이미지 자동 생성이 켜졌어요' : '홍보 이미지 자동 생성이 꺼졌어요') },
-    onError: ({ error }) => { setImageToggle(!imageToggle); toast.error(error.serverError ?? '설정 변경에 실패했어요') },
   })
 
   const { execute: approvePortfolio, isPending: isApproving } = useAction(approvePortfolioAction, {
@@ -673,7 +658,8 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           IG
         </button>
       )}
-      {(post.image_urls?.length ?? 0) > 0 ? (
+      {/* 이미지가 있는 글(과거 자동생성분)만 보기 버튼 노출. 자동 생성 기능은 현재 OFF */}
+      {(post.image_urls?.length ?? 0) > 0 && (
         <button
           type="button"
           onClick={() => setGalleryPost(post)}
@@ -681,18 +667,6 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           title="생성된 이미지 보기"
         >
           <ImageIcon className="h-3.5 w-3.5" />{post.image_urls!.length}
-        </button>
-      ) : (
-        <button
-          type="button"
-          disabled={genId === post.id}
-          onClick={() => { setGenId(post.id); generateImages({ id: post.id }) }}
-          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-white bg-violet-600 hover:bg-violet-700 transition-colors disabled:opacity-60"
-          title="이 글에 맞는 이미지 생성 (게시물당 1회)"
-        >
-          {genId === post.id
-            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />생성 중</>
-            : <><ImageIcon className="h-3.5 w-3.5" />이미지</>}
         </button>
       )}
     </>
@@ -894,36 +868,6 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
         <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
           <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${progressPct}%` }} />
         </div>
-      </div>
-
-      {/* AI 이미지 자동 생성 토글 */}
-      <div className="flex items-center justify-between rounded-xl border bg-white px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <ImageIcon className="h-4 w-4 text-violet-600 shrink-0" />
-          <div>
-            <p className="text-sm font-medium">홍보 이미지 자동 생성</p>
-            <p className="text-xs text-muted-foreground">
-              {imageToggle ? '포스트 발행 시 홍보 이미지 3장이 함께 생성돼요' : '직접 촬영한 사진을 올릴 수 있어요'}
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            const next = !imageToggle
-            setImageToggle(next)
-            toggleAutoImage({ enabled: next })
-          }}
-          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-            imageToggle ? 'bg-violet-600' : 'bg-gray-200'
-          }`}
-        >
-          <span
-            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
-              imageToggle ? 'translate-x-5' : 'translate-x-0'
-            }`}
-          />
-        </button>
       </div>
 
       {/* ── 월간 발행 일정표 ── */}
