@@ -27,14 +27,15 @@ interface SidebarProps {
   onClose?: () => void
 }
 
+// 자주 쓰는 순서로 정렬 (사장님 사용 빈도 기준)
 const navItems = [
   { href: '/dashboard',          label: '홈',          desc: undefined,        icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/clients',  label: '고객 관리',   desc: '상담·견적·거래처', icon: Users },
-  { href: '/dashboard/roadmap',  label: '영업 동선',   desc: '방문 순서 최적화', icon: Route },
   { href: '/dashboard/schedule', label: '일정·배정',   desc: undefined,        icon: CalendarDays },
-  { href: '/dashboard/services', label: '서비스',      desc: undefined,        icon: Wrench },
-  { href: '/dashboard/finance',  label: '매출·지출',   desc: '손익·본전 계산',   icon: Wallet },
   { href: '/dashboard/marketing',label: '마케팅',      desc: undefined,        icon: Megaphone },
+  { href: '/dashboard/clients',  label: '고객 관리',   desc: '상담·견적·거래처', icon: Users },
+  { href: '/dashboard/finance',  label: '매출·지출',   desc: '손익·본전 계산',   icon: Wallet },
+  { href: '/dashboard/roadmap',  label: '영업 동선',   desc: '방문 순서 최적화', icon: Route },
+  { href: '/dashboard/services', label: '서비스',      desc: undefined,        icon: Wrench },
   { href: '/dashboard/settings', label: '설정',        desc: undefined,        icon: Settings },
 ]
 
