@@ -3,8 +3,12 @@ import { fal } from '@fal-ai/client'
 // fal.ai 이미지 생성 — 청소 포스팅용 대표 이미지 자동 생성
 // 모델 선택:
 //   - 'fal-ai/flux/schnell' : 1장당 약 $0.003 (₩4), 빠르지만 품질·프롬프트 반영 낮음
-//   - 'fal-ai/flux/dev'     : 1장당 약 $0.025 (₩33), 품질·맥락 반영 우수 (마케팅 권장)
-const IMAGE_MODEL = 'fal-ai/flux/dev'
+//   - 'fal-ai/flux/dev'     : 1장당 약 $0.025 (₩33), 품질·맥락 반영 우수
+//   - 'fal-ai/nano-banana'  : 1장당 약 $0.039 (₩53), 구글 Gemini 이미지 모델 — 사실감·맥락 반영 최상 (현재 사용)
+// ⚠️ Flux로 되돌리려면 IMAGE_MODEL만 'fal-ai/flux/dev'로 교체하면 됨 (입력 파라미터는 아래에서 자동 분기)
+// 타입을 string으로 두어 fal이 모델별 입력 타입으로 좁히지 않게 함 (Flux/nano 입력 자동 분기 허용)
+const IMAGE_MODEL: string = 'fal-ai/nano-banana'
+const IS_NANO = IMAGE_MODEL.includes('nano-banana')
 const STEPS = IMAGE_MODEL.includes('schnell') ? 4 : 28
 
 // 포스트당 생성할 이미지 수 (네이버 상위노출 균형점: 대표 1 + 본문용 2)
@@ -85,17 +89,30 @@ export function buildImagePrompt(seed: string): string {
   return buildVariantPrompts(seed)[0]
 }
 
-async function runFlux(prompt: string): Promise<string | null> {
+// 모델 계열별 입력 파라미터 (nano-banana는 스텝·guidance 없음 → aspect_ratio 사용)
+function buildModelInput(prompt: string): Record<string, unknown> {
+  if (IS_NANO) {
+    return {
+      prompt,
+      num_images: 1,
+      aspect_ratio: '4:3', // Flux의 landscape_4_3과 동일한 가로 비율
+      output_format: 'jpeg', // 블로그 업로드용 경량 포맷
+    }
+  }
+  return {
+    prompt,
+    image_size: 'landscape_4_3',
+    num_images: 1,
+    num_inference_steps: STEPS,
+    guidance_scale: 3.5,
+    enable_safety_checker: true,
+  }
+}
+
+async function runImageModel(prompt: string): Promise<string | null> {
   try {
     const result = await fal.subscribe(IMAGE_MODEL, {
-      input: {
-        prompt,
-        image_size: 'landscape_4_3',
-        num_images: 1,
-        num_inference_steps: STEPS,
-        guidance_scale: 3.5,
-        enable_safety_checker: true,
-      },
+      input: buildModelInput(prompt),
     }) as { data: FalResult }
     return result.data?.images?.[0]?.url ?? null
   } catch (err) {
@@ -113,7 +130,7 @@ export async function generatePostImage(seed: string): Promise<string | null> {
     return null
   }
   fal.config({ credentials: apiKey })
-  return runFlux(buildImagePrompt(seed))
+  return runImageModel(buildImagePrompt(seed))
 }
 
 // seed → 맥락 맞춤 이미지 count장 생성 (작업/결과/디테일 등 서로 다른 장면)
@@ -133,6 +150,6 @@ export async function generatePostImages(seed: string, count: number): Promise<s
     i < variants.length ? variants[i] : `${variants[i % variants.length]}, alternative angle ${i}`,
   )
 
-  const results = await Promise.all(prompts.map((p) => runFlux(p)))
+  const results = await Promise.all(prompts.map((p) => runImageModel(p)))
   return results.filter((u): u is string => Boolean(u))
 }

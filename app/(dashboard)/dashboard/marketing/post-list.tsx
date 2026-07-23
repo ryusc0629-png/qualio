@@ -486,6 +486,33 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+  // 네이버 블로그용 — 자동 생성 이미지 전부를 한 번에 내려받기
+  // (직원이 드라이브를 왕복하지 않고 다운로드 폴더에서 바로 블로그에 첨부하도록)
+  const [savingAllImages, setSavingAllImages] = useState(false)
+  const handleSaveAllImages = async (urls: string[], title: string) => {
+    setSavingAllImages(true)
+    try {
+      for (let i = 0; i < urls.length; i++) {
+        const res = await fetch(urls[i])
+        const blob = await res.blob()
+        const objectUrl = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = objectUrl
+        a.download = `${title}_${i + 1}.jpg`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(objectUrl)
+        // 브라우저가 연속 다운로드를 차단하지 않도록 약간의 간격을 둔다
+        await new Promise((r) => setTimeout(r, 400))
+      }
+      toast.success(`이미지 ${urls.length}장을 저장했어요!`)
+    } catch {
+      toast.error('이미지 저장을 못 했어요. 다시 눌러주세요')
+    } finally {
+      setSavingAllImages(false)
+    }
+  }
 
   const now = new Date()
   const postsThisMonth = posts.filter((p) => {
@@ -1285,15 +1312,20 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
               </div>
             )}
 
-            {/* 이미지 (있는 경우) */}
-            {naverPost.image_url && (
+            {/* 첨부 이미지 — 자동 생성된 전체 이미지를 보여주고, 아래 버튼으로 한 번에 저장 */}
+            {(naverPost.image_urls?.length || naverPost.image_url) && (
               <div className="px-5 py-3 border-b bg-slate-50 shrink-0">
-                <p className="text-xs text-muted-foreground mb-2">첨부 이미지 — 우클릭 후 저장하여 네이버 블로그에 업로드하세요</p>
-                <img
-                  src={naverPost.image_url}
-                  alt="포스트 이미지"
-                  className="rounded-lg w-full max-h-48 object-cover border"
-                />
+                <p className="text-xs text-muted-foreground mb-2">첨부 사진 — 아래 “사진 전부 저장”을 누른 뒤, 네이버 글쓰기에서 사진으로 올려주세요</p>
+                <div className="flex gap-2 overflow-x-auto overscroll-contain">
+                  {(naverPost.image_urls?.length ? naverPost.image_urls : [naverPost.image_url!]).map((src, i) => (
+                    <img
+                      key={i}
+                      src={src}
+                      alt={`포스트 사진 ${i + 1}`}
+                      className="rounded-lg h-24 w-32 object-cover border shrink-0"
+                    />
+                  ))}
+                </div>
               </div>
             )}
 
@@ -1304,17 +1336,35 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
               </pre>
             </div>
 
-            {/* 액션 버튼 */}
-            <div className="px-5 py-4 border-t flex gap-2 shrink-0">
-              <Button
-                className="flex-1 h-12 gap-2"
-                onClick={() => handleNaverCopy(naverPost.naver_content!, naverPost.naver_title ?? undefined)}
-              >
-                {copied
-                  ? <><CheckCircle2 className="h-4 w-4" />복사됐어요!</>
-                  : <><Copy className="h-4 w-4" />전체 복사</>
-                }
-              </Button>
+            {/* 액션 버튼 — ①글 복사 ②사진 저장 ③블로그 열기 순서로 진행 */}
+            <div className="px-5 py-4 border-t flex flex-col gap-2 shrink-0">
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1 h-12 gap-2"
+                  onClick={() => handleNaverCopy(naverPost.naver_content!, naverPost.naver_title ?? undefined)}
+                >
+                  {copied
+                    ? <><CheckCircle2 className="h-4 w-4" />복사됐어요!</>
+                    : <><Copy className="h-4 w-4" />① 글 복사</>
+                  }
+                </Button>
+                {(naverPost.image_urls?.length || naverPost.image_url) && (
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-12 gap-2"
+                    disabled={savingAllImages}
+                    onClick={() => handleSaveAllImages(
+                      naverPost.image_urls?.length ? naverPost.image_urls : [naverPost.image_url!],
+                      naverPost.naver_title || naverPost.title,
+                    )}
+                  >
+                    {savingAllImages
+                      ? <><ImageIcon className="h-4 w-4" />저장 중...</>
+                      : <><ImageIcon className="h-4 w-4" />② 사진 전부 저장</>
+                    }
+                  </Button>
+                )}
+              </div>
               <a
                 // /postwrite는 404(네이버가 게시물 경로로 해석) → ?Redirect=Write가 정식 글쓰기 폼(PostWriteForm)으로 302
                 href={naverBlogId
@@ -1325,7 +1375,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                 className="flex items-center justify-center gap-2 px-4 h-12 rounded-md border border-[#03C75A] text-[#03C75A] text-sm font-medium hover:bg-[#03C75A]/10 transition-colors"
               >
                 <ExternalLink className="h-4 w-4" />
-                블로그 열기
+                ③ 블로그 열기
               </a>
             </div>
           </div>
