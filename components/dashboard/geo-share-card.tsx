@@ -92,7 +92,7 @@ function TrendChart({ points }: { points: { pct: number; label: string }[] }) {
 
 export async function GeoShareCard({ businessId }: { businessId: string }) {
   const db = createServiceClient()
-  const measureEnabled = !!(process.env.PERPLEXITY_API_KEY || process.env.GEMINI_API_KEY)
+  const measureEnabled = !!(process.env.PERPLEXITY_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY)
 
   // 최근 12건 — 추세 그래프 + 직전 대비 계산용
   const { data } = (await db

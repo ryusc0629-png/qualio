@@ -3,6 +3,7 @@ import type { createServiceClient } from '@/lib/supabase/server'
 import { buildGeoQuestions } from '@/lib/geo/questions'
 import { measureGeoShareOfVoice, type GeoMeasureResult, type GeoQuestionResult } from '@/lib/geo/measure'
 import { measureGeoShareOfVoiceGemini } from '@/lib/geo/measure-gemini'
+import { measureGeoShareOfVoiceOpenAI } from '@/lib/geo/measure-openai'
 
 // GEO 측정 1회 실행의 "코어" — 수동 액션(버튼)과 주기 cron이 공용으로 쓴다.
 // 흐름: 질문 세트 보장(월 단위 캐시) → Perplexity 검색 측정 → geo_checks에 1행 저장.
@@ -83,7 +84,8 @@ export interface RunGeoCheckResult {
 export async function runGeoCheck(db: Db, businessId: string): Promise<RunGeoCheckResult> {
   const perplexityKey = process.env.PERPLEXITY_API_KEY
   const geminiKey = process.env.GEMINI_API_KEY
-  if (!perplexityKey && !geminiKey) return { skipped: 'no-key' }
+  const openaiKey = process.env.OPENAI_API_KEY
+  if (!perplexityKey && !geminiKey && !openaiKey) return { skipped: 'no-key' }
 
   // 업체 식별 정보 + 영업지역 + 서비스 조회
   const { data: biz } = (await db
@@ -122,6 +124,10 @@ export async function runGeoCheck(db: Db, businessId: string): Promise<RunGeoChe
   if (geminiKey) {
     const r = await measureGeoShareOfVoiceGemini(geminiKey, questions, { needles })
     engineResults.push({ engine: 'gemini', results: r.results })
+  }
+  if (openaiKey) {
+    const r = await measureGeoShareOfVoiceOpenAI(openaiKey, questions, { needles })
+    engineResults.push({ engine: 'openai', results: r.results })
   }
 
   // 질문별 엔진 통합 — 어느 엔진에서든 잡히면 노출(union), 인용 도메인은 합집합.
