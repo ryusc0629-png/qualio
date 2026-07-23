@@ -12,6 +12,7 @@ import { MonthlyReportShare } from '@/components/dashboard/monthly-report-share'
 import { ClaimActions } from '@/components/dashboard/claim-actions'
 import { ClaimAssignee } from '@/components/dashboard/claim-assignee'
 import { B2bQuoteList } from '@/components/dashboard/b2b-quote-list'
+import { DeleteActivityButton } from '@/components/dashboard/delete-activity-button'
 import { contractAccruedRevenue, type ContractLike } from '@/lib/utils/ltv'
 import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
 
@@ -610,6 +611,7 @@ export default async function CustomerDetailPage({ params }: Props) {
                         <p className="text-sm text-muted-foreground whitespace-pre-wrap mt-1">{activity.content}</p>
                       )}
                     </div>
+                    <DeleteActivityButton activityId={activity.id} />
                   </div>
                 )
               })}

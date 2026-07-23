@@ -62,6 +62,11 @@ const deleteLeadSchema = z.object({
   leadId: z.string().uuid(),
 })
 
+// 상담 기록 삭제 스키마
+const deleteActivitySchema = z.object({
+  activityId: z.string().uuid(),
+})
+
 // 견적 → 잠재고객 전환 스키마
 const createLeadFromQuoteSchema = z.object({
   customerName:  z.string().min(1),
@@ -228,6 +233,23 @@ export const createLeadActivityAction = action
     })
 
     if (error) throw new Error('[APP] 상담 기록 저장에 실패했습니다')
+    revalidatePath('/dashboard/pipeline')
+    return { success: true }
+  })
+
+// 상담 기록 삭제 — 잘못 추가했거나 녹음 정리가 틀렸을 때 지운다(내 업체 것만)
+export const deleteLeadActivityAction = action
+  .schema(deleteActivitySchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuthenticatedBusinessId()
+
+    const { error } = await db
+      .from('lead_activities')
+      .delete()
+      .eq('id', parsedInput.activityId)
+      .eq('business_id', businessId)
+
+    if (error) throw new Error('[APP] 상담 기록 삭제에 실패했습니다')
     revalidatePath('/dashboard/pipeline')
     return { success: true }
   })

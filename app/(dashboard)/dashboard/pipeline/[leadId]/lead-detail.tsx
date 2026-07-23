@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { createLeadActivityAction, updateLeadStatusAction } from '@/lib/actions/crm'
+import { DeleteActivityButton } from '@/components/dashboard/delete-activity-button'
 import { STAGE_CONFIG } from '../pipeline-list'
 import { ConvertToCustomerButton } from './convert-to-customer-button'
 import { B2bQuoteList } from '@/components/dashboard/b2b-quote-list'
@@ -446,6 +447,7 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
                       {activity.content}
                     </p>
                   </div>
+                  <DeleteActivityButton activityId={activity.id} />
                 </div>
               )
             })}
