@@ -1153,7 +1153,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="px-5 py-5 flex-1">
+            <div className="px-5 py-5 flex-1 overflow-y-auto overscroll-contain min-h-0">
               <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed bg-orange-50 rounded-xl p-4 border border-orange-100">
                 {markdownToPlain(daangnPost.daangn_content ?? '')}
               </pre>
@@ -1199,7 +1199,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="px-5 py-4 flex-1 space-y-3">
+            <div className="px-5 py-4 flex-1 space-y-3 overflow-y-auto overscroll-contain min-h-0">
               {/* 본문 */}
               <div>
                 <p className="text-xs text-muted-foreground mb-1.5">본문 캡션</p>
@@ -1303,7 +1303,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
             )}
 
             {/* 본문 스크롤 영역 — 마크다운 기호(##, ** 등)를 정리해 실제 보이는 모습으로 미리보기 */}
-            <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div className="flex-1 overflow-y-auto overscroll-contain min-h-0 px-5 py-4">
               <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed">
                 {markdownToPlain(naverPost.naver_content ?? '')}
               </pre>
