@@ -39,6 +39,66 @@ export type Database = {
   }
   public: {
     Tables: {
+      finance_entries: {
+        Row: {
+          id: string
+          business_id: string
+          entry_date: string
+          type: string
+          category: string
+          amount: number
+          memo: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          entry_date: string
+          type: string
+          category?: string
+          amount: number
+          memo?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          entry_date?: string
+          type?: string
+          category?: string
+          amount?: number
+          memo?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      fixed_costs: {
+        Row: {
+          id: string
+          business_id: string
+          name: string
+          monthly_amount: number
+          active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          name: string
+          monthly_amount: number
+          active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          name?: string
+          monthly_amount?: number
+          active?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
       ops_lessons: {
         Row: {
           id: string
