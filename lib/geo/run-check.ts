@@ -17,12 +17,14 @@ export function currentMonthKey(): string {
   return `${kst.getUTCFullYear()}-${String(kst.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
-// 이번 달 활성 질문을 보장한다. 없거나 이전 달 것이면 새로 생성해 교체.
+// 활성 질문을 보장한다. 저장된 질문이 "지금 생성 결과"와 다르면 자동 재생성해 교체.
+// (주소·서비스·영업지역이 바뀌거나 생성 규칙이 개선되면 다음 측정 때 자동 반영 — 멱등)
 // 반환: 이번 측정에 쓸 질문 문자열 배열(없으면 빈 배열 — 지역·서비스 부족).
 export async function ensureGeoQuestions(
   db: Db,
   businessId: string,
   address: string | null,
+  serviceAreas: string[] | null,
   serviceNames: string[],
 ): Promise<string[]> {
   const month = currentMonthKey()
@@ -34,16 +36,21 @@ export async function ensureGeoQuestions(
     .eq('active' as never, true)) as unknown as { data: GeoQuestionRow[] | null }
 
   const rows = existing ?? []
-  // 이번 달 질문이 이미 있으면 그대로 사용
-  if (rows.length > 0 && rows.every((r) => r.created_month === month)) {
-    return rows.map((r) => r.question)
-  }
+  const current = rows.map((r) => r.question)
 
-  // 새 질문 생성 — 결정적 템플릿. 지역·서비스가 부족하면 빈 배열.
-  const questions = buildGeoQuestions(address, serviceNames)
-  if (questions.length === 0) return []
+  // 지금 규칙으로 만들어야 할 질문 세트 — 결정적 템플릿. 지역·서비스 부족하면 빈 배열.
+  const desired = buildGeoQuestions(address, serviceAreas, serviceNames)
 
-  // 이전 질문 비활성화(추세 기록은 geo_checks에 남으므로 질문은 교체해도 안전)
+  // 생성이 불가능하면(지역·서비스 없음) 기존 질문이라도 있으면 그대로 사용
+  if (desired.length === 0) return current
+
+  // 저장된 질문이 원하는 세트와 동일하면 재생성 없이 그대로 사용(멱등)
+  const same =
+    current.length === desired.length && desired.every((q) => current.includes(q))
+  if (rows.length > 0 && same) return current
+
+  // 다르면 교체: 기존 활성 질문 비활성화 후 새 세트 삽입
+  // (추세 기록은 geo_checks에 남으므로 질문 교체는 안전)
   if (rows.length > 0) {
     await db
       .from('geo_questions' as never)
@@ -53,7 +60,7 @@ export async function ensureGeoQuestions(
   }
 
   await db.from('geo_questions' as never).insert(
-    questions.map((q) => ({
+    desired.map((q) => ({
       business_id: businessId,
       question: q,
       active: true,
@@ -61,7 +68,7 @@ export async function ensureGeoQuestions(
     })) as never,
   )
 
-  return questions
+  return desired
 }
 
 export interface RunGeoCheckResult {
@@ -76,13 +83,13 @@ export async function runGeoCheck(db: Db, businessId: string): Promise<RunGeoChe
   const apiKey = process.env.PERPLEXITY_API_KEY
   if (!apiKey) return { skipped: 'no-key' }
 
-  // 업체 식별 정보 + 서비스 조회
+  // 업체 식별 정보 + 영업지역 + 서비스 조회
   const { data: biz } = (await db
     .from('businesses')
-    .select('name, slug, address' as never)
+    .select('name, slug, address, service_areas' as never)
     .eq('id', businessId)
     .maybeSingle()) as unknown as {
-    data: { name: string | null; slug: string | null; address: string | null } | null
+    data: { name: string | null; slug: string | null; address: string | null; service_areas: string[] | null } | null
   }
   if (!biz) return { skipped: 'no-questions' }
 
@@ -95,7 +102,7 @@ export async function runGeoCheck(db: Db, businessId: string): Promise<RunGeoChe
 
   const serviceNames = (services ?? []).map((s) => s.name as string)
 
-  const questions = await ensureGeoQuestions(db, businessId, biz.address, serviceNames)
+  const questions = await ensureGeoQuestions(db, businessId, biz.address, biz.service_areas, serviceNames)
   if (questions.length === 0) return { skipped: 'no-questions' }
 
   // 식별 신호(needles) — 업체명·slug가 검색 결과 제목/URL/스니펫에 있으면 "노출"로 판정.
