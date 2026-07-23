@@ -121,6 +121,15 @@ async function runImageModel(prompt: string): Promise<string | null> {
   }
 }
 
+// 실패(안전필터·일시 오류 등) 시 1회 더 시도 — 한 장씩 조용히 누락돼 "1장만" 나오는 문제 완화
+async function runImageModelWithRetry(prompt: string, retries = 1): Promise<string | null> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const url = await runImageModel(prompt)
+    if (url) return url
+  }
+  return null
+}
+
 // seed(제목 또는 Claude imagePrompt) → 맥락 맞춤 이미지 1장 생성
 // 실패해도 throw하지 않고 null 반환 (포스팅은 정상 진행)
 export async function generatePostImage(seed: string): Promise<string | null> {
@@ -130,7 +139,7 @@ export async function generatePostImage(seed: string): Promise<string | null> {
     return null
   }
   fal.config({ credentials: apiKey })
-  return runImageModel(buildImagePrompt(seed))
+  return runImageModelWithRetry(buildImagePrompt(seed))
 }
 
 // seed → 맥락 맞춤 이미지 count장 생성 (작업/결과/디테일 등 서로 다른 장면)
@@ -150,6 +159,39 @@ export async function generatePostImages(seed: string, count: number): Promise<s
     i < variants.length ? variants[i] : `${variants[i % variants.length]}, alternative angle ${i}`,
   )
 
-  const results = await Promise.all(prompts.map((p) => runImageModel(p)))
+  const results = await Promise.all(prompts.map((p) => runImageModelWithRetry(p)))
   return results.filter((u): u is string => Boolean(u))
+}
+
+// Claude가 소제목별로 만든 '서로 다른 장면' 프롬프트 배열로 각각 1장씩 생성.
+// 단일 장면을 샷 타입만 바꿔 복제하던 방식과 달리, 글 문단마다 맥락이 다른 사진이 나온다.
+async function generateFromDistinctPrompts(prompts: string[], count: number): Promise<string[]> {
+  const chosen = prompts.slice(0, Math.max(1, count))
+  const results = await Promise.all(
+    // 스타일 수식어만 붙이고 장면은 Claude가 준 그대로 사용
+    chosen.map((p) => runImageModelWithRetry(`${p}, ${STYLE_SUFFIX}`)),
+  )
+  return results.filter((u): u is string => Boolean(u))
+}
+
+// 포스트 이미지 생성 진입점 — 소제목별 다중 프롬프트가 있으면 그걸로(맥락 정확),
+// 없으면 단일 seed 기반 변형 생성으로 폴백(구버전 호환).
+export async function generatePostImagesSmart(
+  prompts: string[] | null | undefined,
+  fallbackSeed: string,
+  count: number,
+): Promise<string[]> {
+  const apiKey = process.env.FAL_KEY
+  if (!apiKey) {
+    console.error('[Image] FAL_KEY 환경변수가 설정되지 않았습니다')
+    return []
+  }
+  fal.config({ credentials: apiKey })
+
+  const distinct = (prompts ?? []).map((p) => (p ?? '').trim()).filter(Boolean)
+  if (distinct.length >= 2) {
+    return generateFromDistinctPrompts(distinct, count)
+  }
+  // 프롬프트가 부족하면(구버전·파싱 실패) 기존 변형 방식으로
+  return generatePostImages(distinct[0] || fallbackSeed, count)
 }

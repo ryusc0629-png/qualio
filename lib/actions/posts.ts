@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions, type TopicSuggestion } from '@/lib/ai/geo-content'
-import { generatePostImages, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
+import { generatePostImages, generatePostImagesSmart, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
 import { revalidatePath } from 'next/cache'
 import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
 import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContentEnabled } from '@/lib/config/plans'
@@ -120,7 +120,7 @@ export const generatePostAction = action
     const fullContent = metaBlock + postContent.content
 
     // 이미지 자동 생성 (실패해도 포스팅 진행) — 힌트 없으면 제목 기반 맥락 생성, 게시물당 1회 N장
-    const imageUrls = await generatePostImages(postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
+    const imageUrls = await generatePostImagesSmart(postContent.imagePrompts, postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
 
     // DB 저장
     const { data: post, error } = await db
@@ -515,7 +515,7 @@ export const publishTodayAction = action
       const fullContent = metaBlock + postContent.content
 
       // 이미지 자동 생성 (실패해도 포스팅 진행) — 게시물당 1회 N장
-      const imageUrls = await generatePostImages(postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
+      const imageUrls = await generatePostImagesSmart(postContent.imagePrompts, postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
 
       const { data: savedPost, error } = await db.from('biz_posts').insert({
         business_id: businessId,

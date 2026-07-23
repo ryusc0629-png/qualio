@@ -160,7 +160,8 @@ export interface PostContent {
   content: string       // 본문 (마크다운)
   faqs: FaqItem[]       // 포스트 전용 FAQ 3개
   slug: string          // URL용 slug
-  imagePrompt: string   // Flux 이미지 생성용 영문 프롬프트
+  imagePrompts?: string[] // 소제목별로 서로 다른 장면 3개 (맥락 맞춤 이미지용)
+  imagePrompt?: string  // (구버전 호환) 단일 장면 프롬프트 — imagePrompts 없을 때 폴백
 }
 
 interface PostInput {
@@ -255,12 +256,17 @@ faqs: 이 주제에서 독자가 실제로 궁금해할 질문 3개 + 명확한 
 
 slug: 제목을 영문 URL slug로 변환 (예: "air-conditioner-cleaning-guide")
 
-imagePrompt: 이 포스트 주제에 정확히 맞는 AI 이미지 생성용 영문 장면 묘사 (1~2문장, 영문만)
-  예시: "close-up of a spotless modern air conditioner being professionally cleaned in a bright Korean apartment, sparkling clean cooling fins, water droplets"
+imagePrompts: 이 포스트에 넣을 서로 다른 사진 3장의 영문 장면 묘사 배열 (각 1~2문장, 영문만, 정확히 3개)
+  예시: [
+    "a professional cleaner deep-cleaning the inside of a wall-mounted air conditioner in a bright Korean apartment, sparkling clean cooling fins, water droplets",
+    "a spotless bright Korean living room with a freshly cleaned air conditioner, calm comfortable atmosphere, no person",
+    "a neatly organized clean refrigerator interior with fresh food, sparkling clean shelves, no person"
+  ]
   규칙:
-  - 글 주제의 핵심 대상(예: 에어컨/욕실 타일/사무실 바닥)을 구체적으로 묘사할 것
-  - 사람 얼굴 클로즈업은 피하고 깨끗한 공간·청소 결과 중심으로
-  - 글자/간판/로고가 들어가지 않는 장면으로 (이미지에 텍스트 금지)
+  - 반드시 소제목1·2·3(글의 서로 다른 부분) 각각에 어울리는 서로 다른 장면 3개로 구성할 것 — 같은 대상·같은 앵글 반복 금지
+  - 각 장면은 그 문단의 핵심 소재(예: 에어컨 내부 세척 / 깨끗해진 거실 / 냉장고 정리)를 구체적으로 묘사
+  - ⚠️ 곰팡이·오염·벌레·세균 등 혐오/위험 소재를 직접 묘사하지 말 것(이미지 안전필터에 막힘). 대신 "전문 세척 작업 중" 또는 "깨끗하게 관리된 결과" 같은 긍정·결과 중심 장면으로 표현
+  - 사람 얼굴 클로즈업 금지, 글자/간판/로고가 들어가지 않는 장면으로 (이미지에 텍스트 금지)
   - 사실적 사진 스타일 (style 수식어는 시스템이 자동 추가하므로 장면만 묘사)
 
 === 반드시 아래 JSON 형식으로만 응답 ===
@@ -275,7 +281,7 @@ imagePrompt: 이 포스트 주제에 정확히 맞는 AI 이미지 생성용 영
     { "question": "...", "answer": "..." }
   ],
   "slug": "...",
-  "imagePrompt": "..."
+  "imagePrompts": ["...", "...", "..."]
 }`
 
   // 이미지가 있으면 URL로 직접 전달 (Claude vision)

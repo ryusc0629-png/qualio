@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
 import { fetchRecentJobCases } from '@/lib/ai/job-cases'
-import { generatePostImages, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
+import { generatePostImagesSmart, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
 import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContentEnabled } from '@/lib/config/plans'
@@ -95,7 +95,7 @@ async function publishOnePost(
 
   // 포스트 주제에 맞는 이미지 자동 생성 (토글 ON일 때만, 실패해도 포스팅 진행)
   const imageUrls = business.autoImageGeneration
-    ? await generatePostImages(postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
+    ? await generatePostImagesSmart(postContent.imagePrompts, postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
     : []
 
   const fullContent = metaBlock + postContent.content
