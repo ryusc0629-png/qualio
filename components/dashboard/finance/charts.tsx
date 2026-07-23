@@ -75,53 +75,6 @@ export function BreakEvenGauge({ achievementPct, breakEvenRevenue, revenue, rema
   )
 }
 
-// ── 일별 매출/지출 미러 막대차트 ────────────────────────────
-interface DailyBarChartProps {
-  days: { day: number; revenue: number; expense: number }[]
-}
-
-export function DailyBarChart({ days }: DailyBarChartProps) {
-  const maxVal = Math.max(1, ...days.map((d) => Math.max(d.revenue, d.expense)))
-  const half = 46 // 위/아래 각 절반 높이(px)
-
-  return (
-    <div>
-      <div className="flex items-end gap-1.5 mb-2 text-xs">
-        <span className="flex items-center gap-1 text-emerald-600"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" />매출</span>
-        <span className="flex items-center gap-1 text-rose-500"><span className="w-2.5 h-2.5 rounded-sm bg-rose-400 inline-block" />지출</span>
-      </div>
-      <div className="overflow-x-auto -mx-1 px-1">
-        <div className="flex items-stretch gap-[3px] min-w-full" style={{ minWidth: `${days.length * 9}px` }}>
-          {days.map((d) => {
-            const revH = d.revenue > 0 ? Math.max(2, (d.revenue / maxVal) * half) : 0
-            const expH = d.expense > 0 ? Math.max(2, (d.expense / maxVal) * half) : 0
-            const isToday = false
-            return (
-              <div key={d.day} className="flex-1 flex flex-col items-center" style={{ minWidth: '6px' }}>
-                {/* 위: 매출 */}
-                <div className="flex-1 w-full flex flex-col justify-end items-center" style={{ height: `${half}px` }}>
-                  <div className="w-full rounded-t-[2px] bg-emerald-500" style={{ height: `${revH}px` }} />
-                </div>
-                {/* 기준선 */}
-                <div className={`w-full h-px ${isToday ? 'bg-foreground' : 'bg-border'}`} />
-                {/* 아래: 지출 */}
-                <div className="flex-1 w-full flex flex-col justify-start items-center" style={{ height: `${half}px` }}>
-                  <div className="w-full rounded-b-[2px] bg-rose-400" style={{ height: `${expH}px` }} />
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-      <div className="flex justify-between text-[10px] text-muted-foreground mt-1 px-0.5">
-        <span>1일</span>
-        <span>{Math.ceil(days.length / 2)}일</span>
-        <span>{days.length}일</span>
-      </div>
-    </div>
-  )
-}
-
 // ── 지출 분류별 도넛 ────────────────────────────────────────
 interface CategoryDonutProps {
   items: { label: string; amount: number }[] // 금액 내림차순
