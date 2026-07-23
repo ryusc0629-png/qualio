@@ -10,8 +10,9 @@ import {
 import { AddEntryForm } from '@/components/dashboard/finance/add-entry-form'
 import { FixedCostsManager, type FixedCost } from '@/components/dashboard/finance/fixed-costs-manager'
 import { DeleteEntryButton } from '@/components/dashboard/finance/delete-entry-button'
-import { BreakEvenGauge, CategoryDonut } from '@/components/dashboard/finance/charts'
+import { BreakEvenGauge } from '@/components/dashboard/finance/charts'
 import { DailyBarChart } from '@/components/dashboard/finance/daily-bar-chart'
+import { CategoryDonut } from '@/components/dashboard/finance/category-donut'
 
 // 현재 KST 기준 'YYYY-MM'
 function currentMonthKST() {

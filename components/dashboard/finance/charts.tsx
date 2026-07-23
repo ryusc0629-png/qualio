@@ -1,5 +1,5 @@
 // 재무 대시보드 차트 — 순수 SVG/CSS(서버 컴포넌트). 외부 차트 라이브러리 없이 구현.
-import { CATEGORY_COLORS, formatWon, formatManwon } from '@/lib/finance/constants'
+import { formatWon, formatManwon } from '@/lib/finance/constants'
 
 // ── 손익분기점 반원 게이지 ──────────────────────────────────
 interface BreakEvenGaugeProps {
@@ -75,53 +75,3 @@ export function BreakEvenGauge({ achievementPct, breakEvenRevenue, revenue, rema
   )
 }
 
-// ── 지출 분류별 도넛 ────────────────────────────────────────
-interface CategoryDonutProps {
-  items: { label: string; amount: number }[] // 금액 내림차순
-  total: number
-}
-
-export function CategoryDonut({ items, total }: CategoryDonutProps) {
-  // conic-gradient 문자열 만들기(누적 %)
-  let acc = 0
-  const stops: string[] = []
-  items.forEach((it, i) => {
-    const start = (acc / total) * 100
-    acc += it.amount
-    const end = (acc / total) * 100
-    const color = CATEGORY_COLORS[i % CATEGORY_COLORS.length]
-    stops.push(`${color} ${start}% ${end}%`)
-  })
-  const gradient = `conic-gradient(${stops.join(', ')})`
-
-  return (
-    <div className="flex items-center gap-5">
-      {/* 도넛 */}
-      <div className="relative shrink-0" style={{ width: 120, height: 120 }}>
-        <div className="w-[120px] h-[120px] rounded-full" style={{ background: gradient }} />
-        <div className="absolute inset-0 m-auto rounded-full bg-white flex flex-col items-center justify-center" style={{ width: 74, height: 74 }}>
-          <span className="text-[10px] text-muted-foreground">총 지출</span>
-          <span className="text-sm font-bold tabular-nums">{formatManwon(total)}</span>
-        </div>
-      </div>
-
-      {/* 범례 */}
-      <div className="flex-1 min-w-0 space-y-1.5">
-        {items.map((it, i) => {
-          const pct = Math.round((it.amount / total) * 100)
-          return (
-            <div key={it.label} className="flex items-center gap-2 text-sm">
-              <span
-                className="w-2.5 h-2.5 rounded-sm shrink-0"
-                style={{ background: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }}
-              />
-              <span className="truncate flex-1 min-w-0">{it.label}</span>
-              <span className="text-muted-foreground tabular-nums shrink-0">{pct}%</span>
-              <span className="font-medium tabular-nums shrink-0 w-20 text-right">{formatWon(it.amount)}</span>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
