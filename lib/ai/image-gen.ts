@@ -1,14 +1,22 @@
 import { fal } from '@fal-ai/client'
 
 // fal.ai 이미지 생성 — 청소 포스팅용 대표 이미지 자동 생성
-// 모델 선택:
-//   - 'fal-ai/flux/schnell' : 1장당 약 $0.003 (₩4), 빠르지만 품질·프롬프트 반영 낮음
-//   - 'fal-ai/flux/dev'     : 1장당 약 $0.025 (₩33), 품질·맥락 반영 우수
-//   - 'fal-ai/nano-banana'  : 1장당 약 $0.039 (₩53), 구글 Gemini 이미지 모델 — 사실감·맥락 반영 최상 (현재 사용)
-// ⚠️ Flux로 되돌리려면 IMAGE_MODEL만 'fal-ai/flux/dev'로 교체하면 됨 (입력 파라미터는 아래에서 자동 분기)
-// 타입을 string으로 두어 fal이 모델별 입력 타입으로 좁히지 않게 함 (Flux/nano 입력 자동 분기 허용)
-const IMAGE_MODEL: string = 'fal-ai/nano-banana'
+//
+// ⚠️⚠️ 현재 자동 이미지 생성 OFF (2026-07-23) — 사장님 요청으로 퀄리오 자동 발행은 '텍스트만'.
+//   이미지는 당분간 로컬 스크립트(scripts/blog-images.mjs)로 직접 만들어 수동 첨부.
+//   ▶ 나중에 이미지 기능을 다시 켤 때: 아래 IMAGE_GENERATION_ENABLED 를 true 로만 바꾸면 됨.
+//     (모델·프롬프트는 이미 '승리 조합'인 Seedream V5 Pro + 한국·장비 프롬프트로 배선돼 있음)
+const IMAGE_GENERATION_ENABLED = false
+//
+// 모델 선택 (승리 조합 = Seedream V5 Pro, 재검증 결과):
+//   - 'bytedance/seedream/v5/pro/text-to-image' : 한국인 인물·실제 청소장비·포토리얼리즘 최상, 1536px 장당 ₩91 (현재 배선)
+//   - 'fal-ai/bytedance/seedream/v4/text-to-image' : 준수, 장당 ₩40
+//   - 'fal-ai/flux/dev'    : 인물 되지만 다소 서양적, 장당 ₩33
+//   - 'fal-ai/nano-banana' : 사실적이나 '사람 등장' 장면 대부분 거부(422)
+// 타입을 string으로 두어 fal이 모델별 입력 타입으로 좁히지 않게 함 (모델별 입력은 buildModelInput에서 분기)
+const IMAGE_MODEL: string = 'bytedance/seedream/v5/pro/text-to-image'
 const IS_NANO = IMAGE_MODEL.includes('nano-banana')
+const IS_SEEDREAM = IMAGE_MODEL.includes('seedream')
 const STEPS = IMAGE_MODEL.includes('schnell') ? 4 : 28
 
 // 포스트당 생성할 이미지 수 (네이버 상위노출 균형점: 대표 1 + 본문용 2)
@@ -43,8 +51,10 @@ const SUBJECT_MAP: { kw: string[]; info: SubjectInfo }[] = [
 
 const FALLBACK: SubjectInfo = { subject: 'home surfaces', space: 'spotless tidy modern Korean home interior', scale: 'room' }
 
+// 승리 조합 스타일 수식어 — 한국인 작업자 + 실제 청소업체 장비가 보이는 현장 톤
+// (예전의 'no visible faces'는 빈 공간만 나오게 해서 제거함)
 const STYLE_SUFFIX =
-  'photorealistic, candid professional commercial photography, natural soft daylight, ultra detailed, high resolution, clean and bright atmosphere, no visible faces, no close-up of faces, no text, no letters, no logo, no watermark'
+  'Korean person, East Asian, set in a modern South Korean home interior, real professional cleaning-company equipment and tools clearly visible on site (industrial steam cleaner, electric pressure sprayer, wet/dry vacuum, chemical spray bottles, protective plastic sheeting), photorealistic, shot on a DSLR, authentic candid documentary service photography, natural soft daylight, ultra detailed, realistic skin texture, sharp focus, no text, no letters, no logo, no watermark'
 
 // 한 주제에서 서로 다른 3종 이상의 장면(작업/결과/디테일/와이드)을 생성
 function sceneVariants(info: SubjectInfo): string[] {
@@ -89,14 +99,21 @@ export function buildImagePrompt(seed: string): string {
   return buildVariantPrompts(seed)[0]
 }
 
-// 모델 계열별 입력 파라미터 (nano-banana는 스텝·guidance 없음 → aspect_ratio 사용)
+// 모델 계열별 입력 파라미터
 function buildModelInput(prompt: string): Record<string, unknown> {
+  if (IS_SEEDREAM) {
+    // 1536x1152(4:3) = 저가 구간($0.0675) 최고 해상. 안전검사 off로 인물·장비 오탐 완화
+    return { prompt, image_size: { width: 1536, height: 1152 }, num_images: 1, output_format: 'jpeg', enable_safety_checker: false }
+  }
   if (IS_NANO) {
     return {
       prompt,
       num_images: 1,
       aspect_ratio: '4:3', // Flux의 landscape_4_3과 동일한 가로 비율
       output_format: 'jpeg', // 블로그 업로드용 경량 포맷
+      // nano-banana(Gemini)가 무해한 장면까지 과도하게 거부(422)해 이미지가 누락되는 문제 방지.
+      // 6 = 가장 느슨한 안전 허용도. 로컬 테스트에서 실패율 ~50% → 0%로 개선 확인.
+      safety_tolerance: '6',
     }
   }
   return {
@@ -133,6 +150,7 @@ async function runImageModelWithRetry(prompt: string, retries = 1): Promise<stri
 // seed(제목 또는 Claude imagePrompt) → 맥락 맞춤 이미지 1장 생성
 // 실패해도 throw하지 않고 null 반환 (포스팅은 정상 진행)
 export async function generatePostImage(seed: string): Promise<string | null> {
+  if (!IMAGE_GENERATION_ENABLED) return null // 자동 이미지 OFF (플래그로 재활성화)
   const apiKey = process.env.FAL_KEY
   if (!apiKey) {
     console.error('[Image] FAL_KEY 환경변수가 설정되지 않았습니다')
@@ -145,6 +163,7 @@ export async function generatePostImage(seed: string): Promise<string | null> {
 // seed → 맥락 맞춤 이미지 count장 생성 (작업/결과/디테일 등 서로 다른 장면)
 // 네이버 상위노출용 다중 이미지. 실패한 장은 제외하고 성공한 URL 배열만 반환.
 export async function generatePostImages(seed: string, count: number): Promise<string[]> {
+  if (!IMAGE_GENERATION_ENABLED) return [] // 자동 이미지 OFF (플래그로 재활성화)
   const apiKey = process.env.FAL_KEY
   if (!apiKey) {
     console.error('[Image] FAL_KEY 환경변수가 설정되지 않았습니다')
@@ -181,6 +200,7 @@ export async function generatePostImagesSmart(
   fallbackSeed: string,
   count: number,
 ): Promise<string[]> {
+  if (!IMAGE_GENERATION_ENABLED) return [] // 자동 이미지 OFF (플래그로 재활성화)
   const apiKey = process.env.FAL_KEY
   if (!apiKey) {
     console.error('[Image] FAL_KEY 환경변수가 설정되지 않았습니다')
