@@ -140,14 +140,12 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
 
   return (
     <div className="rounded-xl border bg-white p-6 space-y-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="font-semibold text-sm">🔎 AI 검색 노출률</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {formatKstDate(latest.checked_at)} 측정 · 손님 질문 {latest.total}개 기준
-          </p>
-        </div>
-        {measureEnabled && <GeoMeasureButton label="다시 측정" />}
+      <div>
+        <p className="font-semibold text-sm">🔎 AI 검색 노출률</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {formatKstDate(latest.checked_at)} 측정 · 손님 질문 {latest.total}개 기준
+          {measureEnabled && ' · 매주 자동 측정돼요'}
+        </p>
       </div>
 
       {/* 핵심 숫자 */}
