@@ -87,7 +87,10 @@ export default async function PublicQuotePage({
       lead={client}
       quote={quote}
       business={businessResult.data}
-      variant={isOwnerPreview ? 'internal' : 'public'}
+      // 사장님 미리보기(?preview=1)도 고객 페이지와 '완전히 동일하게' 렌더(variant=public).
+      // 다른 건 조회 추적을 끄는 것뿐 → 인쇄 동작이 고객 페이지와 동일해짐
+      variant="public"
+      disableTracking={isOwnerPreview}
       publicToken={quote.public_token}
       initialMode={initialMode}
     />

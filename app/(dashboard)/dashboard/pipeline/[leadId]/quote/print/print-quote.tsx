@@ -52,13 +52,16 @@ interface Props {
   business: Business | null
   // 'internal' = 사장님 미리보기(링크 복사·닫기 있음) / 'public' = 고객 공개(조회 추적)
   variant?: 'internal' | 'public'
+  // 조회 추적(고객 열람 알림)만 끄는 스위치 — 사장님이 공개 페이지로 자기 미리보기 할 때 사용.
+  // (variant는 'public' 그대로 두어 고객 페이지와 렌더를 100% 동일하게 유지 → 인쇄 동작도 동일)
+  disableTracking?: boolean
   // 공개 링크 토큰 — 링크 복사·공개 조회 추적에 사용
   publicToken?: string | null
   // 처음 보여줄 문서 (공개 링크의 ?doc= 로 지정 가능)
   initialMode?: DocMode
 }
 
-export function PrintQuote({ lead, quote, business, variant = 'internal', publicToken, initialMode = 'both' }: Props) {
+export function PrintQuote({ lead, quote, business, variant = 'internal', disableTracking = false, publicToken, initialMode = 'both' }: Props) {
   const items = (Array.isArray(quote.items) ? quote.items : []) as QuoteItem[]
   const isOneOff = quote.job_type === 'one_off'
 
@@ -102,7 +105,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', public
 
   // 공개 링크로 고객이 열람하면 조회 기록 → 재열람 시 대표에게 알림
   useEffect(() => {
-    if (variant !== 'public' || !publicToken) return
+    if (variant !== 'public' || disableTracking || !publicToken) return
     try {
       const payload = JSON.stringify({ token: publicToken })
       const blob = new Blob([payload], { type: 'application/json' })
@@ -110,7 +113,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', public
     } catch {
       // 추적 실패가 고객 열람을 막지 않도록 무시
     }
-  }, [variant, publicToken])
+  }, [variant, disableTracking, publicToken])
 
   const handleCopyLink = async () => {
     if (!publicToken) return
