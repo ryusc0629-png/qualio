@@ -81,6 +81,45 @@ export const deleteFinanceEntryAction = action
     return { success: true }
   })
 
+// ── 거래 기록 수정 ──────────────────────────────────────────
+const updateEntrySchema = z.object({
+  id: z.string().uuid(),
+  type: z.string().refine(
+    (v) => ['revenue', 'expense'].includes(v),
+    '매출 또는 지출을 선택해주세요',
+  ),
+  amount: z.coerce.number().int().min(1, '금액을 입력해주세요'),
+  category: z.string().min(1, '분류를 선택해주세요'),
+  entry_date: z.string().refine((v) => dateRegex.test(v), '날짜를 선택해주세요'),
+  memo: z.string().max(200).optional(),
+})
+
+export const updateFinanceEntryAction = action
+  .schema(updateEntrySchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { error } = await db
+      .from('finance_entries')
+      .update({
+        entry_date: parsedInput.entry_date,
+        type: parsedInput.type,
+        category: parsedInput.category,
+        amount: parsedInput.amount,
+        memo: parsedInput.memo?.trim() || null,
+      })
+      .eq('id', parsedInput.id)
+      .eq('business_id', businessId)
+
+    if (error) {
+      console.error('[Finance] 기록 수정 실패:', error)
+      throw new Error('[APP] 수정 못 했어요. 다시 눌러주세요')
+    }
+
+    revalidatePath('/dashboard/finance')
+    return { success: true }
+  })
+
 // ── 고정비 추가 ────────────────────────────────────────────
 const addFixedCostSchema = z.object({
   name: z.string().min(1, '항목 이름을 입력해주세요').max(40),
@@ -102,6 +141,33 @@ export const addFixedCostAction = action
     if (error) {
       console.error('[Finance] 고정비 추가 실패:', error)
       throw new Error('[APP] 저장 못 했어요. 다시 눌러주세요')
+    }
+
+    revalidatePath('/dashboard/finance')
+    return { success: true }
+  })
+
+// ── 고정비 수정 (이름·월 금액) ──────────────────────────────
+const updateFixedCostSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1, '항목 이름을 입력해주세요').max(40),
+  monthly_amount: z.coerce.number().int().min(1, '월 금액을 입력해주세요'),
+})
+
+export const updateFixedCostAction = action
+  .schema(updateFixedCostSchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { error } = await db
+      .from('fixed_costs')
+      .update({ name: parsedInput.name.trim(), monthly_amount: parsedInput.monthly_amount })
+      .eq('id', parsedInput.id)
+      .eq('business_id', businessId)
+
+    if (error) {
+      console.error('[Finance] 고정비 수정 실패:', error)
+      throw new Error('[APP] 수정 못 했어요. 다시 눌러주세요')
     }
 
     revalidatePath('/dashboard/finance')

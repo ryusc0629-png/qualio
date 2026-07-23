@@ -9,7 +9,7 @@ import {
 } from '@/lib/finance/constants'
 import { AddEntryForm } from '@/components/dashboard/finance/add-entry-form'
 import { FixedCostsManager, type FixedCost } from '@/components/dashboard/finance/fixed-costs-manager'
-import { DeleteEntryButton } from '@/components/dashboard/finance/delete-entry-button'
+import { EntryRow } from '@/components/dashboard/finance/entry-row'
 import { BreakEvenGauge } from '@/components/dashboard/finance/charts'
 import { DailyBarChart } from '@/components/dashboard/finance/daily-bar-chart'
 import { CategoryDonut } from '@/components/dashboard/finance/category-donut'
@@ -337,34 +337,16 @@ export default async function FinancePage({ searchParams }: PageProps) {
                 </div>
               </div>
             ) : (
-              <ul className="divide-y">
-                {rows.map((r) => {
-                  const isRev = r.type === 'revenue'
-                  const md = `${Number(r.entry_date.slice(5, 7))}월 ${Number(r.entry_date.slice(8, 10))}일`
-                  return (
-                    <li key={r.id} className="flex items-center gap-3 py-3">
-                      <span
-                        className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                          isRev ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-500'
-                        }`}
-                      >
-                        {isRev ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {r.category}
-                          {r.memo && <span className="text-muted-foreground font-normal"> · {r.memo}</span>}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{md}</p>
-                      </div>
-                      <span className={`font-bold tabular-nums shrink-0 ${isRev ? 'text-emerald-600' : 'text-rose-500'}`}>
-                        {isRev ? '+' : '-'}{formatWon(r.amount)}
-                      </span>
-                      <DeleteEntryButton id={r.id} label={`${r.category} ${formatWon(r.amount)}`} />
+              <>
+                <ul className="divide-y">
+                  {rows.map((r) => (
+                    <li key={r.id}>
+                      <EntryRow entry={r} />
                     </li>
-                  )
-                })}
-              </ul>
+                  ))}
+                </ul>
+                <p className="text-[11px] text-muted-foreground text-center mt-3">기록을 누르면 고치거나 지울 수 있어요</p>
+              </>
             )}
           </div>
         </>

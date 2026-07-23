@@ -6,10 +6,11 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Settings2, X, Plus, Trash2 } from 'lucide-react'
+import { Settings2, X, Plus, Trash2, Pencil, Check } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import {
   addFixedCostAction,
+  updateFixedCostAction,
   toggleFixedCostAction,
   deleteFixedCostAction,
 } from '@/lib/actions/finance'
@@ -38,6 +39,10 @@ export function FixedCostsManager({ costs, variant = 'button' }: FixedCostsManag
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
+  // 인라인 수정 상태
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editAmount, setEditAmount] = useState('')
 
   const modalRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -53,9 +58,36 @@ export function FixedCostsManager({ costs, variant = 'button' }: FixedCostsManag
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
+  const updateAction = useAction(updateFixedCostAction, {
+    onSuccess: () => {
+      toast.success('고정비를 수정했어요')
+      setEditingId(null)
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
   const toggleAction = useAction(toggleFixedCostAction, {
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
+
+  function startEdit(c: FixedCost) {
+    setEditingId(c.id)
+    setEditName(c.name)
+    setEditAmount(String(c.monthly_amount))
+  }
+
+  function saveEdit() {
+    const amt = parseInt(digitsOnly(editAmount), 10) || 0
+    if (!editName.trim()) {
+      toast.error('항목 이름을 입력해주세요')
+      return
+    }
+    if (amt < 1) {
+      toast.error('월 금액을 입력해주세요')
+      return
+    }
+    updateAction.execute({ id: editingId!, name: editName.trim(), monthly_amount: amt })
+  }
 
   const deleteAction = useAction(deleteFixedCostAction, {
     onSuccess: () => toast.success('삭제했어요'),
@@ -125,34 +157,71 @@ export function FixedCostsManager({ costs, variant = 'button' }: FixedCostsManag
         {costs.length > 0 && (
           <div className="space-y-2">
             {costs.map((c) => (
-              <div
-                key={c.id}
-                className={`flex items-center gap-2 rounded-xl border p-3 ${c.active ? 'bg-white' : 'bg-muted/40 opacity-60'}`}
-              >
-                <label className="flex items-center cursor-pointer shrink-0" title="손익분기점 계산에 포함">
-                  <input
-                    type="checkbox"
-                    checked={c.active}
-                    onChange={(e) => toggleAction.execute({ id: c.id, active: e.target.checked })}
-                    className="accent-primary h-5 w-5"
+              editingId === c.id ? (
+                // 인라인 수정
+                <div key={c.id} className="rounded-xl border border-primary/40 bg-white p-3 space-y-2">
+                  <Input
+                    autoComplete="off"
+                    placeholder="항목 이름"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="h-10"
                   />
-                </label>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{c.name}</p>
-                  <p className="text-xs text-muted-foreground tabular-nums">{formatWon(c.monthly_amount)} / 월</p>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Input
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="월 금액"
+                        value={formatThousands(editAmount)}
+                        onChange={(e) => setEditAmount(digitsOnly(e.target.value))}
+                        className="h-10 text-right pr-8 font-semibold tabular-nums"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">원</span>
+                    </div>
+                    <Button type="button" variant="outline" className="h-10 px-3" onClick={() => setEditingId(null)}>취소</Button>
+                    <Button type="button" className="h-10 px-3" onClick={saveEdit} disabled={updateAction.isPending}>
+                      <Check className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => {
-                    if (window.confirm(`'${c.name}' 고정비를 삭제할까요?`)) {
-                      deleteAction.execute({ id: c.id })
-                    }
-                  }}
-                  className="shrink-0 w-9 h-9 rounded-lg border flex items-center justify-center text-destructive hover:bg-destructive/10"
-                  aria-label="삭제"
+              ) : (
+                <div
+                  key={c.id}
+                  className={`flex items-center gap-2 rounded-xl border p-3 ${c.active ? 'bg-white' : 'bg-muted/40 opacity-60'}`}
                 >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
+                  <label className="flex items-center cursor-pointer shrink-0" title="손익분기점 계산에 포함">
+                    <input
+                      type="checkbox"
+                      checked={c.active}
+                      onChange={(e) => toggleAction.execute({ id: c.id, active: e.target.checked })}
+                      className="accent-primary h-5 w-5"
+                    />
+                  </label>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{c.name}</p>
+                    <p className="text-xs text-muted-foreground tabular-nums">{formatWon(c.monthly_amount)} / 월</p>
+                  </div>
+                  <button
+                    onClick={() => startEdit(c)}
+                    className="shrink-0 w-9 h-9 rounded-lg border flex items-center justify-center text-muted-foreground hover:bg-muted"
+                    aria-label="수정"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`'${c.name}' 고정비를 삭제할까요?`)) {
+                        deleteAction.execute({ id: c.id })
+                      }
+                    }}
+                    className="shrink-0 w-9 h-9 rounded-lg border flex items-center justify-center text-destructive hover:bg-destructive/10"
+                    aria-label="삭제"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              )
             ))}
             <div className="flex items-center justify-between px-1 pt-1">
               <span className="text-sm font-semibold">월 고정비 합계</span>
