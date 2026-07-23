@@ -121,21 +121,12 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
   // 추세 — 직전 측정 대비 몇 %p 변화
   const delta = prev ? latest.share_pct - prev.share_pct : null
 
-  // 아직 안 잡히는 질문(노출 실패) — 이 질문들로 글을 쓰면 노출이 오른다(행동 유도)
-  const missing = latest.detail.filter((d) => !d.mentioned).map((d) => d.query).slice(0, 5)
-
-  // 이 질문들에서 자주 보이는 경쟁 채널 — 우리 도메인은 제외하고 빈도순 상위 3개
-  const domainCount = new Map<string, number>()
-  for (const d of latest.detail) {
-    for (const dom of d.topDomains) {
-      if (!dom || dom === APP_HOST) continue
-      domainCount.set(dom, (domainCount.get(dom) ?? 0) + 1)
-    }
-  }
-  const topCompetitors = [...domainCount.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([dom]) => dom)
+  // 질문별 승패 — 이미 잡힌 질문 / 아직 안 잡힌 질문
+  const citedQuestions = latest.detail.filter((d) => d.mentioned)
+  const weakQuestions = latest.detail.filter((d) => !d.mentioned)
+  // 특정 질문에서 지금 잡히는 경쟁 채널(우리 도메인 제외, 상위 2개)
+  const competitorsFor = (topDomains: string[]) =>
+    topDomains.filter((d) => d && d !== APP_HOST).slice(0, 2)
 
   return (
     <div className="rounded-xl border bg-white p-6 space-y-5">
@@ -180,33 +171,59 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
         </p>
       )}
 
-      {/* 아직 안 잡히는 질문 — 다음 행동 안내 */}
-      {missing.length > 0 && (
-        <div className="rounded-lg bg-amber-50 border border-amber-100 p-4">
-          <p className="text-sm font-semibold text-amber-900">아직 안 잡히는 질문</p>
-          <p className="text-xs text-amber-900/70 mt-1">
-            자동 발행이 <b>이 질문들부터 우선</b> 글을 씁니다. 글이 쌓이면 다음 측정 때 노출이 올라가요. (따로 하실 일 없어요)
-          </p>
+      {/* 이미 잡히는 질문(승) — 잡힌 것도 있고 아직인 것도 있을 때만 별도 표시 */}
+      {citedQuestions.length > 0 && weakQuestions.length > 0 && (
+        <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-4">
+          <p className="text-sm font-semibold text-emerald-900">✅ 이미 AI에 잡히는 질문</p>
           <ul className="mt-2 space-y-1">
-            {missing.map((q) => (
-              <li key={q} className="text-sm text-amber-900/80">· {q}</li>
+            {citedQuestions.map((d) => (
+              <li key={d.query} className="text-sm text-emerald-900/80">· {d.query}</li>
             ))}
           </ul>
         </div>
       )}
 
-      {missing.length === 0 && (
+      {/* 아직 안 잡히는 질문(패) — 질문별로 지금 잡히는 경쟁 채널까지(승패 드릴다운) */}
+      {weakQuestions.length > 0 && (
+        <div className="rounded-lg bg-amber-50 border border-amber-100 p-4">
+          <p className="text-sm font-semibold text-amber-900">아직 안 잡히는 질문</p>
+          <p className="text-xs text-amber-900/70 mt-1">
+            자동 발행이 <b>이 질문들부터 우선</b> 글을 씁니다. 글이 쌓이면 다음 측정 때 잡히기 시작해요. (따로 하실 일 없어요)
+          </p>
+          <ul className="mt-3 space-y-2.5">
+            {weakQuestions.map((d) => {
+              const comp = competitorsFor(d.topDomains)
+              return (
+                <li key={d.query} className="text-sm">
+                  <p className="text-amber-900/90">· {d.query}</p>
+                  <p className="text-xs text-amber-900/60 mt-0.5 pl-2">
+                    {comp.length > 0
+                      ? `지금 잡히는 곳: ${comp.join(', ')}`
+                      : '아직 뚜렷한 업체가 없어요 — 먼저 선점할 기회예요'}
+                  </p>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
+      {weakQuestions.length === 0 && (
         <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-4">
           <p className="text-sm font-semibold text-emerald-900">모든 질문에서 우리 업체가 잡혔어요! 🎉</p>
           <p className="text-xs text-emerald-900/70 mt-1">계속 글을 쌓아 이 자리를 지켜요.</p>
         </div>
       )}
 
-      {/* 경쟁 채널 — 참고 정보 */}
-      {topCompetitors.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          이 질문들에서 자주 보이는 곳: {topCompetitors.join(', ')}
-        </p>
+      {/* 기대치 설명 — 아직 한 건도 안 잡혔을 때(초기 이탈 방지) */}
+      {latest.cited === 0 && (
+        <div className="rounded-lg bg-slate-50 border p-4">
+          <p className="text-sm font-semibold text-foreground">지금 0%인 건 정상이에요</p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            AI 검색은 글이 쌓이고 검색엔진에 반영되기까지 보통 <b>2~4주</b>가 걸려요. 이제 막 시작한 단계라 0%가 자연스러워요.
+            자동 발행이 위 질문들부터 글을 쓰고 있으니, <b>매주 측정 결과로 조금씩 올라가는 걸</b> 보시게 됩니다.
+          </p>
+        </div>
       )}
     </div>
   )
