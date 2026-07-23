@@ -6,6 +6,7 @@ import { MarketingStats } from './marketing-stats'
 import { ChannelLinksCard } from './channel-links-card'
 import { MarketingPeriodSelector } from './period-selector'
 import { SearchTrafficTrend } from '@/components/dashboard/search-traffic-trend'
+import { GeoShareCard } from '@/components/dashboard/geo-share-card'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
@@ -167,6 +168,14 @@ export default async function MarketingPage({
           </div>
         }>
           <SearchTrafficTrend businessId={profile.business_id} months={months} />
+        </Suspense>
+
+        <Suspense fallback={
+          <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
+            AI 검색 노출률을 불러오는 중...
+          </div>
+        }>
+          <GeoShareCard businessId={profile.business_id} />
         </Suspense>
       </div>
     </div>
