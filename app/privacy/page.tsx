@@ -102,7 +102,7 @@ export default function PrivacyPage() {
           <h2 className="text-lg font-semibold mb-3">제6조 (정보주체의 권리·의무)</h2>
           <p className="text-muted-foreground leading-relaxed">
             이용자는 회사에 대해 언제든지 개인정보 열람, 정정, 삭제, 처리정지 요구 등의 권리를
-            행사할 수 있습니다. 위 권리 행사는 ryusc0628@naver.com 로 연락하시기 바랍니다.
+            행사할 수 있습니다. 위 권리 행사는 ceo@qualio.co.kr 로 연락하시기 바랍니다.
           </p>
         </section>
 
@@ -110,7 +110,7 @@ export default function PrivacyPage() {
           <h2 className="text-lg font-semibold mb-3">제7조 (개인정보 보호책임자)</h2>
           <ul className="list-none space-y-1 text-muted-foreground">
             <li>성명: 퀄리오 개인정보보호팀</li>
-            <li>이메일: ryusc0628@naver.com</li>
+            <li>이메일: ceo@qualio.co.kr</li>
           </ul>
         </section>
 

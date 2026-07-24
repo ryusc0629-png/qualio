@@ -11,5 +11,5 @@ export const BUSINESS_INFO = {
   mailOrderSalesNumber: '2022-수원권선-0796',
   address: '울산광역시 울주군 삼남읍 도호1길 39-11, 202동 3103호', // 사업장 주소
   phone: '010-2912-2881',           // 고객 문의 전화
-  email: 'ryusc0628@naver.com',     // 고객 문의 이메일
+  email: 'ceo@qualio.co.kr',        // 고객 문의 이메일
 } as const
