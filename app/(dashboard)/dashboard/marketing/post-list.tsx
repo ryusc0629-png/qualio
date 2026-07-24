@@ -485,6 +485,8 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   const [galleryPost, setGalleryPost] = useState<Post | null>(null)
   const [postingId, setPostingId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // 홍보 페이지(랜딩) 주소 복사 완료 표시 — 헤더 '링크 복사' 버튼 전용
+  const [landingCopied, setLandingCopied] = useState(false)
   // 오늘 자동 발행 시간(오전 9시 KST)이 지났는지 — 하이드레이션 불일치 방지 위해 마운트 후 계산
   const [autoTimePassed, setAutoTimePassed] = useState(false)
   useEffect(() => {
@@ -499,6 +501,15 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
     navigator.clipboard.writeText(markdownToPlain(content))
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+  // 홍보 페이지 주소 — 고객에게 공유하는 내 업체 소개 페이지(/biz/[slug])
+  const landingUrl = businessSlug ? `${appUrl}/biz/${businessSlug}` : null
+  const handleCopyLanding = () => {
+    if (!landingUrl) return
+    navigator.clipboard.writeText(landingUrl)
+    setLandingCopied(true)
+    toast.success('홍보 페이지 주소를 복사했어요!')
+    setTimeout(() => setLandingCopied(false), 2000)
   }
   // 네이버 블로그 — 서식 HTML을 함께 복사해 붙여넣으면 소제목·인용구가 자동 적용됨
   const handleNaverCopy = async (content: string, title?: string) => {
@@ -1037,8 +1048,31 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
       {/* ── 발행된 포스트 목록 ── */}
       {posts.length > 0 && (
         <div className="rounded-xl border bg-white overflow-hidden">
-          <div className="px-5 py-3.5 border-b bg-slate-50">
-            <p className="font-semibold text-sm">전체 발행 포스트 ({posts.length}건)</p>
+          <div className="px-4 sm:px-5 py-2.5 border-b bg-slate-50 flex items-center justify-between gap-2">
+            <p className="font-semibold text-sm shrink-0">전체 발행 포스트 ({posts.length}건)</p>
+            {landingUrl && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleCopyLanding}
+                  className="inline-flex items-center gap-1 h-9 px-2.5 rounded-lg text-xs font-medium text-slate-700 bg-white border hover:bg-slate-100 transition-colors"
+                  title="홍보 페이지 주소 복사하기"
+                >
+                  {landingCopied
+                    ? <><Check className="h-3.5 w-3.5 text-emerald-600" />복사됨</>
+                    : <><Copy className="h-3.5 w-3.5" />링크 복사</>}
+                </button>
+                <a
+                  href={landingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 h-9 px-3 rounded-lg text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
+                  title="새 창에서 내 홍보 페이지 보기"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />홍보 페이지 열기
+                </a>
+              </div>
+            )}
           </div>
           <div ref={postListRef} className="divide-y max-h-[480px] overflow-y-auto">
             {sortedPosts.map((post) => {
@@ -1122,19 +1156,22 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
       )}
 
       {posts.length === 0 && (
-        <div className="rounded-lg border bg-card p-10 text-center text-sm text-muted-foreground">
-          아직 포스트가 없어요. 첫 번째 포스트를 만들어보세요!
+        <div className="rounded-lg border bg-card p-10 text-center space-y-3">
+          <p className="text-sm text-muted-foreground">아직 포스트가 없어요. 첫 번째 포스트를 만들어보세요!</p>
+          {landingUrl && (
+            <a
+              href={landingUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg text-sm font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
+            >
+              <ExternalLink className="h-4 w-4" />내 홍보 페이지 열기
+            </a>
+          )}
         </div>
       )}
 
-      {businessSlug && (
-        <div className="text-xs text-muted-foreground text-center pt-1">
-          랜딩 페이지:{' '}
-          <a href={`${appUrl}/biz/${businessSlug}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
-            {appUrl}/biz/{businessSlug}
-          </a>
-        </div>
-      )}
+      {/* 홍보 페이지 링크는 '전체 발행 포스트' 헤더의 '홍보 페이지 열기·링크 복사' 버튼으로 이동 */}
 
       {/* 당근마켓용 글 모달 */}
       {daangnPost && daangnPost.daangn_content && (
