@@ -31,6 +31,10 @@ const PLAN_ORDER: Record<string, number> = { beta: 0, starter: 1, pro: 2, scale:
 // false면 포트원 단건 결제로 진행(빌키 미개통 상황 대비 폴백).
 const USE_BILLING_KEY = true
 
+// 결제창에 노출할 카드사 강제 지정 — 카드사(하나카드) 입점심사 요구사항(슬라이드 9) 대응.
+// 심사 통과 후 null로 되돌리면 결제창에서 카드사를 직접 선택할 수 있다.
+const FORCE_CARD_COMPANY: 'HANA_CARD' | null = 'HANA_CARD'
+
 // 결제 위젯 클라이언트 컴포넌트
 export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, currentPeriodEnd, needsPayment = false, provider }: UpgradeFormProps) {
   const [selectedPlanId, setSelectedPlanId] = useState<PlanId | null>(
@@ -109,6 +113,9 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
       displayAmount: order.displayAmount,
       currency: 'KRW',
       customer: order.customer,
+      // 카드사 입점심사(하나카드) 요구: 마지막 결제창을 '하나카드'로 노출시킨다.
+      // 심사 통과 후 이 줄을 제거하면 카드사 선택 화면이 노출된다.
+      card: FORCE_CARD_COMPANY ? { cardCompany: FORCE_CARD_COMPANY } : undefined,
       // 모바일 리다이렉트 복귀 지점 (orderId를 실어 보내 서버가 조회·청구)
       redirectUrl: `${window.location.origin}/api/payment/portone-billing-return?orderId=${encodeURIComponent(order.orderId)}`,
     })
