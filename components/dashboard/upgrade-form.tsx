@@ -26,9 +26,10 @@ interface UpgradeFormProps {
 // 플랜 순서 (업그레이드/다운그레이드 판별용)
 const PLAN_ORDER: Record<string, number> = { beta: 0, starter: 1, pro: 2, scale: 3 }
 
-// 정기결제(빌키) 사용 여부 — KCP의 정기결제 그룹 ID(batchPaymentGroupId) 개통 전까지는 false.
-// false면 포트원 단건 결제로 진행(심사·즉시 이용). KCP 정기결제 개통 후 true로 바꾸면 자동청구 복귀.
-const USE_BILLING_KEY = false
+// 정기결제(빌키) 사용 여부.
+// true면 카드 등록(빌키 발급) 창을 띄운다 — 한국결제네트웍스(KPN) 정기결제 채널 + 정기결제 심사에 필요.
+// false면 포트원 단건 결제로 진행(빌키 미개통 상황 대비 폴백).
+const USE_BILLING_KEY = true
 
 // 결제 위젯 클라이언트 컴포넌트
 export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, currentPeriodEnd, needsPayment = false, provider }: UpgradeFormProps) {
