@@ -21,9 +21,13 @@ interface StatsChartsProps {
 }
 
 export function StatsCharts({ sourceCounts, monthlyData, topPosts, totalViews }: StatsChartsProps) {
-  // 소스별 집계를 내림차순 정렬
+  // 소스별 집계를 내림차순 정렬 — 직접 방문·기타는 비테크 사장님에게 혼란만 줘서 분포에서 제외
+  // (직접·링크·SNS 방문 총합은 상위 마케팅 화면에 한 줄로 이미 요약됨)
   const sortedSources = (Object.entries(sourceCounts) as [ViewSource, number][])
+    .filter(([source]) => source !== 'direct' && source !== 'other')
     .sort((a, b) => b[1] - a[1])
+  // 퍼센트는 '보이는 유입(검색·AI·SNS)'의 합 기준 — 채널 간 비중을 또렷하게
+  const shownTotal = sortedSources.reduce((sum, [, count]) => sum + count, 0)
 
   const maxMonthly = Math.max(...monthlyData.map((d) => d.count), 1)
 
@@ -37,7 +41,7 @@ export function StatsCharts({ sourceCounts, monthlyData, topPosts, totalViews }:
           </div>
           <div className="px-5 py-4 space-y-3">
             {sortedSources.map(([source, count]) => {
-              const pct = totalViews > 0 ? Math.round((count / totalViews) * 100) : 0
+              const pct = shownTotal > 0 ? Math.round((count / shownTotal) * 100) : 0
               const isAi = source.startsWith('ai_')
               return (
                 <div key={source} className="space-y-1">
@@ -57,16 +61,13 @@ export function StatsCharts({ sourceCounts, monthlyData, topPosts, totalViews }:
               )
             })}
           </div>
-          <div className="px-5 pb-3 pt-1 space-y-0.5">
-            {sortedSources.some(([s]) => s.startsWith('ai_')) && (
+          {sortedSources.some(([s]) => s.startsWith('ai_')) && (
+            <div className="px-5 pb-3 pt-1">
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <span className="text-emerald-600 font-semibold">✦</span> AI 검색 유입
               </p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              * 직접 방문에는 ChatGPT 앱 등 앱에서 클릭한 AI 유입도 포함될 수 있어요
-            </p>
-          </div>
+            </div>
+          )}
         </div>
       )}
 
