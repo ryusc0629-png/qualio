@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
-import { GraduationCap, ArrowRight, TrendingUp, LineChart, Award, ShieldAlert } from 'lucide-react'
+import { GraduationCap, ArrowRight, TrendingUp, LineChart, Award, ShieldAlert, Quote } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { SiteFooter } from '@/components/site-footer'
 import { AcademyInquiryForm } from './academy-inquiry-form'
 
@@ -60,6 +61,15 @@ const IMPLANT = [
     title: '학원은 기술에만 집중',
     desc: '마케팅·영업은 전문팀이 맡으니, 학원은 가장 잘하는 기술 교육에만 집중하시면 됩니다.',
   },
+]
+
+// 실제 카페 수강생 후기(제목 그대로 인용) — 클릭하면 카페에서 날짜·댓글까지 검증 가능
+const CAFE_REVIEWS_URL = 'https://cafe.naver.com/f-e/cafes/31123207/menus/24'
+const REVIEWS = [
+  '4개월 만에 연매출 2억, 월소득 680만 원 달성',
+  '3개월 만에 월 매출 1,300만 원 상승 — 결과로 증명',
+  '250평 정기청소, 대형 인테리어 업체와 계약',
+  '제안서라는 무기가 생기니 영업이 간단하네요',
 ]
 
 export default function AcademyPartnershipPage() {
@@ -160,14 +170,36 @@ export default function AcademyPartnershipPage() {
             </p>
           </div>
 
-          {/* 증거 프레임 — 데이터는 있으나 구체 수치·조건은 미팅에서 공개(전략적 숨김) */}
-          <div className="rounded-2xl border bg-card p-5 shadow-sm space-y-2">
-            <p className="font-bold break-keep">막연한 약속이 아니라, 데이터로 증명합니다.</p>
-            <p className="text-sm text-muted-foreground break-keep">
-              퀄리오는 수료생 한 명 한 명의 견적·예약·<b className="text-foreground">매출을 데이터로
-              추적</b>합니다. 제휴 학원에는 수료생들의 실제 성장 데이터를 리포트로 제공하고요.{' '}
-              <b className="text-foreground">실제 매출 상승 케이스</b>는 미팅에서 숫자 그대로
-              보여드립니다.
+          {/* 실증 — 카페의 실제 수강생 후기(살아있는 포트폴리오, 클릭 검증 가능) */}
+          <div className="rounded-2xl border bg-card p-5 shadow-sm space-y-4">
+            <div className="space-y-1">
+              <p className="font-bold break-keep">막연한 약속이 아니라, 실제 후기로 증명합니다.</p>
+              <p className="text-sm text-muted-foreground break-keep">
+                퀄리오로 시작한 사장님들이 직접 남긴 후기예요. 골라 담은 게 아니라,{' '}
+                <b className="text-foreground">카페에서 날짜·댓글까지 그대로</b> 확인하실 수 있습니다.
+              </p>
+            </div>
+
+            {/* 실제 후기 제목 인용 */}
+            <ul className="space-y-2">
+              {REVIEWS.map((review) => (
+                <li
+                  key={review}
+                  className="flex items-start gap-2.5 rounded-xl bg-muted/50 px-4 py-3"
+                >
+                  <Quote className="w-4 h-4 shrink-0 text-primary mt-0.5" />
+                  <span className="text-sm font-medium break-keep">{review}</span>
+                </li>
+              ))}
+            </ul>
+
+            <Button asChild variant="outline" className="w-full h-12 text-base font-semibold">
+              <a href={CAFE_REVIEWS_URL} target="_blank" rel="noopener noreferrer">
+                실제 수강생 후기 전체 보기 →
+              </a>
+            </Button>
+            <p className="text-[11px] text-center text-muted-foreground break-keep">
+              실제 수강생 후기이며, 성과는 개인차가 있습니다.
             </p>
           </div>
 
