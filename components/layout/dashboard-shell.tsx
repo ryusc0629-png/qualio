@@ -7,11 +7,12 @@ import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 
 interface DashboardShellProps {
   businessName: string
+  isAdmin?: boolean
   children: React.ReactNode
 }
 
 // 대시보드 전체 레이아웃 — 모바일 사이드바 토글 상태 관리
-export function DashboardShell({ businessName, children }: DashboardShellProps) {
+export function DashboardShell({ businessName, isAdmin = false, children }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
@@ -31,6 +32,7 @@ export function DashboardShell({ businessName, children }: DashboardShellProps) 
       {/* 사이드바 (인쇄 시 숨김은 Sidebar 루트의 print:hidden 으로 처리) */}
       <Sidebar
         businessName={businessName}
+        isAdmin={isAdmin}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />

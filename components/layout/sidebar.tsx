@@ -14,6 +14,7 @@ import {
   CalendarDays,
   Route,
   Wallet,
+  ShieldCheck,
   X,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -23,6 +24,7 @@ import { cn } from '@/lib/utils'
 
 interface SidebarProps {
   businessName: string
+  isAdmin?: boolean
   isOpen?: boolean
   onClose?: () => void
 }
@@ -39,7 +41,7 @@ const navItems = [
   { href: '/dashboard/settings', label: '설정',        desc: undefined,        icon: Settings },
 ]
 
-export function Sidebar({ businessName, isOpen = false, onClose }: SidebarProps) {
+export function Sidebar({ businessName, isAdmin = false, isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname()
   const [isPending, startTransition] = useTransition()
 
@@ -121,8 +123,18 @@ export function Sidebar({ businessName, isOpen = false, onClose }: SidebarProps)
         })}
       </nav>
 
-      {/* 로그아웃 */}
-      <div className="px-2 py-3 border-t border-border">
+      {/* 본사 관리자(관리자 계정에만 노출) + 로그아웃 */}
+      <div className="px-2 py-3 border-t border-border space-y-0.5">
+        {isAdmin && (
+          <Link
+            href="/admin"
+            onClick={onClose}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-primary hover:bg-primary/5 transition-colors"
+          >
+            <ShieldCheck className="h-4 w-4 shrink-0" />
+            <span>본사 관리자</span>
+          </Link>
+        )}
         <Button
           variant="ghost"
           size="sm"

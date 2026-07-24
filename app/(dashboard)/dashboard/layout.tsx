@@ -56,7 +56,7 @@ export default async function DashboardLayout({
     (profile.businesses as { name: string } | null)?.name ?? '내 업체'
 
   return (
-    <DashboardShell businessName={businessName}>
+    <DashboardShell businessName={businessName} isAdmin={isAdmin}>
       <ServiceWorkerRegister />
       <SessionRefresher />
       {children}
