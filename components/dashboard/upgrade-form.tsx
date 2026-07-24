@@ -31,9 +31,9 @@ const PLAN_ORDER: Record<string, number> = { beta: 0, starter: 1, pro: 2, scale:
 // false면 포트원 단건 결제로 진행(빌키 미개통 상황 대비 폴백).
 const USE_BILLING_KEY = true
 
-// 결제창에 노출할 카드사 강제 지정 — 카드사(하나카드) 입점심사 요구사항(슬라이드 9) 대응.
-// 심사 통과 후 null로 되돌리면 결제창에서 카드사를 직접 선택할 수 있다.
-const FORCE_CARD_COMPANY: 'HANA_CARD' | null = 'HANA_CARD'
+// 결제창 카드사 강제 지정. null이면 KPN 결제창에서 카드사(하나카드 등)를 직접 선택하는 화면이 노출된다.
+// 심사자료 슬라이드 9는 '카드사 선택 화면 + 하나카드 결제창'을 요구하므로 심사 중에는 null(선택 화면 노출).
+const FORCE_CARD_COMPANY: 'HANA_CARD' | null = null
 
 // 결제 위젯 클라이언트 컴포넌트
 export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, currentPeriodEnd, needsPayment = false, provider }: UpgradeFormProps) {
