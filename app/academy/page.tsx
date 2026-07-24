@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { GraduationCap, ArrowRight, TrendingUp, LineChart, Award, ShieldAlert, Quote } from 'lucide-react'
+import { GraduationCap, ArrowRight, TrendingUp, LineChart, Award, ShieldAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SiteFooter } from '@/components/site-footer'
 import { AcademyInquiryForm } from './academy-inquiry-form'
@@ -63,13 +63,12 @@ const IMPLANT = [
   },
 ]
 
-// 실제 카페 수강생 후기(제목 그대로 인용) — 클릭하면 카페에서 날짜·댓글까지 검증 가능
+// 실제 카페 수강생 후기 — 스크린샷(원본은 카페에서 날짜·댓글까지 검증 가능)
 const CAFE_REVIEWS_URL = 'https://cafe.naver.com/f-e/cafes/31123207/menus/24'
-const REVIEWS = [
-  '4개월 만에 연매출 2억, 월소득 680만 원 달성',
-  '3개월 만에 월 매출 1,300만 원 상승 — 결과로 증명',
-  '250평 정기청소, 대형 인테리어 업체와 계약',
-  '제안서라는 무기가 생기니 영업이 간단하네요',
+const REVIEW_IMAGES = [
+  { src: '/academy/reviews/review-1.png', w: 1160, h: 965, alt: '청소 창업 수강생 실제 후기 — 연매출·월 매출 상승 사례 (카페 화면)' },
+  { src: '/academy/reviews/review-2.png', w: 1160, h: 798, alt: '청소 창업 수강생 실제 후기 — 계약·영업 성공 사례 (카페 화면)' },
+  { src: '/academy/reviews/review-3.png', w: 1160, h: 958, alt: '청소 창업 수강생 실제 후기 — 정기청소·인테리어 계약 사례 (카페 화면)' },
 ]
 
 export default function AcademyPartnershipPage() {
@@ -180,18 +179,25 @@ export default function AcademyPartnershipPage() {
               </p>
             </div>
 
-            {/* 실제 후기 제목 인용 */}
-            <ul className="space-y-2">
-              {REVIEWS.map((review) => (
-                <li
-                  key={review}
-                  className="flex items-start gap-2.5 rounded-xl bg-muted/50 px-4 py-3"
+            {/* 실제 후기 스크린샷 — 프레임 카드로 통일 */}
+            <div className="space-y-3">
+              {REVIEW_IMAGES.map((img) => (
+                <div
+                  key={img.src}
+                  className="overflow-hidden rounded-xl border bg-background shadow-sm"
                 >
-                  <Quote className="w-4 h-4 shrink-0 text-primary mt-0.5" />
-                  <span className="text-sm font-medium break-keep">{review}</span>
-                </li>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={img.src}
+                    width={img.w}
+                    height={img.h}
+                    alt={img.alt}
+                    loading="lazy"
+                    className="w-full h-auto"
+                  />
+                </div>
               ))}
-            </ul>
+            </div>
 
             <Button asChild variant="outline" className="w-full h-12 text-base font-semibold">
               <a href={CAFE_REVIEWS_URL} target="_blank" rel="noopener noreferrer">
