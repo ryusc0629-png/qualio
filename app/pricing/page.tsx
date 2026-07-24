@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: '퀄리오 구독 요금제 안내 — Starter, Pro, Scale',
 }
 
-// 공개 가격 안내 페이지 — KCP 결제 심사 필수
+// 공개 가격 안내 페이지 — 포트원(PortOne) 결제 심사 필수
 export default function PricingPage() {
   return (
     <div className="min-h-screen bg-background">
@@ -125,7 +125,7 @@ export default function PricingPage() {
               },
               {
                 q: '결제 수단은 무엇을 지원하나요?',
-                a: '신용카드, 체크카드 자동결제(정기결제)를 지원합니다. 등록하신 카드로 매월 자동 결제되며, KCP를 통해 안전하게 처리됩니다.',
+                a: '신용카드, 체크카드 자동결제(정기결제)를 지원합니다. 등록하신 카드로 매월 자동 결제되며, 결제대행사 포트원(코리아포트원)을 통해 안전하게 처리됩니다.',
               },
             ].map((item) => (
               <div key={item.q} className="border-b pb-6">

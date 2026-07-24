@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { BUSINESS_INFO } from '@/lib/config/business'
 
-// 공개 페이지 공용 푸터 — 전자상거래법 사업자 정보 표시 (KCP 결제 심사 필수)
+// 공개 페이지 공용 푸터 — 전자상거래법 사업자 정보 표시 (포트원(PortOne) 결제 심사 필수)
 export function SiteFooter() {
   const b = BUSINESS_INFO
   return (

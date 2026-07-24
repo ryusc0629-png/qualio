@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: '퀄리오 서비스 이용약관',
 }
 
-// 퀄리오 이용약관 — KCP 결제 심사 필수 페이지
+// 퀄리오 이용약관 — 포트원(PortOne) 결제 심사 필수 페이지
 export default function TermsPage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
@@ -60,7 +60,7 @@ export default function TermsPage() {
             서비스는 아래와 같은 월 구독 플랜을 제공합니다. 구독료는 이용자가 등록한 결제 수단(카드)으로
             매월 결제일에 자동으로 결제(정기결제)되며, 이용자가 해지하기 전까지 매월 동일한 주기로 갱신됩니다.
             이용자는 서비스 내 설정에서 언제든지 구독을 해지할 수 있으며, 해지 시 다음 결제일부터
-            자동 결제가 중단됩니다. 결제는 KCP(NHN KCP)를 통해 처리됩니다.
+            자동 결제가 중단됩니다. 결제는 결제대행사 포트원(코리아포트원)을 통해 처리됩니다.
           </p>
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">

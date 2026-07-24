@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: '퀄리오 개인정보처리방침',
 }
 
-// 퀄리오 개인정보처리방침 — KCP 결제 심사 필수 페이지
+// 퀄리오 개인정보처리방침 — 포트원(PortOne) 결제 심사 필수 페이지
 export default function PrivacyPage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
@@ -35,7 +35,7 @@ export default function PrivacyPage() {
               <p className="font-medium mb-2">서비스 이용자(업체 사장님)</p>
               <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
                 <li>필수: 이메일 주소, 업체명, 대표자 이름, 연락처</li>
-                <li>결제 시: 결제 수단 정보 (KCP(NHN KCP)에서 처리, 회사는 저장하지 않음)</li>
+                <li>결제 시: 결제 수단 정보 (결제대행사 포트원(코리아포트원)에서 처리, 회사는 저장하지 않음)</li>
               </ul>
             </div>
             <div>
@@ -66,7 +66,7 @@ export default function PrivacyPage() {
           <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
             <li>법령의 규정에 의거하거나, 수사 목적으로 법령에 정해진 절차와 방법에 따라 수사기관의 요구가 있는 경우</li>
             <li>카카오 알림톡 발송을 위해 Solapi에 수신자 전화번호 제공 (발송 목적 한정)</li>
-            <li>결제 처리를 위해 KCP(NHN KCP)에 필요 정보 제공</li>
+            <li>결제 처리를 위해 결제대행사 포트원(코리아포트원)에 필요 정보 제공</li>
           </ul>
         </section>
 
@@ -90,8 +90,8 @@ export default function PrivacyPage() {
                   <td className="px-4 py-2 text-muted-foreground">카카오 알림톡 발송</td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-2">KCP(NHN KCP)</td>
-                  <td className="px-4 py-2 text-muted-foreground">결제 처리</td>
+                  <td className="px-4 py-2">포트원(코리아포트원)</td>
+                  <td className="px-4 py-2 text-muted-foreground">결제 처리(결제대행)</td>
                 </tr>
               </tbody>
             </table>
