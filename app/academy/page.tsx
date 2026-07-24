@@ -1,45 +1,45 @@
 import type { Metadata } from 'next'
-import { GraduationCap, ArrowRight, TrendingUp, LineChart, Repeat } from 'lucide-react'
+import { GraduationCap, ArrowRight, TrendingUp, LineChart, Award, ShieldAlert } from 'lucide-react'
 import { SiteFooter } from '@/components/site-footer'
 import { AcademyInquiryForm } from './academy-inquiry-form'
 
 // 검색 노출을 원하므로 noindex 미적용 — 학원이 검색으로도 찾아올 수 있게 SEO 메타 강화
 export const metadata: Metadata = {
-  title: '기술 창업 학원 제휴 — 수료생 정착 시스템 임베드 | 퀄리오',
+  title: '기술 창업 학원 제휴 — 마케팅 교육은 전문팀에 맡기세요 | 퀄리오',
   description:
-    '기술은 가르쳐도 졸업 후 영업·마케팅·운영은 아무도 안 가르칩니다. 검증된 청소 창업 운영 교육(OPS)과 자동화 도구를 귀 학원 커리큘럼에 심어, 수료생 정착률과 재등록·모집 선순환을 만듭니다. 제휴 문의를 남겨주세요.',
+    '기술은 학원이 제대로 가르칩니다. 하지만 마케팅·영업 커리큘럼은 대개 얕죠. 청소업 마케팅 전문팀 퀄리오가 검증된 운영 교육과 자동화 시스템을 학원 커리큘럼에 심어드립니다. 학원은 기술 교육에만 집중하고, 성공한 졸업생으로 명문이 되세요. 제휴 문의를 남겨주세요.',
   keywords: [
     '기술 창업 학원 제휴',
     '청소 창업 교육',
     '직업전문학교 제휴',
-    '수료생 취업 창업 지원',
-    '청소업 운영 교육',
+    '학원 마케팅 커리큘럼',
+    '수료생 창업 지원',
     '퀄리오 제휴',
   ],
   openGraph: {
-    title: '기술 창업 학원 제휴 — 수료생이 졸업 후에도 자리 잡게',
+    title: '기술 창업 학원 제휴 — 마케팅 교육은 전문팀에 맡기세요',
     description:
-      '검증된 청소 창업 운영 교육과 자동화 도구를 학원 커리큘럼에 심어 수료생 정착률을 높입니다.',
+      '학원은 기술 교육에 집중하고, 마케팅·운영은 광고 전문팀 퀄리오가. 성공한 졸업생이 곧 학원의 포트폴리오가 됩니다.',
     type: 'website',
   },
 }
 
-// 학원이 겪는 문제 — '데이터로 증명되는 빈칸'
+// 학원의 현실 — 강점은 확실하나, 마케팅 수업이 부실하다는 '진짜 빈칸'
 const GAPS = [
   {
     stat: '기술 교육',
-    label: '학원이 채우는 것',
-    desc: '청소·방역·시공 등 손기술은 완성도 높게 가르칩니다.',
+    label: '학원의 확실한 강점',
+    desc: '원하는 기술을 제대로 가르치니, 후기가 나쁠 일이 없어요. 여긴 손댈 필요 없습니다.',
   },
   {
-    stat: '운영 교육',
-    label: '아무도 안 채우는 것',
-    desc: '견적·영업·마케팅·고객관리 — 졸업 후 매출을 만드는 진짜 기술은 공백입니다.',
+    stat: '마케팅 수업',
+    label: '대개 아쉬운 것',
+    desc: "만들어는 두셨죠. 하지만 광고를 전문으로 파본 팀이 짠 게 아니라 깊이가 얕습니다.",
   },
   {
-    stat: '수료생 폐업',
-    label: '그 결과',
-    desc: '오더를 못 따 남 밑으로 가거나 문을 닫습니다. 이게 학원 후기·재등록·모집을 갉아먹습니다.',
+    stat: '무너지는 신뢰',
+    label: '그래서 생기는 위험',
+    desc: '배운 대로 해도 오더가 안 나오면, 신뢰를 잃는 건 결국 학원이에요.',
   },
 ]
 
@@ -47,18 +47,18 @@ const GAPS = [
 const IMPLANT = [
   {
     icon: LineChart,
-    title: 'OPS 운영 교육 임베드',
-    desc: '견적 짜는 법부터 영업·마케팅·고객관리까지, 실제 현장에서 검증된 운영 커리큘럼을 귀 학원 수업에 그대로 붙여드립니다.',
+    title: '광고 전문팀이 짠 운영 교육',
+    desc: '청소업 마케팅만 전문으로 파온 팀의 검증된 운영 커리큘럼을, 귀 학원 수업에 그대로 임베드합니다.',
   },
   {
     icon: TrendingUp,
-    title: '수료생용 자동화 도구 제공',
-    desc: '견적→예약→결제→알림톡→후기까지 운영 전 과정을 자동화하는 도구를 수료생이 창업과 동시에 쓰게 합니다.',
+    title: '수강생용 자동화 시스템',
+    desc: '견적→예약→결제→알림톡→후기까지, 수강생이 졸업과 동시에 굴러가는 실전 도구를 제공합니다.',
   },
   {
-    icon: Repeat,
-    title: '정착 → 모집 선순환',
-    desc: '수료생이 졸업 후 실제로 자리 잡으면, 그 성과가 후기·재등록·신규 모집으로 돌아옵니다.',
+    icon: GraduationCap,
+    title: '학원은 기술에만 집중',
+    desc: '마케팅·영업은 전문팀이 맡으니, 학원은 가장 잘하는 기술 교육에만 집중하시면 됩니다.',
   },
 ]
 
@@ -72,22 +72,23 @@ export default function AcademyPartnershipPage() {
             <GraduationCap className="w-4 h-4" /> 기술 창업 학원 제휴 안내
           </div>
 
-          {/* 헤드라인 — 진짜 통증: 기술은 가르쳐도 운영은 못 가르친다 */}
+          {/* 헤드라인 — 기술은 명문, 문제는 부실한 마케팅 수업 */}
           <h1 className="text-3xl sm:text-4xl font-bold leading-tight break-keep">
-            기술은 가르치는데,
+            기술은 명문인데,
             <br />
-            졸업 후 <span className="text-primary">운영</span>은
+            <span className="text-primary">마케팅 수업</span>은
             <br />
-            왜 아무도 안 가르칠까요?
+            왜 늘 아쉬울까요?
           </h1>
 
           <p className="text-muted-foreground text-base leading-relaxed break-keep">
-            수료생이 손기술은 배웠는데 <b className="text-foreground">견적·영업·마케팅</b>을 몰라
-            오더를 못 땁니다. 결국 남 밑으로 가거나 문을 닫죠. 그리고 그 폐업률이 학원 후기와
-            다음 기수 모집의 발목을 잡습니다.
+            기술 교육은 학원의 자부심이죠. 원하는 기술을 확실히 알려주니{' '}
+            <b className="text-foreground">후기가 나쁠 일도 없고요</b>. 문제는 그 다음입니다.
+            마케팅·영업 커리큘럼은 대개 <b className="text-foreground">‘만들어는 둔’ 수준</b> —
+            광고를 전문으로 파본 팀이 짠 게 아니니까요.
           </p>
 
-          {/* 데이터로 보는 빈칸 */}
+          {/* 데이터로 보는 현실 */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {GAPS.map(({ stat, label, desc }) => (
               <div key={stat} className="rounded-xl border bg-muted/40 p-4 space-y-1">
@@ -98,10 +99,19 @@ export default function AcademyPartnershipPage() {
             ))}
           </div>
 
+          {/* 위험 경고 — 어설픈 마케팅이 학원을 위험하게 한다(악용 사례 대비, 톤은 절제) */}
+          <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3">
+            <ShieldAlert className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+            <p className="text-sm text-amber-900/80 break-keep leading-relaxed">
+              마케팅 대행을 명목으로 수강생에게 수백만 원을 받는 곳도 있습니다. 당장은 돈이 되지만,
+              <b className="text-amber-900"> 학원의 평판은 그렇게 무너져요.</b> 마케팅은 어설프게
+              손대면 오히려 신뢰를 잃는 전문 영역입니다.
+            </p>
+          </div>
+
           <p className="text-base leading-relaxed break-keep font-medium">
-            퀄리오는 그 빈칸을 채웁니다. 검증된{' '}
-            <b className="text-primary">운영 교육과 자동화 도구</b>를 귀 학원 커리큘럼에
-            심어드려요.
+            애매한 마케팅·영업은, <b className="text-primary">광고 전문팀 퀄리오에 맡기세요.</b>{' '}
+            학원은 가장 잘하는 것 — 기술 교육 — 에만 집중하시면 됩니다.
           </p>
 
           {/* 심어드리는 것 */}
@@ -128,13 +138,30 @@ export default function AcademyPartnershipPage() {
               <span>
                 학원은 기술을,
                 <br />
-                졸업 후 운영은 퀄리오가 책임집니다.
+                마케팅과 운영은 퀄리오가 책임집니다.
               </span>
             </div>
           </div>
 
+          {/* 반론 방어 — "수강생 잘되면 시장 작아지는 것 아니냐"에 대한 답 */}
+          <div className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <Award className="w-5 h-5 text-primary" />
+              <p className="font-bold break-keep">
+                수강생이 잘되면 시장이 작아질까요? 반대입니다.
+              </p>
+            </div>
+            <p className="text-sm text-muted-foreground break-keep leading-relaxed">
+              “폐업하는 사람이 있어야 창업하는 사람이 생긴다”는 말, 반은 맞고 반은 틀립니다.{' '}
+              <b className="text-foreground">명문 학원은 ‘성공한 졸업생’으로 만들어져요.</b> 전국 각지에서
+              잘 운영되는 수강생 한 명 한 명이 그대로 학원의 <b className="text-foreground">살아있는
+              포트폴리오</b>가 되고, 멀리서도 찾아와 배우는 이유가 됩니다. 잘된 졸업생이 많을수록,
+              학원은 <b className="text-foreground">대체 불가능한 기득권</b>이 됩니다.
+            </p>
+          </div>
+
           {/* 증거 프레임 — 데이터는 있으나 구체 수치·조건은 미팅에서 공개(전략적 숨김) */}
-          <div className="rounded-2xl border border-primary/20 bg-primary/[0.03] p-5 space-y-2">
+          <div className="rounded-2xl border bg-card p-5 shadow-sm space-y-2">
             <p className="font-bold break-keep">막연한 약속이 아니라, 데이터로 증명합니다.</p>
             <p className="text-sm text-muted-foreground break-keep">
               퀄리오는 수료생 한 명 한 명의 견적·예약·<b className="text-foreground">매출을 데이터로
