@@ -1,8 +1,5 @@
 'use client'
 
-import { SOURCE_LABELS } from '@/lib/utils/detect-view-source'
-import type { ViewSource } from '@/lib/utils/detect-view-source'
-
 interface MonthlyCount {
   month: string
   count: number
@@ -14,63 +11,16 @@ interface TopPost {
 }
 
 interface StatsChartsProps {
-  sourceCounts: Record<string, number>
   monthlyData: MonthlyCount[]
   topPosts: TopPost[]
-  totalViews: number
 }
 
-export function StatsCharts({ sourceCounts, monthlyData, topPosts, totalViews }: StatsChartsProps) {
-  // 소스별 집계를 내림차순 정렬 — 직접 방문·기타는 비테크 사장님에게 혼란만 줘서 분포에서 제외
-  // (직접·링크·SNS 방문 총합은 상위 마케팅 화면에 한 줄로 이미 요약됨)
-  const sortedSources = (Object.entries(sourceCounts) as [ViewSource, number][])
-    .filter(([source]) => source !== 'direct' && source !== 'other')
-    .sort((a, b) => b[1] - a[1])
-  // 퍼센트는 '보이는 유입(검색·AI·SNS)'의 합 기준 — 채널 간 비중을 또렷하게
-  const shownTotal = sortedSources.reduce((sum, [, count]) => sum + count, 0)
-
+// 유입 소스 분포는 위 '검색·AI 유입' 카드와 중복이라 제거함 — 여기선 콘텐츠 성과만(조회 TOP·발행 추이)
+export function StatsCharts({ monthlyData, topPosts }: StatsChartsProps) {
   const maxMonthly = Math.max(...monthlyData.map((d) => d.count), 1)
 
   return (
     <div className="space-y-5">
-      {/* 유입 소스 분포 */}
-      {sortedSources.length > 0 && (
-        <div className="rounded-xl border bg-white overflow-hidden">
-          <div className="px-5 py-3.5 border-b bg-slate-50">
-            <p className="font-semibold text-sm">유입 소스</p>
-          </div>
-          <div className="px-5 py-4 space-y-3">
-            {sortedSources.map(([source, count]) => {
-              const pct = shownTotal > 0 ? Math.round((count / shownTotal) * 100) : 0
-              const isAi = source.startsWith('ai_')
-              return (
-                <div key={source} className="space-y-1">
-                  <div className="flex justify-between text-xs">
-                    <span className={`font-medium ${isAi ? 'text-emerald-700' : 'text-foreground'}`}>
-                      {isAi && '✦ '}{SOURCE_LABELS[source as ViewSource] ?? source}
-                    </span>
-                    <span className="text-muted-foreground">{count.toLocaleString()}회 ({pct}%)</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-700 ${isAi ? 'bg-emerald-500' : 'bg-primary'}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-          {sortedSources.some(([s]) => s.startsWith('ai_')) && (
-            <div className="px-5 pb-3 pt-1">
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <span className="text-emerald-600 font-semibold">✦</span> AI 검색 유입
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* 포스트별 조회수 TOP 5 */}
       {topPosts.length > 0 && (
         <div className="rounded-xl border bg-white overflow-hidden">
@@ -117,16 +67,6 @@ export function StatsCharts({ sourceCounts, monthlyData, topPosts, totalViews }:
           </div>
         </div>
       </div>
-
-      {/* 데이터 없을 때 안내 */}
-      {totalViews === 0 && (
-        <div className="rounded-xl border bg-white px-5 py-8 text-center space-y-2">
-          <p className="text-sm font-medium">아직 조회 데이터가 없어요</p>
-          <p className="text-xs text-muted-foreground">
-            GEO 포스트가 AI 검색엔진에 인덱싱되면 자동으로 집계됩니다
-          </p>
-        </div>
-      )}
     </div>
   )
 }
