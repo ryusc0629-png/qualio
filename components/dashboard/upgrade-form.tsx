@@ -83,10 +83,21 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
       return
     }
 
+    // 결제 설정(스토어·채널 키)이 빌드에 안 박힌 경우 — 원인 불명 에러 대신 명확히 안내
+    // (NEXT_PUBLIC_* 는 빌드 시점에 주입되므로, env 추가 후 '캐시 재배포'만 하면 비어있을 수 있음)
+    const storeId = process.env.NEXT_PUBLIC_PORTONE_STORE_ID
+    const channelKey = process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY
+    if (!storeId || !channelKey) {
+      console.error('[Payment] 포트원 결제 설정 누락:', { hasStoreId: !!storeId, hasChannelKey: !!channelKey })
+      toast.error('결제 설정을 불러오지 못했어요. 잠시 후 다시 시도해주세요.')
+      setIsPaying(false)
+      return
+    }
+
     const PortOne = (await import('@portone/browser-sdk/v2')).default
     const response = await PortOne.requestIssueBillingKey({
-      storeId: process.env.NEXT_PUBLIC_PORTONE_STORE_ID!,
-      channelKey: process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY!,
+      storeId,
+      channelKey,
       billingKeyMethod: 'CARD',
       issueId: order.orderId, // KCP 필수 — 주문 고유번호
       issueName: order.issueName, // KCP 모바일 발급 필수
@@ -163,7 +174,9 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
     } catch (e) {
       // 사용자가 결제창을 닫으면 SDK가 에러를 던짐 — 조용히 되돌린다
       console.error('[Payment] 결제 진행 오류:', e)
-      toast.error('결제가 취소되었거나 문제가 생겼어요. 다시 시도해주세요.')
+      // 실제 원인 메시지가 있으면 함께 보여줘 진단을 돕는다(설정/네트워크 오류 구분)
+      const detail = e instanceof Error && e.message ? ` (${e.message})` : ''
+      toast.error(`결제가 취소되었거나 문제가 생겼어요. 다시 시도해주세요.${detail}`)
       setIsPaying(false)
     }
   }
