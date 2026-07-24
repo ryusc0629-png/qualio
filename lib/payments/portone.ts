@@ -48,6 +48,42 @@ export async function verifyPortOnePayment(paymentId: string): Promise<VerifyRes
   return { ok: true, businessId: parsed.businessId, planId, amount: expected, paymentKey: paymentId }
 }
 
+// 주문 기반 단건 결제 검증 — paymentId(짧은 주문번호)로 포트원 결제를 조회해
+// 상태(PAID)와 금액이 서버가 아는 기대 금액과 일치하는지 확인한다.
+// (KCP V2는 주문번호 40자 제한이라 businessId를 못 실으므로, 금액·플랜은 주문 테이블에서 가져온다.)
+export async function verifyPortOnePaymentByOrder(
+  paymentId: string,
+  expectedAmount: number
+): Promise<{ ok: true; paymentKey: string } | { ok: false; error: string }> {
+  const apiSecret = process.env.PORTONE_V2_API_SECRET
+  if (!apiSecret) {
+    console.error('[Payment] PORTONE_V2_API_SECRET 환경변수 없음')
+    return { ok: false, error: '결제 설정 오류입니다' }
+  }
+
+  const res = await fetch(
+    `https://api.portone.io/payments/${encodeURIComponent(paymentId)}`,
+    { headers: { Authorization: `PortOne ${apiSecret}` } }
+  )
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { message?: string }
+    console.error('[Payment] 포트원 결제 조회 실패:', err)
+    return { ok: false, error: err.message ?? '결제 확인에 실패했습니다' }
+  }
+
+  const payment = (await res.json()) as { status?: string; amount?: { total?: number } }
+  if (payment.status !== 'PAID') {
+    console.error('[Payment] 포트원 결제 미완료 상태:', payment.status)
+    return { ok: false, error: '결제가 완료되지 않았습니다' }
+  }
+  if (payment.amount?.total !== expectedAmount) {
+    console.error('[Payment] 포트원 결제 금액 불일치:', { paid: payment.amount?.total, expected: expectedAmount })
+    return { ok: false, error: '결제 금액이 올바르지 않습니다' }
+  }
+
+  return { ok: true, paymentKey: paymentId }
+}
+
 type ChargeResult = { ok: true; amount: number } | { ok: false; error: string }
 
 // 발급된 빌링키로 서버에서 정기결제(자동결제)를 청구한다.

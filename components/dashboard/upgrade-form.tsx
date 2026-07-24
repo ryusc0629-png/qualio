@@ -151,22 +151,28 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
       return
     }
 
-    const plan = PLANS[planId]
-    // 결제 식별자 {businessId}_{planId}_{ts} — 서버가 파싱해 금액 위변조를 검증한다(verifyPortOnePayment)
-    const paymentId = buildPaymentId(businessId, planId)
+    // 서버에서 짧은 주문번호(KCP 40자 제약) 채번 + 고객정보 확보 + 금액/플랜 저장(pending)
+    const orderResult = await createBillingOrderAction({ planId })
+    const order = orderResult?.data
+    if (!order) {
+      toast.error(orderResult?.serverError ?? '결제 준비에 실패했어요. 다시 시도해주세요.')
+      setIsPaying(false)
+      return
+    }
 
+    const plan = PLANS[planId]
     const PortOne = (await import('@portone/browser-sdk/v2')).default
     const response = await PortOne.requestPayment({
       storeId,
       channelKey,
-      paymentId,
+      paymentId: order.orderId, // 짧은 주문번호(KCP ≤40자)
       orderName: `퀄리오 ${plan.label} 플랜 1개월`,
-      totalAmount: plan.price,
+      totalAmount: order.displayAmount,
       currency: 'KRW',
       payMethod: 'CARD',
-      customer: { customerId: businessId, fullName: businessName },
-      // 모바일 리다이렉트 복귀 지점(서버가 검증·활성화 후 성공/실패 페이지로 이동)
-      redirectUrl: `${window.location.origin}/api/payment/portone-return`,
+      customer: order.customer,
+      // 모바일 리다이렉트 복귀 지점(orderId를 실어 보내 서버가 조회·검증·활성화)
+      redirectUrl: `${window.location.origin}/api/payment/portone-return?orderId=${encodeURIComponent(order.orderId)}`,
     })
 
     // 모바일이면 위에서 이미 리다이렉트됨. 아래는 데스크톱 팝업 흐름.
@@ -180,7 +186,7 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
     const res = await fetch('/api/payment/confirm', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paymentId: response.paymentId }),
+      body: JSON.stringify({ orderId: order.orderId }),
     })
     const data = (await res.json().catch(() => ({}))) as { error?: string }
     if (!res.ok) {
@@ -190,7 +196,7 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
     }
 
     window.location.replace(
-      `/upgrade/success?status=paid&ordr=${encodeURIComponent(paymentId)}&amount=${plan.price}&plan=${planId}`
+      `/upgrade/success?status=paid&ordr=${encodeURIComponent(order.orderId)}&amount=${order.displayAmount}&plan=${planId}`
     )
   }
 
