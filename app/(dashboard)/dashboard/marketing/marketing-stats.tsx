@@ -284,6 +284,38 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
     monthlyData.push({ month: label, count: monthlyMap[key] ?? 0 })
   }
 
+  // ── 검색·AI 유입 월별 추이 — '검색·AI 유입' 스냅샷 카드 안에 함께 표시(별도 박스 통합) ──
+  // 막대 = 그 달 검색·AI로 들어온 방문, 아래 숫자 = 그 달 발행한 글 수(글↑ → 유입↑ 상관 확인용)
+  const isSearchOrAi = (s: string) => isAiSource(s) || ['google', 'naver', 'daum'].includes(s)
+  const trendBuckets = monthlyData.map((m) => ({ label: m.month, searchAi: 0, published: m.count }))
+  const trendIndex = new Map(trendBuckets.map((_, i) => {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1 - i), 1))
+    return [d.toISOString().slice(0, 7), i] as const
+  }))
+  for (const v of views) {
+    if (!v.viewed_at || !isSearchOrAi(v.source)) continue
+    const idx = trendIndex.get(v.viewed_at.slice(0, 7))
+    if (idx !== undefined) trendBuckets[idx].searchAi++
+  }
+  for (const p of pageViews) {
+    if (!p.viewed_at || !isSearchOrAi(p.source)) continue
+    const idx = trendIndex.get(p.viewed_at.slice(0, 7))
+    if (idx !== undefined) trendBuckets[idx].searchAi++
+  }
+  const trendMax = trendBuckets.reduce((m, x) => Math.max(m, x.searchAi), 0)
+  const trendTotal = trendBuckets.reduce((s, m) => s + m.searchAi, 0)
+  // 증감 판정 — 기간을 반으로 나눠 앞·뒤 비교
+  const trendSplit = Math.floor(trendBuckets.length / 2)
+  const trendFirst = trendBuckets.slice(0, trendSplit).reduce((s, m) => s + m.searchAi, 0)
+  const trendSecond = trendBuckets.slice(trendSplit).reduce((s, m) => s + m.searchAi, 0)
+  const trendGrowing = trendBuckets.length >= 2 && trendTotal > 0 && trendSecond > trendFirst
+  const trendVerdict: { text: string; tone: string } =
+    trendTotal === 0
+      ? { text: '아직 검색·AI로 들어온 방문이 없어요. 글이 검색·AI에 색인되면 여기에 쌓여요', tone: 'text-muted-foreground' }
+      : trendGrowing
+        ? { text: '검색·AI로 찾아오는 고객이 늘고 있어요 ↗ 글이 쌓일수록 효과가 커져요', tone: 'text-emerald-600' }
+        : { text: '검색·AI 유입이 꾸준히 쌓이는 중이에요. 글을 더 낼수록 빨라져요', tone: 'text-muted-foreground' }
+
   return (
     <div className="space-y-5">
       {/* 퀄리오가 만든 매출 — 마케팅 유입(견적)에서 나온 예약 매출. ROI를 한눈에 */}
@@ -380,6 +412,34 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
           <span>그 외 직접·링크·SNS 방문</span>
           <span className="font-medium">{directOtherViews.toLocaleString()}회</span>
         </div>
+        {/* 월별 추이 — 같은 박스 안에서 흐름까지(예전 '검색·AI 유입 추이' 박스 통합) */}
+        {trendBuckets.length >= 2 && (
+          <div className="border-t p-4 space-y-3">
+            <p className={`text-xs font-medium ${trendVerdict.tone}`}>{trendVerdict.text}</p>
+            <div className="flex items-end justify-between gap-2 pt-1">
+              {trendBuckets.map((m) => {
+                const heightPct = trendMax > 0 ? Math.max((m.searchAi / trendMax) * 100, m.searchAi > 0 ? 8 : 0) : 0
+                return (
+                  <div key={m.label} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
+                    <span className="text-[11px] font-bold tabular-nums text-foreground">
+                      {m.searchAi > 0 ? m.searchAi.toLocaleString() : ''}
+                    </span>
+                    <div className="w-full h-24 flex items-end">
+                      <div className="w-full rounded-t bg-emerald-500/80 transition-all min-h-0" style={{ height: `${heightPct}%` }} />
+                    </div>
+                    <span className="text-[11px] text-muted-foreground">{m.label}</span>
+                    <span className="text-[10px] text-muted-foreground/70 tabular-nums">
+                      {m.published > 0 ? `글 ${m.published}` : '·'}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="text-[11px] text-muted-foreground/70 pt-1 border-t">
+              막대는 그 달 검색·AI로 들어온 방문, 아래 숫자는 그 달 발행한 글 수예요
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ▼ 여기부터 접이식 — 핵심(매출·전환·유입)만 위에 두고 세부 분석은 접어둠 (선택과 집중) */}
