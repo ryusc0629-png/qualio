@@ -26,6 +26,10 @@ interface UpgradeFormProps {
 // 플랜 순서 (업그레이드/다운그레이드 판별용)
 const PLAN_ORDER: Record<string, number> = { beta: 0, starter: 1, pro: 2, scale: 3 }
 
+// 정기결제(빌키) 사용 여부 — KCP의 정기결제 그룹 ID(batchPaymentGroupId) 개통 전까지는 false.
+// false면 포트원 단건 결제로 진행(심사·즉시 이용). KCP 정기결제 개통 후 true로 바꾸면 자동청구 복귀.
+const USE_BILLING_KEY = false
+
 // 결제 위젯 클라이언트 컴포넌트
 export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, currentPeriodEnd, needsPayment = false, provider }: UpgradeFormProps) {
   const [selectedPlanId, setSelectedPlanId] = useState<PlanId | null>(
@@ -133,6 +137,63 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
     )
   }
 
+  // 포트원 단건 결제 — KCP 정기결제(빌키) 개통 전까지 심사·운영에 사용.
+  // 빌키발급은 KCP의 batchPaymentGroupId(정기결제 그룹 ID)가 있어야 동작하는데,
+  // 아직 미개통이라 단건(1개월) 결제로 진행한다. 개통 후 USE_BILLING_KEY=true로 되돌리면 자동청구 복귀.
+  // 데스크톱은 팝업(프로미스 반환) → /api/payment/confirm 검증, 모바일은 리다이렉트 → /api/payment/portone-return.
+  const startPortOnePayment = async (planId: PlanId) => {
+    const storeId = process.env.NEXT_PUBLIC_PORTONE_STORE_ID
+    const channelKey = process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY
+    if (!storeId || !channelKey) {
+      console.error('[Payment] 포트원 결제 설정 누락:', { hasStoreId: !!storeId, hasChannelKey: !!channelKey })
+      toast.error('결제 설정을 불러오지 못했어요. 잠시 후 다시 시도해주세요.')
+      setIsPaying(false)
+      return
+    }
+
+    const plan = PLANS[planId]
+    // 결제 식별자 {businessId}_{planId}_{ts} — 서버가 파싱해 금액 위변조를 검증한다(verifyPortOnePayment)
+    const paymentId = buildPaymentId(businessId, planId)
+
+    const PortOne = (await import('@portone/browser-sdk/v2')).default
+    const response = await PortOne.requestPayment({
+      storeId,
+      channelKey,
+      paymentId,
+      orderName: `퀄리오 ${plan.label} 플랜 1개월`,
+      totalAmount: plan.price,
+      currency: 'KRW',
+      payMethod: 'CARD',
+      customer: { customerId: businessId, fullName: businessName },
+      // 모바일 리다이렉트 복귀 지점(서버가 검증·활성화 후 성공/실패 페이지로 이동)
+      redirectUrl: `${window.location.origin}/api/payment/portone-return`,
+    })
+
+    // 모바일이면 위에서 이미 리다이렉트됨. 아래는 데스크톱 팝업 흐름.
+    if (!response || response.code != null) {
+      toast.error(response?.message ?? '결제가 취소되었어요')
+      setIsPaying(false)
+      return
+    }
+
+    // 서버에서 포트원 결제 내역 조회로 위변조 검증 + 구독 활성화
+    const res = await fetch('/api/payment/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paymentId: response.paymentId }),
+    })
+    const data = (await res.json().catch(() => ({}))) as { error?: string }
+    if (!res.ok) {
+      toast.error(data.error ?? '결제 확인에 실패했어요. 다시 시도해주세요.')
+      setIsPaying(false)
+      return
+    }
+
+    window.location.replace(
+      `/upgrade/success?status=paid&ordr=${encodeURIComponent(paymentId)}&amount=${plan.price}&plan=${planId}`
+    )
+  }
+
   // 토스 결제창 — 리다이렉트 방식(성공 시 successUrl로 이동, 서버가 승인 처리)
   const startTossPayment = async (planId: PlanId) => {
     const clientKey = process.env.NEXT_PUBLIC_TOSSPAYMENTS_CLIENT_KEY
@@ -168,8 +229,12 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
     try {
       if (provider === 'toss') {
         await startTossPayment(selectedPlanId)
-      } else {
+      } else if (USE_BILLING_KEY) {
+        // KCP 정기결제(빌키) 개통 후 활성화 — 자동청구
         await startPortOneBilling(selectedPlanId)
+      } else {
+        // 개통 전: 단건 결제로 진행(심사 통과·즉시 이용)
+        await startPortOnePayment(selectedPlanId)
       }
     } catch (e) {
       // 사용자가 결제창을 닫으면 SDK가 에러를 던짐 — 조용히 되돌린다
@@ -344,7 +409,11 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
         <p className="text-xs text-muted-foreground text-center">
           {showPaymentFlow ? (
             <>
-              등록한 카드로 <strong>매월 자동 결제</strong>되는 정기 구독이에요. 언제든지 해지할 수 있어요.<br />
+              {provider !== 'toss' && !USE_BILLING_KEY ? (
+                <>선택한 플랜을 <strong>1개월</strong> 이용하는 결제예요. 만료 전 다시 결제하시면 이어서 이용할 수 있어요.<br /></>
+              ) : (
+                <>등록한 카드로 <strong>매월 자동 결제</strong>되는 정기 구독이에요. 언제든지 해지할 수 있어요.<br /></>
+              )}
               {provider === 'toss' ? '토스페이먼츠' : '포트원(PortOne)'}을 통해 카드로 안전하게 결제되며,
               결제 후 7일 이내 미사용 시 전액 환불 가능합니다.
             </>
