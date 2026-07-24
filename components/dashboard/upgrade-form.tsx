@@ -27,9 +27,10 @@ interface UpgradeFormProps {
 const PLAN_ORDER: Record<string, number> = { beta: 0, starter: 1, pro: 2, scale: 3 }
 
 // 정기결제(빌키) 사용 여부.
-// true면 카드 등록(빌키 발급) 창을 띄운다 — 한국결제네트웍스(KPN) 정기결제 채널 + 정기결제 심사에 필요.
-// false면 포트원 단건 결제로 진행(빌키 미개통 상황 대비 폴백).
-const USE_BILLING_KEY = true
+// true = 카드 등록(빌키 발급) 창 — 정기결제 MID(merchantes10, 비인증). 슬라이드 8(정기 카드등록) 캡처용.
+// false = 인증 단건 결제창 — 일반결제 MID(merchanttest6, 인증). 카드사 선택+하나카드 인증창이 떠서 슬라이드 9 캡처용.
+// ⚠️ 심사 캡처가 끝나면 true로 되돌려 실제 정기결제로 운영.
+const USE_BILLING_KEY = false
 
 // 결제창 카드사 강제 지정. null이면 KPN 결제창에서 카드사(하나카드 등)를 직접 선택하는 화면이 노출된다.
 // 심사자료 슬라이드 9는 '카드사 선택 화면 + 하나카드 결제창'을 요구하므로 심사 중에는 null(선택 화면 노출).
