@@ -629,8 +629,20 @@ const { execute: deletePost, isPending: isDeleting } = useAction(deletePostActio
         toast.success(data.message ?? '오늘 목표를 이미 달성했어요!')
       }
     },
-    onError: ({ error }) => { toast.error(error.serverError ?? '발행에 실패했습니다') },
+    // 응답이 늦거나 유실돼도 글은 서버에 저장됐을 수 있어, 실패 단정 대신 새로고침 안내
+    onError: ({ error }) => {
+      toast.error(error.serverError ?? '발행이 오래 걸리고 있어요. 잠시 후 새로고침해 오늘 글이 올라왔는지 확인해 주세요')
+    },
   })
+
+  // 무한 로딩 방지 워치독 — 발행이 150초를 넘으면(응답 유실 등) 자동 새로고침.
+  // scale 플랜은 심층 글+채널 원고로 1~2분 걸리므로 그보다 여유를 둔다.
+  // 글은 서버에서 먼저 저장되므로, 새로고침하면 목록에 반영돼 로딩이 풀린다.
+  useEffect(() => {
+    if (!isPublishing) return
+    const t = setTimeout(() => window.location.replace(window.location.pathname), 150_000)
+    return () => clearTimeout(t)
+  }, [isPublishing])
 
 const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/posts/${slug}` : null
   const publishedCount = schedule.filter((s) => s.status === 'published').length
@@ -1031,7 +1043,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
       {/* 발행 중 안내 — 오래 걸려도 새로고침·재클릭하지 않도록 (중복 발행 방지) */}
       {isPublishing && (
         <p className="text-xs text-muted-foreground -mt-1">
-          글과 이미지를 만드는 중이라 20초쯤 걸려요. 새로고침하거나 다시 누르지 말고 잠시만 기다려 주세요.
+          전문가 데이터로 글과 SNS 원고까지 만드는 중이라 최대 1~2분 걸려요. 새로고침하거나 다시 누르지 말고 잠시만 기다려 주세요.
         </p>
       )}
 

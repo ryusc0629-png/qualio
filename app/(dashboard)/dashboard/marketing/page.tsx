@@ -9,6 +9,11 @@ import { GeoShareCard } from '@/components/dashboard/geo-share-card'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
+// '지금 발행'(publishTodayAction)은 이 페이지에서 호출되는 Server Action이라
+// 이 라우트의 제한시간을 따른다. scale 플랜은 심층 글 + SNS 채널 원고까지
+// 생성해 1~2분 걸리므로, 저장 후 응답 전에 함수가 죽지 않도록 넉넉히 확보한다.
+export const maxDuration = 300
+
 export default async function MarketingPage({
   searchParams,
 }: {

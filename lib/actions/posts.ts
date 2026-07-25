@@ -433,7 +433,7 @@ export const publishTodayAction = action
       .select('id')
       .maybeSingle()
     if (!lockRow) {
-      return { success: true, published: 0, message: '이미 홍보 글을 작성 중이에요. 20초쯤 걸리니 잠시만 기다려 주세요' }
+      return { success: true, published: 0, message: '이미 홍보 글을 작성 중이에요. 1~2분쯤 걸리니 잠시만 기다려 주세요' }
     }
 
     try {
