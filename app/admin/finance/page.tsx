@@ -86,39 +86,44 @@ export default async function HqFinancePage() {
         <span className="text-xs text-muted-foreground">{label} 기준</span>
       </div>
 
-      {/* 이번 달 손익 요약 */}
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* 한 줄 설명 — 이 화면의 본질 */}
+      <p className="mb-4 text-sm text-muted-foreground break-keep">
+        이번 달 <b className="text-foreground">번 돈(매출)</b>에서{' '}
+        <b className="text-foreground">쓴 돈(매입·지출)</b>을 빼면{' '}
+        <b className="text-foreground">순이익</b>이에요. 아래에 정기결제·지출만 입력하면 자동으로 계산됩니다.
+      </p>
+
+      {/* 이번 달 요약 — 매출 / 매입·지출 / 순이익 */}
+      <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-lg border bg-emerald-50/40 border-emerald-200 p-4">
-          <p className="text-xs text-muted-foreground">매출 (MRR)</p>
-          <p className="mt-1 text-xl font-bold tabular-nums">{formatMoney(mrr)}</p>
+          <p className="text-xs text-muted-foreground">💰 매출 (버는 돈)</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">{formatMoney(mrr)}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">고객 구독료(월) 자동 집계</p>
         </div>
         <div className="rounded-lg border bg-background p-4">
-          <p className="text-xs text-muted-foreground">총 비용 (월)</p>
-          <p className="mt-1 text-xl font-bold tabular-nums">{formatMoney(totalCost)}</p>
+          <p className="text-xs text-muted-foreground">💸 매입·지출 (쓰는 돈)</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">{formatMoney(totalCost)}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">정기결제 + 이번 달 지출</p>
         </div>
         <div className={`rounded-lg border p-4 ${profitable ? 'bg-emerald-50/40 border-emerald-200' : 'bg-red-50/40 border-red-200'}`}>
-          <p className="text-xs text-muted-foreground">순이익 (영업이익)</p>
-          <p className={`mt-1 text-xl font-bold tabular-nums ${profitable ? 'text-emerald-700' : 'text-red-600'}`}>
+          <p className="text-xs text-muted-foreground">📊 순이익 (남는 돈)</p>
+          <p className={`mt-1 text-2xl font-bold tabular-nums ${profitable ? 'text-emerald-700' : 'text-red-600'}`}>
             {formatMoney(operatingIncome)}
           </p>
-          <p className="mt-0.5 text-[11px] font-medium">
-            {profitable ? '흑자 ✓' : '적자'}
-          </p>
-        </div>
-        <div className="rounded-lg border bg-background p-4">
-          <p className="text-xs text-muted-foreground">매출총이익률</p>
-          <p className="mt-1 text-xl font-bold tabular-nums">
-            {mrr > 0 ? `${(grossMargin * 100).toFixed(1)}%` : '—'}
-          </p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">매각 핵심 지표</p>
+          <p className="mt-0.5 text-[11px] font-medium">{profitable ? '흑자 ✓' : '적자'}</p>
         </div>
       </div>
 
-      {/* 손익계산서 구조 — 매출 − COGS = 매출총이익 − 판관비 = 영업이익 */}
-      <section className="mb-8 rounded-xl border bg-background p-5">
-        <h2 className="mb-1 text-base font-semibold">🧮 손익계산서</h2>
-        <p className="mb-4 text-xs text-muted-foreground">
-          매각 실사에서 인수자가 보는 구조 그대로. 비용을 매출원가/판관비로 나눠 계산합니다.
+      {/* 손익계산서 — 평소엔 접어둠, 매각 대비 상세(선택) */}
+      <details className="mb-8 rounded-xl border bg-background p-5">
+        <summary className="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
+          <span className="text-base font-semibold">🧮 손익계산서 자세히 보기</span>
+          <span className="ml-2 text-xs font-normal text-muted-foreground">매각 대비 · 선택 (평소엔 안 봐도 돼요)</span>
+        </summary>
+        <p className="mt-2 mb-4 text-xs text-muted-foreground break-keep">
+          나중에 회사를 팔 때 인수자가 보는 구조예요. 비용을 매출원가(서비스에 직접 드는 돈)와
+          판관비(그 외 운영비)로 나눠 매출총이익률까지 자동 계산합니다. 입력은 신경 안 쓰셔도 돼요 —
+          항목만 고르면 자동으로 나뉩니다.
         </p>
 
         <div className="space-y-1.5 text-sm">
@@ -156,7 +161,7 @@ export default async function HqFinancePage() {
             아직 비용이 없어요. 아래에서 정기결제(구독)와 지출을 등록하면 손익이 자동으로 채워집니다.
           </p>
         )}
-      </section>
+      </details>
 
       {/* 구독·지출·환율 — 인터랙션 */}
       <FinanceClient subscriptions={subscriptions} expenses={expenses} rate={rate} />

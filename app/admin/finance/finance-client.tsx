@@ -69,25 +69,17 @@ function fmtAmount(amount: number, currency: string): string {
 const inputCls =
   'h-11 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring'
 
-// 분류 선택 — 매출원가/판관비 그룹으로 나눠 표시
+// 분류 선택 — 어려운 회계 용어(매출원가/판관비) 없이 항목만 고르면 됨.
+// 각 항목의 COGS/판관비 매핑은 시스템이 자동 처리(finance-categories.ts).
 function CategorySelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <select className={inputCls} value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">분류 선택</option>
-      <optgroup label="매출원가 (COGS)">
-        {FINANCE_CATEGORIES.filter((c) => c.costType === 'cogs').map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.label}
-          </option>
-        ))}
-      </optgroup>
-      <optgroup label="판관비 (OpEx)">
-        {FINANCE_CATEGORIES.filter((c) => c.costType === 'opex').map((c) => (
-          <option key={c.id} value={c.id}>
-            {c.label}
-          </option>
-        ))}
-      </optgroup>
+      <option value="">어떤 비용인가요?</option>
+      {FINANCE_CATEGORIES.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.label}
+        </option>
+      ))}
     </select>
   )
 }
