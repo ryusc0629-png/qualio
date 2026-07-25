@@ -528,6 +528,7 @@ export type Database = {
           naver_title: string | null
           naver_content: string | null
           naver_tags: string[] | null
+          daangn_title: string | null
           daangn_content: string | null
           instagram_content: string | null
           instagram_hashtags: string[] | null
@@ -550,6 +551,7 @@ export type Database = {
           naver_title?: string | null
           naver_content?: string | null
           naver_tags?: string[] | null
+          daangn_title?: string | null
           daangn_content?: string | null
           instagram_content?: string | null
           instagram_hashtags?: string[] | null
@@ -572,6 +574,7 @@ export type Database = {
           naver_title?: string | null
           naver_content?: string | null
           naver_tags?: string[] | null
+          daangn_title?: string | null
           daangn_content?: string | null
           instagram_content?: string | null
           instagram_hashtags?: string[] | null

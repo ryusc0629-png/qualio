@@ -49,6 +49,7 @@ export async function generateAndSaveChannelContent(
         naver_title:        c.naverTitle,
         naver_content:      naverContent,
         naver_tags:         c.naverTags,
+        daangn_title:       c.daangnTitle,
         daangn_content:     daangnContent,
         instagram_content:  c.instagram,
         instagram_hashtags: c.instagramHashtags,

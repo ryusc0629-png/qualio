@@ -46,7 +46,7 @@ export default async function MarketingPage({
       .maybeSingle() as unknown as { data: { slug: string | null; name: string | null; address: string | null; monthly_post_target: number; auto_image_generation: boolean; topic_suggestions: { title: string; reason: string; topic: string }[] | null; topic_suggestions_month: string | null; naver_blog_id: string | null; danggeun_business_url: string | null } | null },
     db
       .from('biz_posts' as never)
-      .select('id, slug, title, content, summary, published, ai_generated, published_at, image_url, image_urls, naver_title, naver_content, naver_tags, daangn_content, instagram_content, instagram_hashtags, post_type, before_image_urls, after_image_urls, channel_posted_at' as never)
+      .select('id, slug, title, content, summary, published, ai_generated, published_at, image_url, image_urls, naver_title, naver_content, naver_tags, daangn_title, daangn_content, instagram_content, instagram_hashtags, post_type, before_image_urls, after_image_urls, channel_posted_at' as never)
       .eq('business_id' as never, profile.business_id)
       .order('published_at' as never, { ascending: false }) as unknown as { data: Record<string, unknown>[] | null },
     db
@@ -96,7 +96,7 @@ export default async function MarketingPage({
     published: boolean; ai_generated: boolean; published_at: string
     image_url: string | null; image_urls: string[] | null
     naver_title: string | null; naver_content: string | null; naver_tags: string[] | null
-    daangn_content: string | null; instagram_content: string | null; instagram_hashtags: string[] | null
+    daangn_title: string | null; daangn_content: string | null; instagram_content: string | null; instagram_hashtags: string[] | null
     post_type: string | null; before_image_urls: string[] | null; after_image_urls: string[] | null
     channel_posted_at: string | null
   }[]

@@ -14,6 +14,7 @@ interface SocialContentOutput {
   naverTitle: string
   naverContent: string
   naverTags: string[]
+  daangnTitle: string  // 당근 목록·미리보기에서 제목처럼 노출되는 첫 줄(네이버 제목과 동일 역할)
   daangn: string
   instagram: string
   instagramHashtags: string[]
@@ -93,11 +94,11 @@ ${pureContent.slice(0, 2500)}
 - 태그: 롱테일 위주 10개 (지역명+서비스 조합, 세부 증상 키워드 포함).
 
 [당근마켓 — 동네 노출 최적화]
-- 첫 줄(제목 역할 — 가장 중요): 스크롤을 멈추게 하는 한 줄로 시작할 것. 목록·미리보기에서 이 줄이 제목처럼 노출되므로 여기서 승부남.
-  · '지역명(${region}) + 서비스 키워드'를 넣되(동네 검색 노출), 증상·결과·궁금증으로 후킹.
-  · "안녕하세요, ${businessName}입니다" 같은 밋밋한 인사로 시작 금지 — 업체 소개·인사는 본문 뒤로 미룰 것.
+- 제목(daangnTitle — 가장 중요): 스크롤을 멈추게 하는 한 줄. 당근 목록·미리보기에서 이 줄이 제목처럼 노출되므로 여기서 승부남. 반드시 daangnTitle 필드에 따로 담고, 본문(daangn) 안에서 다시 반복하지 말 것.
+  · '지역명(${region}) + 서비스 키워드'를 넣되(동네 검색 노출), 증상·결과·궁금증으로 후킹. 20~35자.
+  · "안녕하세요, ${businessName}입니다" 같은 밋밋한 인사 금지 — 업체 소개·인사는 본문 뒤로 미룰 것.
   · 예: "${region}에서 에어컨 켤 때 쿰쿰한 냄새 나셨다면 꼭 보세요" / "${region} 상가 사장님, 청소 견적 전에 이것부터 확인하세요"
-- 이어지는 본문: 250~350자. 동네 이웃에게 건네듯 친근하지만, 전문가의 믿음직함이 드러나게.
+- 본문(daangn): 250~350자. 제목에 이어지는 내용으로 자연스럽게 시작하되 제목 문장을 그대로 반복하지 말 것. 동네 이웃에게 건네듯 친근하지만, 전문가의 믿음직함이 드러나게.
 - 지역명(${region})을 2~3회 자연스럽게 (당근은 지역 기반 노출이라 중요).
 - 동네 고객 해결 사례 1개를 짧게 녹이고, 핵심 서비스 1~2개만 언급.
 - 마지막에 "채팅으로 편하게 여쭤보세요" 같은 부담 없는 CTA. 해시태그 없음.
@@ -119,7 +120,8 @@ ${pureContent.slice(0, 2500)}
   "naverTitle": "네이버 블로그 제목",
   "naverContent": "네이버 블로그 본문 전체",
   "naverTags": ["태그1", "태그2", "태그3", "태그4", "태그5", "태그6", "태그7", "태그8", "태그9", "태그10"],
-  "daangn": "당근마켓 글 전체",
+  "daangnTitle": "당근마켓 제목(목록에 노출될 후킹 한 줄)",
+  "daangn": "당근마켓 본문 (제목 제외)",
   "instagram": "인스타그램 본문 (해시태그 제외)",
   "instagramHashtags": ["태그1", "태그2", "태그3", "태그4", "태그5"],
   "ctaQuestion": "우리 OO 청소 비용은 얼마일까요?"
@@ -149,6 +151,9 @@ ${pureContent.slice(0, 2500)}
 
   // 견적 유도 질문 — 모델이 비웠으면 제목 키워드로 주제 치환(집/매장/에어컨/세탁기…)
   parsed.ctaQuestion = (parsed.ctaQuestion ?? '').trim() || fallbackCtaQuestion(geoTitle)
+
+  // 당근 제목 — 모델이 비웠으면 원본 글 제목으로 폴백(제목이 항상 맨 앞에 노출되도록)
+  parsed.daangnTitle = (parsed.daangnTitle ?? '').trim() || geoTitle
 
   // 실검색량 기반 키워드가 있으면 네이버 태그 앞쪽에 우선 배치(실제 검색되는 태그) + 중복 제거, 최대 12개
   if (seoKeywords && seoKeywords.length > 0) {

@@ -70,6 +70,7 @@ interface Post {
   naver_title: string | null
   naver_content: string | null
   naver_tags: string[] | null
+  daangn_title: string | null
   daangn_content: string | null
   instagram_content: string | null
   instagram_hashtags: string[] | null
@@ -754,7 +755,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                       <div className="flex gap-1.5 shrink-0">
                         <button
                           type="button"
-                          onClick={() => setEditingPost({ id: p.id, slug: '', title: p.title, content: p.content ?? '', summary: p.summary, published: false, ai_generated: true, published_at: '', image_url: null, image_urls: null, naver_title: null, naver_content: null, naver_tags: null, daangn_content: null, instagram_content: null, instagram_hashtags: null, post_type: 'portfolio', before_image_urls: p.before_image_urls, after_image_urls: p.after_image_urls })}
+                          onClick={() => setEditingPost({ id: p.id, slug: '', title: p.title, content: p.content ?? '', summary: p.summary, published: false, ai_generated: true, published_at: '', image_url: null, image_urls: null, naver_title: null, naver_content: null, naver_tags: null, daangn_title: null, daangn_content: null, instagram_content: null, instagram_hashtags: null, post_type: 'portfolio', before_image_urls: p.before_image_urls, after_image_urls: p.after_image_urls })}
                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 transition-colors"
                         >
                           <Pencil className="h-3.5 w-3.5" /><span className="hidden sm:inline">수정</span>
@@ -1180,6 +1181,13 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                 <X className="h-4 w-4" />
               </button>
             </div>
+            {/* 제목 — 당근 목록·미리보기에서 첫 줄이 제목처럼 노출되므로 맨 앞에 보여줌 */}
+            {daangnPost.daangn_title && (
+              <div className="px-5 py-3 border-b bg-orange-50/60 shrink-0">
+                <p className="text-xs text-muted-foreground mb-1">제목</p>
+                <p className="font-semibold text-sm">{daangnPost.daangn_title}</p>
+              </div>
+            )}
             <div className="px-5 py-5 flex-1 overflow-y-auto overscroll-contain min-h-0">
               <pre className="text-sm text-foreground whitespace-pre-wrap font-sans leading-relaxed bg-orange-50 rounded-xl p-4 border border-orange-100">
                 {markdownToPlain(daangnPost.daangn_content ?? '')}
@@ -1188,7 +1196,12 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
             <div className="px-5 py-4 border-t flex gap-2 shrink-0">
               <Button
                 className="flex-1 h-12 gap-2 bg-[#FF6F0F] hover:bg-[#e5620d]"
-                onClick={() => handleCopy(daangnPost.daangn_content!)}
+                // 복사 시 제목을 맨 앞에 붙여 당근 글 상자에 통째로 붙여넣도록(당근은 제목 칸이 따로 없음)
+                onClick={() => handleCopy(
+                  daangnPost.daangn_title
+                    ? `${daangnPost.daangn_title}\n\n${daangnPost.daangn_content}`
+                    : daangnPost.daangn_content!,
+                )}
               >
                 {copied
                   ? <><CheckCircle2 className="h-4 w-4" />복사됐어요!</>
