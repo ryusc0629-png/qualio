@@ -399,7 +399,7 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
         <div className="px-5 py-2.5 bg-emerald-50 border-b border-emerald-100 flex items-start gap-1.5">
           <span className="text-sm leading-none mt-0.5" aria-hidden>💚</span>
           <p className="text-xs text-emerald-800 font-medium leading-relaxed">
-            광고비 <b>0원</b> — 홍보 글만으로 검색·AI가 스스로 데려온 손님이에요
+            광고비 <b>0원</b> — 자동 포스팅만으로 검색·AI가 스스로 데려온 손님이에요
           </p>
         </div>
         <div className="grid grid-cols-2 divide-x">
