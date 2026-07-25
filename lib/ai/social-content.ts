@@ -107,7 +107,7 @@ ${pureContent.slice(0, 2500)}
 - 본문: 120~180자, 이모지 4~6개. 짧은 줄바꿈으로 가독성. 전문가가 현장 사례를 들려주는 톤.
 - 저장·공유를 유도하는 한마디 포함 (예: "필요할 때 꺼내보게 저장해두세요").
 - 마지막 CTA: "프로필 링크 클릭" 또는 "DM 주세요".
-- 해시태그 12개: 대형(#청소) + 중형(#에어컨청소) + 지역소형(#${region.replace(/\\s/g, '')}청소) 믹스로 도달 극대화.
+- 해시태그 정확히 5개(인스타 캡션 제한): 대형(#청소) + 중형(#에어컨청소) + 지역소형(#${region.replace(/\\s/g, '')}청소) 믹스로 도달 극대화. 5개를 넘기지 말 것.
 
 [견적 유도 질문 — ctaQuestion]
 - 이 글 주제에 딱 맞춰 독자의 궁금증을 자극하는 짧은 질문 1개. 형식: "우리 OO 청소 비용은 얼마일까요?"
@@ -121,7 +121,7 @@ ${pureContent.slice(0, 2500)}
   "naverTags": ["태그1", "태그2", "태그3", "태그4", "태그5", "태그6", "태그7", "태그8", "태그9", "태그10"],
   "daangn": "당근마켓 글 전체",
   "instagram": "인스타그램 본문 (해시태그 제외)",
-  "instagramHashtags": ["태그1", "태그2", "태그3", "태그4", "태그5", "태그6", "태그7", "태그8", "태그9", "태그10", "태그11", "태그12"],
+  "instagramHashtags": ["태그1", "태그2", "태그3", "태그4", "태그5"],
   "ctaQuestion": "우리 OO 청소 비용은 얼마일까요?"
 }`
 
@@ -144,7 +144,8 @@ ${pureContent.slice(0, 2500)}
     (tags ?? []).map((t) => t.replace(/^#+/, '').trim()).filter(Boolean)
 
   parsed.naverTags = cleanTags(parsed.naverTags)
-  parsed.instagramHashtags = cleanTags(parsed.instagramHashtags)
+  // 인스타 캡션은 해시태그 5개까지만 허용 — 모델이 초과 생성해도 앞 5개로 자름
+  parsed.instagramHashtags = cleanTags(parsed.instagramHashtags).slice(0, 5)
 
   // 견적 유도 질문 — 모델이 비웠으면 제목 키워드로 주제 치환(집/매장/에어컨/세탁기…)
   parsed.ctaQuestion = (parsed.ctaQuestion ?? '').trim() || fallbackCtaQuestion(geoTitle)
