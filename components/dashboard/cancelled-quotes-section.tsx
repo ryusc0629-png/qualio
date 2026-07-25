@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import { restoreCancelledQuoteAction } from '@/lib/actions/quotes'
+import { ExcludeQuoteButton } from '@/components/dashboard/exclude-quote-button'
 import { Phone, RotateCcw, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 
 export type CancelledQuote = {
@@ -73,7 +74,7 @@ function CancelledQuoteRow({ quote }: { quote: CancelledQuote }) {
             )}
           </div>
         </div>
-        <div className="shrink-0">
+        <div className="shrink-0 flex flex-col items-end gap-1">
           <button
             type="button"
             onClick={() => execute({ quote_id: quote.id })}
@@ -83,6 +84,7 @@ function CancelledQuoteRow({ quote }: { quote: CancelledQuote }) {
             {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
             되살리기
           </button>
+          <ExcludeQuoteButton quoteId={quote.id} />
         </div>
       </div>
     </div>

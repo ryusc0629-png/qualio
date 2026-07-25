@@ -202,11 +202,12 @@ export default async function ClientsPage({
       .eq('is_active', true)
       .order('name', { ascending: true }),
 
-    // 취소한 견적 요청 (되살리기 가능) — 최근 30건
+    // 취소한 견적 요청 (되살리기 가능) — 최근 30건, 테스트로 표시한 건 제외
     db.from('quotes')
       .select('id, customer_name, customer_phone, cleaning_type, space_size, good_price')
       .eq('business_id', businessId)
       .eq('status', 'cancelled')
+      .eq('is_test' as never, false as never)
       .order('created_at', { ascending: false })
       .limit(30),
   ])
