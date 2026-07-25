@@ -110,6 +110,12 @@ export function FinanceClient({
   const router = useRouter()
   const refresh = () => router.refresh()
 
+  // 자동 합계 — 정기결제(월 환산)·이번 달 지출
+  const subsMonthlyTotal = subscriptions.reduce((sum, s) => sum + subMonthlyKrw(s, rate), 0)
+  const expensesTotal = expenses.reduce((sum, e) => sum + Math.round(e.amount_krw), 0)
+  // 비용 큰 순으로 정렬 — 가장 비싼 구독이 위로 와서 한눈에
+  const sortedSubs = [...subscriptions].sort((a, b) => subMonthlyKrw(b, rate) - subMonthlyKrw(a, rate))
+
   // ── 구독 다이얼로그 ──
   const emptySub = {
     id: '',
@@ -255,8 +261,9 @@ export function FinanceClient({
             </Button>
           </div>
         ) : (
+          <>
           <ul className="space-y-2">
-            {subscriptions.map((s) => {
+            {sortedSubs.map((s) => {
               const d = daysUntil(s.next_billing_date)
               const soon = d !== null && d >= 0 && d <= 7
               return (
@@ -312,6 +319,15 @@ export function FinanceClient({
               )
             })}
           </ul>
+          {/* 월 고정비 자동 합계 */}
+          <div className="mt-2 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3.5">
+            <span className="text-sm font-semibold">월 고정비 합계</span>
+            <span className="text-lg font-bold text-primary tabular-nums">
+              {won(subsMonthlyTotal)}
+              <span className="ml-0.5 text-[11px] font-normal text-muted-foreground">/월</span>
+            </span>
+          </div>
+          </>
         )}
       </section>
 
@@ -332,6 +348,7 @@ export function FinanceClient({
             <p className="text-sm text-muted-foreground">이번 달 기록된 지출이 없어요</p>
           </div>
         ) : (
+          <>
           <ul className="space-y-2">
             {expenses.map((e) => (
               <li
@@ -364,6 +381,12 @@ export function FinanceClient({
               </li>
             ))}
           </ul>
+          {/* 이번 달 지출 자동 합계 */}
+          <div className="mt-2 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-4 py-3.5">
+            <span className="text-sm font-semibold">이번 달 지출 합계</span>
+            <span className="text-lg font-bold text-primary tabular-nums">{won(expensesTotal)}</span>
+          </div>
+          </>
         )}
       </section>
 
