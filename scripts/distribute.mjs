@@ -297,6 +297,18 @@ function writeOutputs(data, srtPath, video) {
 // ── 6. Ayrshare 자동 게시·예약 (--publish) ───────────────────
 const PLATFORMS = ['youtube', 'instagram', 'tiktok', 'threads', 'facebook'] // 연결된 5채널(X는 BYOK 미연결·네이버는 API 없음)
 
+// 인스타그램은 해시태그 최대 10개(초과 시 code 151로 전 채널 게시 거부) → 중복 제거 후 상위 N개만(외부 태그 extra 포함)
+function capHashtags(raw, extra = '', max = 10) {
+  const tags = `${raw || ''} ${extra}`.split(/\s+/).filter((t) => t.startsWith('#'))
+  const seen = new Set()
+  const uniq = []
+  for (const t of tags) {
+    const k = t.toLowerCase()
+    if (!seen.has(k)) { seen.add(k); uniq.push(t) }
+  }
+  return uniq.slice(0, max).join(' ')
+}
+
 // 내일부터 하루 1개씩, 19:00 KST(=10:00 UTC)에 분산 예약
 function scheduleUtc(i) {
   const d = new Date()
@@ -343,7 +355,7 @@ async function publishClips(data, outDir) {
   for (let i = 0; i < clips.length; i++) {
     const mp4 = path.join(outDir, `clip_${i + 1}.mp4`)
     if (!existsSync(mp4)) continue
-    const text = `${clips[i].caption || ''}\n\n${data.hashtags || ''} #Shorts`.trim()
+    const text = `${clips[i].caption || ''}\n\n${capHashtags(data.hashtags, '#Shorts')}`.trim()
     try {
       const url = await ayrshareUpload(apiKey, mp4)
       const res = await ayrsharePost(apiKey, {
