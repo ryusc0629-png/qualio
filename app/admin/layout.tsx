@@ -19,6 +19,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link href="/admin" className="text-sm text-muted-foreground hover:text-foreground">
               지표
             </Link>
+            <Link href="/admin/growth" className="text-sm text-muted-foreground hover:text-foreground">
+              그로스
+            </Link>
             <Link href="/admin/finance" className="text-sm text-muted-foreground hover:text-foreground">
               재무
             </Link>
