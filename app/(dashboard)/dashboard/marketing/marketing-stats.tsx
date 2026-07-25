@@ -285,29 +285,28 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
   }
 
   // ── 검색·AI 유입 월별 추이 — '검색·AI 유입' 스냅샷 카드 안에 함께 표시(별도 박스 통합) ──
-  // 막대 = 그 달 검색·AI로 들어온 방문, 아래 숫자 = 그 달 발행한 글 수(글↑ → 유입↑ 상관 확인용)
-  const isSearchOrAi = (s: string) => isAiSource(s) || ['google', 'naver', 'daum'].includes(s)
-  const trendBuckets = monthlyData.map((m) => ({ label: m.month, searchAi: 0, published: m.count }))
+  // 막대 = 그 달 검색·AI 방문(AI=초록·일반검색=파랑 색깔 구분), 아래 숫자 = 그 달 발행 글 수(글↑ → 유입↑)
+  const isSeoSource = (s: string) => ['google', 'naver', 'daum'].includes(s)
+  const trendBuckets = monthlyData.map((m) => ({ label: m.month, ai: 0, seo: 0, published: m.count }))
   const trendIndex = new Map(trendBuckets.map((_, i) => {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1 - i), 1))
     return [d.toISOString().slice(0, 7), i] as const
   }))
-  for (const v of views) {
-    if (!v.viewed_at || !isSearchOrAi(v.source)) continue
-    const idx = trendIndex.get(v.viewed_at.slice(0, 7))
-    if (idx !== undefined) trendBuckets[idx].searchAi++
+  const tallyTrend = (source: string, at: string | null) => {
+    if (!at) return
+    const idx = trendIndex.get(at.slice(0, 7))
+    if (idx === undefined) return
+    if (isAiSource(source)) trendBuckets[idx].ai++
+    else if (isSeoSource(source)) trendBuckets[idx].seo++
   }
-  for (const p of pageViews) {
-    if (!p.viewed_at || !isSearchOrAi(p.source)) continue
-    const idx = trendIndex.get(p.viewed_at.slice(0, 7))
-    if (idx !== undefined) trendBuckets[idx].searchAi++
-  }
-  const trendMax = trendBuckets.reduce((m, x) => Math.max(m, x.searchAi), 0)
-  const trendTotal = trendBuckets.reduce((s, m) => s + m.searchAi, 0)
+  for (const v of views) tallyTrend(v.source, v.viewed_at)
+  for (const p of pageViews) tallyTrend(p.source, p.viewed_at)
+  const trendMax = trendBuckets.reduce((m, x) => Math.max(m, x.ai + x.seo), 0)
+  const trendTotal = trendBuckets.reduce((s, m) => s + m.ai + m.seo, 0)
   // 증감 판정 — 기간을 반으로 나눠 앞·뒤 비교
   const trendSplit = Math.floor(trendBuckets.length / 2)
-  const trendFirst = trendBuckets.slice(0, trendSplit).reduce((s, m) => s + m.searchAi, 0)
-  const trendSecond = trendBuckets.slice(trendSplit).reduce((s, m) => s + m.searchAi, 0)
+  const trendFirst = trendBuckets.slice(0, trendSplit).reduce((s, m) => s + m.ai + m.seo, 0)
+  const trendSecond = trendBuckets.slice(trendSplit).reduce((s, m) => s + m.ai + m.seo, 0)
   const trendGrowing = trendBuckets.length >= 2 && trendTotal > 0 && trendSecond > trendFirst
   const trendVerdict: { text: string; tone: string } =
     trendTotal === 0
@@ -390,11 +389,18 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
         </div>
       </div>
 
-      {/* 검색·AI 유입 — 검색으로 새로 찾아온 손님(핵심). 직접·기타는 보조로 작게 */}
+      {/* 검색·AI 유입 — 광고비 없이 콘텐츠만으로 들어온 자연 유입(핵심). 직접·기타는 보조로 작게 */}
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
           <p className="font-semibold text-sm">검색·AI 유입</p>
           <p className="text-xs text-muted-foreground">{periodLabel}</p>
+        </div>
+        {/* 자연 유입 강조 — 광고비 0원, 홍보 글만으로 얻은 성과임을 비테크 사장님에게 인지 */}
+        <div className="px-5 py-2.5 bg-emerald-50 border-b border-emerald-100 flex items-start gap-1.5">
+          <span className="text-sm leading-none mt-0.5" aria-hidden>💚</span>
+          <p className="text-xs text-emerald-800 font-medium leading-relaxed">
+            광고비 <b>0원</b> — 홍보 글만으로 검색·AI가 스스로 데려온 손님이에요
+          </p>
         </div>
         <div className="grid grid-cols-2 divide-x">
           <div className="px-2 py-5 text-center">
@@ -412,20 +418,36 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
           <span>그 외 직접·링크·SNS 방문</span>
           <span className="font-medium">{directOtherViews.toLocaleString()}회</span>
         </div>
-        {/* 월별 추이 — 같은 박스 안에서 흐름까지(예전 '검색·AI 유입 추이' 박스 통합) */}
+        {/* 월별 추이 — 같은 박스 안에서 흐름까지(AI=초록·일반검색=파랑 색깔 구분, 호버 시 숫자 표시) */}
         {trendBuckets.length >= 2 && (
           <div className="border-t p-4 space-y-3">
             <p className={`text-xs font-medium ${trendVerdict.tone}`}>{trendVerdict.text}</p>
             <div className="flex items-end justify-between gap-2 pt-1">
               {trendBuckets.map((m) => {
-                const heightPct = trendMax > 0 ? Math.max((m.searchAi / trendMax) * 100, m.searchAi > 0 ? 8 : 0) : 0
+                const total = m.ai + m.seo
+                const heightPct = trendMax > 0 ? Math.max((total / trendMax) * 100, total > 0 ? 8 : 0) : 0
                 return (
-                  <div key={m.label} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
+                  <div key={m.label} className="group relative flex-1 flex flex-col items-center gap-1.5 min-w-0">
+                    {/* 호버 툴팁 — AI·일반검색 숫자 분리 표시 */}
+                    {total > 0 && (
+                      <div className="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 z-10 hidden group-hover:block whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-medium text-white shadow-lg">
+                        <span className="text-emerald-300">AI {m.ai.toLocaleString()}</span>
+                        <span className="text-white/40"> · </span>
+                        <span className="text-blue-300">검색 {m.seo.toLocaleString()}</span>
+                        <span className="text-white/40"> · </span>합계 {total.toLocaleString()}
+                      </div>
+                    )}
                     <span className="text-[11px] font-bold tabular-nums text-foreground">
-                      {m.searchAi > 0 ? m.searchAi.toLocaleString() : ''}
+                      {total > 0 ? total.toLocaleString() : ''}
                     </span>
-                    <div className="w-full h-24 flex items-end">
-                      <div className="w-full rounded-t bg-emerald-500/80 transition-all min-h-0" style={{ height: `${heightPct}%` }} />
+                    <div
+                      className="w-full h-24 flex items-end cursor-default"
+                      title={total > 0 ? `AI 검색 ${m.ai}회 · 일반 검색 ${m.seo}회 · 합계 ${total}회` : '방문 없음'}
+                    >
+                      <div className="w-full rounded-t overflow-hidden flex flex-col justify-end transition-all min-h-0" style={{ height: `${heightPct}%` }}>
+                        {m.ai > 0 && <div className="w-full bg-emerald-500" style={{ height: `${(m.ai / total) * 100}%` }} />}
+                        {m.seo > 0 && <div className="w-full bg-blue-500" style={{ height: `${(m.seo / total) * 100}%` }} />}
+                      </div>
                     </div>
                     <span className="text-[11px] text-muted-foreground">{m.label}</span>
                     <span className="text-[10px] text-muted-foreground/70 tabular-nums">
@@ -435,9 +457,16 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
                 )
               })}
             </div>
-            <p className="text-[11px] text-muted-foreground/70 pt-1 border-t">
-              막대는 그 달 검색·AI로 들어온 방문, 아래 숫자는 그 달 발행한 글 수예요
-            </p>
+            {/* 범례 + 안내 */}
+            <div className="pt-2 border-t space-y-1.5">
+              <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500" />AI 검색</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-500" />일반 검색(네이버·구글)</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground/70">
+                막대에 마우스를 올리면 자세한 숫자가 보여요. 아래 숫자는 그 달 발행한 글 수예요
+              </p>
+            </div>
           </div>
         )}
       </div>
