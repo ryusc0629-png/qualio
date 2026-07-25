@@ -50,14 +50,20 @@ export const calculateAndCreateQuoteAction = publicAction
   .action(async ({ parsedInput }) => {
     const db = createServiceClient()
 
-    // 업체 존재 확인
+    // 업체 존재 확인 (대표 전화번호도 함께 — 본인 테스트 견적 자동 감지용)
     const { data: business } = await db
       .from('businesses')
-      .select('id')
+      .select('id, phone')
       .eq('id', parsedInput.business_id)
       .maybeSingle()
 
     if (!business) throw new Error('[APP] 존재하지 않는 업체입니다')
+
+    // 사장님 본인 번호로 들어온 견적은 테스트로 보고 통계에서 자동 제외
+    const onlyDigits = (p: string | null | undefined) => (p ?? '').replace(/[^0-9]/g, '')
+    const bizPhoneDigits = onlyDigits((business as { phone?: string | null }).phone)
+    const custPhoneDigits = onlyDigits(parsedInput.customer_phone)
+    const isTestQuote = bizPhoneDigits.length > 0 && custPhoneDigits === bizPhoneDigits
 
     // 선택한 서비스 조회 (에어컨·항목별 단가 포함)
     const { data: service } = await db
@@ -267,7 +273,8 @@ export const calculateAndCreateQuoteAction = publicAction
         status:        'pending',
         customer_name:  parsedInput.customer_name || null,
         customer_phone: parsedInput.customer_phone || null,
-      })
+        is_test:       isTestQuote,
+      } as never)
       .select('id')
       .single()
 
@@ -559,6 +566,40 @@ export const restoreQuoteAction = authAction
     if (error) throw new Error('[APP] 복원에 실패했습니다')
 
     revalidatePath('/dashboard/work')
+    return { success: true }
+  })
+
+// 테스트/장난 견적을 통계에서 제외(is_test 토글) — 본인 테스트·고객 호기심 클릭 대비.
+// is_test=true면 마케팅 통계·'예약확정 대기' 목록에서 빠진다(상태는 그대로).
+export const markQuoteTestAction = authAction
+  .schema(z.object({
+    quote_id: z.string().min(1),
+    is_test: z.boolean(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+
+    // 본인 업체 견적인지 확인
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const { error } = await db
+      .from('quotes')
+      .update({ is_test: parsedInput.is_test } as never)
+      .eq('id', parsedInput.quote_id)
+      .eq('business_id', profile.business_id)
+
+    if (error) throw new Error('[APP] 처리에 실패했어요. 다시 눌러주세요')
+
+    revalidatePath('/dashboard/clients')
     return { success: true }
   })
 

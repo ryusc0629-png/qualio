@@ -7,6 +7,7 @@ import { DeleteCustomerButton } from '@/components/dashboard/delete-customer-but
 import { ContractStatusSelect } from '@/components/dashboard/contract-status-select'
 import { ConfirmBookingButton } from '@/components/dashboard/confirm-booking-button'
 import { CancelQuoteButton } from '@/components/dashboard/cancel-quote-button'
+import { ExcludeQuoteButton } from '@/components/dashboard/exclude-quote-button'
 import { CancelledQuotesSection, type CancelledQuote } from '@/components/dashboard/cancelled-quotes-section'
 import { formatFrequency } from '@/lib/utils/frequency'
 import { contractAccruedRevenue } from '@/lib/utils/ltv'
@@ -186,11 +187,12 @@ export default async function ClientsPage({
       .eq('business_id' as never, businessId)
       .not('claimed_at' as never, 'is', null),
 
-    // 예약 미확정 견적 요청 (공개 폼으로 들어온)
+    // 예약 미확정 견적 요청 (공개 폼으로 들어온) — 테스트/장난 견적(is_test)은 제외
     db.from('quotes')
       .select('id, customer_name, customer_phone, cleaning_type, space_size, preferred_date, good_price, better_price, best_price, created_at')
       .eq('business_id', businessId)
       .eq('status', 'pending')
+      .eq('is_test' as never, false as never)
       .order('created_at', { ascending: false }),
 
     // 사이드바 '서비스 항목'에 등록된 서비스 (활성만) — 이름 + 기본 가격 + 단위
@@ -439,6 +441,7 @@ export default async function ClientsPage({
                         preferredDate={quote.preferred_date}
                       />
                       <CancelQuoteButton quoteId={quote.id} />
+                      <ExcludeQuoteButton quoteId={quote.id} />
                     </div>
                   </div>
                 </div>

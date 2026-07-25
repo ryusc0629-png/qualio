@@ -20,10 +20,10 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
   const periodLabel = `최근 ${months}개월`
 
   const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, reviewResult, claimsResult, pageViewsResult, funnelResult] = await Promise.all([
-    // 견적 신청 수 (기간 내) — 퍼널 '견적 받기' 단계 겸용
+    // 견적 신청 (기간 내) — 테스트 견적 제외용으로 id·is_test 조회. '견적 받기' 단계 겸용
     db
       .from('quotes')
-      .select('id', { count: 'exact', head: true })
+      .select('id, is_test' as never)
       .eq('business_id', businessId)
       .gte('created_at', periodStart),
 
@@ -81,9 +81,13 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
       .gte('created_at' as never, periodStart) as unknown as Promise<{ data: { session_id: string; event_type: string; step: string | null; meta: Record<string, string | number> | null; channel: string | null }[] | null }>,
   ])
 
-  const quoteCount = quotesResult.count ?? 0
-  // 마케팅 유입(견적)에서 나온 예약들 — 건수 + 매출 + 채널 귀속
-  const bookingRows = (bookingsResult.data ?? []) as { final_price: number | null; status: string; quote_id: string | null }[]
+  // 테스트/장난 견적(is_test) 제외 — 사장님 본인 테스트·고객 호기심 클릭이 통계를 오염시키지 않게
+  const quoteRows = (quotesResult.data ?? []) as unknown as { id: string; is_test: boolean | null }[]
+  const testQuoteIds = new Set(quoteRows.filter((q) => q.is_test).map((q) => q.id))
+  const quoteCount = quoteRows.filter((q) => !q.is_test).length
+  // 마케팅 유입(견적)에서 나온 예약들 — 건수 + 매출 + 채널 귀속 (테스트 견적에서 나온 예약도 제외)
+  const bookingRows = ((bookingsResult.data ?? []) as { final_price: number | null; status: string; quote_id: string | null }[])
+    .filter((b) => !(b.quote_id && testQuoteIds.has(b.quote_id)))
   const bookingCount = bookingRows.length
   const conversionRate = quoteCount > 0 ? Math.round((bookingCount / quoteCount) * 100) : 0
   // 퀄리오가 만든 매출 — 취소·노쇼 제외한 예약 매출(실현+예정), 그중 이미 완료분 별도 표시
