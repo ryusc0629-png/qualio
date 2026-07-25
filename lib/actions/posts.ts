@@ -527,6 +527,7 @@ export const publishTodayAction = action
         realCases,
         keyword,
         relatedKeywords,
+        titleOverride: todaySlot?.label, // 계획표에 확정된 제목 그대로 발행(달력과 일치)
       })
 
       // slug 중복 방지

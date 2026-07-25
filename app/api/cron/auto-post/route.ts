@@ -49,8 +49,8 @@ async function publishOnePost(
   model: string,
   channelsEnabled: boolean,
   realCases: string[],
-  // 고정 계획표의 오늘 슬롯 — 있으면 무조건 이 주제로 발행(달력과 일치)
-  planned: { topic: string; keyword: string | null } | null,
+  // 고정 계획표의 오늘 슬롯 — 있으면 무조건 이 주제·제목으로 발행(달력과 일치)
+  planned: { topic: string; keyword: string | null; title: string } | null,
 ): Promise<string> {
   // 주제 선택 — 무조건 고정 계획표의 오늘 슬롯을 그대로 따른다.
   let selectedTopic: string | undefined = planned?.topic || undefined
@@ -99,6 +99,7 @@ async function publishOnePost(
     serviceAreas: business.serviceAreas,
     model,
     realCases,
+    titleOverride: planned?.title, // 계획표에 확정된 제목 그대로 발행(달력과 일치)
   })
 
   // slug 중복 방지
@@ -272,7 +273,7 @@ export async function GET(request: NextRequest) {
 
       const publishedTitlesThisRun: string[] = []
       for (let i = 0; i < needed; i++) {
-        const planned = todaySlot ? { topic: todaySlot.topic, keyword: todaySlot.keyword } : null
+        const planned = todaySlot ? { topic: todaySlot.topic, keyword: todaySlot.keyword, title: todaySlot.label } : null
         const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas, autoImageGeneration: business.auto_image_generation ?? true }, services ?? [], publishedTitles, month, model, channelsEnabled, realCases, planned)
         publishedTitlesThisRun.push(title)
         console.log(`[Cron] 자동 발행 완료 (${i + 1}/${needed}): ${business.name} — "${title}"`)

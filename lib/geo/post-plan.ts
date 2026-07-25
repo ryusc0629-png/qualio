@@ -1,6 +1,6 @@
 import 'server-only'
 import type { createServiceClient } from '@/lib/supabase/server'
-import { generateTopicSuggestions, type TopicSuggestion } from '@/lib/ai/geo-content'
+import { generateTopicSuggestions, generateGeoTitles, type TopicSuggestion } from '@/lib/ai/geo-content'
 import { deriveKeyword } from '@/lib/geo/weak-topics'
 
 // 자동 발행 '계획표'를 월 1회 확정해 DB(businesses.post_plan)에 고정 저장한다.
@@ -11,8 +11,8 @@ type Db = ReturnType<typeof createServiceClient>
 
 export interface PlanSlot {
   day: number              // 발행 예정 '일'(1~31)
-  label: string            // 달력에 표시할 주제 텍스트
-  topic: string            // 글 생성에 넘길 주제 문자열
+  label: string            // 카피라이팅된 발행 제목 — 달력 표시 & 실제 발행 제목이 동일
+  topic: string            // 글 생성에 넘길 주제(맥락)
   keyword: string | null   // 핵심 검색 키워드(있으면 제목·본문 최적화)
   geoTargeted: boolean     // GEO '안 잡히는 질문' 슬롯 → 'AI 검색 공략' 배지
   monthlySearches?: number // 추천 주제의 실제 월 검색량(있으면 배지)
@@ -69,7 +69,8 @@ async function buildMonthlyPlan(db: Db, businessId: string, ctx: PlanContext): P
     .filter((d) => d >= ctx.today && !ctx.publishedDays.has(d))
 
   // 3) 주제 큐 — 약점 질문 먼저(AI 검색 공략). 날짜를 다 못 채우면 그때만 월간 추천을 생성해 보충
-  //    (약점 질문만으로 충분하면 AI 호출을 생략해 첫 렌더 지연을 없앤다.)
+  //    (약점 질문만으로 충분하면 추천 생성 AI 호출을 생략해 첫 렌더 지연을 줄인다.)
+  //    weak 슬롯의 title은 일단 원문(질문)으로 두고, 아래에서 카피라이팅 제목으로 일괄 치환.
   const queue: Omit<PlanSlot, 'day'>[] = weak.map((q) => ({
     label: q,
     topic: q,
@@ -94,7 +95,7 @@ async function buildMonthlyPlan(db: Db, businessId: string, ctx: PlanContext): P
       })
       for (const s of suggestions) {
         queue.push({
-          label: s.title,
+          label: s.title, // 추천 주제는 이미 카피라이팅된 제목
           topic: s.topic,
           keyword: s.keyword ?? null,
           geoTargeted: false,
@@ -114,6 +115,18 @@ async function buildMonthlyPlan(db: Db, businessId: string, ctx: PlanContext): P
     // 주제가 날짜보다 적으면 순환(현 시점 데이터로는 거의 발생하지 않음)
     return { ...queue[i % queue.length], day }
   })
+
+  // 4) 약점 슬롯의 제목을 카피라이팅된 지역 롱테일 제목으로 일괄 치환(1회 호출).
+  //    → 달력에 딱딱한 검색어 대신 실제 발행될 제목이 보이고, 발행도 이 제목을 그대로 사용.
+  const weakIdx = slots.map((s, i) => (s.geoTargeted ? i : -1)).filter((i) => i >= 0)
+  if (weakIdx.length > 0) {
+    const titles = await generateGeoTitles({
+      businessName: ctx.businessName,
+      address: ctx.address,
+      targets: weakIdx.map((i) => ({ question: slots[i].topic, keyword: slots[i].keyword })),
+    })
+    weakIdx.forEach((i, k) => { if (titles[k]) slots[i].label = titles[k] })
+  }
 
   return { month: ctx.month, slots }
 }

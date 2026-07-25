@@ -176,6 +176,7 @@ interface PostInput {
   realCases?: string[]  // 실제 작업 사례(익명) — 본문 고유성·신뢰도용 근거
   keyword?: string      // 이 글의 핵심 검색 키워드 (제목·본문에 자연 반영)
   relatedKeywords?: string[] // 연관 검색어(실검색량 순) — 본문에 자연스럽게 녹임
+  titleOverride?: string // 계획표에 확정된 제목 — 있으면 이 제목 그대로 사용(달력=발행 일치)
 }
 
 // 업체 블로그 포스트 자동 생성
@@ -208,6 +209,11 @@ export async function generatePostContent(input: PostInput): Promise<PostContent
     ? `\n[검색 최적화 키워드 — 매우 중요]\n- 이 글의 핵심 검색 키워드: "${input.keyword}". 제목(title)·요약(summary)·첫 문단에 반드시 자연스럽게 포함하고, 본문 전체에 3~5회 자연스럽게 반복할 것(억지 삽입·단순 나열 금지 — 저품질 처리됨).${related.length > 0 ? `\n- 아래 연관 검색어도 본문에 자연스럽게 녹여 검색 노출을 넓힐 것(제목엔 넣지 말 것): ${related.join(', ')}` : ''}`
     : ''
 
+  // 계획표에 이미 확정된 제목이 있으면 그대로 사용 — 달력 미리보기와 발행 제목을 일치시킴
+  const titleRule = input.titleOverride
+    ? `\n[제목 고정 — 매우 중요] 이 글의 제목(title)은 반드시 아래 문구를 그대로 사용할 것(수정·재작성·번역 금지): "${input.titleOverride}". summary·slug·본문은 이 제목에 자연스럽게 맞출 것.`
+    : ''
+
   const textPrompt = `당신은 한국 청소 서비스 업체의 GEO 블로그 포스팅 전문가입니다.
 ChatGPT, Gemini, Perplexity 등 AI 검색엔진이 "청소 관련 질문"에 이 업체를 인용하도록
 아래 구조에 맞게 포스트를 작성하세요.
@@ -218,7 +224,7 @@ ${regionHint}
 업체 소개: ${input.description ?? '청소 전문 업체'}
 서비스: ${serviceList || '청소 서비스'}
 ${topicHint}
-${input.imageUrl ? '위 첨부 이미지를 분석하여 이미지 내용을 포스트에 자연스럽게 반영하세요.' : ''}${realCasesBlock}${keywordBlock}
+${input.imageUrl ? '위 첨부 이미지를 분석하여 이미지 내용을 포스트에 자연스럽게 반영하세요.' : ''}${realCasesBlock}${keywordBlock}${titleRule}
 
 [지역·고유성 규칙 — 검색 노출에 매우 중요]
 - 본문·소제목에 핵심 지역(동/구)을 자연스럽게 2~4회 녹일 것. 상위 지역(시·도·권역)은 1~2회만 언급해 "핵심 지역 전문"이라는 신호를 흐리지 말 것.
@@ -320,7 +326,10 @@ imagePrompts: 이 포스트에 넣을 서로 다른 사진 3장의 영문 장면
     try {
       const jsonMatch = text.match(/\{[\s\S]*\}/)
       if (!jsonMatch) throw new Error('JSON not found')
-      return JSON.parse(repairJson(jsonMatch[0])) as PostContent
+      const parsed = JSON.parse(repairJson(jsonMatch[0])) as PostContent
+      // 계획표 확정 제목이 있으면 최종적으로 강제 — 모델이 살짝 바꿔도 달력과 100% 일치
+      if (input.titleOverride) parsed.title = input.titleOverride
+      return parsed
     } catch (e) {
       lastErr = e
       console.error(`[AI] 포스트 생성 파싱 실패 (시도 ${attempt}/2):`, e instanceof Error ? e.message : e)
@@ -329,6 +338,62 @@ imagePrompts: 이 포스트에 넣을 서로 다른 사진 3장의 영문 장면
 
   console.error('[AI] 포스트 생성 최종 실패:', lastErr)
   throw new Error('[APP] 포스트 생성에 실패했습니다')
+}
+
+// 공략할 GEO 검색어(약점 질문) 여러 개를 받아, 각각 카피라이팅된 지역 롱테일 제목으로 변환.
+// 계획표 확정 시 1회만 호출(제목만 생성이라 저렴) → 달력·발행이 같은 좋은 제목을 쓴다.
+// 실패하거나 키 없으면 원문 질문을 그대로 반환(안전 폴백).
+export async function generateGeoTitles(input: {
+  businessName: string
+  address: string | null
+  serviceAreas?: string[] | null
+  targets: { question: string; keyword: string | null }[]
+  model?: string
+}): Promise<string[]> {
+  const fallback = input.targets.map((t) => t.question)
+  if (input.targets.length === 0) return []
+
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return fallback
+
+  const region = input.address ? input.address.split(' ').slice(0, 2).join(' ') : null
+
+  const prompt = `당신은 한국 청소업체의 GEO 블로그 제목 카피라이터입니다.
+아래 "공략 검색어"마다, 그 검색 의도를 담아 사람이 클릭하고 싶은 한국어 블로그 제목을 정확히 1개씩 지으세요.
+
+규칙:
+- 각 제목 50자 이내, 질문형 또는 정보형 (예: "울산 정기청소, 어떤 주기와 업체를 선택해야 할까?")
+- 해당 검색어의 핵심 키워드(지역명 포함)를 제목에 자연스럽게 넣을 것${region ? ` — 지역: ${region}` : ''}
+- 딱딱한 키워드 나열 금지. 카피라이팅된 문장형 제목으로.
+- 서로 다른 제목으로(중복·유사 금지)
+
+공략 검색어 (순서 유지):
+${input.targets.map((t, i) => `${i + 1}. ${t.question}${t.keyword ? ` (핵심 키워드: ${t.keyword})` : ''}`).join('\n')}
+
+반드시 아래 JSON 배열로만 응답 (입력과 개수·순서 동일):
+["제목1", "제목2", ...]`
+
+  try {
+    const client = new Anthropic({ apiKey })
+    const message = await client.messages.create({
+      model: input.model ?? 'claude-haiku-4-5-20251001',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }],
+    })
+    const text = message.content[0].type === 'text' ? message.content[0].text : ''
+    const match = text.match(/\[[\s\S]*\]/)
+    if (!match) return fallback
+    const titles = JSON.parse(match[0]) as unknown
+    if (!Array.isArray(titles)) return fallback
+    // 개수가 안 맞으면 부족분은 원문으로 채워 안전하게
+    return input.targets.map((t, i) => {
+      const v = titles[i]
+      return typeof v === 'string' && v.trim() ? v.trim() : t.question
+    })
+  } catch (e) {
+    console.error('[AI] GEO 제목 생성 실패, 원문 사용:', e instanceof Error ? e.message : e)
+    return fallback
+  }
 }
 
 export interface TopicSuggestion {
