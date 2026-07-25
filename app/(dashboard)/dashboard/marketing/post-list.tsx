@@ -1346,7 +1346,10 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
               </pre>
             </div>
 
-            {/* 액션 버튼 — ①글 복사 ②사진 저장 ③블로그 열기 순서로 진행 */}
+            {/* 액션 버튼 — ①글 복사 →(사진 있으면 ②사진 저장)→ 블로그 열기 순서. 사진 없으면 ②가 곧 블로그 열기 */}
+            {(() => {
+            const hasNaverImages = !!(naverPost.image_urls?.length || naverPost.image_url)
+            return (
             <div className="px-5 py-4 border-t flex flex-col gap-2 shrink-0">
               <div className="flex gap-2">
                 <Button
@@ -1358,7 +1361,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                     : <><Copy className="h-4 w-4" />① 글 복사</>
                   }
                 </Button>
-                {(naverPost.image_urls?.length || naverPost.image_url) && (
+                {hasNaverImages && (
                   <Button
                     variant="outline"
                     className="flex-1 h-12 gap-2"
@@ -1385,9 +1388,11 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                 className="flex items-center justify-center gap-2 px-4 h-12 rounded-md border border-[#03C75A] text-[#03C75A] text-sm font-medium hover:bg-[#03C75A]/10 transition-colors"
               >
                 <ExternalLink className="h-4 w-4" />
-                ③ 블로그 열기
+                {hasNaverImages ? '③ 블로그 열기' : '② 블로그 열기'}
               </a>
             </div>
+            )
+            })()}
           </div>
         </div>
       )}
