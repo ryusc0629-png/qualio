@@ -485,7 +485,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   const [galleryPost, setGalleryPost] = useState<Post | null>(null)
   const [postingId, setPostingId] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  // 홍보 페이지(랜딩) 주소 복사 완료 표시 — 헤더 '링크 복사' 버튼 전용
+  // 홈페이지 주소 복사 완료 표시 — 헤더 '링크 복사' 버튼 전용
   const [landingCopied, setLandingCopied] = useState(false)
   // 오늘 자동 발행 시간(오전 9시 KST)이 지났는지 — 하이드레이션 불일치 방지 위해 마운트 후 계산
   const [autoTimePassed, setAutoTimePassed] = useState(false)
@@ -502,13 +502,13 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-  // 홍보 페이지 주소 — 고객에게 공유하는 내 업체 소개 페이지(/biz/[slug])
+  // 홈페이지 주소 — 고객에게 공유하는 내 업체 소개 페이지(/biz/[slug])
   const landingUrl = businessSlug ? `${appUrl}/biz/${businessSlug}` : null
   const handleCopyLanding = () => {
     if (!landingUrl) return
     navigator.clipboard.writeText(landingUrl)
     setLandingCopied(true)
-    toast.success('홍보 페이지 주소를 복사했어요!')
+    toast.success('홈페이지 주소를 복사했어요!')
     setTimeout(() => setLandingCopied(false), 2000)
   }
   // 네이버 블로그 — 서식 HTML을 함께 복사해 붙여넣으면 소제목·인용구가 자동 적용됨
@@ -1056,7 +1056,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                   type="button"
                   onClick={handleCopyLanding}
                   className="inline-flex items-center gap-1 h-9 px-2.5 rounded-lg text-xs font-medium text-slate-700 bg-white border hover:bg-slate-100 transition-colors"
-                  title="홍보 페이지 주소 복사하기"
+                  title="홈페이지 주소 복사하기"
                 >
                   {landingCopied
                     ? <><Check className="h-3.5 w-3.5 text-emerald-600" />복사됨</>
@@ -1067,9 +1067,9 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 h-9 px-3 rounded-lg text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
-                  title="새 창에서 내 홍보 페이지 보기"
+                  title="새 창에서 내 홈페이지 보기"
                 >
-                  <ExternalLink className="h-3.5 w-3.5" />홍보 페이지 열기
+                  <ExternalLink className="h-3.5 w-3.5" />홈페이지 열기
                 </a>
               </div>
             )}
@@ -1165,13 +1165,13 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg text-sm font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
             >
-              <ExternalLink className="h-4 w-4" />내 홍보 페이지 열기
+              <ExternalLink className="h-4 w-4" />내 홈페이지 열기
             </a>
           )}
         </div>
       )}
 
-      {/* 홍보 페이지 링크는 '전체 발행 포스트' 헤더의 '홍보 페이지 열기·링크 복사' 버튼으로 이동 */}
+      {/* 홈페이지 링크는 '전체 발행 포스트' 헤더의 '홈페이지 열기·링크 복사' 버튼으로 이동 */}
 
       {/* 당근마켓용 글 모달 */}
       {daangnPost && daangnPost.daangn_content && (
