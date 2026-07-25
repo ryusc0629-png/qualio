@@ -11,7 +11,7 @@ import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContent
 import type { PlanId } from '@/lib/config/plans'
 import { fetchRecentJobCases } from '@/lib/ai/job-cases'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
-import { pickWeakGeoTopic } from '@/lib/geo/weak-topics'
+import { getOrCreatePostPlan, pickTodayPlanSlot } from '@/lib/geo/post-plan'
 import { getRelatedKeywords } from '@/lib/keyword/naver-searchad'
 
 // 공통: 현재 유저의 business_id 조회
@@ -386,6 +386,12 @@ export const publishTodayAction = action
     const dayOfMonth = now.getUTCDate()
     const daysInMonth = new Date(year, month, 0).getDate()
 
+    // KST 기준 오늘 — 고정 계획표는 KST '일'을 기준으로 슬롯을 잡는다
+    const todayKSTStr = new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const monthKST = todayKSTStr.slice(0, 7)
+    const todayDayKST = Number(todayKSTStr.slice(8, 10))
+    const daysInMonthKST = new Date(Number(todayKSTStr.slice(0, 4)), Number(todayKSTStr.slice(5, 7)), 0).getDate()
+
     // 플랜 한도 조회
     const { data: sub } = await db
       .from('subscriptions')
@@ -440,7 +446,7 @@ export const publishTodayAction = action
     try {
     // 업체 정보 + 서비스 조회
     const [businessResult, servicesResult] = await Promise.all([
-      db.from('businesses').select('name, address, description, service_areas' as never).eq('id', businessId).maybeSingle() as unknown as Promise<{ data: { name: string; address: string | null; description: string | null; service_areas: string[] | null } | null }>,
+      db.from('businesses').select('name, address, description, service_areas, monthly_post_target' as never).eq('id', businessId).maybeSingle() as unknown as Promise<{ data: { name: string; address: string | null; description: string | null; service_areas: string[] | null; monthly_post_target: number } | null }>,
       db.from('service_items').select('name, base_price, unit')
         .eq('business_id', businessId).eq('is_active', true).is('deleted_at', null),
     ])
@@ -450,13 +456,31 @@ export const publishTodayAction = action
     const business = businessResult.data
     const services = servicesResult.data ?? []
 
-    // 이번 달 발행 제목 목록 (중복 방지)
+    // 이번 달 발행 제목 + 발행일(KST) — 중복 방지 및 계획표 슬롯 매칭용
     const { data: publishedThisMonth } = await db
       .from('biz_posts')
-      .select('title')
+      .select('title, published_at, post_type' as never)
       .eq('business_id', businessId)
-      .gte('published_at', monthStart)
+      .gte('published_at', monthStart) as unknown as { data: { title: string; published_at: string; post_type: string | null }[] | null }
     const publishedTitles = (publishedThisMonth ?? []).map((p) => p.title)
+    const publishedDays = new Set<number>(
+      (publishedThisMonth ?? [])
+        .filter((p) => p.post_type !== 'portfolio')
+        .map((p) => Number(new Date(new Date(p.published_at).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(8, 10)))
+    )
+
+    // 고정 계획표에서 오늘 발행할 슬롯을 가져온다(달력·크론과 동일한 주제).
+    const plan = await getOrCreatePostPlan(db, businessId, {
+      month: monthKST,
+      currentMonthNum: Number(monthKST.slice(5, 7)),
+      daysInMonth: daysInMonthKST,
+      today: todayDayKST,
+      target: Math.min(business.monthly_post_target ?? planLimit, planLimit),
+      businessName: business.name,
+      address: business.address,
+      publishedDays,
+    })
+    const todaySlot = pickTodayPlanSlot(plan, todayDayKST, publishedDays)
 
     const titles: string[] = []
     const publishedSlugs: string[] = []
@@ -465,21 +489,11 @@ export const publishTodayAction = action
     const realCases = await fetchRecentJobCases(db, businessId)
 
     for (let i = 0; i < needed; i++) {
-      // 주제 선택 — 크론 자동 발행과 동일한 순서로 골라 달력 미리보기와 어긋나지 않게 한다.
-      let topic: string | undefined
-      let keyword: string | undefined
+      // 주제 선택 — 무조건 고정 계획표의 오늘 슬롯을 그대로 따른다(달력과 100% 일치).
+      let topic: string | undefined = todaySlot?.topic || undefined
+      let keyword: string | undefined = todaySlot?.keyword ?? undefined
 
-      // 1순위: GEO '안 잡히는 질문'(달력의 'AI 검색 공략' 슬롯과 동일 출처).
-      // 이번 달 이미 다룬 주제는 pickWeakGeoTopic이 알아서 건너뛴다.
-      try {
-        const weak = await pickWeakGeoTopic(db, businessId, publishedTitles)
-        if (weak) {
-          topic = weak.topic
-          keyword = weak.keyword
-        }
-      } catch { /* 약점 질문 조회 실패 시 아래 월간 추천으로 폴백 */ }
-
-      // 2순위: 약점 질문이 없으면(모두 노출 중이거나 측정 전) 월간 추천 주제
+      // 폴백: 계획 슬롯이 없을 때만(측정 전·목표 변경 등) 월간 추천에서 선택
       if (!topic) {
         try {
           const suggestions = await generateTopicSuggestions({

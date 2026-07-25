@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Sparkles, Plus, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send, SkipForward, Save, ChevronUp } from 'lucide-react'
 import { PostEditor } from './post-editor'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
+import type { PostPlan } from '@/lib/geo/post-plan'
 import { copyRichText, markdownToPlain } from '@/lib/utils/rich-text'
 import { toast } from 'sonner'
 
@@ -112,8 +113,8 @@ interface PostListProps {
   naverBlogId?: string | null
   // 사장님 당근 비즈프로필 주소 — '당근 열기'가 이 프로필로 연결 (없으면 당근 비즈니스 홈)
   danggeunBusinessUrl?: string | null
-  // GEO 측정 '안 잡히는 질문' — 예정 일정에 우선 배정 (자동 발행이 노출률 약점부터 공략)
-  geoWeakQuestions?: string[]
+  // 이번 달 고정 자동 발행 계획표(서버에서 확정·저장) — 달력이 이 계획을 그대로 표시
+  postPlan?: PostPlan | null
 }
 
 interface ScheduleSlot {
@@ -129,18 +130,16 @@ interface ScheduleSlot {
 
 const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토']
 
-function buildSchedule(
-  target: number,
-  posts: Post[],
-  suggestions: TopicSuggestion[] | null,
-  geoWeakQuestions: string[] = [],
-): ScheduleSlot[] {
+// 고정 계획표(postPlan) + 실제 발행 글로 달력을 만든다.
+// 계획은 서버에서 월 1회 확정·저장돼 불변이므로, 예정 주제가 렌더마다 바뀌지 않는다.
+// 발행된 날짜엔 실제 글을, 그 외 계획된 날짜엔 계획 주제를 표시한다.
+function buildSchedule(plan: PostPlan | null, posts: Post[]): ScheduleSlot[] {
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth()
   const today = now.getDate()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
 
+  // 이번 달 발행 글: day → post
   const postsByDay = new Map<number, Post[]>()
   posts.forEach((p) => {
     const d = new Date(p.published_at)
@@ -151,57 +150,36 @@ function buildSchedule(
     }
   })
 
-  // 발행 예정일 계산 (균등 분포)
-  const scheduledDays: number[] = []
-  let simCount = 0
-  for (let day = 1; day <= daysInMonth; day++) {
-    if (simCount >= target) break
-    const needed = Math.floor(target * day / daysInMonth) - simCount
-    for (let i = 0; i < needed; i++) {
-      scheduledDays.push(day)
-      simCount++
+  // 계획 슬롯: day → slot (한 날짜엔 하나)
+  const planByDay = new Map<number, PostPlan['slots'][number]>()
+  ;(plan?.slots ?? []).forEach((s) => { if (!planByDay.has(s.day)) planByDay.set(s.day, s) })
+
+  // 표시할 날짜 = 발행된 날 ∪ 계획된 날
+  const allDays = [...new Set<number>([...postsByDay.keys(), ...planByDay.keys()])].sort((a, b) => a - b)
+
+  const result: ScheduleSlot[] = []
+  for (const day of allDays) {
+    const date = new Date(year, month, day)
+    const post = postsByDay.get(day)?.[0] ?? null
+
+    // 발행 완료 슬롯 — 실제 제목 그대로
+    if (post) {
+      result.push({ day, date, post, topicLabel: post.title, status: 'published' })
+      continue
     }
-  }
-
-  const suggestionList = suggestions ?? []
-  // 예정 슬롯 배정 순서 — 실제 자동 발행과 동일하게 GEO '안 잡히는 질문'을 먼저,
-  // 그다음 월간 추천 주제를 순환. (u = 발행 예정 슬롯의 순번)
-  let u = 0
-
-  return scheduledDays
-    .map((day): ScheduleSlot | null => {
-      const date = new Date(year, month, day)
-      const dayPosts = postsByDay.get(day) ?? []
-      const post = dayPosts.shift() ?? null
-
-      let status: ScheduleSlot['status']
-      if (post) status = 'published'
-      else if (day === today) status = 'today'
-      else if (day >= today) status = 'upcoming'
-      else return null  // 과거 미발행 슬롯은 제외
-
-      // 발행 완료 슬롯은 실제 제목 그대로
-      if (post) {
-        return { day, date, post, topicLabel: post.title, status }
-      }
-
-      // 예정 슬롯: 앞쪽엔 GEO 약점 질문, 소진되면 월간 추천 주제 순환
-      const idx = u++
-      if (idx < geoWeakQuestions.length) {
-        return { day, date, post: null, topicLabel: geoWeakQuestions[idx], status, geoTargeted: true }
-      }
-      const suggestion = suggestionList.length > 0
-        ? suggestionList[(idx - geoWeakQuestions.length) % suggestionList.length]
-        : null
-      return {
-        day, date, post: null,
-        topicLabel: suggestion?.title ?? '최적 주제를 자동으로 선택해요',
-        status,
-        monthlySearches: suggestion?.monthlySearches,
-        competition: suggestion?.competition,
-      }
+    // 발행 안 된 날: 계획이 있고 오늘 이후면 표시 (과거 미발행은 숨김)
+    const slot = planByDay.get(day)
+    if (!slot || day < today) continue
+    result.push({
+      day, date, post: null,
+      topicLabel: slot.label,
+      status: day === today ? 'today' : 'upcoming',
+      geoTargeted: slot.geoTargeted,
+      monthlySearches: slot.monthlySearches,
+      competition: slot.competition,
     })
-    .filter((s): s is ScheduleSlot => s !== null)
+  }
+  return result
 }
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
@@ -418,7 +396,7 @@ function ReelCard({
   )
 }
 
-export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], autoImageGeneration = true, initialSuggestions = null, naverBlogId = null, danggeunBusinessUrl = null, geoWeakQuestions = [] }: PostListProps) {
+export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], autoImageGeneration = true, initialSuggestions = null, naverBlogId = null, danggeunBusinessUrl = null, postPlan = null }: PostListProps) {
   const [posts] = useState(initialPosts)
   // 오름차순 정렬 (오래된 글 위 → 최신 글 아래) + 오늘 위치로 자동 스크롤
   const sortedPosts = [...posts].sort((a, b) => new Date(a.published_at).getTime() - new Date(b.published_at).getTime())
@@ -552,7 +530,7 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   }).length
   const progressPct = autoPostLimit > 0 ? Math.min((postsThisMonth / autoPostLimit) * 100, 100) : 0
   const currentMonth = now.getMonth() + 1
-  const schedule = buildSchedule(autoPostLimit, posts, suggestions, geoWeakQuestions)
+  const schedule = buildSchedule(postPlan, posts)
 
   // 아직 채널에 안 올린 글 (포트폴리오 제외, 채널 콘텐츠 있고 완료 처리 안 된 것)
   const channelTodos = posts.filter((p) => {

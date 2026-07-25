@@ -8,7 +8,7 @@ import { MarketingPeriodSelector } from './period-selector'
 import { GeoShareCard } from '@/components/dashboard/geo-share-card'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
-import { deriveKeyword } from '@/lib/geo/weak-topics'
+import { getOrCreatePostPlan } from '@/lib/geo/post-plan'
 
 // '지금 발행'(publishTodayAction)은 이 페이지에서 호출되는 Server Action이라
 // 이 라우트의 제한시간을 따른다. scale 플랜은 심층 글 + SNS 채널 원고까지
@@ -41,9 +41,9 @@ export default async function MarketingPage({
   const [businessResult, postsResult, subResult, pendingPortfolioResult, doneReelsResult] = await Promise.all([
     db
       .from('businesses')
-      .select('slug, name, monthly_post_target, auto_image_generation, topic_suggestions, topic_suggestions_month, naver_blog_id, danggeun_business_url' as never)
+      .select('slug, name, address, monthly_post_target, auto_image_generation, topic_suggestions, topic_suggestions_month, naver_blog_id, danggeun_business_url' as never)
       .eq('id', profile.business_id)
-      .maybeSingle() as unknown as { data: { slug: string | null; name: string | null; monthly_post_target: number; auto_image_generation: boolean; topic_suggestions: { title: string; reason: string; topic: string }[] | null; topic_suggestions_month: string | null; naver_blog_id: string | null; danggeun_business_url: string | null } | null },
+      .maybeSingle() as unknown as { data: { slug: string | null; name: string | null; address: string | null; monthly_post_target: number; auto_image_generation: boolean; topic_suggestions: { title: string; reason: string; topic: string }[] | null; topic_suggestions_month: string | null; naver_blog_id: string | null; danggeun_business_url: string | null } | null },
     db
       .from('biz_posts' as never)
       .select('id, slug, title, content, summary, published, ai_generated, published_at, image_url, image_urls, naver_title, naver_content, naver_tags, daangn_content, instagram_content, instagram_hashtags, post_type, before_image_urls, after_image_urls, channel_posted_at' as never)
@@ -83,16 +83,6 @@ export default async function MarketingPage({
 
   const business = businessResult.data
 
-  // GEO 최신 측정의 '안 잡히는 질문' — 자동 발행 일정에 우선 배정
-  const { data: latestGeoCheck } = (await db
-    .from('geo_checks' as never)
-    .select('detail' as never)
-    .eq('business_id' as never, profile.business_id)
-    .order('checked_at' as never, { ascending: false })
-    .limit(1)
-    .maybeSingle()) as unknown as { data: { detail: { query: string; mentioned: boolean }[] } | null }
-  const geoWeakQuestionsRaw = (latestGeoCheck?.detail ?? []).filter((d) => !d.mentioned).map((d) => d.query)
-
   const doneReels = (doneReelsResult.data ?? []).map((r) => ({
     reportId: r.id,
     reelUrl: r.reel_url,
@@ -125,17 +115,26 @@ export default async function MarketingPage({
   }).length
   const isTodayComplete = todayPostCount >= autoDailyPostLimit
 
-  // 달력이 약속하는 주제 = 실제 발행이 고를 주제가 되도록, 이번 달 이미 다룬 약점
-  // 질문은 미리보기에서도 제외한다(pickWeakGeoTopic의 커버 판정과 동일 기준).
-  // → "달력엔 인테리어인데 발행은 에어컨" 같은 어긋남 방지.
-  const monthPrefixKST = todayKSTStr.slice(0, 7)
-  const publishedTitlesThisMonth = posts
-    .filter((p) => p.published && p.post_type !== 'portfolio')
-    .filter((p) => new Date(new Date(p.published_at).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7) === monthPrefixKST)
-    .map((p) => p.title)
-  const geoWeakQuestions = geoWeakQuestionsRaw.filter((q) => {
-    const kw = deriveKeyword(q)
-    return kw !== '' && !publishedTitlesThisMonth.some((t) => t.includes(kw))
+  // 자동 발행 '계획표' — 이번 달 1회 확정 후 고정(달력·크론·수동 발행이 모두 이 계획을 따름).
+  // 이미 발행된 KST 날짜는 계획에서 제외(그 자리엔 실제 발행 글이 표시됨).
+  const monthKST = todayKSTStr.slice(0, 7)
+  const todayDayKST = Number(todayKSTStr.slice(8, 10))
+  const publishedDaysThisMonth = new Set<number>(
+    posts
+      .filter((p) => p.published && p.post_type !== 'portfolio')
+      .map((p) => new Date(new Date(p.published_at).getTime() + 9 * 60 * 60 * 1000).toISOString())
+      .filter((iso) => iso.slice(0, 7) === monthKST)
+      .map((iso) => Number(iso.slice(8, 10)))
+  )
+  const postPlan = await getOrCreatePostPlan(db, profile.business_id, {
+    month: monthKST,
+    currentMonthNum: Number(todayKSTStr.slice(5, 7)),
+    daysInMonth: new Date(Number(todayKSTStr.slice(0, 4)), Number(todayKSTStr.slice(5, 7)), 0).getDate(),
+    today: todayDayKST,
+    target: Math.min(business?.monthly_post_target ?? autoPostLimit, autoPostLimit),
+    businessName: business?.name ?? '우리 업체',
+    address: business?.address ?? null,
+    publishedDays: publishedDaysThisMonth,
   })
 
   // 이번 달(KST) 저장된 주제가 있으면 서버에서 바로 넘겨 화면 진입 즉시 표시 (스피너·재조회 없음)
@@ -168,7 +167,7 @@ export default async function MarketingPage({
         initialSuggestions={initialSuggestions}
         naverBlogId={business?.naver_blog_id ?? null}
         danggeunBusinessUrl={business?.danggeun_business_url ?? null}
-        geoWeakQuestions={geoWeakQuestions}
+        postPlan={postPlan}
       />
 
       <div className="border-t pt-6 space-y-5">

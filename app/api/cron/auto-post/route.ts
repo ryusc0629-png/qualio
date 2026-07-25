@@ -6,6 +6,7 @@ import { generatePostImagesSmart, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
 import { pickWeakGeoTopic } from '@/lib/geo/weak-topics'
+import { getOrCreatePostPlan, pickTodayPlanSlot } from '@/lib/geo/post-plan'
 import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContentEnabled } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 
@@ -48,21 +49,27 @@ async function publishOnePost(
   model: string,
   channelsEnabled: boolean,
   realCases: string[],
+  // 고정 계획표의 오늘 슬롯 — 있으면 무조건 이 주제로 발행(달력과 일치)
+  planned: { topic: string; keyword: string | null } | null,
 ): Promise<string> {
-  // 주제 선택 — 1순위: GEO 측정에서 '안 잡히는 질문'을 우선 공략(같은 발행량으로 노출률↑)
-  let selectedTopic: string | undefined
-  let selectedKeyword: string | undefined
-  try {
-    const weak = await pickWeakGeoTopic(db, business.id, publishedTitles)
-    if (weak) {
-      selectedTopic = weak.topic
-      selectedKeyword = weak.keyword
+  // 주제 선택 — 무조건 고정 계획표의 오늘 슬롯을 그대로 따른다.
+  let selectedTopic: string | undefined = planned?.topic || undefined
+  let selectedKeyword: string | undefined = planned?.keyword ?? undefined
+
+  // 폴백1: 계획 슬롯이 없을 때만 GEO '안 잡히는 질문' 조회
+  if (!selectedTopic) {
+    try {
+      const weak = await pickWeakGeoTopic(db, business.id, publishedTitles)
+      if (weak) {
+        selectedTopic = weak.topic
+        selectedKeyword = weak.keyword
+      }
+    } catch {
+      // GEO 약점 조회 실패 시 아래 일반 주제 추천으로 진행
     }
-  } catch {
-    // GEO 약점 조회 실패 시 아래 일반 주제 추천으로 진행
   }
 
-  // 2순위: 약점 질문이 없으면(모두 노출 중이거나 측정 전) 기존 월간 주제 추천
+  // 폴백2: 약점 질문도 없으면(모두 노출 중이거나 측정 전) 기존 월간 주제 추천
   if (!selectedTopic) {
     try {
       const suggestions = await generateTopicSuggestions({
@@ -164,6 +171,12 @@ export async function GET(request: NextRequest) {
   const dayOfMonth = now.getUTCDate()
   const daysInMonth = getDaysInMonth(year, month)
 
+  // KST 기준 오늘 — 고정 계획표는 KST '일'로 슬롯을 잡는다
+  const todayKSTStr = new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const monthKST = todayKSTStr.slice(0, 7)
+  const todayDayKST = Number(todayKSTStr.slice(8, 10))
+  const daysInMonthKST = getDaysInMonth(Number(todayKSTStr.slice(0, 4)), Number(todayKSTStr.slice(5, 7)))
+
   const { data: businesses, error: bizError } = await db
     .from('businesses' as never)
     .select('id, name, address, description, service_areas, monthly_post_target, auto_image_generation, slug' as never)
@@ -215,14 +228,30 @@ export async function GET(request: NextRequest) {
         continue
       }
 
-      // 이번 달 발행 제목 목록 (중복 방지용) — AI GEO 글만
+      // 이번 달 발행 제목 + 발행일(KST) — 중복 방지 및 계획표 슬롯 매칭용 (AI GEO 글만)
       const { data: publishedThisMonth } = await db
         .from('biz_posts')
-        .select('title')
+        .select('title, published_at' as never)
         .eq('business_id', business.id)
         .eq('post_type' as never, 'geo')
-        .gte('published_at', monthStart)
+        .gte('published_at', monthStart) as unknown as { data: { title: string; published_at: string }[] | null }
       const publishedTitles = (publishedThisMonth ?? []).map((p) => p.title)
+      const publishedDays = new Set<number>(
+        (publishedThisMonth ?? []).map((p) => Number(new Date(new Date(p.published_at).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(8, 10)))
+      )
+
+      // 고정 계획표에서 오늘 발행할 슬롯을 가져온다(달력·수동 발행과 동일한 주제).
+      const plan = await getOrCreatePostPlan(db, business.id, {
+        month: monthKST,
+        currentMonthNum: Number(monthKST.slice(5, 7)),
+        daysInMonth: daysInMonthKST,
+        today: todayDayKST,
+        target: effectiveTarget,
+        businessName: business.name,
+        address: business.address,
+        publishedDays,
+      })
+      const todaySlot = pickTodayPlanSlot(plan, todayDayKST, publishedDays)
 
       const { data: services } = await db
         .from('service_items')
@@ -243,7 +272,8 @@ export async function GET(request: NextRequest) {
 
       const publishedTitlesThisRun: string[] = []
       for (let i = 0; i < needed; i++) {
-        const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas, autoImageGeneration: business.auto_image_generation ?? true }, services ?? [], publishedTitles, month, model, channelsEnabled, realCases)
+        const planned = todaySlot ? { topic: todaySlot.topic, keyword: todaySlot.keyword } : null
+        const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas, autoImageGeneration: business.auto_image_generation ?? true }, services ?? [], publishedTitles, month, model, channelsEnabled, realCases, planned)
         publishedTitlesThisRun.push(title)
         console.log(`[Cron] 자동 발행 완료 (${i + 1}/${needed}): ${business.name} — "${title}"`)
       }
