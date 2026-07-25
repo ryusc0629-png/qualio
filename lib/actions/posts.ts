@@ -11,6 +11,7 @@ import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContent
 import type { PlanId } from '@/lib/config/plans'
 import { fetchRecentJobCases } from '@/lib/ai/job-cases'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
+import { pickWeakGeoTopic } from '@/lib/geo/weak-topics'
 import { getRelatedKeywords } from '@/lib/keyword/naver-searchad'
 
 // 공통: 현재 유저의 business_id 조회
@@ -464,23 +465,37 @@ export const publishTodayAction = action
     const realCases = await fetchRecentJobCases(db, businessId)
 
     for (let i = 0; i < needed; i++) {
-      // 주제 추천
+      // 주제 선택 — 크론 자동 발행과 동일한 순서로 골라 달력 미리보기와 어긋나지 않게 한다.
       let topic: string | undefined
       let keyword: string | undefined
+
+      // 1순위: GEO '안 잡히는 질문'(달력의 'AI 검색 공략' 슬롯과 동일 출처).
+      // 이번 달 이미 다룬 주제는 pickWeakGeoTopic이 알아서 건너뛴다.
       try {
-        const suggestions = await generateTopicSuggestions({
-          businessName: business.name,
-          services,
-          currentMonth: month,
-          address: business.address,
-          skipKeywordData: true, // 발행 경로: 검색량 배지 불필요 → 네이버 API 생략
-        })
-        const unused = suggestions.find(
-          (s) => !publishedTitles.some((t) => t.includes(s.title.slice(0, 10)))
-        )
-        topic = unused?.topic ?? suggestions[0]?.topic
-        keyword = unused?.keyword ?? suggestions[0]?.keyword
-      } catch { /* 주제 추천 실패 시 AI 자유 선택 */ }
+        const weak = await pickWeakGeoTopic(db, businessId, publishedTitles)
+        if (weak) {
+          topic = weak.topic
+          keyword = weak.keyword
+        }
+      } catch { /* 약점 질문 조회 실패 시 아래 월간 추천으로 폴백 */ }
+
+      // 2순위: 약점 질문이 없으면(모두 노출 중이거나 측정 전) 월간 추천 주제
+      if (!topic) {
+        try {
+          const suggestions = await generateTopicSuggestions({
+            businessName: business.name,
+            services,
+            currentMonth: month,
+            address: business.address,
+            skipKeywordData: true, // 발행 경로: 검색량 배지 불필요 → 네이버 API 생략
+          })
+          const unused = suggestions.find(
+            (s) => !publishedTitles.some((t) => t.includes(s.title.slice(0, 10)))
+          )
+          topic = unused?.topic ?? suggestions[0]?.topic
+          keyword = unused?.keyword ?? suggestions[0]?.keyword
+        } catch { /* 주제 추천 실패 시 AI 자유 선택 */ }
+      }
 
       // 핵심 검색어 연관어까지 조회 → 본문·태그를 실제 검색어에 맞춤
       const relatedStats = keyword ? await getRelatedKeywords(keyword) : []

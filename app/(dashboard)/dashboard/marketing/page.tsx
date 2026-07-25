@@ -8,6 +8,7 @@ import { MarketingPeriodSelector } from './period-selector'
 import { GeoShareCard } from '@/components/dashboard/geo-share-card'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
+import { deriveKeyword } from '@/lib/geo/weak-topics'
 
 // '지금 발행'(publishTodayAction)은 이 페이지에서 호출되는 Server Action이라
 // 이 라우트의 제한시간을 따른다. scale 플랜은 심층 글 + SNS 채널 원고까지
@@ -90,7 +91,7 @@ export default async function MarketingPage({
     .order('checked_at' as never, { ascending: false })
     .limit(1)
     .maybeSingle()) as unknown as { data: { detail: { query: string; mentioned: boolean }[] } | null }
-  const geoWeakQuestions = (latestGeoCheck?.detail ?? []).filter((d) => !d.mentioned).map((d) => d.query)
+  const geoWeakQuestionsRaw = (latestGeoCheck?.detail ?? []).filter((d) => !d.mentioned).map((d) => d.query)
 
   const doneReels = (doneReelsResult.data ?? []).map((r) => ({
     reportId: r.id,
@@ -123,6 +124,19 @@ export default async function MarketingPage({
     return pKST.toISOString().slice(0, 10) === todayKSTStr
   }).length
   const isTodayComplete = todayPostCount >= autoDailyPostLimit
+
+  // 달력이 약속하는 주제 = 실제 발행이 고를 주제가 되도록, 이번 달 이미 다룬 약점
+  // 질문은 미리보기에서도 제외한다(pickWeakGeoTopic의 커버 판정과 동일 기준).
+  // → "달력엔 인테리어인데 발행은 에어컨" 같은 어긋남 방지.
+  const monthPrefixKST = todayKSTStr.slice(0, 7)
+  const publishedTitlesThisMonth = posts
+    .filter((p) => p.published && p.post_type !== 'portfolio')
+    .filter((p) => new Date(new Date(p.published_at).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7) === monthPrefixKST)
+    .map((p) => p.title)
+  const geoWeakQuestions = geoWeakQuestionsRaw.filter((q) => {
+    const kw = deriveKeyword(q)
+    return kw !== '' && !publishedTitlesThisMonth.some((t) => t.includes(kw))
+  })
 
   // 이번 달(KST) 저장된 주제가 있으면 서버에서 바로 넘겨 화면 진입 즉시 표시 (스피너·재조회 없음)
   const monthKey = `${nowKST.getUTCFullYear()}-${String(nowKST.getUTCMonth() + 1).padStart(2, '0')}`
