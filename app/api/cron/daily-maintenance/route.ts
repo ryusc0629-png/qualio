@@ -14,6 +14,10 @@ export const dynamic = 'force-dynamic'
 
 // 실행할 하위 cron 목록 (실행 순서는 영향 없음 — 병렬 실행)
 const SUB_TASKS = [
+  // 자동 발행 안전망(catch-up) — 오전 9시(00:00 UTC) auto-post cron이 배포 겹침 등으로
+  // 누락되면, 1시간 뒤 이 10시(01:00 UTC) 실행에서 보충 발행한다.
+  // auto-post는 멱등: 9시에 이미 발행됐으면 needed=0으로 건너뛰므로 중복 발행 없음.
+  'auto-post',
   'expire-quotes',
   'review-request',
   'quote-followup',
