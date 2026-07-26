@@ -311,7 +311,7 @@ export const calculateAndCreateQuoteAction = publicAction
 
         if (business) {
           const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
-          // 카카오 알림톡 우선 → 미설정·실패 시 문자(SMS)로 폴백
+          // 카카오 알림톡으로만 발송(문자 폴백 제거 — 발신번호 노출 방지). 미승인·실패 시 미발송.
           await sendQuoteToCustomer({
             customerPhone: parsedInput.customer_phone,
             customerName:  parsedInput.customer_name,
@@ -830,12 +830,16 @@ export const createConsultationRequestAction = publicAction
     // 같은 번호 리드가 있으면 갱신, 없으면 신규 (AI 상담 리드와 동일 규칙)
     const { data: existing } = await db
       .from('leads')
-      .select('id')
+      .select('id, status')
       .eq('business_id', parsedInput.business_id)
       .eq('phone', phone)
       .maybeSingle()
 
     if (existing) {
+      // 보관(archived)·거절(rejected)됐던 리드가 다시 문의하면 '신규 문의'로 되살림 —
+      // 전엔 필요 없어 넘겼어도 마음이 바뀌어 재문의할 수 있어 보관함에 묻히면 안 됨.
+      // 단, 이미 계약(contracted)됐거나 진행 중인 리드는 상태 유지.
+      const isDormant = existing.status === 'archived' || existing.status === 'rejected'
       // 기존 리드가 정기청소·업무공간으로 문의하면 법인으로 승격(개인→법인만, 반대로 내리지 않음)
       await db
         .from('leads')
@@ -844,6 +848,7 @@ export const createConsultationRequestAction = publicAction
           notes,
           updated_at: new Date().toISOString(),
           ...(isBusinessCustomer ? { customer_type: 'company' } : {}),
+          ...(isDormant ? { status: 'new' } : {}),
         })
         .eq('id', existing.id)
     } else {

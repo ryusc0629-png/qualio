@@ -48,18 +48,20 @@ async function registerConsultationLead(
   // 같은 전화번호 리드가 있으면 갱신, 없으면 신규 등록 (재상담이 사라지지 않게)
   const { data: existing } = await db
     .from('leads')
-    .select('id')
+    .select('id, status')
     .eq('business_id', businessId)
     .eq('phone', phone)
     .maybeSingle()
 
   if (existing) {
     // 개인 리드는 고객명이 곧 제목(company_name) — 재상담 시 이름·메모 갱신
-    const patch: { notes: string; updated_at: string; company_name?: string } = {
+    const patch: { notes: string; updated_at: string; company_name?: string; status?: string } = {
       notes,
       updated_at: new Date().toISOString(),
     }
     if (name) patch.company_name = name
+    // 보관·거절됐던 리드가 다시 상담하면 '신규 문의'로 되살림(마음 바뀐 재문의를 놓치지 않게)
+    if (existing.status === 'archived' || existing.status === 'rejected') patch.status = 'new'
     await db.from('leads').update(patch).eq('id', existing.id)
   } else {
     await db.from('leads').insert({
