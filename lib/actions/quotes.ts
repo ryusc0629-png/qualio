@@ -820,10 +820,12 @@ export const createConsultationRequestAction = publicAction
     const noteText = parsedInput.notes?.trim()
     const notes = `[현장견적 상담요청] ${serviceName}${noteText ? ` · ${noteText}` : ''}`
 
-    // 정기청소 문의는 사업자(법인)로 고정 — 실측상 정기청소 = 100% 회사 고객.
-    // 그 외(에어컨·입주·이사 등 1회성)는 개인으로 둠.
-    const isRecurringBusiness = serviceName.includes('정기')
-    const customerType = isRecurringBusiness ? 'company' : 'individual'
+    // 정기청소·업무공간(사무실·상가·공장·병원 등) 문의는 사업자(법인)로 고정 —
+    // 실측상 정기청소=100% 회사 고객이고, 업무공간 청소도 사실상 전부 법인 계약.
+    // 그 외(에어컨·입주·이사 등 1회성 주거)는 개인으로 둠.
+    const BUSINESS_SERVICE_KEYWORDS = ['정기', '사무실', '오피스', '상가', '공장', '병원', '의원']
+    const isBusinessCustomer = BUSINESS_SERVICE_KEYWORDS.some((kw) => serviceName.includes(kw))
+    const customerType = isBusinessCustomer ? 'company' : 'individual'
 
     // 같은 번호 리드가 있으면 갱신, 없으면 신규 (AI 상담 리드와 동일 규칙)
     const { data: existing } = await db
@@ -834,14 +836,14 @@ export const createConsultationRequestAction = publicAction
       .maybeSingle()
 
     if (existing) {
-      // 기존 리드가 정기청소로 문의하면 법인으로 승격(개인→법인만, 반대로 내리지 않음)
+      // 기존 리드가 정기청소·업무공간으로 문의하면 법인으로 승격(개인→법인만, 반대로 내리지 않음)
       await db
         .from('leads')
         .update({
           company_name: name,
           notes,
           updated_at: new Date().toISOString(),
-          ...(isRecurringBusiness ? { customer_type: 'company' } : {}),
+          ...(isBusinessCustomer ? { customer_type: 'company' } : {}),
         })
         .eq('id', existing.id)
     } else {
