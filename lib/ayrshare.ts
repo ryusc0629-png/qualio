@@ -70,6 +70,8 @@ export async function getSocialAnalytics(): Promise<ChannelStat[] | null> {
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ platforms: PLATFORMS }),
       cache: 'no-store',
+      // 외부 API가 느리거나 응답이 없어도 화면이 무한정 걸리지 않도록 10초 제한
+      signal: AbortSignal.timeout(10_000),
     })
     if (!res.ok) return null
     const data = (await res.json()) as RawResponse
