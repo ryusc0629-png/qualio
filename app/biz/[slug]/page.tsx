@@ -171,6 +171,11 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
   // 견적폼 링크에 유입 채널(ch) 전달 — 광고 유입이 견적 단계까지 추적되도록
   const quoteHref = ch ? `/q/${business.id}?ch=${encodeURIComponent(ch)}` : `/q/${business.id}`
 
+  // 랜딩 안의 CTA는 별도 견적페이지(/q)로 보내지 않고 히어로 인라인 폼으로 스크롤 — 입력 경로를 하나로 통일.
+  // 폼이 없는 신규 업체(서비스 미등록)만 기존 견적페이지로 폴백.
+  const hasHeroForm = !!(formServices && formServices.length > 0)
+  const primaryCta = hasHeroForm ? '#lead-form' : quoteHref
+
   // YouTube URL → embed ID 추출
   function getYoutubeId(url: string | null): string | null {
     if (!url) return null
@@ -289,7 +294,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <div className="min-h-screen bg-white" style={themeStyle}>
+      <div className="min-h-screen bg-white scroll-smooth" style={themeStyle}>
 
         {/* ── 헤더 ── */}
         <header className="border-b bg-white/95 backdrop-blur sticky top-0 z-20">
@@ -328,11 +333,11 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
                   {business.phone}
                 </a>
               )}
-              <Link href={quoteHref}>
+              <a href={primaryCta}>
                 <Button size="sm" className="gap-1.5">
                   무료 견적 받기
                 </Button>
-              </Link>
+              </a>
             </div>
           </div>
         </header>
@@ -416,11 +421,13 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
             {/* 주 CTA — 히어로 인라인 견적 폼 (광고 유입이 페이지 이동 없이 바로 연락처 남김).
                 서비스가 없으면(신규 업체 등) 기존 견적폼 링크로 폴백 */}
             {formServices && formServices.length > 0 ? (
-              <HeroLeadForm
-                businessId={business.id}
-                businessName={business.name}
-                services={formServices}
-              />
+              <div id="lead-form" className="scroll-mt-24">
+                <HeroLeadForm
+                  businessId={business.id}
+                  businessName={business.name}
+                  services={formServices}
+                />
+              </div>
             ) : (
               <div className="flex justify-center">
                 <Link href={quoteHref} className="w-full sm:w-auto">
@@ -518,12 +525,12 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
 
             <div className="text-center mt-10">
               <p className="text-muted-foreground text-sm mb-5">걱정 마세요. {business.name}이 도와드릴게요.</p>
-              <Link href={quoteHref}>
+              <a href={primaryCta}>
                 <Button size="lg" className="gap-2 h-12 px-8 rounded-xl font-bold">
                   지금 무료로 견적 받기
                   <ArrowRight className="h-4 w-4" />
                 </Button>
-              </Link>
+              </a>
             </div>
           </div>
           </FadeIn>
@@ -557,12 +564,12 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
             </div>
 
             <div className="text-center mt-12">
-              <Link href={quoteHref}>
+              <a href={primaryCta}>
                 <Button size="lg" className="gap-2 h-12 px-8 rounded-xl font-bold">
                   지금 바로 시작하기
                   <ArrowRight className="h-4 w-4" />
                 </Button>
-              </Link>
+              </a>
             </div>
           </div>
           </FadeIn>
@@ -583,7 +590,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
                 </p>
               </div>
 
-              <ServiceList services={services} quoteUrl={quoteHref} />
+              <ServiceList services={services} quoteUrl={primaryCta} />
             </div>
             </FadeIn>
           </section>
@@ -854,12 +861,12 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
               서비스 정보를 입력하면 즉시 3가지 견적을 확인할 수 있어요.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-              <Link href={quoteHref}>
+              <a href={primaryCta}>
                 <Button size="lg" className="h-12 px-8 text-base font-bold gap-2 shadow-lg shadow-primary/30">
                   <Star className="h-4 w-4" />
                   무료 견적 받기
                 </Button>
-              </Link>
+              </a>
               {business.phone && (
                 <a href={`tel:${business.phone}`}>
                   <Button size="lg" variant="outline" className="h-12 px-8 text-base bg-transparent border-white/50 text-white hover:bg-white/10 hover:text-white gap-2">
@@ -914,12 +921,12 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
             전화 문의
           </a>
         )}
-        <Link href={quoteHref} className={business.phone ? 'flex-1' : 'w-full'}>
+        <a href={primaryCta} className={business.phone ? 'flex-1' : 'w-full'}>
           <Button className="w-full h-12 text-sm font-bold gap-2">
             <Star className="h-4 w-4" />
             무료 견적 받기
           </Button>
-        </Link>
+        </a>
       </div>
     </>
   )

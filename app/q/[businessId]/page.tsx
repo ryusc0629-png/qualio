@@ -1,5 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { notFound, permanentRedirect } from 'next/navigation'
+import { notFound, permanentRedirect, redirect } from 'next/navigation'
 import { QuoteForm } from './quote-form'
 import { MetaPixel } from '@/components/meta-pixel'
 import { trackPageView } from '@/lib/utils/track-page-view'
@@ -24,8 +24,8 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
 
   // UUID면 id로, 아니면 slug로 조회
   const { data: business } = await (UUID_RE.test(idOrSlug)
-    ? db.from('businesses').select('id, name, description').eq('id', idOrSlug)
-    : db.from('businesses').select('id, name, description').eq('slug', idOrSlug)
+    ? db.from('businesses').select('id, name, description, slug').eq('id', idOrSlug)
+    : db.from('businesses').select('id, name, description, slug').eq('slug', idOrSlug)
   ).maybeSingle()
 
   if (!business) {
@@ -42,6 +42,22 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
   }
 
   const businessId = business.id
+
+  // 자동견적 계산기는 은퇴 — 전환은 홈 히어로의 문의 폼이 담당(계산기는 UX 문제로 문의를 못 만들었음).
+  // 서비스가 등록돼 폼이 뜨는 업체는 랜딩 폼(#lead-form)으로 흡수. 유입 채널(ch)은 그대로 이어붙여 추적 유지.
+  // (문자·알림톡이 링크하는 견적 결과/보고서/영수증 등 /q 하위 다른 페이지는 그대로 유지됨)
+  if (business.slug) {
+    const { count: serviceCount } = await db
+      .from('service_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .eq('is_active', true)
+      .is('deleted_at', null)
+    if (serviceCount && serviceCount > 0) {
+      const chQuery = ch ? `?ch=${encodeURIComponent(ch)}` : ''
+      redirect(`/biz/${business.slug}${chQuery}#lead-form`)
+    }
+  }
 
   // 견적폼 노출 서비스 목록 + 후기 요약(사회적 증거) 조회 + 방문 추적 (병렬)
   const [{ data: services }, reviewSummary] = await Promise.all([
