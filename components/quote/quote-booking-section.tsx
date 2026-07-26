@@ -179,6 +179,7 @@ export function QuoteBookingSection({
                   <p className="font-extrabold text-base text-[#1A1A1A]">{tier.label}</p>
                 </div>
                 <div className="text-right">
+                  <p className="text-[10px] font-semibold text-zinc-400 leading-none mb-0.5">예상 금액</p>
                   <p className="text-xl font-black text-[#1A1A1A] tabular-nums">
                     {tier.price.toLocaleString('ko-KR')}원
                   </p>
@@ -231,7 +232,7 @@ export function QuoteBookingSection({
           <p className="font-bold text-sm text-[#1A1A1A]">
             {selectedTierData.label} 플랜
             <span className="ml-2 text-primary tabular-nums">
-              {selectedTierData.price.toLocaleString('ko-KR')}원
+              예상 {selectedTierData.price.toLocaleString('ko-KR')}원
             </span>
           </p>
 

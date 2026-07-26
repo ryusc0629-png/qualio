@@ -28,16 +28,18 @@ function buildQuoteSmsText(p: QuoteSentParams): string {
   const priceBlock = singlePrice
     ? `· 예상 견적: ${won(p.goodPrice)}`
     : [
-        `· 기본가: ${won(p.goodPrice)}`,
-        `· 추천가: ${won(p.betterPrice)}`,
+        `· 기본: ${won(p.goodPrice)}`,
+        `· 추천: ${won(p.betterPrice)}`,
         `· 프리미엄: ${won(p.bestPrice)}`,
       ].join('\n')
 
   return [
-    `[${p.businessName}] ${p.customerName}님, 요청하신 견적입니다.`,
+    `[${p.businessName}] ${p.customerName}님, 요청하신 예상 견적입니다.`,
     ``,
     `· 서비스: ${p.cleaningType}${spaceLabel}`,
     priceBlock,
+    ``,
+    `※ 현장 상황에 따라 최종 금액은 방문 후 확정돼요.`,
     ``,
     `자세히 보기 👇`,
     p.quoteUrl,
