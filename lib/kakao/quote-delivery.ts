@@ -26,7 +26,7 @@ function buildQuoteSmsText(p: QuoteSentParams): string {
   // 플랜 미설정 업체는 3단계 가격이 모두 같으므로 단일 금액으로 안내
   const singlePrice = p.betterPrice === p.goodPrice && p.bestPrice === p.goodPrice
   const priceBlock = singlePrice
-    ? `· 예상 견적: ${won(p.goodPrice)}`
+    ? `· 맞춤 견적: ${won(p.goodPrice)}`
     : [
         `· 기본: ${won(p.goodPrice)}`,
         `· 추천: ${won(p.betterPrice)}`,
@@ -34,12 +34,12 @@ function buildQuoteSmsText(p: QuoteSentParams): string {
       ].join('\n')
 
   return [
-    `[${p.businessName}] ${p.customerName}님, 요청하신 예상 견적입니다.`,
+    `[${p.businessName}] ${p.customerName}님, 요청하신 맞춤 견적입니다.`,
     ``,
     `· 서비스: ${p.cleaningType}${spaceLabel}`,
     priceBlock,
     ``,
-    `※ 현장 상황에 따라 최종 금액은 방문 후 확정돼요.`,
+    `※ 추가 서비스나 오염이 심한 경우 추가 비용이 발생할 수 있어요.`,
     ``,
     `자세히 보기 👇`,
     p.quoteUrl,

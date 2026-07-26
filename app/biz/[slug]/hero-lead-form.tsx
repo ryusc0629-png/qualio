@@ -139,10 +139,10 @@ export function HeroLeadForm({ businessId, businessName, services }: Props) {
         <CheckCircle2 className="h-12 w-12 text-primary mx-auto" />
         {result === 'quote' ? (
           <>
-            <h3 className="text-lg font-bold text-slate-900">예상 견적을 문자로 보내드렸어요! 📩</h3>
+            <h3 className="text-lg font-bold text-slate-900">맞춤 견적을 문자로 보내드렸어요! 📩</h3>
             <p className="text-sm text-slate-600">
-              {name.trim()}님 연락처로 예상 견적을 보냈어요.<br />
-              문자를 확인해 주세요. (최종 금액은 방문 후 확정돼요)
+              {name.trim()}님 연락처로 맞춤 견적을 보냈어요.<br />
+              문자를 확인해 주세요.
             </p>
           </>
         ) : (

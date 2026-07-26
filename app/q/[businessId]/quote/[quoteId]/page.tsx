@@ -199,7 +199,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
           </div>
 
           <p className="text-[11px] text-zinc-500 mt-3 leading-relaxed break-keep">
-            ※ 위 금액은 <span className="font-semibold text-zinc-700">예상 견적</span>이에요. 현장 오염도·실측 면적에 따라 최종 금액이 달라질 수 있으며, 변동사항이 생기면 방문 시 현장 담당자가 안내드립니다.
+            ※ <span className="font-semibold text-zinc-700">맞춤 견적</span> 기준 금액이에요. 추가 서비스를 요청하시거나 오염이 아주 심한 경우에만 추가 비용이 생길 수 있어요.
           </p>
         </div>
 
