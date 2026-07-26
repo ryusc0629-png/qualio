@@ -5,7 +5,8 @@ import { createSafeActionClient } from 'next-safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { generateTierDescriptions } from '@/lib/ai/tier-descriptions'
-import { sendBookingConfirmAlimtalk, sendQuoteAlimtalk } from '@/lib/kakao/alimtalk'
+import { sendBookingConfirmAlimtalk } from '@/lib/kakao/alimtalk'
+import { sendQuoteToCustomer } from '@/lib/kakao/quote-delivery'
 import { sendPushToBusiness } from '@/lib/push/web-push'
 import { detectBundleReview } from '@/lib/utils/booking-review'
 
@@ -310,7 +311,8 @@ export const calculateAndCreateQuoteAction = publicAction
 
         if (business) {
           const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
-          await sendQuoteAlimtalk({
+          // 카카오 알림톡 우선 → 미설정·실패 시 문자(SMS)로 폴백
+          await sendQuoteToCustomer({
             customerPhone: parsedInput.customer_phone,
             customerName:  parsedInput.customer_name,
             businessName:  business.name,
@@ -321,7 +323,7 @@ export const calculateAndCreateQuoteAction = publicAction
             goodPrice,
             betterPrice: betterPrice ?? goodPrice,
             bestPrice: bestPrice ?? goodPrice,
-            quoteUrl: `${appUrl}/q/${parsedInput.business_id}`,
+            quoteUrl: `${appUrl}/q/${parsedInput.business_id}/quote/${quote.id}`,
           })
         }
       } catch (e) {

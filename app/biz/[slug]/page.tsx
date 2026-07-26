@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { FadeIn } from '@/components/ui/fade-in'
 import { ServiceList } from './service-list'
+import { HeroLeadForm, type HeroFormService } from './hero-lead-form'
 import { buildBrandStyle, toBrandSettings } from '@/lib/brand'
 import { trackPageView } from '@/lib/utils/track-page-view'
 import { buildAreaServed } from '@/lib/address/parse-region'
@@ -153,6 +154,16 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
     // 브랜드 홈 방문 추적 (병렬)
     trackPageView(db, business.id, 'brand_home', ch),
   ])
+
+  // 히어로 인라인 견적 폼용 서비스 — 자동견적 가능 여부 판별에 필요한 유형 컬럼 포함(/q 견적폼과 동일 형태)
+  const { data: formServices } = await db
+    .from('service_items')
+    .select('id, name, base_price, unit, ac_type_prices, unit_prices, unit_variants' as never)
+    .eq('business_id', business.id)
+    .eq('is_active', true)
+    .is('deleted_at', null)
+    .order('sort_order')
+    .order('created_at') as unknown as { data: HeroFormService[] | null }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
   const faqs = (business.seo_faqs as unknown as FaqItem[]) ?? []
@@ -402,17 +413,30 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
               </div>
             )}
 
-            {/* CTA 버튼 — 모바일 풀 너비 */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-              <Link href={quoteHref} className="w-full sm:w-auto">
-                <Button size="lg" className="w-full sm:w-auto gap-2 h-14 px-8 text-base font-bold shadow-xl shadow-primary/25 rounded-2xl">
-                  <Star className="h-4 w-4" />
-                  무료 견적 받기
-                </Button>
-              </Link>
+            {/* 주 CTA — 히어로 인라인 견적 폼 (광고 유입이 페이지 이동 없이 바로 연락처 남김).
+                서비스가 없으면(신규 업체 등) 기존 견적폼 링크로 폴백 */}
+            {formServices && formServices.length > 0 ? (
+              <HeroLeadForm
+                businessId={business.id}
+                businessName={business.name}
+                services={formServices}
+              />
+            ) : (
+              <div className="flex justify-center">
+                <Link href={quoteHref} className="w-full sm:w-auto">
+                  <Button size="lg" className="w-full sm:w-auto gap-2 h-14 px-8 text-base font-bold shadow-xl shadow-primary/25 rounded-2xl">
+                    <Star className="h-4 w-4" />
+                    무료 견적 받기
+                  </Button>
+                </Link>
+              </div>
+            )}
+
+            {/* 보조 CTA — 전화·네이버 플레이스 */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mt-4">
               {business.phone && (
                 <a href={`tel:${business.phone}`} className="w-full sm:w-auto">
-                  <Button size="lg" variant="outline" className={`w-full sm:w-auto h-14 px-7 text-base bg-transparent gap-2 rounded-2xl ${hero.outlineBtn}`}>
+                  <Button size="lg" variant="outline" className={`w-full sm:w-auto h-12 px-6 text-sm bg-transparent gap-2 rounded-2xl ${hero.outlineBtn}`}>
                     <Phone className="h-4 w-4" />
                     전화 문의
                   </Button>
@@ -420,7 +444,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
               )}
               {business.naver_place_url && (
                 <a href={business.naver_place_url} target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto">
-                  <Button size="lg" variant="outline" className={`w-full sm:w-auto h-14 px-7 text-base bg-transparent rounded-2xl ${hero.outlineBtn}`}>
+                  <Button size="lg" variant="outline" className={`w-full sm:w-auto h-12 px-6 text-sm bg-transparent rounded-2xl ${hero.outlineBtn}`}>
                     네이버 플레이스
                   </Button>
                 </a>

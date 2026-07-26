@@ -44,8 +44,10 @@ export interface QuoteSentParams {
   quoteUrl: string
 }
 
-// 견적 발송 알림톡 — 가격 확인 직후 고객에게 발송
-export async function sendQuoteAlimtalk(params: QuoteSentParams): Promise<void> {
+// 견적 발송 알림톡 — 가격 확인 직후 고객에게 발송.
+// 반환값: 실제 카카오 알림톡을 발송했으면 true, 템플릿 미설정·발송 실패면 false.
+// (false면 호출부에서 문자(SMS)로 폴백한다)
+export async function sendQuoteAlimtalk(params: QuoteSentParams): Promise<boolean> {
   const apiKey     = process.env.SOLAPI_API_KEY
   const apiSecret  = process.env.SOLAPI_API_SECRET
   const sender     = process.env.SOLAPI_SENDER_PHONE
@@ -53,8 +55,8 @@ export async function sendQuoteAlimtalk(params: QuoteSentParams): Promise<void> 
   const pfId       = process.env.SOLAPI_KAKAO_PF_ID
 
   if (!apiKey || !apiSecret || !sender || !templateId || !pfId) {
-    console.warn('[Alimtalk] QUOTE_SENT 템플릿 미설정 — 발송 생략')
-    return
+    console.warn('[Alimtalk] QUOTE_SENT 템플릿 미설정 — 알림톡 생략(문자로 폴백)')
+    return false
   }
 
   const service = new SolapiMessageService(apiKey, apiSecret)
@@ -65,27 +67,33 @@ export async function sendQuoteAlimtalk(params: QuoteSentParams): Promise<void> 
       })
     : '미정'
 
-  await service.sendOne({
-    to:   params.customerPhone,
-    from: sender,
-    type: 'ATA',
-    kakaoOptions: {
-      pfId,
-      templateId,
-      variables: {
-        '#{고객명}':     params.customerName,
-        '#{업체명}':     params.businessName,
-        '#{서비스명}':   params.cleaningType,
-        '#{평수}':       params.spaceSize ? ` ${params.spaceSize}평` : '',
-        '#{희망날짜}':   preferredDateKr,
-        '#{기본가}':     params.goodPrice.toLocaleString('ko-KR'),
-        '#{추천가}':     params.betterPrice.toLocaleString('ko-KR'),
-        '#{프리미엄가}': params.bestPrice.toLocaleString('ko-KR'),
-        '#{업체연락처}': params.businessPhone ?? '업체에 문의해 주세요',
-        '#{예약링크}':   params.quoteUrl,
+  try {
+    await service.sendOne({
+      to:   params.customerPhone,
+      from: sender,
+      type: 'ATA',
+      kakaoOptions: {
+        pfId,
+        templateId,
+        variables: {
+          '#{고객명}':     params.customerName,
+          '#{업체명}':     params.businessName,
+          '#{서비스명}':   params.cleaningType,
+          '#{평수}':       params.spaceSize ? ` ${params.spaceSize}평` : '',
+          '#{희망날짜}':   preferredDateKr,
+          '#{기본가}':     params.goodPrice.toLocaleString('ko-KR'),
+          '#{추천가}':     params.betterPrice.toLocaleString('ko-KR'),
+          '#{프리미엄가}': params.bestPrice.toLocaleString('ko-KR'),
+          '#{업체연락처}': params.businessPhone ?? '업체에 문의해 주세요',
+          '#{예약링크}':   params.quoteUrl,
+        },
       },
-    },
-  })
+    })
+    return true
+  } catch (e) {
+    console.error('[Alimtalk] 견적 알림톡 발송 실패(문자로 폴백):', e)
+    return false
+  }
 }
 
 // 일정 변경 알림톡 파라미터
