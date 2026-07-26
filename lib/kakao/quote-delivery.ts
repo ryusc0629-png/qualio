@@ -1,51 +1,12 @@
 import { sendQuoteAlimtalk, type QuoteSentParams } from './alimtalk'
-import { sendSms } from './sms'
 
-// 견적을 고객에게 전달 — 카카오 알림톡 우선, 미설정·실패 시 문자(SMS/LMS)로 폴백.
-// 알림톡 템플릿(SOLAPI_TEMPLATE_ID_QUOTE_SENT)이 승인·설정되면 코드 수정 없이 자동으로 카톡 발송된다.
-// 반환값으로 실제 사용된 채널을 알려준다('none'이면 발신 설정 자체가 없어 아무것도 못 보냄).
+// 견적을 고객에게 전달 — 카카오 알림톡으로만 발송한다.
+// 알림톡 템플릿(SOLAPI_TEMPLATE_ID_QUOTE_SENT)이 승인·설정되면 코드 수정 없이 자동으로 카톡이 나간다.
+// ⚠️ 문자(SMS) 폴백은 의도적으로 제거함 — 발신번호(사장님 개인번호)가 고객에게 노출되기 때문.
+//    따라서 알림톡이 아직 심사 중이거나 실패하면 아무것도 보내지 않는다('none').
 export async function sendQuoteToCustomer(
   params: QuoteSentParams,
-): Promise<'kakao' | 'sms' | 'none'> {
+): Promise<'kakao' | 'none'> {
   const sentByKakao = await sendQuoteAlimtalk(params)
-  if (sentByKakao) return 'kakao'
-
-  const sentBySms = await sendSms({
-    to:      params.customerPhone,
-    subject: `${params.businessName} 견적 안내`,
-    text:    buildQuoteSmsText(params),
-  })
-  return sentBySms ? 'sms' : 'none'
-}
-
-// 문자용 견적 본문 — 알림톡과 동일 정보를 순수 텍스트로 구성
-function buildQuoteSmsText(p: QuoteSentParams): string {
-  const won = (n: number) => `${n.toLocaleString('ko-KR')}원`
-  const spaceLabel = p.spaceSize ? ` ${p.spaceSize}평` : ''
-
-  // 플랜 미설정 업체는 3단계 가격이 모두 같으므로 단일 금액으로 안내
-  const singlePrice = p.betterPrice === p.goodPrice && p.bestPrice === p.goodPrice
-  const priceBlock = singlePrice
-    ? `· 맞춤 견적: ${won(p.goodPrice)}`
-    : [
-        `· 기본: ${won(p.goodPrice)}`,
-        `· 추천: ${won(p.betterPrice)}`,
-        `· 프리미엄: ${won(p.bestPrice)}`,
-      ].join('\n')
-
-  return [
-    `[${p.businessName}] ${p.customerName}님, 요청하신 맞춤 견적입니다.`,
-    ``,
-    `· 서비스: ${p.cleaningType}${spaceLabel}`,
-    priceBlock,
-    ``,
-    `※ 추가 서비스나 오염이 심한 경우 추가 비용이 발생할 수 있어요.`,
-    ``,
-    `자세히 보기 👇`,
-    p.quoteUrl,
-    p.businessPhone ? `문의: ${p.businessPhone}` : null,
-  ]
-    .filter((line): line is string => line !== null)
-    .join('\n')
-    .trim()
+  return sentByKakao ? 'kakao' : 'none'
 }

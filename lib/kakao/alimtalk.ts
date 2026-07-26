@@ -46,7 +46,7 @@ export interface QuoteSentParams {
 
 // 견적 발송 알림톡 — 가격 확인 직후 고객에게 발송.
 // 반환값: 실제 카카오 알림톡을 발송했으면 true, 템플릿 미설정·발송 실패면 false.
-// (false면 호출부에서 문자(SMS)로 폴백한다)
+// (false면 호출부에서 아무것도 보내지 않는다 — 문자(SMS) 폴백은 발신번호 노출 때문에 제거됨)
 export async function sendQuoteAlimtalk(params: QuoteSentParams): Promise<boolean> {
   const apiKey     = process.env.SOLAPI_API_KEY
   const apiSecret  = process.env.SOLAPI_API_SECRET
@@ -55,7 +55,7 @@ export async function sendQuoteAlimtalk(params: QuoteSentParams): Promise<boolea
   const pfId       = process.env.SOLAPI_KAKAO_PF_ID
 
   if (!apiKey || !apiSecret || !sender || !templateId || !pfId) {
-    console.warn('[Alimtalk] QUOTE_SENT 템플릿 미설정 — 알림톡 생략(문자로 폴백)')
+    console.warn('[Alimtalk] QUOTE_SENT 템플릿 미설정 — 알림톡 생략(문자 폴백 없음, 미발송)')
     return false
   }
 
@@ -91,7 +91,7 @@ export async function sendQuoteAlimtalk(params: QuoteSentParams): Promise<boolea
     })
     return true
   } catch (e) {
-    console.error('[Alimtalk] 견적 알림톡 발송 실패(문자로 폴백):', e)
+    console.error('[Alimtalk] 견적 알림톡 발송 실패(문자 폴백 없음, 미발송):', e)
     return false
   }
 }
