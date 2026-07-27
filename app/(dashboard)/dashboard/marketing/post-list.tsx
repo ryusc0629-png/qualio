@@ -8,7 +8,6 @@ import { dismissReelAction } from '@/lib/actions/reports'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Sparkles, Plus, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send, SkipForward, Save, ChevronUp } from 'lucide-react'
-import { PostEditor } from './post-editor'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import type { PostPlan } from '@/lib/geo/post-plan'
 import { copyRichText, markdownToPlain } from '@/lib/utils/rich-text'
@@ -451,8 +450,6 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
 
   useEffect(() => { scrollToToday() }, [scrollToToday])
 
-  const [showEditor, setShowEditor] = useState(false)
-  const [editingPost, setEditingPost] = useState<Post | null>(null)
   const [suggestions, setSuggestions] = useState<TopicSuggestion[] | null>(initialSuggestions)
   // 오늘 이미 발행 완료된 경우 버튼 초기 상태를 완료로 설정
   const [publishResult, setPublishResult] = useState<{ published: number; message?: string } | null>(
@@ -753,13 +750,12 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                         {p.summary && <p className="text-xs text-muted-foreground truncate">{p.summary}</p>}
                       </div>
                       <div className="flex gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setEditingPost({ id: p.id, slug: '', title: p.title, content: p.content ?? '', summary: p.summary, published: false, ai_generated: true, published_at: '', image_url: null, image_urls: null, naver_title: null, naver_content: null, naver_tags: null, daangn_title: null, daangn_content: null, instagram_content: null, instagram_hashtags: null, post_type: 'portfolio', before_image_urls: p.before_image_urls, after_image_urls: p.after_image_urls })}
+                        <a
+                          href={`/dashboard/marketing/write?id=${p.id}`}
                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 transition-colors"
                         >
                           <Pencil className="h-3.5 w-3.5" /><span className="hidden sm:inline">수정</span>
-                        </button>
+                        </a>
                         <button
                           type="button"
                           disabled={isApproving || isRejecting}
@@ -1014,8 +1010,10 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
               : <><Play className="h-4 w-4" />지금 발행</>
           }
         </Button>
-        <Button variant="outline" onClick={() => { setShowEditor(!showEditor); setEditingPost(null) }} className="gap-2">
-          <Plus className="h-4 w-4" />직접 작성
+        <Button asChild variant="outline" className="gap-2">
+          <a href="/dashboard/marketing/write">
+            <Plus className="h-4 w-4" />직접 작성
+          </a>
         </Button>
       </div>
 
@@ -1024,16 +1022,6 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
         <p className="text-xs text-muted-foreground -mt-1">
           전문가 데이터로 글과 SNS 원고까지 만드는 중이라 최대 1~2분 걸려요. 새로고침하거나 다시 누르지 말고 잠시만 기다려 주세요.
         </p>
-      )}
-
-      {/* 직접 작성 패널 */}
-      {showEditor && !editingPost && (
-        <PostEditor businessId={businessId} onClose={() => setShowEditor(false)} onSaved={() => { setShowEditor(false); window.location.reload() }} />
-      )}
-
-      {/* 수정 패널 — 목록에 없는 글(시공 사례 초안 등)은 여기서 편집 */}
-      {editingPost && !posts.some((p) => p.id === editingPost.id) && (
-        <PostEditor businessId={businessId} post={editingPost} onClose={() => setEditingPost(null)} onSaved={() => { setEditingPost(null); window.location.reload() }} />
       )}
 
       {/* ── 발행된 포스트 목록 ── */}
@@ -1095,50 +1083,19 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                         <Button size="icon" variant="ghost" className="h-8 w-8"><ExternalLink className="h-3.5 w-3.5" /></Button>
                       </a>
                     )}
-                    <button
-                      type="button"
-                      onClick={() => setEditingPost(post)}
+                    <a
+                      href={`/dashboard/marketing/write?id=${post.id}`}
                       className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
                       title="제목·내용 수정하기"
                     >
                       <Pencil className="h-3.5 w-3.5" />수정
-                    </button>
+                    </a>
                     <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" disabled={isDeleting}
                       onClick={() => { if (confirm('포스트를 삭제할까요?')) deletePost({ id: post.id }) }}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
                   </div>
-                  {editingPost?.id === post.id && (
-                    <div className="px-5 py-4 bg-slate-50/70 border-t">
-                      <PostEditor
-                        businessId={businessId}
-                        post={editingPost}
-                        onClose={() => {
-                          const postId = editingPost?.id
-                          setEditingPost(null)
-                          if (postId && postListRef.current) {
-                            const container = postListRef.current
-                            requestAnimationFrame(() => {
-                              const el = document.getElementById(`post-${postId}`)
-                              if (el) container.scrollTop = el.offsetTop - container.offsetTop
-                            })
-                          }
-                        }}
-                        onSaved={() => {
-                          const postId = editingPost?.id
-                          setEditingPost(null)
-                          // 해시로 위치 저장 후 새로고침 → 해당 게시물로 스크롤
-                          if (postId) {
-                            window.location.hash = `post-${postId}`
-                            window.location.reload()
-                          } else {
-                            window.location.reload()
-                          }
-                        }}
-                      />
-                    </div>
-                  )}
                 </div>
               )
             })}
