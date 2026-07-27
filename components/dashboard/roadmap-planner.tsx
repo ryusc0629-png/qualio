@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { MapPin, Phone, Navigation, Users, ClipboardList, Map, Upload, Sparkles } from 'lucide-react'
+import { MapPin, Phone, Navigation, Users, ClipboardList, Copy, Upload, Sparkles } from 'lucide-react'
 
 export interface LeadOption {
   id: string
@@ -129,32 +129,6 @@ function csvToPasteText(raw: string): { text: string; count: number } {
     .map((r) => [r.name, r.address, r.phone].filter(Boolean).join(', '))
     .join('\n')
   return { text, count: rows.length }
-}
-
-// 카카오맵 구간 길안내 URL — 실제 한국 도로 내비 됨(구글은 한국 자동차 길안내 불가).
-// 카카오는 경유지(vp~vp5) 최대 5개 → 한 링크에 출발+경유5+도착 = 최대 7곳. 초과분은 겹쳐서 분할.
-// 각 구간이 몇 번째~몇 번째 방문지인지(from~to)도 함께 반환해 버튼에 표시.
-function kakaoRouteUrls(stops: GeoStop[]): { url: string; from: number; to: number }[] {
-  if (stops.length === 0) return []
-  if (stops.length === 1) {
-    const s = stops[0]
-    return [{ url: `https://map.kakao.com/link/to/${encodeURIComponent(s.name)},${s.lat},${s.lng}`, from: 1, to: 1 }]
-  }
-  const out: { url: string; from: number; to: number }[] = []
-  const CHUNK = 7 // 출발 + 경유 최대5 + 도착
-  for (let i = 0; i < stops.length - 1; i += CHUNK - 1) {
-    const seg = stops.slice(i, i + CHUNK)
-    const sp = seg[0]
-    const ep = seg[seg.length - 1]
-    const mids = seg.slice(1, -1) // 경유지 (최대 5)
-    const params = [`sp=${sp.lat},${sp.lng}`, `ep=${ep.lat},${ep.lng}`]
-    mids.forEach((m, idx) => {
-      params.push(`${idx === 0 ? 'vp' : `vp${idx + 1}`}=${m.lat},${m.lng}`)
-    })
-    params.push('by=CAR')
-    out.push({ url: `kakaomap://route?${params.join('&')}`, from: i + 1, to: i + seg.length })
-  }
-  return out
 }
 
 // 티맵 한 목적지 안내 (goalname/goalx/goaly 형식은 iOS·Android 모두 동작)
@@ -287,6 +261,20 @@ export function RoadmapPlanner({
     saveRoadmapAction({ savedAt: now, summary: label, result: data }).then((res) => {
       if (res?.serverError) toast.error(res.serverError)
     })
+  }
+
+  // 하루 코스의 주소를 순서대로 복사 (출발지를 맨 앞에). 메모·내비에 붙여넣기 쉽게 한 줄에 하나씩.
+  const copyCourseAddresses = async (course: Course) => {
+    const lines = [
+      ...(start.trim() ? [start.trim()] : []),
+      ...course.stops.map((s) => s.address).filter((a) => a.trim()),
+    ]
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'))
+      toast.success(`주소 ${lines.length}개를 복사했어요`)
+    } catch {
+      toast.error('복사를 못 했어요. 다시 눌러주세요')
+    }
   }
 
   // 저장된 코스 지우기 (서버에서도 삭제 → 모든 기기에서 사라짐)
@@ -580,7 +568,6 @@ export function RoadmapPlanner({
           </div>
 
           {result.courses.map((course, ci) => {
-            const urls = kakaoRouteUrls(course.stops)
             return (
               <div key={ci} className="border rounded-xl p-4 space-y-3 bg-white shadow-sm">
                 <div className="flex items-center justify-between">
@@ -590,25 +577,17 @@ export function RoadmapPlanner({
                   </span>
                 </div>
 
-                {urls.map((u, ui) => (
-                  <a
-                    key={ui}
-                    href={u.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-2 h-11 rounded-lg bg-primary text-primary-foreground text-sm font-semibold"
-                  >
-                    <Map className="h-4 w-4" />
-                    {urls.length > 1
-                      ? `카카오맵 길안내 (${u.from}~${u.to}번째)`
-                      : '카카오맵으로 전체 길안내'}
-                  </a>
-                ))}
-                {urls.length > 1 && (
-                  <p className="text-xs text-muted-foreground text-center -mt-1">
-                    카카오맵은 한 번에 7곳까지 안내돼서, 하루 코스를 구간별로 나눠 열어드려요.
-                  </p>
-                )}
+                <button
+                  type="button"
+                  onClick={() => copyCourseAddresses(course)}
+                  className="flex w-full items-center justify-center gap-2 h-11 rounded-lg bg-primary text-primary-foreground text-sm font-semibold"
+                >
+                  <Copy className="h-4 w-4" />
+                  이 코스 주소 복사
+                </button>
+                <p className="text-xs text-muted-foreground text-center -mt-1">
+                  출발지부터 순서대로 복사돼요. 카카오맵·티맵에 붙여넣어 쓰세요.
+                </p>
 
                 <div className="divide-y">
                   {course.stops.map((s, si) => (
