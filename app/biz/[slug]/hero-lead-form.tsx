@@ -239,12 +239,12 @@ export function HeroLeadForm({ businessId, businessName, services }: Props) {
           {isPending ? (
             <><Loader2 className="h-4 w-4 animate-spin" />보내는 중...</>
           ) : (
-            <><Send className="h-4 w-4" />{consultMode ? '상담 신청하기' : '무료 견적 문자로 받기'}</>
+            <><Send className="h-4 w-4" />{consultMode ? '상담 신청하기' : '무료 견적 신청하기'}</>
           )}
         </Button>
 
         <p className="text-center text-[11px] text-slate-400">
-          입력하신 연락처로 {consultMode ? '상담 안내를' : '견적을'} 보내드려요
+          입력하신 연락처로 {businessName}에서 바로 연락드려요
         </p>
       </form>
 

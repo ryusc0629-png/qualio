@@ -418,26 +418,17 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
               </div>
             )}
 
-            {/* 주 CTA — 히어로 인라인 견적 폼 (광고 유입이 페이지 이동 없이 바로 연락처 남김).
+            {/* 주 CTA — 히어로에선 버튼만 노출하고, 실제 견적 폼은 페이지 최하단(#lead-form)에 배치.
+                설득 콘텐츠(후기·환불보장·특장점)를 먼저 보여준 뒤 폼으로 유도 — 버튼 클릭 시 최하단 폼으로 스크롤.
                 서비스가 없으면(신규 업체 등) 기존 견적폼 링크로 폴백 */}
-            {formServices && formServices.length > 0 ? (
-              <div id="lead-form" className="scroll-mt-24">
-                <HeroLeadForm
-                  businessId={business.id}
-                  businessName={business.name}
-                  services={formServices}
-                />
-              </div>
-            ) : (
-              <div className="flex justify-center">
-                <Link href={quoteHref} className="w-full sm:w-auto">
-                  <Button size="lg" className="w-full sm:w-auto gap-2 h-14 px-8 text-base font-bold shadow-xl shadow-primary/25 rounded-2xl">
-                    <Star className="h-4 w-4" />
-                    무료 견적 받기
-                  </Button>
-                </Link>
-              </div>
-            )}
+            <div className="flex justify-center">
+              <a href={primaryCta} className="w-full sm:w-auto">
+                <Button size="lg" className="w-full sm:w-auto gap-2 h-14 px-8 text-base font-bold shadow-xl shadow-primary/25 rounded-2xl">
+                  <Star className="h-4 w-4" />
+                  무료 견적 받기
+                </Button>
+              </a>
+            </div>
 
             {/* 보조 CTA — 전화·네이버 플레이스 */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mt-4">
@@ -837,8 +828,9 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
           </section>
         )}
 
-        {/* ── 하단 CTA ── */}
-        <section className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-20 relative overflow-hidden">
+        {/* ── 하단 CTA — 실제 견적 폼(설득 콘텐츠를 다 본 뒤 이 자리에서 바로 신청).
+            히어로·헤더·서비스목록·모바일 고정바의 모든 CTA가 이 #lead-form으로 스크롤됨 ── */}
+        <section id="lead-form" className="scroll-mt-24 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-20 relative overflow-hidden">
           {/* 배경 장식 */}
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-primary/15 via-transparent to-transparent" />
           <div
@@ -860,22 +852,35 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
             <p className="text-slate-300 text-lg">
               서비스 정보를 입력하면 즉시 3가지 견적을 확인할 수 있어요.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-              <a href={primaryCta}>
-                <Button size="lg" className="h-12 px-8 text-base font-bold gap-2 shadow-lg shadow-primary/30">
-                  <Star className="h-4 w-4" />
-                  무료 견적 받기
-                </Button>
-              </a>
-              {business.phone && (
-                <a href={`tel:${business.phone}`}>
-                  <Button size="lg" variant="outline" className="h-12 px-8 text-base bg-transparent border-white/50 text-white hover:bg-white/10 hover:text-white gap-2">
-                    <Phone className="h-4 w-4" />
-                    {business.phone}
+
+            {/* 실제 견적 폼 — 설득 콘텐츠를 다 본 방문자가 위로 안 올라가고 이 자리에서 바로 신청.
+                서비스가 없으면(신규 업체 등) 기존 견적폼 링크로 폴백 */}
+            {formServices && formServices.length > 0 ? (
+              <div className="pt-2">
+                <HeroLeadForm
+                  businessId={business.id}
+                  businessName={business.name}
+                  services={formServices}
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+                <a href={quoteHref}>
+                  <Button size="lg" className="h-12 px-8 text-base font-bold gap-2 shadow-lg shadow-primary/30">
+                    <Star className="h-4 w-4" />
+                    무료 견적 받기
                   </Button>
                 </a>
-              )}
-            </div>
+                {business.phone && (
+                  <a href={`tel:${business.phone}`}>
+                    <Button size="lg" variant="outline" className="h-12 px-8 text-base bg-transparent border-white/50 text-white hover:bg-white/10 hover:text-white gap-2">
+                      <Phone className="h-4 w-4" />
+                      {business.phone}
+                    </Button>
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         </section>
 
