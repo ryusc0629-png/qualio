@@ -1,6 +1,11 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { RoadmapPlanner, type LeadOption } from '@/components/dashboard/roadmap-planner'
+import {
+  RoadmapPlanner,
+  type LeadOption,
+  type SavedRoadmap,
+} from '@/components/dashboard/roadmap-planner'
 import { Route } from 'lucide-react'
 
 export default async function RoadmapPage() {
@@ -26,8 +31,8 @@ export default async function RoadmapPage() {
     args?: Record<string, unknown>,
   ) => Promise<{ data: unknown }>
 
-  // 주소가 있는 리드 + 기본 출발지(업체 주소) + 상가정보가 적재된 시도 목록
-  const [leadsRes, bizRes, sidoRes] = await Promise.all([
+  // 주소가 있는 리드 + 기본 출발지(업체 주소) + 상가정보가 적재된 시도 목록 + 저장된 코스
+  const [leadsRes, bizRes, sidoRes, savedRes] = await Promise.all([
     db
       .from('leads')
       .select('id, company_name, address, phone')
@@ -36,7 +41,23 @@ export default async function RoadmapPage() {
       .order('created_at', { ascending: false }),
     db.from('businesses').select('address').eq('id', businessId).maybeSingle(),
     rpc('prospect_sido_list'),
+    // database.ts 타입에 아직 없는 테이블 → 느슨한 클라이언트로 접근
+    (createServiceClient() as unknown as SupabaseClient)
+      .from('business_roadmaps')
+      .select('summary, result, saved_at')
+      .eq('business_id', businessId)
+      .maybeSingle() as unknown as Promise<{
+      data: { summary: string; result: SavedRoadmap['result']; saved_at: string } | null
+    }>,
   ])
+
+  const savedRoadmap: SavedRoadmap | null = savedRes.data
+    ? {
+        summary: savedRes.data.summary,
+        result: savedRes.data.result,
+        savedAt: new Date(savedRes.data.saved_at).getTime(),
+      }
+    : null
 
   const sidoOptions = ((sidoRes.data ?? []) as { sido: string }[]).map((r) => r.sido)
 
@@ -65,6 +86,7 @@ export default async function RoadmapPage() {
         leads={leads}
         defaultStart={bizRes.data?.address ?? ''}
         sidoOptions={sidoOptions}
+        savedRoadmap={savedRoadmap}
       />
     </div>
   )

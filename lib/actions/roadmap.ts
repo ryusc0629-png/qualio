@@ -1,6 +1,7 @@
 'use server'
 
 import { z } from 'zod'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { action } from '@/lib/safe-action'
 import {
@@ -77,6 +78,68 @@ export const buildRoadmapAction = action
       totalKm: courses.reduce((s, c) => s + c.km, 0),
     }
   })
+
+// ── 짠 코스 서버 저장 (폰·PC 어느 기기에서든 같은 코스가 보이도록) ──────────────
+// 업체당 마지막으로 짠 코스 1개만 유지(다시 짜면 덮어씀). database.ts 타입엔 아직 없어 as never 캐스팅.
+
+const geoStopSchema = z.object({
+  name: z.string(),
+  address: z.string(),
+  phone: z.string().optional(),
+  lat: z.number(),
+  lng: z.number(),
+})
+
+const roadmapResultSchema = z.object({
+  courses: z.array(z.object({ stops: z.array(geoStopSchema), km: z.number() })),
+  geocodedCount: z.number(),
+  failedCount: z.number(),
+  failedNames: z.array(z.string()),
+  totalKm: z.number(),
+  capped: z.boolean().optional(),
+})
+
+const saveRoadmapSchema = z.object({
+  summary: z.string(),
+  savedAt: z.number(),
+  result: roadmapResultSchema,
+})
+
+// database.ts 타입에 아직 없는 테이블 → 느슨한 클라이언트로 접근(다른 신규 테이블과 동일 패턴)
+function looseDb(): SupabaseClient {
+  return createServiceClient() as unknown as SupabaseClient
+}
+
+export const saveRoadmapAction = action.schema(saveRoadmapSchema).action(async ({ parsedInput }) => {
+  const { businessId } = await requireAuth()
+  const { error } = await looseDb()
+    .from('business_roadmaps')
+    .upsert(
+      {
+        business_id: businessId,
+        summary: parsedInput.summary,
+        result: parsedInput.result,
+        saved_at: new Date(parsedInput.savedAt).toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'business_id' },
+    )
+  if (error) {
+    console.error('[Roadmap] 저장 오류:', error)
+    throw new Error('[APP] 코스를 저장 못 했어요. 다시 시도해주세요')
+  }
+  return { success: true }
+})
+
+export const clearRoadmapAction = action.schema(z.object({})).action(async () => {
+  const { businessId } = await requireAuth()
+  const { error } = await looseDb().from('business_roadmaps').delete().eq('business_id', businessId)
+  if (error) {
+    console.error('[Roadmap] 삭제 오류:', error)
+    throw new Error('[APP] 코스를 지우지 못했어요. 다시 시도해주세요')
+  }
+  return { success: true }
+})
 
 // ── 지역+업종 자동 명단 (공공데이터 상가정보 기반) ──────────────
 

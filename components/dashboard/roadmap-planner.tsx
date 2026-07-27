@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import {
   buildRoadmapAction,
   buildDirectoryRoadmapAction,
   listSigunguAction,
+  saveRoadmapAction,
+  clearRoadmapAction,
 } from '@/lib/actions/roadmap'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -42,10 +44,18 @@ interface RoadmapResult {
   capped?: boolean
 }
 
+// 서버(DB)에 저장되는 코스 한 벌 — 페이지에서 로드해 내려줌
+export interface SavedRoadmap {
+  savedAt: number
+  summary: string
+  result: RoadmapResult
+}
+
 interface RoadmapPlannerProps {
   leads: LeadOption[]
   defaultStart: string
   sidoOptions: string[]
+  savedRoadmap: SavedRoadmap | null
 }
 
 // 붙여넣은 텍스트를 한 줄씩 (상호 / 주소 / 전화)로 파싱. 탭·쉼표 구분 모두 허용.
@@ -192,59 +202,21 @@ const TARGET_CATEGORIES = ['인테리어', '병의원', '학원', '공장']
 
 type Mode = 'directory' | 'leads' | 'paste'
 
-// 짜둔 코스를 브라우저에 저장 → 페이지를 떠났다 와도, 새로고침해도 그대로 유지
-const STORAGE_KEY = 'qualio_roadmap_v1'
-
-interface SavedRoadmap {
-  savedAt: number
-  summary: string
-  result: RoadmapResult
-}
-
-function loadSavedRoadmap(): SavedRoadmap | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as SavedRoadmap) : null
-  } catch {
-    return null
-  }
-}
-
-function persistRoadmap(v: SavedRoadmap) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(v))
-  } catch {
-    // 용량 초과 등은 조용히 무시 (저장 실패해도 기능은 정상)
-  }
-}
-
-function removeSavedRoadmap() {
-  try {
-    localStorage.removeItem(STORAGE_KEY)
-  } catch {
-    // noop
-  }
-}
-
-export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlannerProps) {
+export function RoadmapPlanner({
+  leads,
+  defaultStart,
+  sidoOptions,
+  savedRoadmap,
+}: RoadmapPlannerProps) {
   const [mode, setMode] = useState<Mode>(sidoOptions.length > 0 ? 'directory' : leads.length > 0 ? 'leads' : 'paste')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [paste, setPaste] = useState('')
   const [start, setStart] = useState(defaultStart)
-  const [result, setResult] = useState<RoadmapResult | null>(null)
-  const [savedAt, setSavedAt] = useState<number | null>(null)
-  const [summary, setSummary] = useState('')
+  // 서버에 저장된 코스로 초기화 → 폰·PC 어느 기기에서 열어도 같은 코스가 보임
+  const [result, setResult] = useState<RoadmapResult | null>(savedRoadmap?.result ?? null)
+  const [savedAt, setSavedAt] = useState<number | null>(savedRoadmap?.savedAt ?? null)
+  const [summary, setSummary] = useState(savedRoadmap?.summary ?? '')
   const [isPending, startTransition] = useTransition()
-
-  // 저장해둔 코스가 있으면 복원 (페이지 재진입·새로고침해도 유지)
-  useEffect(() => {
-    const saved = loadSavedRoadmap()
-    if (saved) {
-      setResult(saved.result)
-      setSavedAt(saved.savedAt)
-      setSummary(saved.summary)
-    }
-  }, [])
 
   // 지역+업종 자동 모드 상태
   const [dirSido, setDirSido] = useState('')
@@ -310,16 +282,21 @@ export function RoadmapPlanner({ leads, defaultStart, sidoOptions }: RoadmapPlan
     setResult(data)
     setSummary(label)
     setSavedAt(now)
-    persistRoadmap({ savedAt: now, summary: label, result: data })
     toast.success(`${data.courses.length}개 코스로 짰어요!`)
+    // 서버에 저장 → 다른 기기(폰↔PC)에서도 그대로 보임. 저장 실패해도 화면 결과는 유지.
+    saveRoadmapAction({ savedAt: now, summary: label, result: data }).then((res) => {
+      if (res?.serverError) toast.error(res.serverError)
+    })
   }
 
-  // 저장된 코스 지우기 (다시 짜기 전까지는 유지되므로, 지울 때만 사라짐)
+  // 저장된 코스 지우기 (서버에서도 삭제 → 모든 기기에서 사라짐)
   const clearSavedRoadmap = () => {
     setResult(null)
     setSavedAt(null)
     setSummary('')
-    removeSavedRoadmap()
+    clearRoadmapAction({}).then((res) => {
+      if (res?.serverError) toast.error(res.serverError)
+    })
   }
 
   const handleBuild = () => {
