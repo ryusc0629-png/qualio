@@ -400,40 +400,87 @@ async function runAnalytics() {
 }
 
 // ── 8. 네이버 초안 → 노션 자동 푸시 (NOTION_TOKEN 있을 때) ────
+// 노션에 '서식이 살아있는' 블록으로 넣는다(코드블록 원문 X). 그래야 네이버 블로그에
+// 붙여넣을 때 소제목=인용구, 강조=굵게로 서식이 적용되고 ##·** 기호가 literal로 안 남는다.
 function nHeading(t) { return { object: 'block', type: 'heading_3', heading_3: { rich_text: [{ type: 'text', text: { content: t } }] } } }
-function nCode(text) { // 노션 rich_text는 항목당 2000자 제한 → 분할
-  const chunks = []
-  for (let i = 0; i < text.length; i += 1900) chunks.push(text.slice(i, i + 1900))
-  return { object: 'block', type: 'code', code: { language: 'plain text', rich_text: chunks.map(c => ({ type: 'text', text: { content: c } })) } }
+
+// 인라인 마크다운(**볼드**, [텍스트](url)) → 노션 rich_text 배열
+function nRich(line) {
+  const out = []
+  const re = /\*\*([^*]+)\*\*|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g
+  let last = 0, m
+  while ((m = re.exec(line))) {
+    if (m.index > last) out.push({ type: 'text', text: { content: line.slice(last, m.index) } })
+    if (m[1] !== undefined) out.push({ type: 'text', text: { content: m[1] }, annotations: { bold: true } })
+    else out.push({ type: 'text', text: { content: m[2], link: { url: m[3] } } })
+    last = re.lastIndex
+  }
+  if (last < line.length) out.push({ type: 'text', text: { content: line.slice(last) } })
+  const rich = out.length ? out : [{ type: 'text', text: { content: line || ' ' } }]
+  // 노션 rich_text 항목당 2000자 제한 방어
+  return rich.map(r => r.text.content.length > 1900
+    ? { ...r, text: { ...r.text, content: r.text.content.slice(0, 1900) } } : r)
 }
-async function pushToNotion(outDir) {
+const nBlock = (type, line) => ({ object: 'block', type, [type]: { rich_text: nRich(line) } })
+
+// 마크다운 본문 → 노션 블록 배열. 소제목(##/###)·인용(>)은 네이버 '인용구'(quote)로 매핑.
+function mdToBlocks(text) {
+  const blocks = []
+  for (const raw of String(text || '').split('\n')) {
+    const line = raw.replace(/\s+$/, '')
+    if (!line.trim()) continue
+    if (/^([-*_])\1{2,}$/.test(line.trim())) { blocks.push({ object: 'block', type: 'divider', divider: {} }); continue }
+    const h = line.match(/^#{1,3}\s+(.*)$/)          // ## 소제목 → 인용구
+    if (h) { blocks.push(nBlock('quote', h[1])); continue }
+    const q = line.match(/^>\s?(.*)$/)               // > 인용 → 인용구
+    if (q) { blocks.push(nBlock('quote', q[1])); continue }
+    const b = line.match(/^[-*]\s+(.*)$/)            // - 항목 → 불릿
+    if (b) { blocks.push(nBlock('bulleted_list_item', b[1])); continue }
+    blocks.push(nBlock('paragraph', line))
+  }
+  return blocks
+}
+
+async function pushToNotion(outDir, data) {
   let tok
   try { tok = loadEnv('NOTION_TOKEN') } catch { return } // 토큰 없으면 조용히 스킵
-  const files = [
-    ['네이버 블로그', '01_네이버블로그.txt'],
-    ['카페 — 아프니까 사장이다', '02_카페_아프니까사장이다.txt'],
-    ['카페 — 청소업의 모든 것', '03_카페_청소업의모든것.txt'],
-    ['카페 — 청소동우회', '04_카페_청소동우회.txt'],
+  const channels = [
+    ['네이버 블로그', data.blog],
+    ['카페 — 아프니까 사장이다', data.cafe?.afup],
+    ['카페 — 청소업의 모든 것', data.cafe?.all],
+    ['카페 — 청소동우회', data.cafe?.dongwoo],
   ]
   const children = []
-  for (const [h, f] of files) {
-    const p = path.join(outDir, f)
-    if (existsSync(p)) children.push(nHeading(h), nCode(readFileSync(p, 'utf8')))
+  for (const [label, post] of channels) {
+    if (!post || (!post.title && !post.body)) continue
+    children.push(nHeading(label))
+    if (post.title) children.push(nBlock('paragraph', `**${post.title}**`)) // 제목은 굵게
+    children.push(...mdToBlocks(post.body))
+    children.push({ object: 'block', type: 'divider', divider: {} })
   }
   if (!children.length) return
-  const body = {
-    parent: { page_id: NOTION_DRAFTS_PARENT },
-    icon: { type: 'emoji', emoji: '📝' },
-    properties: { title: { title: [{ text: { content: `EP.${ep} 네이버 초안` } }] } },
-    children,
-  }
+
+  // 노션 children은 요청당 최대 100블록 → 첫 100개로 생성 후 나머지 append
   const r = await fetch('https://api.notion.com/v1/pages', {
     method: 'POST',
     headers: { Authorization: `Bearer ${tok}`, 'Notion-Version': '2022-06-28', 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      parent: { page_id: NOTION_DRAFTS_PARENT },
+      icon: { type: 'emoji', emoji: '📝' },
+      properties: { title: { title: [{ text: { content: `EP.${ep} 네이버 초안` } }] } },
+      children: children.slice(0, 100),
+    }),
   })
   const j = await r.json()
-  console.log(r.status === 200 ? `📝 네이버 초안 → 노션: ${j.url}` : `⚠️ 노션 푸시 실패: ${r.status} ${JSON.stringify(j).slice(0, 120)}`)
+  if (r.status !== 200) { console.log(`⚠️ 노션 푸시 실패: ${r.status} ${JSON.stringify(j).slice(0, 120)}`); return }
+  for (let i = 100; i < children.length; i += 100) {
+    await fetch(`https://api.notion.com/v1/blocks/${j.id}/children`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${tok}`, 'Notion-Version': '2022-06-28', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ children: children.slice(i, i + 100) }),
+    })
+  }
+  console.log(`📝 네이버 초안 → 노션: ${j.url}`)
 }
 
 // ── 실행 ─────────────────────────────────────────────────────
@@ -449,7 +496,7 @@ async function pushToNotion(outDir) {
     console.log(`\n✅ 완료 → ${outDir}`)
     console.log('   채널별 .txt + 배포팩.md(노션 붙여넣기용) 생성됨')
     console.log(`   숏폼 클립 컷: ${flags.clips ? '생성됨' : '건너뜀(--clips 로 켜기)'}`)
-    await pushToNotion(outDir) // 네이버 초안 → 노션(토큰 있을 때)
+    await pushToNotion(outDir, data) // 네이버 초안 → 노션(토큰 있을 때)
     if (flags.publish) await publishClips(data, outDir)
   } catch (e) {
     console.error(`\n❌ ${e.message}`)
