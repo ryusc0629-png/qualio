@@ -1,6 +1,6 @@
 import 'server-only'
 import type { createServiceClient } from '@/lib/supabase/server'
-import { generateTopicSuggestions, generateGeoTitles, type TopicSuggestion } from '@/lib/ai/geo-content'
+import { generateTopicSuggestions, generateGeoTitles, isKeywordishTitle, keywordToCopyTitle, type TopicSuggestion } from '@/lib/ai/geo-content'
 import { deriveKeyword } from '@/lib/geo/weak-topics'
 
 // 자동 발행 '계획표'를 월 1회 확정해 DB(businesses.post_plan)에 고정 저장한다.
@@ -127,6 +127,15 @@ async function buildMonthlyPlan(db: Db, businessId: string, ctx: PlanContext): P
     })
     weakIdx.forEach((i, k) => { if (titles[k]) slots[i].label = titles[k] })
   }
+
+  // 5) 최종 안전망 — 어떤 경로(약점 슬롯·월간 추천)로 만들어졌든, 라벨이 여전히
+  //    '키워드 나열'(예: "울산 청소업체 추천")이면 결정적 카피 제목으로 교정한다.
+  //    계획은 월 1회 고정 저장되므로 여기서 맨 키워드가 새어나가면 한 달간 박힌다.
+  slots.forEach((s, i) => {
+    if (isKeywordishTitle(s.label, s.topic)) {
+      s.label = keywordToCopyTitle({ question: s.topic, keyword: s.keyword }, i)
+    }
+  })
 
   return { month: ctx.month, slots }
 }

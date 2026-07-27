@@ -340,9 +340,49 @@ imagePrompts: 이 포스트에 넣을 서로 다른 사진 3장의 영문 장면
   throw new Error('[APP] 포스트 생성에 실패했습니다')
 }
 
+// 검색용 키워드/질문에 붙는 홍보성 꼬리말(추천·잘하는 곳 등)을 떼어 순수 핵심어만 남긴다.
+// 예: "울산 청소업체 추천" → "울산 청소업체", "울산 인테리어 후 청소 잘하는 곳" → "울산 인테리어 후 청소"
+function stripPromoSuffix(s: string): string {
+  return s
+    .trim()
+    .replace(/\s*(추천|잘\s*하는\s*곳|제일\s*잘하는\s*곳|잘하는\s*업체|좋은\s*곳|좋은\s*업체|베스트|best|순위|가격|비용|후기)\s*$/i, '')
+    .trim()
+}
+
+// '카피가 아니라 키워드 나열'로 보이는 제목인지 판별(안전망 트리거).
+// 홍보성 꼬리말로 끝나거나(예: "울산 정기청소 추천"), 원문 검색어와 사실상 동일하면 true.
+export function isKeywordishTitle(title: string, source?: string): boolean {
+  const t = (title ?? '').trim()
+  if (!t) return true
+  if (source && t === source.trim()) return true
+  // 문장 부호(물음표·쉼표·— 등)가 전혀 없고 홍보성 꼬리말로 끝나면 키워드 나열로 간주
+  const endsPromo = /(추천|잘\s*하는\s*곳|좋은\s*곳|좋은\s*업체|베스트|best|순위)\s*$/i.test(t)
+  const hasSentenceMark = /[?？,，·—…!]/.test(t)
+  return endsPromo && !hasSentenceMark
+}
+
+// AI 없이도 항상 '문장형 카피'를 보장하는 결정적(deterministic) 폴백.
+// 키워드는 앞에 그대로 살려 검색·AI 노출을 지키고, 뒤에 클릭 유도 문구를 붙인다.
+// seed(발행 순서 등)로 패턴을 돌려 고객사·날짜마다 제목이 겹치지 않게 한다.
+export function keywordToCopyTitle(input: { question: string; keyword: string | null }, seed = 0): string {
+  const base = stripPromoSuffix(input.keyword || input.question) || (input.keyword || input.question).trim()
+  const patterns = [
+    (b: string) => `${b}, 어디에 맡겨야 후회 없을까?`,
+    (b: string) => `${b}, 실패 없이 고르는 3가지 기준`,
+    (b: string) => `${b} 맡기기 전 꼭 확인해야 할 것`,
+    (b: string) => `${b}, 전문 업체가 필요한 이유`,
+    (b: string) => `${b}, 이렇게 준비하면 끝까지 깔끔합니다`,
+    (b: string) => `${b}, 견적 전에 알아두면 좋은 점`,
+  ]
+  const idx = ((seed % patterns.length) + patterns.length) % patterns.length
+  return patterns[idx](base)
+}
+
 // 공략할 GEO 검색어(약점 질문) 여러 개를 받아, 각각 카피라이팅된 지역 롱테일 제목으로 변환.
 // 계획표 확정 시 1회만 호출(제목만 생성이라 저렴) → 달력·발행이 같은 좋은 제목을 쓴다.
-// 실패하거나 키 없으면 원문 질문을 그대로 반환(안전 폴백).
+// ★ 실패·키 없음·키워드형 응답이어도 절대 '맨 키워드'를 그대로 내보내지 않는다.
+//   결정적 카피 폴백(keywordToCopyTitle)으로 항상 문장형 제목을 보장한다.
+//   (계획표는 월 1회 고정 저장되므로, 여기서 한 번 나쁜 제목이 나오면 한 달간 박힌다 → 폴백 품질이 중요)
 export async function generateGeoTitles(input: {
   businessName: string
   address: string | null
@@ -350,11 +390,12 @@ export async function generateGeoTitles(input: {
   targets: { question: string; keyword: string | null }[]
   model?: string
 }): Promise<string[]> {
-  const fallback = input.targets.map((t) => t.question)
   if (input.targets.length === 0) return []
+  // 어떤 실패 경로든 최종적으로 이 카피 폴백으로 수렴 (맨 키워드 금지)
+  const copyFallback = input.targets.map((t, i) => keywordToCopyTitle(t, i))
 
   const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) return fallback
+  if (!apiKey) return copyFallback
 
   const region = input.address ? input.address.split(' ').slice(0, 2).join(' ') : null
 
@@ -363,8 +404,9 @@ export async function generateGeoTitles(input: {
 
 규칙:
 - 각 제목 50자 이내, 질문형 또는 정보형 (예: "울산 정기청소, 어떤 주기와 업체를 선택해야 할까?")
-- 해당 검색어의 핵심 키워드(지역명 포함)를 제목에 자연스럽게 넣을 것${region ? ` — 지역: ${region}` : ''}
-- 딱딱한 키워드 나열 금지. 카피라이팅된 문장형 제목으로.
+- 해당 검색어의 핵심 키워드(지역명 포함)를 제목 앞부분에 자연스럽게 넣을 것${region ? ` — 지역: ${region}` : ''}
+- 딱딱한 키워드 나열 금지. 반드시 카피라이팅된 문장형 제목으로.
+- 절대 "~추천", "~잘하는 곳", "~순위" 처럼 검색어를 그대로 나열하며 끝내지 말 것(저품질).
 - 서로 다른 제목으로(중복·유사 금지)
 
 공략 검색어 (순서 유지):
@@ -373,27 +415,31 @@ ${input.targets.map((t, i) => `${i + 1}. ${t.question}${t.keyword ? ` (핵심 �
 반드시 아래 JSON 배열로만 응답 (입력과 개수·순서 동일):
 ["제목1", "제목2", ...]`
 
-  try {
-    const client = new Anthropic({ apiKey })
-    const message = await client.messages.create({
-      model: input.model ?? 'claude-haiku-4-5-20251001',
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: prompt }],
-    })
-    const text = message.content[0].type === 'text' ? message.content[0].text : ''
-    const match = text.match(/\[[\s\S]*\]/)
-    if (!match) return fallback
-    const titles = JSON.parse(match[0]) as unknown
-    if (!Array.isArray(titles)) return fallback
-    // 개수가 안 맞으면 부족분은 원문으로 채워 안전하게
-    return input.targets.map((t, i) => {
-      const v = titles[i]
-      return typeof v === 'string' && v.trim() ? v.trim() : t.question
-    })
-  } catch (e) {
-    console.error('[AI] GEO 제목 생성 실패, 원문 사용:', e instanceof Error ? e.message : e)
-    return fallback
+  const client = new Anthropic({ apiKey })
+  // 일시적 오류로 한 달치 제목이 통째로 폴백되는 걸 줄이기 위해 1회 재시도
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const message = await client.messages.create({
+        model: input.model ?? 'claude-haiku-4-5-20251001',
+        max_tokens: 1500,
+        messages: [{ role: 'user', content: prompt }],
+      })
+      const text = message.content[0].type === 'text' ? message.content[0].text : ''
+      const match = text.match(/\[[\s\S]*\]/)
+      if (!match) continue
+      const titles = JSON.parse(match[0]) as unknown
+      if (!Array.isArray(titles)) continue
+      // 각 항목: 유효한 문장형이면 채택, 비었거나 키워드형이면 카피 폴백으로 교정
+      return input.targets.map((t, i) => {
+        const v = titles[i]
+        if (typeof v === 'string' && v.trim() && !isKeywordishTitle(v, t.question)) return v.trim()
+        return keywordToCopyTitle(t, i)
+      })
+    } catch (e) {
+      console.error(`[AI] GEO 제목 생성 실패(시도 ${attempt + 1}/2):`, e instanceof Error ? e.message : e)
+    }
   }
+  return copyFallback
 }
 
 export interface TopicSuggestion {
