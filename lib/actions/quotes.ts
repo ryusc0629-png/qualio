@@ -9,6 +9,7 @@ import { sendBookingConfirmAlimtalk } from '@/lib/kakao/alimtalk'
 import { sendQuoteToCustomer } from '@/lib/kakao/quote-delivery'
 import { sendPushToBusiness } from '@/lib/push/web-push'
 import { detectBundleReview } from '@/lib/utils/booking-review'
+import { isBusinessService } from '@/lib/utils'
 
 // 공개 폼용 액션 클라이언트 (인증 불필요)
 const publicAction = createSafeActionClient({
@@ -38,6 +39,7 @@ const calculateAndCreateQuoteSchema = z.object({
   extra_notes: z.string().max(500).optional(),
   customer_name: z.string().optional(),
   customer_phone: z.string().optional(),
+  company_name: z.string().optional(), // B2B 서비스에서 고객이 입력한 회사명
   // 에어컨 유형별 선택 수량 { wall_standard: 2, stand_standard: 1 }
   ac_selections: z.record(z.string(), z.number().min(0)).optional(),
   // 항목별 선택 수량 { "화장실": 2, "주방": 1 }
@@ -259,6 +261,14 @@ export const calculateAndCreateQuoteAction = publicAction
       ])
     }
 
+    // B2B 서비스에서 받은 회사명은 quotes에 전용 컬럼이 없어 메모(extra_notes) 앞에 기록 —
+    // 대표가 견적 목록·상세에서 어느 회사 문의인지 바로 알 수 있게 한다.
+    const companyInput = parsedInput.company_name?.trim()
+    const mergedExtraNotes = [
+      companyInput ? `[회사명] ${companyInput}` : null,
+      parsedInput.extra_notes?.trim() || null,
+    ].filter(Boolean).join('\n') || null
+
     // 견적 생성
     const { data: quote, error } = await db
       .from('quotes')
@@ -267,7 +277,7 @@ export const calculateAndCreateQuoteAction = publicAction
         cleaning_type: service.name,
         space_size:    parsedInput.space_size ?? null,
         preferred_date: parsedInput.preferred_date ?? null,
-        extra_notes:   parsedInput.extra_notes ?? null,
+        extra_notes:   mergedExtraNotes,
         good_price:    goodPrice,
         better_price:  betterPrice,
         best_price:    bestPrice,
@@ -334,7 +344,7 @@ export const calculateAndCreateQuoteAction = publicAction
       // 알림 클릭 시 견적 대기 목록(개인 고객 탭)으로 바로 이동
       await sendPushToBusiness(parsedInput.business_id, {
         title: '새 견적이 들어왔어요! 🧾',
-        body: `${parsedInput.customer_name}님 · ${service.name}${parsedInput.space_size ? ` · ${parsedInput.space_size}평` : ''}`,
+        body: `${companyInput ? `${companyInput}(${parsedInput.customer_name}님)` : `${parsedInput.customer_name}님`} · ${service.name}${parsedInput.space_size ? ` · ${parsedInput.space_size}평` : ''}`,
         url: '/dashboard/clients?type=individual',
         tag: `quote-${quote.id}`,
       })
@@ -800,6 +810,7 @@ const consultationRequestSchema = z.object({
   service_id:     z.string().uuid(),
   customer_name:  z.string().min(1),
   customer_phone: z.string().min(8),
+  company_name:   z.string().optional(), // B2B 서비스에서 고객이 입력한 회사명
   notes:          z.string().optional(),
 })
 
@@ -817,15 +828,21 @@ export const createConsultationRequestAction = publicAction
 
     const phone = parsedInput.customer_phone.replace(/[^0-9]/g, '')
     const name = parsedInput.customer_name.trim()
+    const companyInput = parsedInput.company_name?.trim()
     const noteText = parsedInput.notes?.trim()
     const notes = `[현장견적 상담요청] ${serviceName}${noteText ? ` · ${noteText}` : ''}`
 
     // 정기청소·업무공간(사무실·상가·공장·병원 등) 문의는 사업자(법인)로 고정 —
     // 실측상 정기청소=100% 회사 고객이고, 업무공간 청소도 사실상 전부 법인 계약.
     // 그 외(에어컨·입주·이사 등 1회성 주거)는 개인으로 둠.
-    const BUSINESS_SERVICE_KEYWORDS = ['정기', '사무실', '오피스', '상가', '공장', '병원', '의원']
-    const isBusinessCustomer = BUSINESS_SERVICE_KEYWORDS.some((kw) => serviceName.includes(kw))
+    const isBusinessCustomer = isBusinessService(serviceName)
     const customerType = isBusinessCustomer ? 'company' : 'individual'
+
+    // 법인 리드는 회사명(company_name)·담당자(contact_name)를 나눠서 저장한다.
+    // 고객이 회사명을 적었으면 그대로, 안 적었으면 담당자 이름으로 대체(기존 동작 유지).
+    // 개인 고객은 예전처럼 company_name 자리에 이름을 넣고 담당자는 비운다.
+    const leadCompanyName = isBusinessCustomer ? (companyInput || name) : name
+    const leadContactName = isBusinessCustomer ? name : null
 
     // 같은 번호 리드가 있으면 갱신, 없으면 신규 (AI 상담 리드와 동일 규칙)
     const { data: existing } = await db
@@ -844,18 +861,19 @@ export const createConsultationRequestAction = publicAction
       await db
         .from('leads')
         .update({
-          company_name: name,
+          company_name: leadCompanyName,
           notes,
           updated_at: new Date().toISOString(),
-          ...(isBusinessCustomer ? { customer_type: 'company' } : {}),
+          // 법인 문의면 담당자명도 함께 갱신(개인 문의는 담당자 칸 건드리지 않음)
+          ...(isBusinessCustomer ? { customer_type: 'company', contact_name: leadContactName } : {}),
           ...(isDormant ? { status: 'new' } : {}),
         })
         .eq('id', existing.id)
     } else {
       await db.from('leads').insert({
         business_id:   parsedInput.business_id,
-        company_name:  name,
-        contact_name:  null,
+        company_name:  leadCompanyName,
+        contact_name:  leadContactName,
         phone,
         customer_type: customerType,
         status:        'new',
@@ -867,7 +885,8 @@ export const createConsultationRequestAction = publicAction
     try {
       await sendPushToBusiness(parsedInput.business_id, {
         title: '현장 견적 상담 요청! 📞',
-        body: `${name}님 · ${phone} · ${serviceName}`,
+        // 회사명이 있으면 "회사명(담당자님)"으로 표시해 대표가 누구인지 바로 알게 함
+        body: `${isBusinessCustomer && companyInput ? `${companyInput}(${name}님)` : `${name}님`} · ${phone} · ${serviceName}`,
         url: '/dashboard/crm',
         tag: `consult-${phone}`,
       })

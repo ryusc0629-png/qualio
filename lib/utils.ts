@@ -13,6 +13,16 @@ export function isAcService(name: string): boolean {
   return AC_VARIANTS.test(name)
 }
 
+// ── B2B(법인·업무공간) 성격의 서비스 판별 ──
+// 정기청소·업무공간(사무실·상가·공장·병원 등)은 실측상 사실상 전부 법인 계약이라
+// 고객 견적/상담 폼에서 회사명을 함께 받는다. 그 외(에어컨·입주·이사 등 1회성 주거)는 개인.
+// 폼(클라이언트)과 서버 액션이 같은 기준을 쓰도록 이 한 곳에서만 정의한다.
+export const BUSINESS_SERVICE_KEYWORDS = ['정기', '사무실', '오피스', '상가', '공장', '병원', '의원'] as const
+
+export function isBusinessService(name: string): boolean {
+  return BUSINESS_SERVICE_KEYWORDS.some((kw) => name.includes(kw))
+}
+
 // ── 유형·대수(변형)로 견적 내는 가전 청소 프리셋 ──
 // 서비스명에 키워드가 들어가면 등록/수정/고객 견적에서 "유형별 단가 + 대수 선택" UI가 자동으로 뜬다.
 // 냉장고·세탁기 등 새 가전은 여기 한 항목만 추가하면 전체 흐름이 동작한다(에어컨과 동일 파이프라인 재사용).

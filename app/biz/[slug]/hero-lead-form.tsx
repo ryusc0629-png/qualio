@@ -10,6 +10,7 @@ import { QuoteChatWidget } from '@/components/quote/quote-chat-widget'
 import { calculateAndCreateQuoteAction, createConsultationRequestAction } from '@/lib/actions/quotes'
 import { trackFunnel } from '@/lib/utils/track-funnel'
 import { trackMetaPixel } from '@/lib/utils/meta-pixel'
+import { isBusinessService } from '@/lib/utils'
 
 // 랜딩 히어로에 넣는 서비스 정보 — 견적 자동계산 가능 여부 판별에 필요한 최소 필드
 export interface HeroFormService {
@@ -46,6 +47,7 @@ function isConsultType(s: HeroFormService): boolean {
 export function HeroLeadForm({ businessId, businessName, services }: Props) {
   const [serviceId, setServiceId] = useState(services[0]?.id ?? '')
   const [size, setSize] = useState('')
+  const [company, setCompany] = useState('')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [result, setResult] = useState<'quote' | 'consult' | null>(null)
@@ -56,6 +58,8 @@ export function HeroLeadForm({ businessId, businessName, services }: Props) {
   const consultMode = selected ? isConsultType(selected) : false
   const sizeMode = selected ? needsSize(selected) : false
   const sizeLabel = selected?.unit === '개' ? '개수' : '평수'
+  // 정기청소·업무공간(사무실·상가·공장·병원 등) B2B 서비스는 회사명을 함께 받는다
+  const businessMode = selected ? isBusinessService(selected.name) : false
 
   const quoteAction = useAction(calculateAndCreateQuoteAction, {
     onSuccess: () => {
@@ -88,6 +92,7 @@ export function HeroLeadForm({ businessId, businessName, services }: Props) {
   function reset() {
     setResult(null)
     setSize('')
+    setCompany('')
     setName('')
     setPhone('')
     startedRef.current = false
@@ -100,7 +105,12 @@ export function HeroLeadForm({ businessId, businessName, services }: Props) {
       return
     }
     const trimmedName = name.trim()
+    const trimmedCompany = company.trim()
     const phoneDigits = phone.replace(/[^0-9]/g, '')
+    if (businessMode && trimmedCompany.length < 1) {
+      toast.error('회사명(상호)을 입력해주세요')
+      return
+    }
     if (trimmedName.length < 2) {
       toast.error('성함을 입력해주세요')
       return
@@ -120,6 +130,7 @@ export function HeroLeadForm({ businessId, businessName, services }: Props) {
         service_id: selected.id,
         customer_name: trimmedName,
         customer_phone: phoneDigits,
+        company_name: businessMode ? trimmedCompany : undefined,
       })
     } else {
       quoteAction.execute({
@@ -128,6 +139,7 @@ export function HeroLeadForm({ businessId, businessName, services }: Props) {
         space_size: sizeMode ? Number(size) : undefined,
         customer_name: trimmedName,
         customer_phone: phoneDigits,
+        company_name: businessMode ? trimmedCompany : undefined,
       })
     }
   }
@@ -209,9 +221,25 @@ export function HeroLeadForm({ businessId, businessName, services }: Props) {
           </div>
         )}
 
+        {/* 회사명(상호) — 정기청소·업무공간 등 B2B 서비스에만 노출 */}
+        {businessMode && (
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-slate-500">회사명 (필수)</label>
+            <Input
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              onFocus={markStarted}
+              placeholder="예: (주)퀄리오 / 강남점"
+              className="h-12"
+            />
+          </div>
+        )}
+
         {/* 이름 */}
         <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-500">성함 (필수)</label>
+          <label className="text-xs font-medium text-slate-500">
+            {businessMode ? '담당자 성함 (필수)' : '성함 (필수)'}
+          </label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
