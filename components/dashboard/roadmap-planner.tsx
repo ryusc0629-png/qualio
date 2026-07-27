@@ -13,7 +13,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { MapPin, Phone, Navigation, Users, ClipboardList, Copy, Upload, Sparkles } from 'lucide-react'
+import {
+  MapPin,
+  Phone,
+  Navigation,
+  Users,
+  ClipboardList,
+  Copy,
+  Upload,
+  Sparkles,
+  ArrowDown,
+} from 'lucide-react'
 
 export interface LeadOption {
   id: string
@@ -561,6 +571,15 @@ export function RoadmapPlanner({
                 {result.failedNames.length > 0 && ` (${result.failedNames.slice(0, 5).join(', ')}${result.failedCount > 5 ? ' 외' : ''})`}
               </span>
             )}
+          </div>
+
+          {/* 순서 안내 — 위에서 아래로가 가장 적게 이동하는 순서라는 걸 알려줌 */}
+          <div className="flex items-start gap-2 rounded-lg bg-primary/5 px-3 py-2.5 text-sm text-foreground">
+            <ArrowDown className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
+            <span>
+              적힌 순서(위 → 아래)가 <b>가장 적게 이동하는 방문 순서</b>예요. 번호 순서대로 돌면
+              됩니다.
+            </span>
           </div>
 
           {result.courses.map((course, ci) => {
