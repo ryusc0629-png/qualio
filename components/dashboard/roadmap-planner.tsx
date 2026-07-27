@@ -263,15 +263,11 @@ export function RoadmapPlanner({
     })
   }
 
-  // 하루 코스의 주소를 순서대로 복사 (출발지를 맨 앞에). 메모·내비에 붙여넣기 쉽게 한 줄에 하나씩.
-  const copyCourseAddresses = async (course: Course) => {
-    const lines = [
-      ...(start.trim() ? [start.trim()] : []),
-      ...course.stops.map((s) => s.address).filter((a) => a.trim()),
-    ]
+  // 방문지 한 곳의 주소만 복사 (카카오맵·티맵 검색창에 붙여넣기용)
+  const copyAddress = async (address: string) => {
     try {
-      await navigator.clipboard.writeText(lines.join('\n'))
-      toast.success(`주소 ${lines.length}개를 복사했어요`)
+      await navigator.clipboard.writeText(address)
+      toast.success('주소를 복사했어요')
     } catch {
       toast.error('복사를 못 했어요. 다시 눌러주세요')
     }
@@ -577,18 +573,6 @@ export function RoadmapPlanner({
                   </span>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => copyCourseAddresses(course)}
-                  className="flex w-full items-center justify-center gap-2 h-11 rounded-lg bg-primary text-primary-foreground text-sm font-semibold"
-                >
-                  <Copy className="h-4 w-4" />
-                  이 코스 주소 복사
-                </button>
-                <p className="text-xs text-muted-foreground text-center -mt-1">
-                  출발지부터 순서대로 복사돼요. 카카오맵·티맵에 붙여넣어 쓰세요.
-                </p>
-
                 <div className="divide-y">
                   {course.stops.map((s, si) => (
                     <div key={si} className="flex gap-3 py-2.5">
@@ -616,6 +600,13 @@ export function RoadmapPlanner({
                           >
                             <Navigation className="h-3 w-3" /> 카카오맵
                           </a>
+                          <button
+                            type="button"
+                            onClick={() => copyAddress(s.address)}
+                            className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border border-border"
+                          >
+                            <Copy className="h-3 w-3" /> 주소 복사
+                          </button>
                           {s.phone && (
                             <a
                               href={`tel:${s.phone}`}
