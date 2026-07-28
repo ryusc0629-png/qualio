@@ -56,9 +56,9 @@ export default async function PublicQuotePage({
   // 견적서는 리드(영업 중) 또는 고객(계약 중)에 연결됨 — 어느 쪽이든 lead 형태로 맞춰 PrintQuote에 전달
   const businessPromise = db
     .from('businesses')
-    .select('name, phone, address, business_number, owner_name, payment_account' as never)
+    .select('name, phone, address, legal_name, business_number, owner_name, payment_account' as never)
     .eq('id', quote.business_id)
-    .maybeSingle() as unknown as Promise<{ data: { name: string; phone: string | null; address: string | null; business_number: string | null; owner_name: string | null; payment_account: string | null } | null }>
+    .maybeSingle() as unknown as Promise<{ data: { name: string; phone: string | null; address: string | null; legal_name: string | null; business_number: string | null; owner_name: string | null; payment_account: string | null } | null }>
 
   let client: { id: string; company_name: string; contact_name: string | null; phone: string | null; address: string | null } | null = null
   if (quote.customer_id) {

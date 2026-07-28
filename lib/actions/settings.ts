@@ -57,6 +57,7 @@ const updateBusinessSchema = z.object({
   // 전문성·신뢰 — 경력 연차(숫자 문자열), 사업자등록번호, 자격증(JSON 문자열 배열)
   experience_years: z.string().max(3).optional(),
   business_number:  z.string().max(20).optional(),
+  legal_name:       z.string().max(60).optional(),
   payment_account:  z.string().max(80).optional(),
   certifications:   z.string().optional(),
   // 시공 사례(JSON 문자열: [{before, after}]) + 주 고객 유형(b2b|b2c)
@@ -156,6 +157,7 @@ export const updateBusinessAction = action
           return Number.isFinite(n) && n > 0 ? n : null
         })() as never,
         business_number:           (parsedInput.business_number?.trim() || null) as never,
+        legal_name:                (parsedInput.legal_name?.trim() || null) as never,
         payment_account:           (parsedInput.payment_account?.trim() || null) as never,
         certifications:            (parsedInput.certifications
           ? JSON.parse(parsedInput.certifications)

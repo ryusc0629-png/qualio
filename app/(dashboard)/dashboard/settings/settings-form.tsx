@@ -78,6 +78,7 @@ interface Business {
   owner_video_url: string | null
   experience_years: number | null
   business_number: string | null
+  legal_name: string | null
   payment_account: string | null
   certifications: string[] | null
   portfolio: PortfolioItem[] | null
@@ -132,6 +133,8 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
     business.experience_years != null ? String(business.experience_years) : '',
   )
   const [businessNumber, setBusinessNumber] = useState(business.business_number ?? '')
+  // 사업자등록증상 상호(법적 상호) — 계약서 '을' 상호에 사용(브랜드명과 다를 때)
+  const [legalName, setLegalName] = useState(business.legal_name ?? '')
   // 정산(입금) 계좌 — 계약서 '을' 정보에 자동 표기
   const [paymentAccount, setPaymentAccount] = useState(business.payment_account ?? '')
   const [certifications, setCertifications] = useState<string[]>(business.certifications ?? [])
@@ -305,6 +308,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
       owner_video_url:           ownerVideoUrl.trim(),
       experience_years:          experienceYears.trim(),
       business_number:           businessNumber.trim(),
+      legal_name:                legalName.trim(),
       payment_account:           paymentAccount.trim(),
       certifications:            JSON.stringify(certifications.filter((c) => c.trim())),
       // 작업 전·후 두 장이 모두 있는 시공 사례만 저장
@@ -494,21 +498,41 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
         />
       </div>
 
-      {/* 정산(입금) 계좌 — 계약서·세금계산서 입금처에 자동 표기 */}
-      <div className="rounded-lg border bg-card p-5 space-y-3">
+      {/* 계약서·세금계산서 정보 — 계약서 '을'(수급자) 정보에 자동 표기 */}
+      <div className="rounded-lg border bg-card p-5 space-y-4">
         <div>
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">정산 계좌</h2>
+          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">계약서·세금계산서 정보</h2>
           <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-            계약서의 <span className="font-medium text-foreground">‘을’ 정보</span>에 입금 계좌로 자동으로 들어가요.
+            계약서의 <span className="font-medium text-foreground">‘을’(수급자) 정보</span>에 자동으로 들어가요.
             한 번만 넣어두면 계약서마다 다시 안 적어도 돼요. (선택)
           </p>
         </div>
-        <Input
-          value={paymentAccount}
-          onChange={(e) => setPaymentAccount(e.target.value)}
-          placeholder="예: 국민은행 123456-78-901234 (예금주: 다트클린 홍길동)"
-          maxLength={80}
-        />
+
+        <div className="space-y-1.5">
+          <Label htmlFor="legal_name" className="text-xs">사업자 상호 (사업자등록증상 이름)</Label>
+          <Input
+            id="legal_name"
+            value={legalName}
+            onChange={(e) => setLegalName(e.target.value)}
+            placeholder="예: 다트챌린지"
+            maxLength={60}
+          />
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            브랜드·홍보에 쓰는 업체명과 사업자등록증상 상호가 다르면 여기에 등록증상 상호를 넣으세요.
+            계약서·세금계산서엔 이 이름이 들어가요(사업자등록번호와 일치해야 함). 비우면 위 업체명을 그대로 써요.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="payment_account" className="text-xs">정산(입금) 계좌</Label>
+          <Input
+            id="payment_account"
+            value={paymentAccount}
+            onChange={(e) => setPaymentAccount(e.target.value)}
+            placeholder="예: 국민은행 123456-78-901234 (예금주: 류승찬)"
+            maxLength={80}
+          />
+        </div>
       </div>
 
       {/* 시공 사례 (비포·애프터 직접 등록 → 홍보 페이지 '시공 사례' 갤러리에 자동 반영) */}

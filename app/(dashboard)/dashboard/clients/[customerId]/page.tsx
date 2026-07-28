@@ -198,12 +198,12 @@ export default async function CustomerDetailPage({ params }: Props) {
     items: Array.isArray(q.items) ? q.items : [],
   }))
 
-  // 계약서 '을'(수급자)에 넣을 우리 업체명
+  // 계약서 '을'(수급자)에 넣을 상호 — 사업자 상호(legal_name) 우선, 없으면 브랜드명(name)
   const { data: bizNameRow } = await db
     .from('businesses')
-    .select('name')
+    .select('name, legal_name' as never)
     .eq('id', profile.business_id)
-    .maybeSingle()
+    .maybeSingle() as unknown as { data: { name: string | null; legal_name: string | null } | null }
 
   // 잠재고객(리드) 시절 영업 기록 — 전환된 고객이면 상담·통화·견적 이력을 이어서 보여줌
   type LeadActivity = { id: string; type: string; content: string | null; activity_at: string }
@@ -364,7 +364,7 @@ export default async function CustomerDetailPage({ params }: Props) {
         quotes={b2bQuotes}
         customerId={customer.id}
         clientName={customer.name}
-        businessName={bizNameRow?.name ?? ''}
+        businessName={bizNameRow?.legal_name || bizNameRow?.name || ''}
       />
 
       {/* 정기계약 — 계약을 고객 허브에 직접 표시 (주기·월금액·다음 방문·완료/예정 횟수) */}

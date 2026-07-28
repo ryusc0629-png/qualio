@@ -48,9 +48,9 @@ export default async function QuotePrintPage({
       : quoteQuery.order('created_at', { ascending: false }).limit(1).maybeSingle(),
     db
       .from('businesses')
-      .select('name, phone, address, business_number, owner_name, payment_account' as never)
+      .select('name, phone, address, legal_name, business_number, owner_name, payment_account' as never)
       .eq('id', profile.business_id)
-      .maybeSingle() as unknown as Promise<{ data: { name: string; phone: string | null; address: string | null; business_number: string | null; owner_name: string | null; payment_account: string | null } | null }>,
+      .maybeSingle() as unknown as Promise<{ data: { name: string; phone: string | null; address: string | null; legal_name: string | null; business_number: string | null; owner_name: string | null; payment_account: string | null } | null }>,
   ])
 
   if (!leadResult.data || !quoteResult.data) notFound()

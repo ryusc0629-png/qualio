@@ -100,12 +100,12 @@ export default async function LeadDetailPage({
     }[],
   }))
 
-  // 계약서 '을'(수급자)에 넣을 우리 업체명
+  // 계약서 '을'(수급자)에 넣을 상호 — 사업자 상호(legal_name) 우선, 없으면 브랜드명(name)
   const { data: bizRow } = await db
     .from('businesses')
-    .select('name')
+    .select('name, legal_name' as never)
     .eq('id', profile.business_id)
-    .maybeSingle()
+    .maybeSingle() as unknown as { data: { name: string | null; legal_name: string | null } | null }
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -115,7 +115,7 @@ export default async function LeadDetailPage({
         quotes={quotes}
         alreadyConverted={alreadyConverted}
         liveStatus={liveStatus}
-        businessName={bizRow?.name ?? ''}
+        businessName={bizRow?.legal_name || bizRow?.name || ''}
       />
     </div>
   )

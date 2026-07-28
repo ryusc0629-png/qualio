@@ -44,7 +44,8 @@ interface Business {
   name: string
   phone: string | null
   address: string | null
-  // 을(수급자) 사업자등록번호·대표명·입금 계좌 — 계약서 서명란에 표기 (신규 컬럼이라 optional)
+  // 을(수급자) 계약서 표기용 — 사업자 상호·사업자등록번호·대표명·입금 계좌 (신규 컬럼이라 optional)
+  legal_name?: string | null
   business_number?: string | null
   owner_name?: string | null
   payment_account?: string | null
@@ -122,7 +123,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
     ? quote.contract_content
     : buildStandardContractText({
         clientCompany: lead.company_name,
-        businessName: business?.name ?? null,
+        businessName: business?.legal_name || business?.name || null,
         isOneOff,
         total,
         taxIncluded: quote.tax_included,
@@ -378,7 +379,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
               </div>
               <div className="space-y-1.5">
                 <p className="font-semibold text-gray-700 border-b pb-1 mb-2">“을” (수급자)</p>
-                <p>상호: {business?.name ?? '_______________'}</p>
+                <p>상호: {business?.legal_name || business?.name || '_______________'}</p>
                 {business?.business_number && <p>사업자등록번호: {business.business_number}</p>}
                 <p>주소: {business?.address ?? '_______________'}</p>
                 <p>대표: {business?.owner_name ?? '_______________'}</p>
