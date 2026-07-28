@@ -9,6 +9,11 @@ import { Label } from '@/components/ui/label'
 import { Plus, Trash2, Quote } from 'lucide-react'
 import { updateBusinessAction } from '@/lib/actions/settings'
 import { BrandDesignSection } from './brand-design-section'
+import { StrengthsSection } from './strengths-section'
+import { OwnerIntroSection } from './owner-intro-section'
+import { CredentialsSection } from './credentials-section'
+import { CompletenessPanel, type CompletenessItem } from './completeness-panel'
+import type { Strength } from '@/lib/business/strengths'
 import { ServiceAreaPicker } from './service-area-picker'
 import { BaseAddressPicker } from './base-address-picker'
 import { normalizeHex, type HeroStyle } from '@/lib/brand'
@@ -65,15 +70,24 @@ interface Business {
   hero_title: string | null
   hero_subtitle: string | null
   testimonials: Testimonial[] | null
+  strengths: Strength[] | null
+  owner_photo_url: string | null
+  owner_name: string | null
+  owner_greeting: string | null
+  owner_video_url: string | null
+  experience_years: number | null
+  business_number: string | null
+  certifications: string[] | null
 }
 
 interface Props {
   business: Business
   serviceCount: number
   hasGeneratedPage: boolean
+  publicReportCount: number
 }
 
-export function SettingsForm({ business, serviceCount, hasGeneratedPage }: Props) {
+export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicReportCount }: Props) {
   // 할인 세부 타입 (discount_amount | discount_rate) 초기값
   const initialType = business.review_reward_type as RewardType
   const [activePlatform, setActivePlatform] = useState<ReviewPlatform>(
@@ -102,6 +116,19 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage }: Props
   const [testimonials, setTestimonials] = useState<Testimonial[]>(
     business.testimonials ?? []
   )
+  // 우리 업체 강점 — 홈페이지 "우리만의 차이" 섹션에 자동 반영
+  const [strengths, setStrengths] = useState<Strength[]>(business.strengths ?? [])
+  // 대표 인사말 — 얼굴 사진 + 이름 + 인사말 + 인사말 영상(유튜브)
+  const [ownerPhotoUrl, setOwnerPhotoUrl] = useState(business.owner_photo_url ?? '')
+  const [ownerName, setOwnerName] = useState(business.owner_name ?? '')
+  const [ownerGreeting, setOwnerGreeting] = useState(business.owner_greeting ?? '')
+  const [ownerVideoUrl, setOwnerVideoUrl] = useState(business.owner_video_url ?? '')
+  // 전문성·신뢰 — 경력 연차 + 사업자등록번호 + 자격증/보유장비
+  const [experienceYears, setExperienceYears] = useState(
+    business.experience_years != null ? String(business.experience_years) : '',
+  )
+  const [businessNumber, setBusinessNumber] = useState(business.business_number ?? '')
+  const [certifications, setCertifications] = useState<string[]>(business.certifications ?? [])
 
   // 업체 기본 정보 — 실시간 체크리스트 판정을 위해 상태로 관리
   const [name, setName] = useState(business.name ?? '')
@@ -144,10 +171,28 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage }: Props
   ]
   const allReady = checklist.every((c) => c.done)
 
-  // 안 채운 칸으로 데려가기 — 같은 페이지면 스크롤+포커스+빨간 테두리 강조, 서비스는 등록 페이지로 이동
+  // ── 홈페이지 완성도(숨고식) — 필수(공개) + 강화(설득력) 통합 목록 ──
+  const completenessItems: CompletenessItem[] = [
+    ...checklist.map((c) => ({ key: c.key, label: c.label, done: c.done, essential: true })),
+    { key: 'owner_intro', label: '대표 인사말', hint: '사장님 얼굴·한마디면 신뢰가 확 올라가요', done: !!(ownerGreeting.trim() || ownerPhotoUrl.trim()), essential: false },
+    { key: 'strengths', label: '우리 업체 강점', hint: '경쟁사와 다른 점을 카드로 보여줘요', done: strengths.filter((s) => s.title.trim()).length > 0, essential: false },
+    { key: 'experience', label: '청소 경력 연차', hint: '“경력 N년”이 표시돼요', done: experienceYears.trim() !== '' && Number(experienceYears) > 0, essential: false },
+    { key: 'business_number', label: '사업자 등록', hint: '‘사업자 등록 업체’ 배지가 붙어요', done: businessNumber.replace(/[^0-9]/g, '').length === 10, essential: false },
+    { key: 'certifications', label: '자격증·보유장비', hint: '전문성을 증명하는 항목이에요', done: certifications.filter((c) => c.trim()).length > 0, essential: false },
+    { key: 'portfolio', label: '시공 사례 사진 (비포·애프터)', hint: '청소는 사진이 가장 강력해요', done: publicReportCount > 0, essential: false },
+    { key: 'testimonials', label: '고객 추천사', hint: '후기가 없을 때 신뢰를 채워줘요', done: testimonials.filter((t) => t.quote.trim()).length > 0, essential: false },
+    { key: 'youtube', label: '시공 영상 (유튜브)', hint: '말보다 영상이 확실해요', done: !!business.youtube_url?.trim(), essential: false },
+  ]
+
+  // 안 채운 칸으로 데려가기 — 같은 페이지면 스크롤+포커스+빨간 테두리 강조, 다른 페이지는 이동
   const jumpTo = (key: string) => {
     if (key === 'services') {
       window.location.href = '/dashboard/services'
+      return
+    }
+    // 시공 사례는 작업 보고에서 '홈 공개'를 켜야 채워짐 → 예약 목록으로 안내
+    if (key === 'portfolio') {
+      window.location.href = '/dashboard/bookings'
       return
     }
     const idMap: Record<string, string> = {
@@ -160,6 +205,13 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage }: Props
       hero_image: 'field-hero-image',
       geo: 'field-geo',
       save: 'field-save',
+      owner_intro: 'field-owner-intro',
+      strengths: 'field-strengths',
+      experience: 'field-credentials',
+      business_number: 'field-credentials',
+      certifications: 'field-credentials',
+      testimonials: 'field-testimonials',
+      youtube: 'field-youtube',
     }
     const el = document.getElementById(idMap[key])
     if (!el) return
@@ -236,11 +288,25 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage }: Props
       testimonials:              JSON.stringify(
         testimonials.filter((t) => t.quote.trim())
       ),
+      // 제목 있는 강점만 저장 (빈 카드 제외)
+      strengths:                 JSON.stringify(
+        strengths.filter((s) => s.title.trim())
+      ),
+      owner_photo_url:           ownerPhotoUrl.trim(),
+      owner_name:                ownerName.trim(),
+      owner_greeting:            ownerGreeting.trim(),
+      owner_video_url:           ownerVideoUrl.trim(),
+      experience_years:          experienceYears.trim(),
+      business_number:           businessNumber.trim(),
+      certifications:            JSON.stringify(certifications.filter((c) => c.trim())),
     })
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 pb-28">
+      {/* 홈페이지 완성도(숨고식) — 채울수록 설득력이 강해진다는 걸 % 진행바로 안내 */}
+      <CompletenessPanel items={completenessItems} onJump={jumpTo} />
+
       {/* 업체 기본 정보 */}
       <div className="rounded-lg border bg-card p-5 space-y-4">
         <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">기본 정보</h2>
@@ -350,6 +416,41 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage }: Props
         }}
       />
 
+      {/* 우리 업체 강점 (홍보 페이지 '우리만의 차이'에 자동 반영) */}
+      <div id="field-strengths">
+        <StrengthsSection value={strengths} onChange={setStrengths} />
+      </div>
+
+      {/* 대표 인사말 (홍보 페이지 '대표 인사말' 섹션에 자동 반영) */}
+      <div id="field-owner-intro">
+        <OwnerIntroSection
+          photoUrl={ownerPhotoUrl}
+          name={ownerName}
+          greeting={ownerGreeting}
+          videoUrl={ownerVideoUrl}
+          onChange={(next) => {
+            if (next.photoUrl !== undefined) setOwnerPhotoUrl(next.photoUrl)
+            if (next.name !== undefined) setOwnerName(next.name)
+            if (next.greeting !== undefined) setOwnerGreeting(next.greeting)
+            if (next.videoUrl !== undefined) setOwnerVideoUrl(next.videoUrl)
+          }}
+        />
+      </div>
+
+      {/* 전문성·신뢰 (경력·사업자·자격증 → 홍보 페이지 상단 신뢰 앵커) */}
+      <div id="field-credentials">
+        <CredentialsSection
+          experienceYears={experienceYears}
+          businessNumber={businessNumber}
+          certifications={certifications}
+          onChange={(next) => {
+            if (next.experienceYears !== undefined) setExperienceYears(next.experienceYears)
+            if (next.businessNumber !== undefined) setBusinessNumber(next.businessNumber)
+            if (next.certifications !== undefined) setCertifications(next.certifications)
+          }}
+        />
+      </div>
+
       {/* 리뷰 수집 채널 */}
       <div className="rounded-lg border bg-card p-5 space-y-4">
         <div>
@@ -451,7 +552,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage }: Props
             SNS 채널을 연결하면 홍보 페이지 하단에 노출되고, 검색·AI가 같은 업체로 인식해 신뢰도가 올라가요.
           </p>
         </div>
-        <div className="space-y-2">
+        <div id="field-youtube" className="space-y-2">
           <Label htmlFor="youtube_url">유튜브 시공 영상 URL</Label>
           <Input
             id="youtube_url"
@@ -622,7 +723,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage }: Props
       </div>
 
       {/* 고객 추천사 */}
-      <div className="rounded-lg border bg-card p-5 space-y-4">
+      <div id="field-testimonials" className="rounded-lg border bg-card p-5 space-y-4">
         <div>
           <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">고객 추천사</h2>
           <p className="text-xs text-muted-foreground mt-1">

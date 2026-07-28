@@ -27,6 +27,7 @@ import { buildBrandStyle, toBrandSettings } from '@/lib/brand'
 import { trackPageView } from '@/lib/utils/track-page-view'
 import { buildAreaServed } from '@/lib/address/parse-region'
 import { getReviewSummary } from '@/lib/reviews/get-reviews'
+import { DEFAULT_STRENGTHS, getStrengthIcon } from '@/lib/business/strengths'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -81,7 +82,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
 
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, instagram_url, youtube_url, service_areas, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials' as never)
+    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, instagram_url, youtube_url, service_areas, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, certifications' as never)
     .eq('slug', slug)
     .maybeSingle() as { data: {
       id: string; name: string; phone: string | null; address: string | null
@@ -94,6 +95,11 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
       brand_color: string | null; brand_color_secondary: string | null
       hero_style: string | null; hero_title: string | null; hero_subtitle: string | null
       testimonials: { quote: string; author: string }[] | null
+      strengths: { key: string; title: string; desc: string }[] | null
+      owner_photo_url: string | null; owner_name: string | null
+      owner_greeting: string | null; owner_video_url: string | null
+      experience_years: number | null; business_number: string | null
+      certifications: string[] | null
     } | null }
 
   if (!business) {
@@ -133,7 +139,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
       : 'border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900',
   }
 
-  const [{ data: services }, { data: recentPosts }, reviewSummary] = await Promise.all([
+  const [{ data: services }, { data: recentPosts }, portfolioResult, reviewSummary] = await Promise.all([
     db
       .from('service_items')
       .select('id, name, base_price, unit, category')
@@ -147,13 +153,37 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
       .select('slug, title, summary, published_at')
       .eq('business_id', business.id)
       .eq('published', true)
+      .eq('post_type' as never, 'geo' as never) // 정보 글만 — 시공 사례(portfolio)는 아래 갤러리로 분리
       .order('published_at', { ascending: false })
       .limit(3),
+    // 시공 사례 갤러리 — 사장님이 홈 공개한 작업 보고의 비포/애프터 사진
+    db
+      .from('reports')
+      .select('id, report_photos(url, type, sort_order)')
+      .eq('business_id', business.id)
+      .eq('is_public' as never, true as never)
+      .order('created_at', { ascending: false })
+      .limit(12),
     // 실제 고객 후기 요약(사회적 증거)
     getReviewSummary(db, business.id, 6),
     // 브랜드 홈 방문 추적 (병렬)
     trackPageView(db, business.id, 'brand_home', ch),
   ])
+
+  // 시공 사례 — 공개된 보고서에서 비포·애프터 첫 장이 모두 있는 것만(최대 6건)
+  const portfolio = (
+    (portfolioResult as unknown as {
+      data: { id: string; report_photos: { url: string; type: string; sort_order: number }[] | null }[] | null
+    }).data ?? []
+  )
+    .map((r) => {
+      const photos = r.report_photos ?? []
+      const before = photos.filter((p) => p.type === 'before').sort((a, b) => a.sort_order - b.sort_order)[0]?.url ?? null
+      const after = photos.filter((p) => p.type === 'after').sort((a, b) => a.sort_order - b.sort_order)[0]?.url ?? null
+      return { id: r.id, before, after }
+    })
+    .filter((p) => p.before && p.after)
+    .slice(0, 6)
 
   // 히어로 인라인 견적 폼용 서비스 — 자동견적 가능 여부 판별에 필요한 유형 컬럼 포함(/q 견적폼과 동일 형태)
   const { data: formServices } = await db
@@ -179,16 +209,45 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
   // YouTube URL → embed ID 추출
   function getYoutubeId(url: string | null): string | null {
     if (!url) return null
-    const m = url.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/)
+    // 일반(watch?v=)·단축(youtu.be)·임베드·쇼츠(세로영상)·라이브 주소 모두 지원
+    const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/|live\/)([A-Za-z0-9_-]{11})/)
     return m?.[1] ?? null
   }
   const youtubeId = getYoutubeId(business.youtube_url)
+  // 대표 인사말 영상(유튜브) + 섹션 노출 여부
+  const ownerVideoId = getYoutubeId(business.owner_video_url)
+  const hasOwnerIntro = !!(business.owner_greeting || business.owner_photo_url || ownerVideoId)
   const minPrice = services && services.length > 0
     ? Math.min(...services.map((s) => s.base_price))
     : null
 
   // 지역 사다리 — 주소(동→구→시→도→권역) + 추가 출장 지역. AI 검색의 지역 매칭 신호.
   const areaServed = buildAreaServed(business.address, business.service_areas)
+
+  // 전문성·신뢰 — 경력 연차 + 사업자등록번호 + 자격증/보유장비 (제안서 QR로 온 고객의 신뢰 앵커)
+  const experienceYears = business.experience_years && business.experience_years > 0 ? business.experience_years : null
+  const bizNumberDigits = (business.business_number ?? '').replace(/[^0-9]/g, '')
+  const businessNumberFormatted =
+    bizNumberDigits.length === 10
+      ? `${bizNumberDigits.slice(0, 3)}-${bizNumberDigits.slice(3, 5)}-${bizNumberDigits.slice(5)}`
+      : null
+  const certifications = (business.certifications ?? []).filter((c) => c.trim())
+  const hasCredentials = !!(experienceYears || businessNumberFormatted || certifications.length > 0)
+
+  // 우리만의 차이 — 사장님이 켠 강점을 우선 전시, 없으면 기본 카드로 폴백(하위 호환)
+  const strengthCards =
+    business.strengths && business.strengths.length > 0
+      ? business.strengths
+      : DEFAULT_STRENGTHS
+  // 카드 아이콘 색상 순환 팔레트
+  const strengthColors = [
+    { iconColor: 'text-blue-600',    iconBg: 'bg-blue-50' },
+    { iconColor: 'text-emerald-600', iconBg: 'bg-emerald-50' },
+    { iconColor: 'text-orange-600',  iconBg: 'bg-orange-50' },
+    { iconColor: 'text-violet-600',  iconBg: 'bg-violet-50' },
+    { iconColor: 'text-rose-600',    iconBg: 'bg-rose-50' },
+    { iconColor: 'text-cyan-600',    iconBg: 'bg-cyan-50' },
+  ]
 
   // SNS·외부 채널 링크 — 엔티티 통합(sameAs) + 하단 노출용
   const snsLinks = [
@@ -486,6 +545,106 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
           </FadeIn>
         </section>
 
+        {/* ── 전문성·신뢰 (경력·사업자 등록·자격증) — 제안서 QR로 온 고객의 신뢰 앵커 ── */}
+        {hasCredentials && (
+          <section className="border-b bg-white">
+            <FadeIn>
+            <div className="max-w-5xl mx-auto px-6 py-8 sm:py-10">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-center gap-5 sm:gap-10">
+                {experienceYears && (
+                  <div className="flex items-center justify-center gap-3">
+                    <div className="flex items-center justify-center h-11 w-11 rounded-2xl bg-primary/10 shrink-0">
+                      <Shield className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-black leading-none">경력 {experienceYears}년</p>
+                      <p className="text-xs text-muted-foreground mt-1">청소 전문 경력</p>
+                    </div>
+                  </div>
+                )}
+                {businessNumberFormatted && (
+                  <div className="flex items-center justify-center gap-3">
+                    <div className="flex items-center justify-center h-11 w-11 rounded-2xl bg-primary/10 shrink-0">
+                      <BadgeCheck className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold leading-tight">사업자 등록 업체</p>
+                      <p className="text-xs text-muted-foreground mt-1">사업자등록번호 {businessNumberFormatted}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {certifications.length > 0 && (
+                <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                  {certifications.map((cert) => (
+                    <span
+                      key={cert}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 text-primary px-3 py-1.5 text-xs font-medium"
+                    >
+                      <BadgeCheck className="h-3.5 w-3.5" />
+                      {cert}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            </FadeIn>
+          </section>
+        )}
+
+        {/* ── 대표 인사말 (얼굴·스토리·영상) — 초반 신뢰 앵커 ── */}
+        {hasOwnerIntro && (
+          <section className="py-20 sm:py-28 bg-slate-50">
+            <FadeIn>
+            <div className="max-w-4xl mx-auto px-6">
+              <div className="text-center mb-10">
+                <p className="text-primary font-semibold text-xs mb-3 tracking-widest uppercase">대표 인사말</p>
+                <h2 className="text-3xl sm:text-4xl font-black tracking-tight">믿고 맡겨주세요</h2>
+              </div>
+
+              <div className="bg-white rounded-3xl p-7 sm:p-10 shadow-sm border border-slate-100">
+                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
+                  {business.owner_photo_url && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={business.owner_photo_url}
+                      alt={business.owner_name ?? `${business.name} 대표`}
+                      className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl object-cover shrink-0 shadow-sm"
+                    />
+                  )}
+                  <div className="flex-1 text-center sm:text-left">
+                    {business.owner_greeting && (
+                      <p className="text-base sm:text-lg leading-relaxed text-slate-700 whitespace-pre-line">
+                        {business.owner_greeting}
+                      </p>
+                    )}
+                    {business.owner_name && (
+                      <p className="mt-5 font-bold text-slate-900">
+                        {business.owner_name}
+                        <span className="ml-2 font-normal text-sm text-muted-foreground">{business.name}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {ownerVideoId && (
+                  <div className="mt-8 rounded-2xl overflow-hidden aspect-video shadow-lg shadow-black/10">
+                    <iframe
+                      src={`https://www.youtube.com/embed/${ownerVideoId}?rel=0&modestbranding=1`}
+                      title={`${business.name} 대표 인사말`}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      className="w-full h-full"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+            </FadeIn>
+          </section>
+        )}
+
         {/* ── 고통 공감 섹션 ── */}
         <section className="py-20 sm:py-28 bg-white">
           <FadeIn>
@@ -611,7 +770,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
           </section>
         )}
 
-        {/* ── 핵심 특장점 3가지 ── */}
+        {/* ── 우리만의 차이 (사장님이 켠 강점 · 없으면 기본 카드) ── */}
         <section className="py-20 sm:py-28 bg-white">
           <FadeIn>
           <div className="max-w-5xl mx-auto px-6">
@@ -621,46 +780,25 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
             </div>
 
             <div className="grid sm:grid-cols-3 gap-4 sm:gap-6">
-              {[
-                {
-                  icon: Zap,
-                  number: '01',
-                  iconColor: 'text-blue-600',
-                  iconBg: 'bg-blue-50',
-                  title: '즉시 견적 확인',
-                  desc: '복잡한 상담 없이 서비스 정보 입력 후 3가지 맞춤 견적을 바로 확인할 수 있어요.',
-                },
-                {
-                  icon: Shield,
-                  number: '02',
-                  iconColor: 'text-emerald-600',
-                  iconBg: 'bg-emerald-50',
-                  title: '전문 청소팀',
-                  desc: '체계적인 교육을 받은 전문 청소 인력이 꼼꼼하게 작업해요. 믿고 맡길 수 있어요.',
-                },
-                {
-                  icon: MessageCircle,
-                  number: '03',
-                  iconColor: 'text-orange-600',
-                  iconBg: 'bg-orange-50',
-                  title: '카카오 알림톡',
-                  desc: '예약 확정부터 방문 전 안내까지 카카오톡으로 자동 알림을 드려요.',
-                },
-              ].map((item) => {
-                const Icon = item.icon
+              {strengthCards.map((item, idx) => {
+                const Icon = getStrengthIcon(item.key)
+                const color = strengthColors[idx % strengthColors.length]
+                const number = String(idx + 1).padStart(2, '0')
                 return (
                   <div
-                    key={item.title}
+                    key={`${item.key}-${idx}`}
                     className="rounded-3xl p-7 sm:p-8 bg-slate-50 space-y-5"
                   >
                     <div className="flex items-center justify-between">
-                      <div className={`w-12 h-12 rounded-2xl ${item.iconBg} flex items-center justify-center`}>
-                        <Icon className={`h-6 w-6 ${item.iconColor}`} />
+                      <div className={`w-12 h-12 rounded-2xl ${color.iconBg} flex items-center justify-center`}>
+                        <Icon className={`h-6 w-6 ${color.iconColor}`} />
                       </div>
-                      <span className="text-3xl font-black text-slate-100">{item.number}</span>
+                      <span className="text-3xl font-black text-slate-100">{number}</span>
                     </div>
                     <p className="font-black text-lg tracking-tight">{item.title}</p>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                    {item.desc && (
+                      <p className="text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                    )}
                   </div>
                 )
               })}
@@ -668,6 +806,54 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
           </div>
           </FadeIn>
         </section>
+
+        {/* ── 시공 사례 갤러리 (비포·애프터) — 사장님이 홈 공개한 작업 보고 ── */}
+        {portfolio.length > 0 && (
+          <section id="portfolio" className="py-20 sm:py-28 bg-white">
+            <FadeIn>
+            <div className="max-w-5xl mx-auto px-6">
+              <div className="text-center mb-12">
+                <p className="text-primary font-semibold text-xs mb-3 tracking-widest uppercase">시공 사례</p>
+                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">
+                  직접 작업한 현장이에요
+                </h2>
+                <p className="text-muted-foreground mt-3 text-base">비포·애프터로 실제 결과를 확인하세요</p>
+              </div>
+
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                {portfolio.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-2xl overflow-hidden bg-slate-50 border border-slate-100"
+                  >
+                    {/* 비포/애프터 2분할 */}
+                    <div className="grid grid-cols-2">
+                      <div className="relative aspect-square overflow-hidden">
+                        <img
+                          src={item.before ?? ''}
+                          alt="작업 전"
+                          loading="lazy"
+                          className="w-full h-full object-cover"
+                        />
+                        <span className="absolute top-2 left-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-bold text-white">전</span>
+                      </div>
+                      <div className="relative aspect-square overflow-hidden">
+                        <img
+                          src={item.after ?? ''}
+                          alt="작업 후"
+                          loading="lazy"
+                          className="w-full h-full object-cover"
+                        />
+                        <span className="absolute top-2 right-2 rounded-md bg-primary px-2 py-0.5 text-[10px] font-bold text-white">후</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            </FadeIn>
+          </section>
+        )}
 
         {/* ── 가격 안심 배너 ── */}
         <section className="py-12 sm:py-16 bg-primary/5">

@@ -36,13 +36,14 @@ export default async function OwnerReportPage({ params }: Props) {
   // 기존 보고서 + 사진 + 릴스 정보 조회
   const { data: report } = await db
     .from('reports')
-    .select('id, notes, kakao_sent_at, ai_report_data, reel_status, reel_url, report_photos(url, type, sort_order)' as never)
+    .select('id, notes, kakao_sent_at, is_public, ai_report_data, reel_status, reel_url, report_photos(url, type, sort_order)' as never)
     .eq('booking_id', bookingId)
     .maybeSingle() as {
       data: {
         id: string
         notes: string | null
         kakao_sent_at: string | null
+        is_public: boolean | null
         ai_report_data: {
           beforeStatus: string
           workDetails: string
@@ -94,6 +95,7 @@ export default async function OwnerReportPage({ params }: Props) {
         aiReportData: report.ai_report_data ?? null,
         reelStatus: report.reel_status ?? 'idle',
         reelUrl: report.reel_url ?? null,
+        isPublic: report.is_public ?? false,
       } : null}
       serviceItems={(services ?? []).map((s) => ({
         name: s.name,

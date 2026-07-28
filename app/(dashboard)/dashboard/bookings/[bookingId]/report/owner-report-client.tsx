@@ -21,6 +21,7 @@ import {
   Plus,
   Film,
   Loader2,
+  Images,
 } from 'lucide-react'
 
 type PhotoSlot = { url: string; uploading: boolean }
@@ -50,6 +51,7 @@ interface ExistingReport {
   aiReportData: AiReportData | null
   reelStatus: string
   reelUrl: string | null
+  isPublic: boolean
 }
 
 interface ServiceItem {
@@ -81,6 +83,8 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
     new Set(existingReport?.aiReportData?.recommendedServices ?? [])
   )
   const [showServicePicker, setShowServicePicker] = useState(false)
+  // 홈페이지 시공 사례 갤러리 공개 여부
+  const [isPublic, setIsPublic] = useState(existingReport?.isPublic ?? false)
 
   const beforeInputRef = useRef<HTMLInputElement>(null)
   const afterInputRef = useRef<HTMLInputElement>(null)
@@ -141,6 +145,7 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
           beforePhotoUrls: before.filter((p) => !p.uploading && p.url).map((p) => p.url),
           afterPhotoUrls:  after.filter((p) => !p.uploading && p.url).map((p) => p.url),
           sendAlimtalk:    false,
+          isPublic,
           aiReportData:    data.report,
         })
       }
@@ -200,6 +205,7 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
       beforePhotoUrls: before.filter((p) => !p.uploading && p.url).map((p) => p.url),
       afterPhotoUrls:  after.filter((p) => !p.uploading && p.url).map((p) => p.url),
       sendAlimtalk:    false,
+      isPublic,
       aiReportData: aiReport ? {
         ...aiReport,
         recommendedServices: aiReport.recommendedServices.filter((s) => selectedServices.has(s)),
@@ -504,6 +510,34 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
             inputRef={afterInputRef}
             type="after"
           />
+        </div>
+
+        {/* 홈페이지 시공 사례 공개 토글 */}
+        <div className="rounded-xl bg-white border p-4">
+          <button
+            type="button"
+            onClick={() => setIsPublic((v) => !v)}
+            className="w-full flex items-center gap-3 text-left"
+            aria-pressed={isPublic}
+          >
+            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <Images className="h-4 w-4 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">이 사진을 홈페이지 시공 사례로 올리기</p>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                켜면 우리 홍보 페이지 ‘시공 사례’에 비포·애프터로 보여요. 고객 이름·연락처·메모는 나가지 않아요.
+              </p>
+            </div>
+            <span className={`shrink-0 w-11 h-6 rounded-full transition-colors relative ${isPublic ? 'bg-primary' : 'bg-muted'}`}>
+              <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${isPublic ? 'left-[22px]' : 'left-0.5'}`} />
+            </span>
+          </button>
+          {isPublic && !hasPhotos && (
+            <p className="mt-2.5 text-xs text-amber-600">
+              작업 전·후 사진을 한 장씩은 올려야 시공 사례로 보여요.
+            </p>
+          )}
         </div>
 
         {/* 릴스 영상 현황 — 현장 직원이 신청한 경우만 표시 */}

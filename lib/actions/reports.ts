@@ -22,6 +22,7 @@ const saveReportSchema = z.object({
   beforePhotoUrls: z.array(z.string().min(1)).max(5),
   afterPhotoUrls:  z.array(z.string().min(1)).max(5),
   sendAlimtalk:    z.boolean(),
+  isPublic:        z.boolean().optional(), // 홈페이지 시공 사례 갤러리 공개 여부
   aiReportData:    aiReportDataSchema.optional(),
 })
 
@@ -42,7 +43,7 @@ export const saveReportAction = action
 
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
-    const { bookingId, notes, beforePhotoUrls, afterPhotoUrls, sendAlimtalk, aiReportData } = parsedInput
+    const { bookingId, notes, beforePhotoUrls, afterPhotoUrls, sendAlimtalk, isPublic, aiReportData } = parsedInput
 
     // 예약이 이 업체 소속인지 확인
     const { data: booking } = await db
@@ -60,6 +61,8 @@ export const saveReportAction = action
       booking_id:  bookingId,
       notes:       notes ?? null,
     }
+    // 홈 공개 토글 — 값이 전달된 경우에만 반영(부분 저장 시 기존값 보존)
+    if (isPublic !== undefined) upsertData.is_public = isPublic
     if (aiReportData) upsertData.ai_report_data = aiReportData
     if (sendAlimtalk) upsertData.kakao_sent_at = new Date().toISOString()
 

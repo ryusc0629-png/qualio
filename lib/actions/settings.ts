@@ -49,6 +49,15 @@ const updateBusinessSchema = z.object({
   hero_title:       z.string().max(30).optional(),
   hero_subtitle:    z.string().max(100).optional(),
   testimonials:   z.string().optional(), // JSON string: [{quote, author}]
+  strengths:      z.string().optional(), // JSON string: [{key, title, desc}]
+  owner_photo_url: z.string().max(500).optional(),
+  owner_name:      z.string().max(30).optional(),
+  owner_greeting:  z.string().max(400).optional(),
+  owner_video_url: z.string().max(300).optional(),
+  // 전문성·신뢰 — 경력 연차(숫자 문자열), 사업자등록번호, 자격증(JSON 문자열 배열)
+  experience_years: z.string().max(3).optional(),
+  business_number:  z.string().max(20).optional(),
+  certifications:   z.string().optional(),
 })
 
 export const updateBusinessAction = action
@@ -126,6 +135,22 @@ export const updateBusinessAction = action
         hero_subtitle:             (parsedInput.hero_subtitle         || null) as never,
         testimonials:              (parsedInput.testimonials
           ? JSON.parse(parsedInput.testimonials)
+          : []) as never,
+        strengths:                 (parsedInput.strengths
+          ? JSON.parse(parsedInput.strengths)
+          : []) as never,
+        owner_photo_url:           (parsedInput.owner_photo_url || null) as never,
+        owner_name:                (parsedInput.owner_name      || null) as never,
+        owner_greeting:            (parsedInput.owner_greeting  || null) as never,
+        owner_video_url:           (parsedInput.owner_video_url || null) as never,
+        // 경력 연차 — 숫자만 추출, 0 이하/빈 값은 null
+        experience_years:          (() => {
+          const n = parseInt((parsedInput.experience_years ?? '').replace(/[^0-9]/g, ''), 10)
+          return Number.isFinite(n) && n > 0 ? n : null
+        })() as never,
+        business_number:           (parsedInput.business_number?.trim() || null) as never,
+        certifications:            (parsedInput.certifications
+          ? JSON.parse(parsedInput.certifications)
           : []) as never,
       })
       .eq('id', profile.business_id)

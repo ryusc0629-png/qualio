@@ -29,10 +29,10 @@ export default async function SettingsPage() {
 
   if (!profile?.business_id) redirect('/onboarding')
 
-  const [businessResult, subscriptionResult, serviceCountResult] = await Promise.all([
+  const [businessResult, subscriptionResult, serviceCountResult, publicReportResult] = await Promise.all([
     db
       .from('businesses')
-      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials' as never)
+      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, certifications' as never)
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
@@ -47,9 +47,16 @@ export default async function SettingsPage() {
       .eq('business_id', profile.business_id)
       .eq('is_active', true)
       .is('deleted_at', null),
+    // 홈페이지 완성도용 — 홈 공개된 시공 사례(보고) 개수
+    db
+      .from('reports')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', profile.business_id)
+      .eq('is_public' as never, true as never),
   ])
 
   const serviceCount = serviceCountResult.count ?? 0
+  const publicReportCount = publicReportResult.count ?? 0
 
   if (!businessResult.data) redirect('/onboarding')
 
@@ -65,6 +72,11 @@ export default async function SettingsPage() {
     brand_color_secondary: string | null; hero_style: string | null
     hero_title: string | null; hero_subtitle: string | null
     testimonials: { quote: string; author: string }[] | null
+    strengths: { key: string; title: string; desc: string }[] | null
+    owner_photo_url: string | null; owner_name: string | null
+    owner_greeting: string | null; owner_video_url: string | null
+    experience_years: number | null; business_number: string | null
+    certifications: string[] | null
   }
   const subscription = subscriptionResult.data ?? {
     plan: 'beta',
@@ -155,6 +167,7 @@ export default async function SettingsPage() {
         business={business}
         serviceCount={serviceCount}
         hasGeneratedPage={!!business.seo_generated_at}
+        publicReportCount={publicReportCount}
       />
     </div>
   )
