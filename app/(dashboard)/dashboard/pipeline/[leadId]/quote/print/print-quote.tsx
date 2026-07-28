@@ -94,8 +94,9 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
   const showUnitPriceCol = isOneOff && !isLumpQuote
 
   const hasSpec = !!quote.spec_content
-  // 계약서는 사장님 전용(내부 라우트 또는 ?preview=1 미리보기) — 고객 공개 링크엔 노출 안 함
-  const canContract = variant === 'internal' || disableTracking
+  // 계약서 탭은 사장님 전용(내부·미리보기) + '표준 계약서 불러오기'로 저장한 계약서가 있을 때만 노출.
+  // (아직 안 불러온 견적서엔 계약서 탭/자동 초안이 뜨지 않게 함)
+  const canContract = (variant === 'internal' || disableTracking) && !!quote.contract_content?.trim()
   // 시방서가 없으면 견적서만 가능
   const [mode, setMode] = useState<DocMode>(hasSpec ? initialMode : 'quote')
   const [copied, setCopied] = useState(false)
