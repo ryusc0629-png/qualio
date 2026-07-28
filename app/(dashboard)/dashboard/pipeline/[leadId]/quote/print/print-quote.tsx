@@ -41,10 +41,13 @@ interface Business {
   name: string
   phone: string | null
   address: string | null
+  // 을(수급자) 사업자등록번호·대표명 — 계약서 서명란에 표기 (신규 컬럼이라 optional)
+  business_number?: string | null
+  owner_name?: string | null
 }
 
-// both = 견적서+시방서 함께 / quote = 견적서만 / spec = 시방서만
-type DocMode = 'both' | 'quote' | 'spec'
+// both = 견적서+시방서 함께 / quote = 견적서만 / spec = 시방서만 / contract = 계약서만(사장님 전용)
+type DocMode = 'both' | 'quote' | 'spec' | 'contract'
 
 interface Props {
   lead: Lead
@@ -86,12 +89,23 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
   const showUnitPriceCol = isOneOff && !isLumpQuote
 
   const hasSpec = !!quote.spec_content
+  // 계약서는 사장님 전용(내부 라우트 또는 ?preview=1 미리보기) — 고객 공개 링크엔 노출 안 함
+  const canContract = variant === 'internal' || disableTracking
   // 시방서가 없으면 견적서만 가능
   const [mode, setMode] = useState<DocMode>(hasSpec ? initialMode : 'quote')
   const [copied, setCopied] = useState(false)
 
-  const showQuote = mode !== 'spec'
-  const showSpec = hasSpec && mode !== 'quote'
+  const showQuote = mode === 'both' || mode === 'quote'
+  const showSpec = hasSpec && (mode === 'both' || mode === 'spec')
+  const showContract = mode === 'contract'
+
+  // 문서 선택 토글 옵션 (있는 문서만 노출)
+  const modeOptions: [DocMode, string][] = [
+    ...(hasSpec ? ([['both', '둘 다']] as [DocMode, string][]) : []),
+    ['quote', '견적서'],
+    ...(hasSpec ? ([['spec', '시방서']] as [DocMode, string][]) : []),
+    ...(canContract ? ([['contract', '계약서']] as [DocMode, string][]) : []),
+  ]
 
   // 발행일/작성일 — 견적 저장일(created_at)을 KST로 표시. 저장값이 없으면 오늘 날짜로 폴백.
   // (예전엔 항상 렌더 시점 new Date()라 재열람할 때마다 날짜가 바뀌었고, 시방서 작성일이 견적서와 어긋났음)
@@ -134,9 +148,9 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
       {/* 상단 툴바 (화면에서만 보임, 인쇄 시 숨김) */}
       <div className="print:hidden fixed top-4 right-4 z-50 flex flex-wrap items-center gap-2 justify-end max-w-[calc(100vw-2rem)]">
         {/* 문서 선택 토글 */}
-        {hasSpec && (
+        {modeOptions.length > 1 && (
           <div className="flex rounded-lg border bg-white shadow-lg overflow-hidden text-sm font-medium">
-            {([['both', '둘 다'], ['quote', '견적서'], ['spec', '시방서']] as [DocMode, string][]).map(([m, label]) => (
+            {modeOptions.map(([m, label]) => (
               <button
                 key={m}
                 onClick={() => setMode(m)}
@@ -157,7 +171,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
           PDF로 저장
         </button>
 
-        {variant === 'internal' && publicToken && (
+        {variant === 'internal' && publicToken && !showContract && (
           <button
             onClick={handleCopyLink}
             className="bg-white border px-4 py-2 rounded-lg text-sm font-medium shadow-lg hover:bg-muted"
@@ -310,6 +324,102 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
               <div className="text-center space-y-1">
                 <p className="text-sm text-gray-600">{issueDate}</p>
                 <p className="font-bold text-base">{business?.name ?? '업체명'}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── 계약서 (사장님 전용, 고객 링크엔 비노출) ─────────────────────── */}
+        {showContract && (
+          <div>
+            {/* 헤더 */}
+            <div className="text-center border-b-2 border-gray-800 pb-4 mb-8">
+              <h1 className="text-3xl font-bold tracking-tight">용역(청소) 계약서</h1>
+              <p className="text-sm text-gray-500 mt-1">SERVICE AGREEMENT</p>
+            </div>
+
+            {/* 당사자 */}
+            <p className="text-sm text-gray-800 mb-6 leading-7">
+              발주자 <b>{lead.company_name}</b>(이하 “갑”)과(와) 수급자 <b>{business?.name ?? '업체명'}</b>(이하 “을”)은
+              아래와 같이 청소 용역 계약을 체결한다.
+            </p>
+
+            {/* 계약 개요 */}
+            <table className="w-full border-collapse mb-8 text-sm">
+              <tbody>
+                <tr className="border-t border-gray-300">
+                  <th className="bg-gray-50 text-left py-2.5 px-3 w-32 font-medium text-gray-600 border-r border-gray-200">계약 금액</th>
+                  <td className="py-2.5 px-3 tabular-nums">
+                    {isOneOff ? '총 ' : '월 '}{total.toLocaleString()}원 ({quote.tax_included ? '부가세 포함' : '부가세 별도'})
+                  </td>
+                </tr>
+                <tr className="border-t border-gray-200">
+                  <th className="bg-gray-50 text-left py-2.5 px-3 font-medium text-gray-600 border-r border-gray-200">계약 기간</th>
+                  <td className="py-2.5 px-3 text-gray-500">&nbsp;&nbsp;&nbsp;&nbsp;년&nbsp;&nbsp;&nbsp;월&nbsp;&nbsp;&nbsp;일 부터&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;년&nbsp;&nbsp;&nbsp;월&nbsp;&nbsp;&nbsp;일 까지</td>
+                </tr>
+                {(quote.frequency || quote.worker_count) && (
+                  <tr className="border-t border-gray-200">
+                    <th className="bg-gray-50 text-left py-2.5 px-3 font-medium text-gray-600 border-r border-gray-200">작업 주기·인원</th>
+                    <td className="py-2.5 px-3">
+                      {quote.frequency ?? ''}{quote.frequency && quote.worker_count ? ' · ' : ''}{quote.worker_count ? `투입 ${quote.worker_count}명` : ''}
+                    </td>
+                  </tr>
+                )}
+                {(quote.site_name || quote.site_address) && (
+                  <tr className="border-t border-b border-gray-200">
+                    <th className="bg-gray-50 text-left py-2.5 px-3 font-medium text-gray-600 border-r border-gray-200">작업 장소</th>
+                    <td className="py-2.5 px-3">
+                      {quote.site_name ?? ''}{quote.site_name && quote.site_address ? ` (${quote.site_address})` : (quote.site_address ?? '')}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            {/* 표준 조항 */}
+            <div className="space-y-3 text-sm leading-7 text-gray-800">
+              <p><b>제1조 (목적)</b> 본 계약은 “갑”이 “을”에게 위탁하는 청소 용역의 수행에 관하여 양 당사자의 권리와 의무를 정함을 목적으로 한다.</p>
+              <p><b>제2조 (용역의 내용 및 범위)</b> 용역의 구체적 작업 대상·범위·방법은 본 계약에 첨부되는 견적서 및 시방서에 따르며, 이는 본 계약의 일부를 구성한다.</p>
+              <p><b>제3조 (계약 기간)</b> 계약 기간은 위 표에 정한 바에 따른다. 기간 만료 30일 전까지 양 당사자의 별도 의사표시가 없으면 동일 조건으로 1년간 자동 연장된다.</p>
+              <p><b>제4조 (계약 금액 및 지급)</b> {isOneOff
+                ? '“갑”은 용역 완료 후 “을”이 발행하는 세금계산서에 따라 대금을 “을”이 지정하는 계좌로 지급한다.'
+                : '“갑”은 매월 “을”이 발행하는 세금계산서에 따라 당월 용역대금을 익월 말일까지 “을”이 지정하는 계좌로 지급한다.'}</p>
+              <p><b>제5조 (“을”의 의무)</b> “을”은 선량한 관리자의 주의로 성실히 용역을 수행하며, 작업 인력에 대한 교육·관리 및 4대보험·안전관리 책임을 진다.</p>
+              <p><b>제6조 (“갑”의 의무)</b> “갑”은 용역 수행에 필요한 장소·전기·수도 등 기본 여건을 제공하고, 정당한 사유 없이 용역 수행을 방해하지 아니한다.</p>
+              <p><b>제7조 (손해배상 및 보험)</b> “을”은 용역 수행 중 “을”의 귀책으로 “갑”에게 발생한 손해를 배상하며, 이를 위하여 배상책임보험에 가입할 수 있다.</p>
+              <p><b>제8조 (계약의 해지)</b> 일방이 본 계약을 위반하고 상대방의 시정 요구 후 7일 이내에 시정하지 아니한 경우 상대방은 계약을 해지할 수 있으며, “갑”과 “을”은 30일 전 서면 통지로 계약을 해지할 수 있다.</p>
+              <p><b>제9조 (비밀유지)</b> 양 당사자는 본 계약 및 용역 수행 과정에서 알게 된 상대방의 정보를 제3자에게 누설하지 아니한다.</p>
+              <p><b>제10조 (기타)</b> 본 계약에 정하지 아니한 사항은 관계 법령 및 상관례에 따르며, 분쟁 발생 시 상호 협의하여 해결한다. 아래 특약사항은 본문에 우선하여 적용한다.</p>
+            </div>
+
+            {/* 특약사항 (견적서의 계약 조건·특이사항을 그대로 사용) */}
+            <div className="mt-6 border rounded-lg p-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">특약 사항</p>
+              <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[2.5rem]">{quote.conditions ?? ''}</p>
+            </div>
+
+            {/* 마무리 문구 + 계약일 */}
+            <p className="text-center text-sm text-gray-700 mt-10 mb-2">
+              본 계약을 증명하기 위하여 계약서 2부를 작성하여 “갑”과 “을”이 서명·날인 후 각 1부씩 보관한다.
+            </p>
+            <p className="text-center text-sm text-gray-600 mb-10">계약일: {issueDate}</p>
+
+            {/* 서명란 */}
+            <div className="grid grid-cols-2 gap-8 text-sm">
+              <div className="space-y-1.5">
+                <p className="font-semibold text-gray-700 border-b pb-1 mb-2">“갑” (발주자)</p>
+                <p>상호: {lead.company_name}</p>
+                <p>주소: {lead.address ?? '_______________'}</p>
+                <p>대표: {lead.contact_name ?? '_______________'}</p>
+                <p className="pt-4">(서명 또는 인) ______________</p>
+              </div>
+              <div className="space-y-1.5">
+                <p className="font-semibold text-gray-700 border-b pb-1 mb-2">“을” (수급자)</p>
+                <p>상호: {business?.name ?? '_______________'}</p>
+                {business?.business_number && <p>사업자등록번호: {business.business_number}</p>}
+                <p>주소: {business?.address ?? '_______________'}</p>
+                <p>대표: {business?.owner_name ?? '_______________'}</p>
+                <p className="pt-4">(서명 또는 인) ______________</p>
               </div>
             </div>
           </div>
