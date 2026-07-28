@@ -97,8 +97,8 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
   // 계약서 탭은 사장님 전용(내부·미리보기) + '표준 계약서 불러오기'로 저장한 계약서가 있을 때만 노출.
   // (아직 안 불러온 견적서엔 계약서 탭/자동 초안이 뜨지 않게 함)
   const canContract = (variant === 'internal' || disableTracking) && !!quote.contract_content?.trim()
-  // 시방서가 없으면 견적서만 가능
-  const [mode, setMode] = useState<DocMode>(hasSpec ? initialMode : 'quote')
+  // 처음 보여줄 문서 — 시방서 지정(?doc=spec)이면 시방서, 그 외엔 견적서. ('둘 다'는 폐지)
+  const [mode, setMode] = useState<DocMode>(initialMode === 'spec' && hasSpec ? 'spec' : 'quote')
   const [copied, setCopied] = useState(false)
 
   const showQuote = mode === 'both' || mode === 'quote'
@@ -107,7 +107,6 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
 
   // 문서 선택 토글 옵션 (있는 문서만 노출)
   const modeOptions: [DocMode, string][] = [
-    ...(hasSpec ? ([['both', '둘 다']] as [DocMode, string][]) : []),
     ['quote', '견적서'],
     ...(hasSpec ? ([['spec', '시방서']] as [DocMode, string][]) : []),
     ...(canContract ? ([['contract', '계약서']] as [DocMode, string][]) : []),
