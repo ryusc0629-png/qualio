@@ -2,13 +2,13 @@
 
 import { useState, useRef } from 'react'
 import { useAction } from 'next-safe-action/hooks'
-import { savePostAction } from '@/lib/actions/posts'
+import { savePostAction, generatePostFromNotesAction } from '@/lib/actions/posts'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Loader2, Save, ImagePlus, X, GripVertical } from 'lucide-react'
+import { Loader2, Save, ImagePlus, X, GripVertical, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { RichTextEditor } from './rich-text-editor'
 
@@ -43,6 +43,8 @@ export function PostEditor({ businessId, post, onClose, onSaved }: PostEditorPro
   const [title, setTitle] = useState(post?.title ?? '')
   const [content, setContent] = useState(bodyOnly)
   const [summary, setSummary] = useState(post?.summary ?? '')
+  // 현장 메모(신규 작성 시 사진+메모로 초안 자동 생성)
+  const [notes, setNotes] = useState('')
   const [published, setPublished] = useState(post?.published ?? true)
   const [imageUrls, setImageUrls] = useState<string[]>(post?.image_urls ?? [])
   const [beforeImageUrls, setBeforeImageUrls] = useState<string[]>(post?.before_image_urls ?? [])
@@ -66,6 +68,25 @@ export function PostEditor({ businessId, post, onClose, onSaved }: PostEditorPro
       toast.error(error.serverError ?? '저장에 실패했습니다')
     },
   })
+
+  // 현장 메모 + 사진 → 초안 자동 작성 (저장은 안 함, 아래 편집칸을 채워줌)
+  const { execute: generateFromNotes, isPending: isGenerating } = useAction(generatePostFromNotesAction, {
+    onSuccess: ({ data }) => {
+      if (!data) return
+      setTitle(data.title)
+      setSummary(data.summary)
+      setContent(data.content)
+      toast.success('글 초안이 만들어졌어요. 내용을 확인하고 저장하세요')
+    },
+    onError: ({ error }) => {
+      toast.error(error.serverError ?? '글을 만들지 못했어요. 잠시 후 다시 눌러주세요')
+    },
+  })
+
+  const handleGenerateFromNotes = () => {
+    if (!notes.trim()) { toast.error('현장 메모를 입력해주세요'); return }
+    generateFromNotes({ notes, imageUrls: imageUrls.length > 0 ? imageUrls : undefined })
+  }
 
   const handleSave = () => {
     if (!title.trim()) { toast.error('제목을 입력해주세요'); return }
@@ -190,6 +211,39 @@ export function PostEditor({ businessId, post, onClose, onSaved }: PostEditorPro
   return (
     <div className="rounded-lg border bg-card p-5 space-y-4">
       <h3 className="font-semibold text-sm">{post ? '포스트 수정' : '새 포스트 작성'}</h3>
+
+      {/* 현장 메모로 빠르게 만들기 — 신규 작성(일반 포스트)에서만 노출 */}
+      {!post && !isPortfolio && (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
+          <div>
+            <h4 className="text-sm font-semibold">현장 메모로 빠르게 만들기</h4>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              오늘 한 작업을 편하게 적어주세요. 아래 &lsquo;사진&rsquo; 칸에 현장 사진을 먼저 올리면, 사진까지 보고 읽기 좋은 글로 만들어 드려요. (사진 없이 메모만으로도 됩니다)
+            </p>
+          </div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            disabled={isGenerating || isPending}
+            rows={4}
+            placeholder="예: 오늘 삼산동 OO상가 바닥 왁스 작업. 기름때가 심해서 두 번 밀었고 미끄럼방지까지 코팅함. 사장님이 반짝인다고 좋아하심."
+            className="w-full rounded-md border bg-white px-3 py-2 text-sm resize-none outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <Button
+            type="button"
+            onClick={handleGenerateFromNotes}
+            disabled={isGenerating || isPending || !notes.trim()}
+            className="gap-2"
+          >
+            {isGenerating
+              ? <><Loader2 className="h-4 w-4 animate-spin" />전문가 데이터로 작성 중이에요...</>
+              : <><Sparkles className="h-4 w-4" />이 내용으로 글 만들기</>}
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            만든 글은 아래에서 바로 고칠 수 있어요. 마음에 들면 저장하세요.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-3">
         <div>

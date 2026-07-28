@@ -259,6 +259,63 @@ export const savePostAction = action
     return { success: true }
   })
 
+// 현장 메모 + 사진 → 읽기 좋은 글 초안 생성 (저장 안 함, 편집기에서 검토 후 저장)
+// 사장님이 사진 올리고 아무렇게나 메모하면, 사진을 보고 전문가 톤으로 다듬어 초안을 만들어 준다.
+export const generatePostFromNotesAction = action
+  .schema(z.object({
+    notes: z.string().min(1, '현장 메모를 입력해주세요').max(2000),
+    imageUrls: z.array(z.string().url()).max(10).optional(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const [businessResult, servicesResult, subResult] = await Promise.all([
+      db
+        .from('businesses')
+        .select('name, address, description, service_areas' as never)
+        .eq('id', businessId)
+        .maybeSingle() as unknown as Promise<{ data: { name: string; address: string | null; description: string | null; service_areas: string[] | null } | null }>,
+      db
+        .from('service_items')
+        .select('name, base_price, unit')
+        .eq('business_id', businessId)
+        .eq('is_active', true)
+        .is('deleted_at', null),
+      db
+        .from('subscriptions')
+        .select('plan')
+        .eq('business_id', businessId)
+        .eq('status', 'active')
+        .maybeSingle(),
+    ])
+
+    if (!businessResult.data) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const business = businessResult.data
+    const services = servicesResult.data ?? []
+    const planId = ((subResult.data?.plan as PlanId) ?? 'beta')
+    const model = getPostModel(planId)
+
+    // 사진(비전) + 메모를 핵심 재료로 초안 작성 — 저장·이미지 자동생성은 하지 않음(실사진 사용)
+    const postContent = await generatePostContent({
+      businessName: business.name,
+      address: business.address,
+      description: business.description,
+      services,
+      fieldNotes: parsedInput.notes,
+      imageUrls: parsedInput.imageUrls,
+      serviceAreas: business.service_areas,
+      model,
+    })
+
+    return {
+      success: true,
+      title: postContent.title,
+      summary: postContent.summary,
+      content: postContent.content,
+    }
+  })
+
 // 이번 달 인기 주제 추천 액션
 export const getTopicSuggestionsAction = action
   .schema(z.object({}))

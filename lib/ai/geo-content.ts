@@ -171,6 +171,8 @@ interface PostInput {
   services: ServiceItem[]
   topic?: string        // 작성할 주제 (없으면 AI가 선택)
   imageUrl?: string     // 업로드한 이미지 URL — Claude가 직접 분석
+  imageUrls?: string[]  // 현장 사진 여러 장 (Claude 비전) — 있으면 imageUrl보다 우선
+  fieldNotes?: string   // 사장님이 현장에서 남긴 메모 — 있으면 이 글의 핵심 재료로 사용
   serviceAreas?: string[] | null // 추가 출장 지역
   model?: string        // 본문 생성 모델 (플랜별 — 미지정 시 기본 Haiku)
   realCases?: string[]  // 실제 작업 사례(익명) — 본문 고유성·신뢰도용 근거
@@ -203,6 +205,11 @@ export async function generatePostContent(input: PostInput): Promise<PostContent
     ? `\n[실제 작업 사례 — 이 업체가 실제로 수행한 익명 사례다. 아래 중 1개를 골라 본문 스토리텔링에 자연스럽게(고객 식별정보 없이) 녹여 고유성을 높일 것. 사례에 없는 사실·수치는 절대 지어내지 말 것]\n${input.realCases.map((c, i) => `${i + 1}. ${c}`).join('\n')}`
     : ''
 
+  // 사장님 현장 메모 — 있으면 이 글의 핵심 재료(사진과 함께 실제 작업을 살려 씀)
+  const fieldNotesBlock = input.fieldNotes && input.fieldNotes.trim()
+    ? `\n[사장님 현장 메모 — 이 글의 핵심 재료다. 아래 메모와 첨부 사진을 바탕으로, 실제로 그 현장에서 있었던 일을 살려 쓸 것. 이 메모가 있으면 다른 주제보다 이 메모를 최우선으로 삼는다]\n"${input.fieldNotes.trim()}"\n- 메모의 사실(작업 내용·상황·결과)을 중심으로 쓰되, 메모에 없는 수치·상호·실명은 절대 지어내지 말 것.\n- 첨부 사진이 있으면 사진 속 실제 장면(공간·상태·장비·작업)을 구체적으로 반영해 생생하게 쓸 것.\n- 메모가 짧거나 반말·비문이어도 전문가가 쓴 것처럼 읽기 좋게 다듬어 완성할 것.`
+    : ''
+
   // 실제 검색량 기반 키워드 — 제목·본문을 진짜 검색어에 맞춰 상위노출 확률↑
   const related = (input.relatedKeywords ?? []).slice(0, 8)
   const keywordBlock = input.keyword
@@ -224,7 +231,7 @@ ${regionHint}
 업체 소개: ${input.description ?? '청소 전문 업체'}
 서비스: ${serviceList || '청소 서비스'}
 ${topicHint}
-${input.imageUrl ? '위 첨부 이미지를 분석하여 이미지 내용을 포스트에 자연스럽게 반영하세요.' : ''}${realCasesBlock}${keywordBlock}${titleRule}
+${(input.imageUrls?.length || input.imageUrl) ? '위 첨부 사진들을 분석하여 사진 속 실제 장면(공간·상태·장비·작업)을 포스트에 자연스럽게 반영하세요.' : ''}${fieldNotesBlock}${realCasesBlock}${keywordBlock}${titleRule}
 
 [지역·고유성 규칙 — 검색 노출에 매우 중요]
 - 본문·소제목에 핵심 지역(동/구)을 자연스럽게 2~4회 녹일 것. 상위 지역(시·도·권역)은 1~2회만 언급해 "핵심 지역 전문"이라는 신호를 흐리지 말 것.
@@ -311,9 +318,13 @@ imagePrompts: 이 포스트에 넣을 서로 다른 사진 3장의 영문 장면
     | { type: 'text'; text: string }
     | { type: 'image'; source: { type: 'url'; url: string } }
 
-  const userContent: MessageContent[] = input.imageUrl
+  // 현장 사진 여러 장 우선, 없으면 단일 imageUrl 폴백 (비용·토큰 고려해 최대 8장)
+  const visionImages = input.imageUrls?.length
+    ? input.imageUrls
+    : (input.imageUrl ? [input.imageUrl] : [])
+  const userContent: MessageContent[] = visionImages.length > 0
     ? [
-        { type: 'image', source: { type: 'url', url: input.imageUrl } },
+        ...visionImages.slice(0, 8).map((url): MessageContent => ({ type: 'image', source: { type: 'url', url } })),
         { type: 'text', text: textPrompt },
       ]
     : [{ type: 'text', text: textPrompt }]
