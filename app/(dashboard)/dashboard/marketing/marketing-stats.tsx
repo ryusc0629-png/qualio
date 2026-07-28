@@ -1,9 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { SOURCE_LABELS, isAiSource } from '@/lib/utils/detect-view-source'
-import type { ViewSource } from '@/lib/utils/detect-view-source'
-import { ALL_CHANNELS, channelLabel } from '@/lib/utils/marketing-channels'
-import { getReviewSummary } from '@/lib/reviews/get-reviews'
-import { StatsCharts } from './stats-charts'
+import { isAiSource } from '@/lib/utils/detect-view-source'
 
 interface MarketingStatsProps {
   businessId: string
@@ -11,6 +7,8 @@ interface MarketingStatsProps {
   months: number
 }
 
+// 마케팅 성과 — "성적표(매출) → 핵심 레버(전환) → 진단(유입·품질)" 3층 구조로 단순화.
+// 비테크 사장님이 한눈에 이해하도록 각 지표에 온보딩 설명을 붙이고, 보조 지표는 접어둔다.
 export async function MarketingStats({ businessId, months }: MarketingStatsProps) {
   const db = createServiceClient()
 
@@ -19,15 +17,15 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
   const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1)).toISOString()
   const periodLabel = `최근 ${months}개월`
 
-  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, reviewResult, claimsResult, pageViewsResult, funnelResult] = await Promise.all([
-    // 견적 신청 (기간 내) — 테스트 견적 제외용으로 id·is_test 조회. '견적 받기' 단계 겸용
+  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, pageViewsResult, funnelResult] = await Promise.all([
+    // 견적 신청 (기간 내) — 테스트 견적 제외용으로 id·is_test 조회
     db
       .from('quotes')
       .select('id, is_test' as never)
       .eq('business_id', businessId)
       .gte('created_at', periodStart),
 
-    // 예약 (quote_id 있는 것만 — 마케팅 유입 전환). 건수 + 매출 + 채널 귀속 겸용
+    // 예약 (quote_id 있는 것만 — 마케팅 유입 전환). 건수 + 매출 겸용
     db
       .from('bookings')
       .select('final_price, status, quote_id')
@@ -35,15 +33,14 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
       .not('quote_id', 'is', null)
       .gte('created_at', periodStart),
 
-    // 조회 기록 (소스 + 포스트 제목)
+    // 블로그 글 조회 (유입 소스 + 추이용)
     db
       .from('post_views')
-      .select('source, post_id, viewed_at, biz_posts!post_views_post_id_fkey(title)')
+      .select('source, viewed_at')
       .eq('business_id', businessId)
-      .gte('viewed_at', periodStart)
-      .order('viewed_at', { ascending: false }),
+      .gte('viewed_at', periodStart),
 
-    // 월별 발행 포스트 수
+    // 월별 발행 포스트 수 (추이 그래프의 '글 N' 표시)
     db
       .from('biz_posts')
       .select('published_at')
@@ -51,46 +48,32 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
       .eq('published', true)
       .gte('published_at', periodStart),
 
-    // 후기 요청 현황
-    db
-      .from('bookings')
-      .select('id, auto_review_sent_at, auto_review_followup_sent_at')
-      .eq('business_id', businessId)
-      .eq('status', 'completed')
-      .gte('scheduled_at', periodStart),
-
-    // 후기 인증 클릭 수
-    db
-      .from('review_claims')
-      .select('id, claimed_at')
-      .eq('business_id', businessId)
-      .gte('sent_at', periodStart),
-
-    // 공개 페이지 방문 (견적 페이지·브랜드 홈) — page_views 타입 미반영이라 단언 사용
+    // 공개 페이지 방문 (견적 페이지·브랜드 홈) — 유입 소스 + 추이용. page_views 타입 미반영이라 단언 사용
     db
       .from('page_views' as never)
-      .select('source, page_type, channel, viewed_at' as never)
+      .select('source, viewed_at' as never)
       .eq('business_id' as never, businessId)
-      .gte('viewed_at' as never, periodStart) as unknown as Promise<{ data: { source: string; page_type: string; channel: string | null; viewed_at: string }[] | null }>,
+      .gte('viewed_at' as never, periodStart) as unknown as Promise<{ data: { source: string; viewed_at: string }[] | null }>,
 
-    // 견적 퍼널 이벤트 (전체 여정) — 타입 미반영이라 단언 사용
+    // 견적 퍼널 이벤트 — '거의 예약할 뻔한 고객' + '어느 질문에서 멈추나'(품질 신호). 타입 미반영이라 단언 사용
     db
       .from('quote_funnel_events' as never)
-      .select('session_id, event_type, step, meta, channel' as never)
+      .select('session_id, event_type, step' as never)
       .eq('business_id' as never, businessId)
-      .gte('created_at' as never, periodStart) as unknown as Promise<{ data: { session_id: string; event_type: string; step: string | null; meta: Record<string, string | number> | null; channel: string | null }[] | null }>,
+      .gte('created_at' as never, periodStart) as unknown as Promise<{ data: { session_id: string; event_type: string; step: string | null }[] | null }>,
   ])
 
-  // 테스트/장난 견적(is_test) 제외 — 사장님 본인 테스트·고객 호기심 클릭이 통계를 오염시키지 않게
+  // ── 성적표: 퀄리오가 만든 매출 ──
+  // 테스트/장난 견적(is_test) 제외 — 사장님 본인 테스트·호기심 클릭이 통계를 오염시키지 않게
   const quoteRows = (quotesResult.data ?? []) as unknown as { id: string; is_test: boolean | null }[]
   const testQuoteIds = new Set(quoteRows.filter((q) => q.is_test).map((q) => q.id))
   const quoteCount = quoteRows.filter((q) => !q.is_test).length
-  // 마케팅 유입(견적)에서 나온 예약들 — 건수 + 매출 + 채널 귀속 (테스트 견적에서 나온 예약도 제외)
+
   const bookingRows = ((bookingsResult.data ?? []) as { final_price: number | null; status: string; quote_id: string | null }[])
     .filter((b) => !(b.quote_id && testQuoteIds.has(b.quote_id)))
   const bookingCount = bookingRows.length
   const conversionRate = quoteCount > 0 ? Math.round((bookingCount / quoteCount) * 100) : 0
-  // 퀄리오가 만든 매출 — 취소·노쇼 제외한 예약 매출(실현+예정), 그중 이미 완료분 별도 표시
+
   const REVENUE_STATUSES = ['confirmed', 'in_progress', 'completed']
   const revenueBookings = bookingRows.filter((b) => REVENUE_STATUSES.includes(b.status))
   const attributedRevenue = revenueBookings.reduce((sum, b) => sum + (b.final_price ?? 0), 0)
@@ -99,65 +82,8 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
     .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
   const upcomingRevenue = attributedRevenue - completedRevenue
 
-  // 채널별 매출 — 견적 제출 이벤트(quote_submitted)의 meta.quoteId↔channel로 예약 매출을 귀속
-  // (블로그 글 CTA는 ?ch=post 로 태그돼 '자동발행 글'로 잡힘)
-  const funnelRows = funnelResult.data ?? []
-  const quoteIdToChannel = new Map<string, string | null>()
-  for (const e of funnelRows) {
-    if (e.event_type !== 'quote_submitted') continue
-    const qid = e.meta && typeof e.meta.quoteId === 'string' ? e.meta.quoteId : null
-    if (qid) quoteIdToChannel.set(qid, e.channel ?? null)
-  }
-  const channelRevenueMap = new Map<string, number>()
-  for (const b of revenueBookings) {
-    const ch = (b.quote_id && quoteIdToChannel.get(b.quote_id)) || '직접·기타'
-    channelRevenueMap.set(ch, (channelRevenueMap.get(ch) ?? 0) + (b.final_price ?? 0))
-  }
-  const channelRevenue = Array.from(channelRevenueMap.entries())
-    .map(([channel, amount]) => ({ channel, amount, label: channel === '직접·기타' ? '직접·기타' : channelLabel(channel) }))
-    .sort((a, b) => b.amount - a.amount)
-
-  // 후기 요청 현황
-  const completedBookings = reviewResult.data ?? []
-  const reviewSentCount = completedBookings.filter((b) => b.auto_review_sent_at).length
-  const reviewFollowupCount = completedBookings.filter((b) => b.auto_review_followup_sent_at).length
-  const claims = claimsResult.data ?? []
-  const claimedCount = claims.filter((c) => c.claimed_at).length
-  // 수집·전시 중인 실제 후기 요약 (누적) — 평균 별점·개수
-  const reviewSummary = await getReviewSummary(db, businessId, 1)
-
-  const views = postViewsResult.data ?? []        // 블로그(post_views)
-  const pageViews = pageViewsResult.data ?? []      // 공개 페이지(page_views)
-
-  // 페이지별 방문 수 (선택 기간)
-  const blogViews = views.length
-  const brandHomeViews = pageViews.filter((p) => p.page_type === 'brand_home').length
-  const quoteViews = pageViews.filter((p) => p.page_type === 'quote').length
-
-  // ── 채널별 유입 (선택 기간) — ?ch= 태그가 붙은 홍보 링크로 들어온 방문만 채널별 집계 ──
-  const channelCounts = pageViews.reduce<Record<string, number>>((acc, p) => {
-    if (!p.channel) return acc // 태그 없는 직접·검색 유입은 위 '검색·AI 유입'에서 다룸
-    acc[p.channel] = (acc[p.channel] ?? 0) + 1
-    return acc
-  }, {})
-  const channelStats = ALL_CHANNELS
-    .map((c) => ({ key: c.key, label: c.label, emoji: c.emoji, count: channelCounts[c.key] ?? 0 }))
-    .filter((c) => c.count > 0)
-    .sort((a, b) => b.count - a.count)
-  const channelTaggedTotal = channelStats.reduce((s, c) => s + c.count, 0)
-  const channelMax = channelStats.reduce((m, c) => Math.max(m, c.count), 0)
-
-  // ── 견적 퍼널 (선택 기간) — 방문 → 작성 시작 → 견적 → 열람 → 플랜 선택 → 예약 ──
+  // ── 핵심 레버: 거의 예약할 뻔한 고객(주소까지 입력·미예약) = 지금 연락하면 매출 되는 사람 ──
   const funnelEvents = funnelResult.data ?? []
-  // 이벤트별 고유 세션 수 (한 사람의 여정 = 1로 집계)
-  const sessionsOf = (type: string) =>
-    new Set(funnelEvents.filter((e) => e.event_type === type).map((e) => e.session_id)).size
-  const startedSessions = sessionsOf('form_started')
-  const quoteViewedSessions = sessionsOf('quote_viewed')
-  const planSelectedSessions = sessionsOf('plan_selected')
-  const addressSessions = sessionsOf('address_entered')
-
-  // 거의 예약할 뻔한 고객 — 주소까지 입력했지만 예약 확정 안 한 세션 수 (재접촉 기회)
   const bookedSessions = new Set(
     funnelEvents.filter((e) => e.event_type === 'booking_submitted').map((e) => e.session_id),
   )
@@ -165,21 +91,7 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
     .filter((e) => e.event_type === 'address_entered' && !bookedSessions.has(e.session_id))
     .reduce<Set<string>>((set, e) => set.add(e.session_id), new Set()).size
 
-  // 플랜 선호도 — plan_selected 이벤트의 meta.tier 분포 (전환 안 돼도 끌린 플랜)
-  const TIER_LABELS: Record<string, string> = { good: '기본', better: '추천', best: '프리미엄' }
-  const planPick = funnelEvents
-    .filter((e) => e.event_type === 'plan_selected')
-    .reduce<Record<string, number>>((acc, e) => {
-      const tier = String(e.meta?.tier ?? '')
-      if (tier) acc[tier] = (acc[tier] ?? 0) + 1
-      return acc
-    }, {})
-  const planPickTotal = Object.values(planPick).reduce((a, b) => a + b, 0)
-  const planStats = ['good', 'better', 'best']
-    .map((tier) => ({ tier, label: TIER_LABELS[tier], count: planPick[tier] ?? 0 }))
-    .filter((p) => p.count > 0)
-
-  // 채팅 단계별 통과 고유 세션 수 — "어느 질문에서 멈추나" 이탈 분석
+  // ── 품질 신호: 어느 질문에서 멈추나(견적 폼 이탈 지점) — 우리판 '체류시간' ──
   const STEP_ORDER = ['service', 'space', 'ac_detail', 'unit_variant', 'unit_detail', 'context', 'date', 'notes', 'name', 'phone'] as const
   const STEP_LABELS: Record<string, string> = {
     service: '서비스 선택', space: '평수 입력', ac_detail: '에어컨 선택',
@@ -197,105 +109,31 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
     .filter((s) => s.count > 0)
   const stepMax = stepStats.reduce((m, s) => Math.max(m, s.count), 0)
 
-  // 퍼널 전체 여정 — 방문 → 작성 시작 → 견적 받기 → 견적서 열람 → 플랜 선택 → 예약
-  const funnelStages = [
-    { label: '견적 페이지 방문', sub: '견적 화면을 열어본 횟수',   count: quoteViews,           tone: 'text-foreground' },
-    { label: '견적 작성 시작',   sub: '첫 질문에 답하기 시작',     count: startedSessions,      tone: 'text-blue-600' },
-    { label: '견적 받기 완료',   sub: '견적서까지 받음',           count: quoteCount,           tone: 'text-blue-600' },
-    { label: '견적서 열람',      sub: '받은 견적서를 다시 열어봄', count: quoteViewedSessions,  tone: 'text-emerald-600' },
-    { label: '플랜 선택',        sub: '플랜을 눌러봄(구매 직전)',   count: planSelectedSessions, tone: 'text-emerald-600' },
-    { label: '예약 완료',        sub: '실제 예약으로 전환',         count: bookingCount,         tone: 'text-primary' },
-  ]
-  const funnelTop = funnelStages[0].count
-  const hasFunnelData = funnelStages.some((s) => s.count > 0)
-
-  // 유입 경로 — 사이트 전체(블로그+견적+브랜드 홈) 합산
+  // ── 진단: 유입 경로(검색·AI·직접) — 사이트 전체(블로그+공개 페이지) 합산 ──
+  const views = postViewsResult.data ?? []
+  const pageViews = pageViewsResult.data ?? []
   const allSources: string[] = [...views.map((v) => v.source), ...pageViews.map((p) => p.source)]
   const totalViews = allSources.length
   const aiViews = allSources.filter((s) => isAiSource(s)).length
-  // 일반 검색(SEO) 유입 — 네이버·구글·다음
   const seoViews = allSources.filter((s) => ['google', 'naver', 'daum'].includes(s)).length
-  // 직접 방문·SNS·기타 (전체에서 AI·검색 제외)
   const directOtherViews = totalViews - aiViews - seoViews
 
-  // 소스별 집계 (사이트 전체) — 차트용
-  const sourceCounts = allSources.reduce<Partial<Record<ViewSource, number>>>((acc, s) => {
-    const src = s as ViewSource
-    acc[src] = (acc[src] ?? 0) + 1
-    return acc
-  }, {})
-
-  // ── AI가 데려온 손님(GEO Phase 0) — ChatGPT·Perplexity 등 AI 검색 유입을 엔진별로 분해 ──
-  // page_views.source(ai_*)를 그대로 활용 — 새 비용·측정 없이 "AI 검색이 손님을 데려온다"를 증명
-  const AI_ENGINE_EMOJI: Record<string, string> = {
-    ai_chatgpt: '🤖', ai_perplexity: '🔮', ai_claude: '✳️', ai_you: '🔎',
-  }
-  const aiBreakdown = (Object.keys(sourceCounts) as ViewSource[])
-    .filter((s) => isAiSource(s))
-    .map((s) => ({ key: s, label: SOURCE_LABELS[s], emoji: AI_ENGINE_EMOJI[s] ?? '🤖', count: sourceCounts[s] ?? 0 }))
-    .filter((s) => s.count > 0)
-    .sort((a, b) => b.count - a.count)
-
-  // ── 유입 방문 기록(상세) — "어떻게 들어왔나": AI·검색에서 온 방문을 시간순으로 ──
-  // 이미 쌓인 데이터(블로그 글 조회 + 공개 페이지 방문)를 합쳐 최신순 목록. 검색어·질문은
-  // 플랫폼이 안 알려줘 표시 불가 — 대신 '어느 글/페이지로 왔나'가 AI 인용 신호가 됨.
-  const VISIT_SOURCE_EMOJI: Record<string, string> = {
-    ...AI_ENGINE_EMOJI, google: '🔵', naver: '🟢', daum: '🟡',
-  }
-  interface VisitRow { at: string; source: string; where: string }
-  const visitRows: VisitRow[] = []
-  for (const v of views) {
-    const post = Array.isArray(v.biz_posts) ? v.biz_posts[0] : v.biz_posts
-    const title = (post as { title?: string } | null)?.title ?? '홍보 글'
-    visitRows.push({ at: v.viewed_at, source: v.source, where: title })
-  }
-  for (const p of pageViews) {
-    const where = p.page_type === 'brand_home' ? '브랜드 홈' : p.page_type === 'quote' ? '견적 페이지' : '페이지'
-    visitRows.push({ at: p.viewed_at, source: p.source, where })
-  }
-  // AI·검색 유입만(어떻게 왔는지 식별 가능한 것) — 최신순 최대 40건
-  const identifiableVisits = visitRows
-    .filter((r) => isAiSource(r.source) || ['google', 'naver', 'daum'].includes(r.source))
-    .sort((a, b) => (a.at < b.at ? 1 : -1))
-    .slice(0, 40)
-
-  // 포스트별 조회수 집계 (상위 5개)
-  interface PostViewAgg { title: string; count: number }
-  const postCounts = views.reduce<Record<string, PostViewAgg>>((acc, v) => {
-    const post = Array.isArray(v.biz_posts) ? v.biz_posts[0] : v.biz_posts
-    const title = (post as { title?: string } | null)?.title ?? '(제목 없음)'
-    if (!acc[v.post_id]) acc[v.post_id] = { title, count: 0 }
-    acc[v.post_id].count++
-    return acc
-  }, {})
-  const topPosts = Object.values(postCounts)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5)
-
-  // 월별 발행 추이 (선택 기간만큼의 월 버킷)
-  const posts = monthlyPostsResult.data ?? []
-  interface MonthlyCount { month: string; count: number }
-  const monthlyMap = posts.reduce<Record<string, number>>((acc, p) => {
-    const m = p.published_at.slice(0, 7)  // 'YYYY-MM'
+  // ── 진단: 검색·AI 유입 월별 추이(막대) + 그 달 발행 글 수 ──
+  const monthlyPosts = monthlyPostsResult.data ?? []
+  const monthlyMap = monthlyPosts.reduce<Record<string, number>>((acc, p) => {
+    const m = p.published_at.slice(0, 7)
     acc[m] = (acc[m] ?? 0) + 1
     return acc
   }, {})
-  const monthlyData: MonthlyCount[] = []
+  const isSeoSource = (s: string) => ['google', 'naver', 'daum'].includes(s)
+  const trendBuckets: { label: string; ai: number; seo: number; published: number }[] = []
+  const trendIndex = new Map<string, number>()
   for (let i = months - 1; i >= 0; i--) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))
     const key = d.toISOString().slice(0, 7)
-    const label = `${d.getUTCMonth() + 1}월`
-    monthlyData.push({ month: label, count: monthlyMap[key] ?? 0 })
+    trendIndex.set(key, trendBuckets.length)
+    trendBuckets.push({ label: `${d.getUTCMonth() + 1}월`, ai: 0, seo: 0, published: monthlyMap[key] ?? 0 })
   }
-
-  // ── 검색·AI 유입 월별 추이 — '검색·AI 유입' 스냅샷 카드 안에 함께 표시(별도 박스 통합) ──
-  // 막대 = 그 달 검색·AI 방문(AI=초록·일반검색=파랑 색깔 구분), 아래 숫자 = 그 달 발행 글 수(글↑ → 유입↑)
-  const isSeoSource = (s: string) => ['google', 'naver', 'daum'].includes(s)
-  const trendBuckets = monthlyData.map((m) => ({ label: m.month, ai: 0, seo: 0, published: m.count }))
-  const trendIndex = new Map(trendBuckets.map((_, i) => {
-    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1 - i), 1))
-    return [d.toISOString().slice(0, 7), i] as const
-  }))
   const tallyTrend = (source: string, at: string | null) => {
     if (!at) return
     const idx = trendIndex.get(at.slice(0, 7))
@@ -307,21 +145,10 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
   for (const p of pageViews) tallyTrend(p.source, p.viewed_at)
   const trendMax = trendBuckets.reduce((m, x) => Math.max(m, x.ai + x.seo), 0)
   const trendTotal = trendBuckets.reduce((s, m) => s + m.ai + m.seo, 0)
-  // 증감 판정 — 기간을 반으로 나눠 앞·뒤 비교
-  const trendSplit = Math.floor(trendBuckets.length / 2)
-  const trendFirst = trendBuckets.slice(0, trendSplit).reduce((s, m) => s + m.ai + m.seo, 0)
-  const trendSecond = trendBuckets.slice(trendSplit).reduce((s, m) => s + m.ai + m.seo, 0)
-  const trendGrowing = trendBuckets.length >= 2 && trendTotal > 0 && trendSecond > trendFirst
-  const trendVerdict: { text: string; tone: string } =
-    trendTotal === 0
-      ? { text: '아직 검색·AI로 들어온 방문이 없어요. 글이 검색·AI에 색인되면 여기에 쌓여요', tone: 'text-muted-foreground' }
-      : trendGrowing
-        ? { text: '검색·AI로 찾아오는 고객이 늘고 있어요 ↗ 글이 쌓일수록 효과가 커져요', tone: 'text-emerald-600' }
-        : { text: '검색·AI 유입이 꾸준히 쌓이는 중이에요. 글을 더 낼수록 빨라져요', tone: 'text-muted-foreground' }
 
   return (
-    <div className="space-y-5">
-      {/* 퀄리오가 만든 매출 — 마케팅 유입(견적)에서 나온 예약 매출. ROI를 한눈에 */}
+    <div className="space-y-4">
+      {/* ── 1층 성적표: 퀄리오가 만든 매출 ── */}
       <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5">
         <div className="flex items-center gap-1.5">
           <span className="text-base">🎉</span>
@@ -350,423 +177,162 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
             아직 매출로 이어진 예약이 없어요. 홍보 링크를 공유하고 견적을 받으면 여기에 매출이 쌓여요.
           </p>
         )}
+        <p className="mt-3 pt-3 border-t border-emerald-100 text-xs text-emerald-900/60 leading-relaxed">
+          우리 홍보 페이지·자동 글로 들어온 견적이 실제 예약·매출로 이어진 금액이에요. 이게 마케팅의 최종 성적표예요.
+        </p>
       </div>
 
-      {/* 채널별 매출 — 어디서 온 견적이 매출이 됐는지(자동발행 글·네이버·당근 등) */}
-      {channelRevenue.length > 0 && (
-        <div className="rounded-xl border bg-white overflow-hidden">
-          <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
-            <p className="font-semibold text-sm">채널별 매출</p>
-            <p className="text-xs text-muted-foreground">어디서 온 예약이 매출이 됐나</p>
-          </div>
-          <div className="p-4 space-y-2.5">
-            {channelRevenue.map((c) => {
-              const pct = attributedRevenue > 0 ? Math.round((c.amount / attributedRevenue) * 100) : 0
-              return (
-                <div key={c.channel} className="space-y-1">
-                  <div className="flex items-baseline justify-between gap-2 text-sm">
-                    <span className="font-medium">{c.label}</span>
-                    <span className="font-semibold text-emerald-700">₩{c.amount.toLocaleString('ko-KR')}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                    <div className="h-full rounded-full bg-emerald-500" style={{ width: `${Math.max(pct, c.amount > 0 ? 6 : 0)}%` }} />
-                  </div>
-                </div>
-              )
-            })}
-            <p className="text-xs text-muted-foreground pt-1">
-              자동 발행 블로그 글에서 온 예약은 &lsquo;자동발행 글&rsquo;로 잡혀요.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* 상단 지표 카드 — 견적/전환 */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl border bg-white p-4 space-y-0.5">
-          <p className="text-2xl font-bold text-primary">{quoteCount}</p>
-          <p className="text-xs text-muted-foreground">{periodLabel} 견적 신청</p>
-        </div>
-        <div className="rounded-xl border bg-white p-4 space-y-0.5">
-          <p className="text-2xl font-bold">{conversionRate}%</p>
-          <p className="text-xs text-muted-foreground">견적 → 예약 전환율</p>
-        </div>
-      </div>
-
-      {/* 검색·AI 유입 — 광고비 없이 콘텐츠만으로 들어온 자연 유입(핵심). 직접·기타는 보조로 작게 */}
+      {/* ── 2층 핵심 레버: 전환(매일 볼 곳) ── */}
       <div className="rounded-xl border bg-white overflow-hidden">
         <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
-          <p className="font-semibold text-sm">검색·AI 유입</p>
+          <p className="font-semibold text-sm">여기에 집중하세요 — 견적을 예약으로</p>
           <p className="text-xs text-muted-foreground">{periodLabel}</p>
         </div>
-        {/* 자연 유입 강조 — 광고비 0원, 홍보 글만으로 얻은 성과임을 비테크 사장님에게 인지 */}
-        <div className="px-5 py-2.5 bg-emerald-50 border-b border-emerald-100 flex items-start gap-1.5">
-          <span className="text-sm leading-none mt-0.5" aria-hidden>💚</span>
-          <p className="text-xs text-emerald-800 font-medium leading-relaxed">
-            광고비 <b>0원</b> — 자동 포스팅만으로 검색·AI가 스스로 데려온 손님이에요
+        <div className="grid grid-cols-3 divide-x">
+          <div className="px-2 py-5 text-center">
+            <p className="text-2xl font-bold">{quoteCount}</p>
+            <p className="text-xs text-muted-foreground mt-1">견적 신청</p>
+          </div>
+          <div className="px-2 py-5 text-center">
+            <p className="text-2xl font-bold">{bookingCount}</p>
+            <p className="text-xs text-muted-foreground mt-1">예약 전환</p>
+          </div>
+          <div className="px-2 py-5 text-center">
+            <p className="text-2xl font-bold text-primary">{conversionRate}%</p>
+            <p className="text-xs text-muted-foreground mt-1">예약 전환율</p>
+          </div>
+        </div>
+        <div className="px-5 py-3 border-t bg-slate-50/50">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            방문자를 늘리는 것보다 <b className="text-foreground">이미 들어온 견적을 예약으로 바꾸는 것</b>이 매출을 가장 크게 올려요.
+            이 전환율을 올리는 데 집중하세요.
           </p>
         </div>
-        <div className="grid grid-cols-2 divide-x">
-          <div className="px-2 py-5 text-center">
-            <p className="text-2xl font-bold text-emerald-600">{aiViews.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-1">AI 검색</p>
-            <p className="text-[10px] text-muted-foreground/70 mt-0.5">ChatGPT·Perplexity</p>
-          </div>
-          <div className="px-2 py-5 text-center">
-            <p className="text-2xl font-bold text-blue-600">{seoViews.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-1">일반 검색</p>
-            <p className="text-[10px] text-muted-foreground/70 mt-0.5">네이버·구글·다음</p>
-          </div>
-        </div>
-        <div className="px-5 py-2.5 border-t bg-slate-50/50 flex items-center justify-between text-xs text-muted-foreground">
-          <span>그 외 직접·링크·SNS 방문</span>
-          <span className="font-medium">{directOtherViews.toLocaleString()}회</span>
-        </div>
-        {/* 월별 추이 — 같은 박스 안에서 흐름까지(AI=초록·일반검색=파랑 색깔 구분, 호버 시 숫자 표시) */}
-        {trendBuckets.length >= 2 && (
-          <div className="border-t p-4 space-y-3">
-            <p className={`text-xs font-medium ${trendVerdict.tone}`}>{trendVerdict.text}</p>
-            <div className="flex items-end justify-between gap-2 pt-1">
-              {trendBuckets.map((m) => {
-                const total = m.ai + m.seo
-                const heightPct = trendMax > 0 ? Math.max((total / trendMax) * 100, total > 0 ? 8 : 0) : 0
-                return (
-                  <div key={m.label} className="group relative flex-1 flex flex-col items-center gap-1.5 min-w-0">
-                    {/* 호버 툴팁 — AI·일반검색 숫자 분리 표시 */}
-                    {total > 0 && (
-                      <div className="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 z-10 hidden group-hover:block whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-medium text-white shadow-lg">
-                        <span className="text-emerald-300">AI {m.ai.toLocaleString()}</span>
-                        <span className="text-white/40"> · </span>
-                        <span className="text-blue-300">검색 {m.seo.toLocaleString()}</span>
-                        <span className="text-white/40"> · </span>합계 {total.toLocaleString()}
-                      </div>
-                    )}
-                    <span className="text-[11px] font-bold tabular-nums text-foreground">
-                      {total > 0 ? total.toLocaleString() : ''}
-                    </span>
-                    <div
-                      className="w-full h-24 flex items-end cursor-default"
-                      title={total > 0 ? `AI 검색 ${m.ai}회 · 일반 검색 ${m.seo}회 · 합계 ${total}회` : '방문 없음'}
-                    >
-                      <div className="w-full rounded-t overflow-hidden flex flex-col justify-end transition-all min-h-0" style={{ height: `${heightPct}%` }}>
-                        {m.ai > 0 && <div className="w-full bg-emerald-500" style={{ height: `${(m.ai / total) * 100}%` }} />}
-                        {m.seo > 0 && <div className="w-full bg-blue-500" style={{ height: `${(m.seo / total) * 100}%` }} />}
-                      </div>
-                    </div>
-                    <span className="text-[11px] text-muted-foreground">{m.label}</span>
-                    <span className="text-[10px] text-muted-foreground/70 tabular-nums">
-                      {m.published > 0 ? `글 ${m.published}` : '·'}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-            {/* 범례 + 안내 */}
-            <div className="pt-2 border-t space-y-1.5">
-              <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500" />AI 검색</span>
-                <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-500" />일반 검색(네이버·구글)</span>
-              </div>
-              <p className="text-[11px] text-muted-foreground/70">
-                막대에 마우스를 올리면 자세한 숫자가 보여요. 아래 숫자는 그 달 발행한 글 수예요
-              </p>
-            </div>
+        {/* 거의 예약할 뻔한 고객 — 지금 연락하면 매출 되는 사람(새는 돈) */}
+        {addressNotBooked > 0 && (
+          <div className="border-t px-5 py-3 bg-amber-50/70 flex items-start gap-2">
+            <span className="text-base shrink-0">📞</span>
+            <p className="text-xs text-amber-900 leading-relaxed">
+              주소까지 입력하고 예약은 안 한 고객이 <b>{addressNotBooked}명</b> 있어요.
+              지금 연락하면 예약으로 이어질 수 있는, 놓치면 아까운 고객이에요.
+            </p>
           </div>
         )}
       </div>
 
-      {/* ▼ 여기부터 접이식 — 핵심(매출·전환·유입)만 위에 두고 세부 분석은 접어둠 (선택과 집중) */}
+      {/* ── 3층 진단: 어디서 들어오나·어디서 멈추나 (접이식) ── */}
       <details className="group">
         <summary className="cursor-pointer list-none select-none rounded-xl border bg-slate-50 px-5 py-3.5 flex items-center justify-between gap-2 text-sm font-medium text-muted-foreground hover:bg-slate-100 transition-colors">
-          <span>📊 자세한 분석 더 보기 <span className="text-muted-foreground/60 font-normal">· 견적 흐름·채널·후기</span></span>
+          <span>📊 자세히 보기 <span className="text-muted-foreground/60 font-normal">· 어디서 들어오나·어디서 멈추나</span></span>
           <span className="text-xs shrink-0">
             <span className="group-open:hidden">펼치기 ▾</span>
             <span className="hidden group-open:inline">접기 ▴</span>
           </span>
         </summary>
-        <div className="space-y-5 pt-5">
+        <div className="space-y-4 pt-4">
 
-      {/* 견적 퍼널 — 방문 → 작성 시작 → 견적 받기 → 예약, 단계마다 얼마나 남는지 */}
-      <div className="rounded-xl border bg-white overflow-hidden">
-        <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
-          <p className="font-semibold text-sm">견적 신청 단계별 흐름</p>
-          <p className="text-xs text-muted-foreground">{periodLabel}</p>
-        </div>
+          {/* 검색·AI 유입 + 월별 추이 */}
+          <div className="rounded-xl border bg-white overflow-hidden">
+            <div className="px-5 py-3 border-b bg-slate-50">
+              <p className="font-semibold text-sm">어디서 들어오나 — 검색·AI 유입</p>
+            </div>
+            <div className="px-5 py-2.5 bg-emerald-50 border-b border-emerald-100 flex items-start gap-1.5">
+              <span className="text-sm leading-none mt-0.5" aria-hidden>💚</span>
+              <p className="text-xs text-emerald-800 font-medium leading-relaxed">
+                광고비 <b>0원</b> — 자동 포스팅만으로 검색·AI가 스스로 데려온 손님이에요
+              </p>
+            </div>
+            <div className="grid grid-cols-3 divide-x">
+              <div className="px-2 py-4 text-center">
+                <p className="text-xl font-bold text-emerald-600">{aiViews.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">AI 검색</p>
+                <p className="text-[10px] text-muted-foreground/70 mt-0.5">ChatGPT·Perplexity</p>
+              </div>
+              <div className="px-2 py-4 text-center">
+                <p className="text-xl font-bold text-blue-600">{seoViews.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">일반 검색</p>
+                <p className="text-[10px] text-muted-foreground/70 mt-0.5">네이버·구글·다음</p>
+              </div>
+              <div className="px-2 py-4 text-center">
+                <p className="text-xl font-bold text-slate-500">{directOtherViews.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">직접·기타</p>
+                <p className="text-[10px] text-muted-foreground/70 mt-0.5">링크·SNS·즐겨찾기</p>
+              </div>
+            </div>
 
-        {hasFunnelData ? (
-          <div className="p-4 space-y-2.5">
-            {funnelStages.map((stage, i) => {
-              // 막대 너비: 1단계(방문) 대비 비율. 직전 단계 대비 전환율도 함께 표시
-              const widthPct = funnelTop > 0 ? Math.max((stage.count / funnelTop) * 100, stage.count > 0 ? 8 : 0) : 0
-              const prev = i > 0 ? funnelStages[i - 1].count : null
-              const stepRate = prev && prev > 0 ? Math.round((stage.count / prev) * 100) : null
-              return (
-                <div key={stage.label} className="space-y-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <div className="flex items-baseline gap-2 min-w-0">
-                      <span className="text-sm font-semibold truncate">{stage.label}</span>
-                      {stepRate !== null && (
-                        <span className="text-[11px] text-muted-foreground shrink-0">
-                          이전 단계의 {stepRate}%
+            {/* 월별 추이 — AI=초록·일반검색=파랑, 아래 숫자는 그 달 발행 글 수 */}
+            {trendBuckets.length >= 2 && (
+              <div className="border-t p-4 space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  {trendTotal === 0
+                    ? '아직 검색·AI로 들어온 방문이 없어요. 글이 색인되면 여기에 쌓여요'
+                    : '글이 쌓일수록 검색·AI로 찾아오는 고객이 늘어요'}
+                </p>
+                <div className="flex items-end justify-between gap-2 pt-1">
+                  {trendBuckets.map((m) => {
+                    const total = m.ai + m.seo
+                    const heightPct = trendMax > 0 ? Math.max((total / trendMax) * 100, total > 0 ? 8 : 0) : 0
+                    return (
+                      <div key={m.label} className="group/bar relative flex-1 flex flex-col items-center gap-1.5 min-w-0">
+                        {total > 0 && (
+                          <div className="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 z-10 hidden group-hover/bar:block whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-medium text-white shadow-lg">
+                            <span className="text-emerald-300">AI {m.ai.toLocaleString()}</span>
+                            <span className="text-white/40"> · </span>
+                            <span className="text-blue-300">검색 {m.seo.toLocaleString()}</span>
+                          </div>
+                        )}
+                        <span className="text-[11px] font-bold tabular-nums text-foreground">
+                          {total > 0 ? total.toLocaleString() : ''}
                         </span>
-                      )}
+                        <div className="w-full h-24 flex items-end">
+                          <div className="w-full rounded-t overflow-hidden flex flex-col justify-end min-h-0" style={{ height: `${heightPct}%` }}>
+                            {m.ai > 0 && <div className="w-full bg-emerald-500" style={{ height: `${(m.ai / total) * 100}%` }} />}
+                            {m.seo > 0 && <div className="w-full bg-blue-500" style={{ height: `${(m.seo / total) * 100}%` }} />}
+                          </div>
+                        </div>
+                        <span className="text-[11px] text-muted-foreground">{m.label}</span>
+                        <span className="text-[10px] text-muted-foreground/70 tabular-nums">
+                          {m.published > 0 ? `글 ${m.published}` : '·'}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="flex items-center gap-3 text-[11px] text-muted-foreground pt-2 border-t">
+                  <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500" />AI 검색</span>
+                  <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-500" />일반 검색</span>
+                  <span className="text-muted-foreground/70">· 아래 숫자는 그 달 발행한 글 수</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 견적 폼 품질 신호 — 어느 질문에서 멈추나 */}
+          {stepStats.length > 0 && (
+            <div className="rounded-xl border bg-white overflow-hidden">
+              <div className="px-5 py-3 border-b bg-slate-50">
+                <p className="font-semibold text-sm">어디서 멈추나 — 견적 폼 이탈 지점</p>
+                <p className="text-xs text-muted-foreground mt-0.5">막대가 확 줄어드는 곳이 고객이 포기하는 지점이에요</p>
+              </div>
+              <div className="p-4 space-y-2">
+                {stepStats.map((s) => {
+                  const widthPct = stepMax > 0 ? Math.max((s.count / stepMax) * 100, 8) : 0
+                  return (
+                    <div key={s.step} className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-20 shrink-0 truncate">{s.label}</span>
+                      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-400 rounded-full" style={{ width: `${widthPct}%` }} />
+                      </div>
+                      <span className="text-xs font-medium tabular-nums w-7 text-right shrink-0">{s.count}</span>
                     </div>
-                    <span className={`text-sm font-bold tabular-nums shrink-0 ${stage.tone}`}>
-                      {stage.count.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary/80 rounded-full transition-all"
-                      style={{ width: `${widthPct}%` }}
-                    />
-                  </div>
-                  <p className="text-[11px] text-muted-foreground/80">{stage.sub}</p>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="px-5 py-8 text-center space-y-1">
-            <p className="text-sm text-muted-foreground">아직 견적 신청 흐름 데이터가 없어요</p>
-            <p className="text-xs text-muted-foreground/70">
-              고객이 견적 페이지에서 신청을 시작하면 단계별로 쌓여요
-            </p>
-          </div>
-        )}
-
-        {/* 거의 예약할 뻔한 고객 — 재접촉하면 전환 가능 */}
-        {addressNotBooked > 0 && (
-          <div className="border-t px-5 py-3 bg-amber-50/60 flex items-start gap-2">
-            <span className="text-base shrink-0">📞</span>
-            <p className="text-xs text-amber-900 leading-relaxed">
-              주소까지 입력하고 예약은 안 한 고객이 <b>{addressNotBooked}명</b> 있어요.
-              조금만 더 안내하면 예약으로 이어질 수 있어요.
-            </p>
-          </div>
-        )}
-
-        {/* 채팅 단계별 이탈 — 어느 질문에서 많이 멈추는지 */}
-        {stepStats.length > 0 && (
-          <div className="border-t px-4 py-4 space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground mb-1">
-              질문별 진행 — 막대가 줄어드는 곳이 이탈 지점이에요
-            </p>
-            {stepStats.map((s) => {
-              const widthPct = stepMax > 0 ? Math.max((s.count / stepMax) * 100, 8) : 0
-              return (
-                <div key={s.step} className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground w-20 shrink-0 truncate">{s.label}</span>
-                  <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-400 rounded-full" style={{ width: `${widthPct}%` }} />
-                  </div>
-                  <span className="text-xs font-medium tabular-nums w-7 text-right shrink-0">{s.count}</span>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* 플랜 선호도 — 고객이 어떤 플랜에 끌리는지(예약 전환 전 클릭 기준) */}
-      {planStats.length > 0 && (
-        <div className="rounded-xl border bg-white overflow-hidden">
-          <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
-            <p className="font-semibold text-sm">플랜 선호도</p>
-            <p className="text-xs text-muted-foreground">고객이 눌러본 플랜 · {periodLabel}</p>
-          </div>
-          <div className="p-4 space-y-2.5">
-            {planStats.map((p) => {
-              const pct = planPickTotal > 0 ? Math.round((p.count / planPickTotal) * 100) : 0
-              return (
-                <div key={p.tier} className="flex items-center gap-2">
-                  <span className="text-xs font-medium w-12 shrink-0">{p.label}</span>
-                  <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.max(pct, p.count > 0 ? 6 : 0)}%` }} />
-                  </div>
-                  <span className="text-xs font-medium tabular-nums w-14 text-right shrink-0">{p.count}회 ({pct}%)</span>
-                </div>
-              )
-            })}
-            <p className="text-[11px] text-muted-foreground/80 pt-1">
-              많이 눌리는 플랜의 구성·가격이 고객 눈높이에 맞다는 신호예요
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* AI가 데려온 손님(GEO Phase 0) — ChatGPT·Perplexity 등 AI 검색 유입을 엔진별로 */}
-      {aiViews > 0 && (
-        <div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white overflow-hidden">
-          <div className="px-5 py-3 border-b border-emerald-100 flex items-baseline justify-between gap-2">
-            <p className="font-semibold text-sm">🤖 AI가 데려온 손님</p>
-            <p className="text-xs text-muted-foreground">{periodLabel}</p>
-          </div>
-          <div className="px-5 py-4">
-            <p className="text-sm text-emerald-900/80">
-              ChatGPT·Perplexity 같은 <b>AI 검색</b>에서 우리 페이지로 <b>{aiViews.toLocaleString()}번</b> 들어왔어요
-            </p>
-            <div className="mt-3 space-y-2">
-              {aiBreakdown.map((e) => {
-                const pct = aiViews > 0 ? Math.round((e.count / aiViews) * 100) : 0
-                const widthPct = Math.max(pct, e.count > 0 ? 6 : 0)
-                return (
-                  <div key={e.key} className="flex items-center gap-2">
-                    <span className="text-base shrink-0" aria-hidden>{e.emoji}</span>
-                    <span className="text-xs font-medium w-24 shrink-0 truncate">{e.label}</span>
-                    <div className="flex-1 h-2.5 bg-emerald-100/70 rounded-full overflow-hidden">
-                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${widthPct}%` }} />
-                    </div>
-                    <span className="text-xs font-medium tabular-nums w-16 text-right shrink-0">
-                      {e.count}번 ({pct}%)
-                    </span>
-                  </div>
-                )
-              })}
+                  )
+                })}
+                <p className="text-[11px] text-muted-foreground/80 pt-1">
+                  네이버의 ‘체류시간’처럼, 우리 견적 폼이 잘 설득하는지 보여주는 품질 신호예요.
+                </p>
+              </div>
             </div>
-            <p className="text-[11px] text-muted-foreground/80 pt-3">
-              AI 검색에 우리 업체가 자주 추천될수록 이 숫자가 올라가요. 홍보 글을 꾸준히 발행하면 AI가 우리를 더 잘 인용해요.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* 유입 방문 기록 — "어떻게 들어왔나" 상세: AI·검색 방문을 시간순으로(접이식) */}
-      {identifiableVisits.length > 0 && (
-        <details className="rounded-xl border bg-white overflow-hidden group">
-          <summary className="px-5 py-3 border-b bg-slate-50 flex items-center justify-between gap-2 cursor-pointer list-none">
-            <div>
-              <p className="font-semibold text-sm">유입 방문 기록</p>
-              <p className="text-xs text-muted-foreground">AI·검색에서 온 방문 · 최신순</p>
-            </div>
-            <span className="text-xs text-muted-foreground group-open:hidden">펼치기 ▾</span>
-            <span className="text-xs text-muted-foreground hidden group-open:inline">접기 ▴</span>
-          </summary>
-          <ul className="divide-y max-h-80 overflow-y-auto overscroll-contain">
-            {identifiableVisits.map((r, i) => {
-              const when = new Date(r.at).toLocaleString('ko-KR', {
-                month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul',
-              })
-              return (
-                <li key={i} className="px-4 py-2.5 flex items-center gap-2.5 text-sm">
-                  <span className="text-base shrink-0" aria-hidden>{VISIT_SOURCE_EMOJI[r.source] ?? '🌐'}</span>
-                  <span className="font-medium shrink-0 w-20 truncate">{SOURCE_LABELS[r.source as ViewSource] ?? r.source}</span>
-                  <span className="text-muted-foreground truncate flex-1">→ {r.where}</span>
-                  <span className="text-[11px] text-muted-foreground shrink-0 tabular-nums">{when}</span>
-                </li>
-              )
-            })}
-          </ul>
-          <p className="px-5 py-2.5 border-t bg-slate-50/50 text-[11px] text-muted-foreground leading-relaxed">
-            무슨 검색어·질문으로 왔는지는 구글·네이버·AI가 알려주지 않아 표시할 수 없어요. 대신 &lsquo;어느 글을 보고 왔나&rsquo;가 AI·검색이 우리를 인용하는 신호예요.
-          </p>
-        </details>
-      )}
-
-      {/* 채널별 유입 — 홍보 링크(?ch=)로 들어온 방문을 채널별로 분리 (네이버 광고·당근·블로그 등)
-          ※ 광고 채널(네이버 파워링크·구글 검색광고)도 여기에 함께 표시 — 예전 '광고 유입' 카드와 중복이라 통합 */}
-      <div className="rounded-xl border bg-white overflow-hidden">
-        <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
-          <p className="font-semibold text-sm">채널별 유입</p>
-          <p className="text-xs text-muted-foreground">홍보 링크 기준 · {periodLabel}</p>
-        </div>
-        {channelStats.length > 0 ? (
-          <div className="p-4 space-y-2.5">
-            {channelStats.map((c) => {
-              const pct = channelTaggedTotal > 0 ? Math.round((c.count / channelTaggedTotal) * 100) : 0
-              const widthPct = channelMax > 0 ? Math.max((c.count / channelMax) * 100, 8) : 0
-              return (
-                <div key={c.key} className="flex items-center gap-2">
-                  <span className="text-base shrink-0" aria-hidden>{c.emoji}</span>
-                  <span className="text-xs font-medium w-24 shrink-0 truncate">{c.label}</span>
-                  <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-primary/80 rounded-full" style={{ width: `${widthPct}%` }} />
-                  </div>
-                  <span className="text-xs font-medium tabular-nums w-16 text-right shrink-0">
-                    {c.count}회 ({pct}%)
-                  </span>
-                </div>
-              )
-            })}
-            <p className="text-[11px] text-muted-foreground/80 pt-1">
-              가장 많이 들어온 채널에 홍보를 집중하면 효율이 올라가요
-            </p>
-          </div>
-        ) : (
-          <div className="px-5 py-8 text-center space-y-1">
-            <p className="text-sm text-muted-foreground">아직 채널 링크로 들어온 방문이 없어요</p>
-            <p className="text-xs text-muted-foreground/70">
-              위 &lsquo;채널별 홍보 링크&rsquo;를 복사해 네이버·당근·인스타에 올리면 채널별로 쌓여요
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* 페이지별 방문 — 브랜드 홈 / 견적 페이지 / 블로그 글 */}
-      <div className="rounded-xl border bg-white overflow-hidden">
-        <div className="px-5 py-3 border-b bg-slate-50 flex items-baseline justify-between gap-2">
-          <p className="font-semibold text-sm">페이지별 방문</p>
-          <p className="text-xs text-muted-foreground">{periodLabel}</p>
-        </div>
-        <div className="grid grid-cols-3 divide-x">
-          <div className="px-2 py-4 text-center">
-            <p className="text-xl font-bold">{brandHomeViews.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">브랜드 홈</p>
-            <p className="text-[10px] text-muted-foreground/70 mt-0.5">업체 소개 페이지</p>
-          </div>
-          <div className="px-2 py-4 text-center">
-            <p className="text-xl font-bold text-primary">{quoteViews.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">견적 페이지</p>
-            <p className="text-[10px] text-muted-foreground/70 mt-0.5">견적 신청 화면</p>
-          </div>
-          <div className="px-2 py-4 text-center">
-            <p className="text-xl font-bold">{blogViews.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">블로그 글</p>
-            <p className="text-[10px] text-muted-foreground/70 mt-0.5">홍보 포스트</p>
-          </div>
-        </div>
-      </div>
-
-      {/* 후기 요청 현황 */}
-      <div className="rounded-xl border bg-white overflow-hidden">
-        <div className="px-5 py-3.5 border-b bg-slate-50 flex items-center justify-between gap-2">
-          <p className="font-semibold text-sm">{periodLabel} 후기 요청 현황</p>
-          {reviewSummary.count > 0 && (
-            <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700">
-              ⭐ {reviewSummary.avg.toFixed(1)} · 후기 {reviewSummary.count}개
-            </span>
           )}
-        </div>
-        <div className="grid grid-cols-4 divide-x">
-          <div className="px-3 py-4 text-center">
-            <p className="text-xl font-bold">{completedBookings.length}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">완료 건수</p>
-          </div>
-          <div className="px-3 py-4 text-center">
-            <p className="text-xl font-bold text-blue-600">{reviewSentCount}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">요청 발송</p>
-          </div>
-          <div className="px-3 py-4 text-center">
-            <p className="text-xl font-bold text-amber-600">{reviewFollowupCount}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">팔로업</p>
-          </div>
-          <div className="px-3 py-4 text-center">
-            <p className="text-xl font-bold text-emerald-600">{claimedCount}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">인증 완료</p>
-          </div>
-        </div>
-        {completedBookings.length > 0 && reviewSentCount === 0 && (
-          <p className="px-5 pb-3 text-xs text-muted-foreground">
-            설정에서 구글/네이버 플레이스 URL을 등록하면 자동 발송이 시작돼요
-          </p>
-        )}
-      </div>
-
-      {/* 차트 (클라이언트 컴포넌트) — 콘텐츠 성과만(조회 TOP·발행 추이). 유입 소스 분포는 위 '검색·AI 유입'과 중복이라 제거 */}
-      <StatsCharts
-        monthlyData={monthlyData}
-        topPosts={topPosts}
-      />
         </div>
       </details>
     </div>
