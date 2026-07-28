@@ -12,6 +12,7 @@ import { BrandDesignSection } from './brand-design-section'
 import { StrengthsSection } from './strengths-section'
 import { OwnerIntroSection } from './owner-intro-section'
 import { CredentialsSection } from './credentials-section'
+import { PortfolioSection, type PortfolioItem } from './portfolio-section'
 import { CompletenessPanel, type CompletenessItem } from './completeness-panel'
 import type { Strength } from '@/lib/business/strengths'
 import { ServiceAreaPicker } from './service-area-picker'
@@ -78,6 +79,8 @@ interface Business {
   experience_years: number | null
   business_number: string | null
   certifications: string[] | null
+  portfolio: PortfolioItem[] | null
+  target_customer: string | null
 }
 
 interface Props {
@@ -129,6 +132,11 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
   )
   const [businessNumber, setBusinessNumber] = useState(business.business_number ?? '')
   const [certifications, setCertifications] = useState<string[]>(business.certifications ?? [])
+  // 시공 사례(비포·애프터) 직접 등록 + 주 고객 유형(B2B/B2C 카피 분기)
+  const [portfolio, setPortfolio] = useState<PortfolioItem[]>(business.portfolio ?? [])
+  const [targetCustomer, setTargetCustomer] = useState<'b2b' | 'b2c'>(
+    business.target_customer === 'b2b' ? 'b2b' : 'b2c',
+  )
 
   // 업체 기본 정보 — 실시간 체크리스트 판정을 위해 상태로 관리
   const [name, setName] = useState(business.name ?? '')
@@ -179,7 +187,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
     { key: 'experience', label: '청소 경력 연차', hint: '“경력 N년”이 표시돼요', done: experienceYears.trim() !== '' && Number(experienceYears) > 0, essential: false },
     { key: 'business_number', label: '사업자 등록', hint: '‘사업자 등록 업체’ 배지가 붙어요', done: businessNumber.replace(/[^0-9]/g, '').length === 10, essential: false },
     { key: 'certifications', label: '자격증·보유장비', hint: '전문성을 증명하는 항목이에요', done: certifications.filter((c) => c.trim()).length > 0, essential: false },
-    { key: 'portfolio', label: '시공 사례 사진 (비포·애프터)', hint: '청소는 사진이 가장 강력해요', done: publicReportCount > 0, essential: false },
+    { key: 'portfolio', label: '시공 사례 사진 (비포·애프터)', hint: '청소는 사진이 가장 강력해요', done: publicReportCount > 0 || portfolio.some((p) => p.before?.trim() && p.after?.trim()), essential: false },
     { key: 'testimonials', label: '고객 추천사', hint: '후기가 없을 때 신뢰를 채워줘요', done: testimonials.filter((t) => t.quote.trim()).length > 0, essential: false },
     { key: 'youtube', label: '시공 영상 (유튜브)', hint: '말보다 영상이 확실해요', done: !!business.youtube_url?.trim(), essential: false },
   ]
@@ -188,11 +196,6 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
   const jumpTo = (key: string) => {
     if (key === 'services') {
       window.location.href = '/dashboard/services'
-      return
-    }
-    // 시공 사례는 작업 보고에서 '홈 공개'를 켜야 채워짐 → 예약 목록으로 안내
-    if (key === 'portfolio') {
-      window.location.href = '/dashboard/bookings'
       return
     }
     const idMap: Record<string, string> = {
@@ -210,6 +213,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
       experience: 'field-credentials',
       business_number: 'field-credentials',
       certifications: 'field-credentials',
+      portfolio: 'field-portfolio',
       testimonials: 'field-testimonials',
       youtube: 'field-youtube',
     }
@@ -299,6 +303,11 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
       experience_years:          experienceYears.trim(),
       business_number:           businessNumber.trim(),
       certifications:            JSON.stringify(certifications.filter((c) => c.trim())),
+      // 작업 전·후 두 장이 모두 있는 시공 사례만 저장
+      portfolio:                 JSON.stringify(
+        portfolio.filter((p) => p.before.trim() && p.after.trim())
+      ),
+      target_customer:           targetCustomer,
     })
   }
 
@@ -350,6 +359,36 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
             placeholder="10년 경력의 청소 전문 업체입니다"
           />
           <p className="text-xs text-muted-foreground">고객 견적 폼 상단에 표시됩니다</p>
+        </div>
+      </div>
+
+      {/* 주 고객 유형 — 홍보 페이지 카피(공감·프로세스)를 B2B/B2C에 맞게 분기 */}
+      <div className="rounded-lg border bg-card p-5 space-y-3">
+        <div>
+          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">주 고객 유형</h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            누구에게 청소를 파는지에 따라 홍보 페이지 문구가 자동으로 맞춰져요.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            { value: 'b2b' as const, label: '상업공간 (B2B)', desc: '사무실·상가·병원·공장 정기청소' },
+            { value: 'b2c' as const, label: '가정 (B2C)', desc: '이사·입주·가정 청소' },
+          ]).map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setTargetCustomer(opt.value)}
+              className={`flex flex-col items-start rounded-lg border p-3 text-left transition-colors ${
+                targetCustomer === opt.value
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                  : 'hover:bg-muted'
+              }`}
+            >
+              <span className="text-sm font-semibold">{opt.label}</span>
+              <span className="text-[11px] text-muted-foreground mt-0.5">{opt.desc}</span>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -449,6 +488,11 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
             if (next.certifications !== undefined) setCertifications(next.certifications)
           }}
         />
+      </div>
+
+      {/* 시공 사례 (비포·애프터 직접 등록 → 홍보 페이지 '시공 사례' 갤러리에 자동 반영) */}
+      <div id="field-portfolio">
+        <PortfolioSection value={portfolio} onChange={setPortfolio} />
       </div>
 
       {/* 리뷰 수집 채널 */}

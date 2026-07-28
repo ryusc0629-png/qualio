@@ -82,7 +82,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
 
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, instagram_url, youtube_url, service_areas, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, certifications' as never)
+    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, instagram_url, youtube_url, service_areas, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, certifications, portfolio, target_customer' as never)
     .eq('slug', slug)
     .maybeSingle() as { data: {
       id: string; name: string; phone: string | null; address: string | null
@@ -100,6 +100,8 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
       owner_greeting: string | null; owner_video_url: string | null
       experience_years: number | null; business_number: string | null
       certifications: string[] | null
+      portfolio: { before: string; after: string }[] | null
+      target_customer: string | null
     } | null }
 
   if (!business) {
@@ -170,8 +172,13 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
     trackPageView(db, business.id, 'brand_home', ch),
   ])
 
-  // 시공 사례 — 공개된 보고서에서 비포·애프터 첫 장이 모두 있는 것만(최대 6건)
-  const portfolio = (
+  // 시공 사례 — ① 사장님이 직접 등록한 비포·애프터(businesses.portfolio) 우선
+  //            ② 공개된 작업 보고에서 비포·애프터 첫 장이 모두 있는 것 (합쳐서 최대 6건)
+  const manualPortfolio = (business.portfolio ?? [])
+    .filter((p) => p.before?.trim() && p.after?.trim())
+    .map((p, idx) => ({ id: `manual-${idx}`, before: p.before, after: p.after }))
+
+  const reportPortfolio = (
     (portfolioResult as unknown as {
       data: { id: string; report_photos: { url: string; type: string; sort_order: number }[] | null }[] | null
     }).data ?? []
@@ -182,8 +189,9 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
       const after = photos.filter((p) => p.type === 'after').sort((a, b) => a.sort_order - b.sort_order)[0]?.url ?? null
       return { id: r.id, before, after }
     })
-    .filter((p) => p.before && p.after)
-    .slice(0, 6)
+    .filter((p): p is { id: string; before: string; after: string } => !!p.before && !!p.after)
+
+  const portfolio = [...manualPortfolio, ...reportPortfolio].slice(0, 6)
 
   // 히어로 인라인 견적 폼용 서비스 — 자동견적 가능 여부 판별에 필요한 유형 컬럼 포함(/q 견적폼과 동일 형태)
   const { data: formServices } = await db
@@ -233,6 +241,39 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
       : null
   const certifications = (business.certifications ?? []).filter((c) => c.trim())
   const hasCredentials = !!(experienceYears || businessNumberFormatted || certifications.length > 0)
+
+  // 주 고객 유형 — B2B(상업공간 정기청소)면 공감·프로세스 카피를 상업 계약 톤으로 분기
+  const isB2B = business.target_customer === 'b2b'
+
+  // 공감 섹션 카피 — 따뜻한 리드(제안서 QR)의 실제 고민에 맞춤
+  const empathy = isB2B
+    ? {
+        eyebrow: '이런 곳을 위해 준비했어요',
+        heading: ['믿고 맡길 상업공간 청소,', '찾기 어려우셨죠?'],
+        bullets: [
+          '담당자가 매번 바뀌어 청소 품질이 들쭉날쭉했던 곳',
+          '계약 후 검수·관리가 안 돼 클레임이 반복되던 곳',
+          '업무에 지장 없이 사무실·상가·병원을 관리하고 싶은 곳',
+          '세금계산서·정기 계약으로 깔끔하게 처리하고 싶은 곳',
+        ],
+        cta: '무료 방문견적 받기',
+      }
+    : {
+        eyebrow: '이런 분들을 위해 준비했어요',
+        heading: ['청소, 어디에 맡겨야', '할지 고민이세요?'],
+        bullets: [
+          '이사·입주 청소를 어디에 맡겨야 할지 막막하신 분',
+          '청소 업체 가격이 적정한지 비교하기 어려우신 분',
+          '당일 또는 빠른 날짜에 청소가 필요하신 분',
+          '청소 후 결과물이 만족스럽지 않아 실망하신 분',
+        ],
+        cta: '지금 무료로 견적 받기',
+      }
+
+  // 프로세스 섹션 헤더 카피
+  const processCopy = isB2B
+    ? { eyebrow: '문의부터 정기 관리까지', heading: '믿고 맡기는 4단계', sub: '계약부터 검수·관리까지 깔끔하게 진행해요' }
+    : { eyebrow: '간편한 예약 프로세스', heading: '예약부터 완료까지', sub: '복잡한 절차 없이 단 4단계면 충분해요' }
 
   // 우리만의 차이 — 사장님이 켠 강점을 우선 전시, 없으면 기본 카드로 폴백(하위 호환)
   const strengthCards =
@@ -314,8 +355,39 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
     ],
   }
 
-  // 예약 프로세스 4단계
-  const processSteps = [
+  // 예약/계약 프로세스 4단계 — B2B(상업공간 정기계약)는 문의→방문견적→계약→관리 톤으로 분기
+  const processSteps = isB2B
+    ? [
+        {
+          icon: ClipboardList,
+          step: '01',
+          title: '문의·현장 정보 전달',
+          desc: '공간 종류와 면적, 원하는 주기를 남겨주세요',
+          color: 'from-blue-500 to-blue-600',
+        },
+        {
+          icon: Sparkles,
+          step: '02',
+          title: '방문 견적·시방 확인',
+          desc: '현장을 보고 딱 맞는 견적과 작업 범위를 제안해요',
+          color: 'from-violet-500 to-violet-600',
+        },
+        {
+          icon: CalendarCheck,
+          step: '03',
+          title: '정기 계약 체결',
+          desc: '고정 담당팀 배정, 세금계산서 발행까지 처리해요',
+          color: 'from-emerald-500 to-emerald-600',
+        },
+        {
+          icon: MessageCircle,
+          step: '04',
+          title: '검수·리포트 관리',
+          desc: '작업 후 검수 결과를 카카오톡으로 보고드려요',
+          color: 'from-yellow-500 to-orange-500',
+        },
+      ]
+    : [
     {
       icon: ClipboardList,
       step: '01',
@@ -650,19 +722,14 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
           <FadeIn>
           <div className="max-w-5xl mx-auto px-6">
             <div className="text-center mb-12">
-              <p className="text-primary font-semibold text-xs mb-3 tracking-widest uppercase">이런 분들을 위해 준비했어요</p>
+              <p className="text-primary font-semibold text-xs mb-3 tracking-widest uppercase">{empathy.eyebrow}</p>
               <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight leading-tight">
-                청소, 어디에 맡겨야<br className="sm:hidden" /> 할지 고민이세요?
+                {empathy.heading[0]}<br className="sm:hidden" /> {empathy.heading[1]}
               </h2>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-3 max-w-2xl mx-auto">
-              {[
-                '이사·입주 청소를 어디에 맡겨야 할지 막막하신 분',
-                '청소 업체 가격이 적정한지 비교하기 어려우신 분',
-                '당일 또는 빠른 날짜에 청소가 필요하신 분',
-                '청소 후 결과물이 만족스럽지 않아 실망하신 분',
-              ].map((text) => (
+              {empathy.bullets.map((text) => (
                 <div
                   key={text}
                   className="flex items-start gap-3 p-5 rounded-2xl bg-slate-50 hover:bg-primary/5 transition-colors"
@@ -677,7 +744,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
               <p className="text-muted-foreground text-sm mb-5">걱정 마세요. {business.name}이 도와드릴게요.</p>
               <a href={primaryCta}>
                 <Button size="lg" className="gap-2 h-12 px-8 rounded-xl font-bold">
-                  지금 무료로 견적 받기
+                  {empathy.cta}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </a>
@@ -691,9 +758,9 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
           <FadeIn>
           <div className="max-w-5xl mx-auto px-6">
             <div className="text-center mb-14 sm:mb-16">
-              <p className="text-primary font-semibold text-xs mb-3 tracking-widest uppercase">간편한 예약 프로세스</p>
-              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">예약부터 완료까지</h2>
-              <p className="text-muted-foreground mt-3 text-base">복잡한 절차 없이 단 4단계면 충분해요</p>
+              <p className="text-primary font-semibold text-xs mb-3 tracking-widest uppercase">{processCopy.eyebrow}</p>
+              <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">{processCopy.heading}</h2>
+              <p className="text-muted-foreground mt-3 text-base">{processCopy.sub}</p>
             </div>
 
             {/* 모바일: 2×2, 태블릿+: 4열 */}

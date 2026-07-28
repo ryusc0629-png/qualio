@@ -58,6 +58,12 @@ const updateBusinessSchema = z.object({
   experience_years: z.string().max(3).optional(),
   business_number:  z.string().max(20).optional(),
   certifications:   z.string().optional(),
+  // 시공 사례(JSON 문자열: [{before, after}]) + 주 고객 유형(b2b|b2c)
+  portfolio:        z.string().optional(),
+  target_customer:  z
+    .string()
+    .refine((v) => ['b2b', 'b2c'].includes(v), '유효하지 않은 고객 유형입니다')
+    .optional(),
 })
 
 export const updateBusinessAction = action
@@ -152,6 +158,10 @@ export const updateBusinessAction = action
         certifications:            (parsedInput.certifications
           ? JSON.parse(parsedInput.certifications)
           : []) as never,
+        portfolio:                 (parsedInput.portfolio
+          ? JSON.parse(parsedInput.portfolio)
+          : []) as never,
+        target_customer:           (parsedInput.target_customer || 'b2c') as never,
       })
       .eq('id', profile.business_id)
 
