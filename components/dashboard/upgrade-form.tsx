@@ -400,6 +400,27 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
         })}
       </div>
 
+      {/* 서비스 제공기간 안내 (결제망 심사 필수 고지 — 라벨 명시) */}
+      <div className="rounded-lg border bg-muted/30 p-4">
+        <div className="flex items-center gap-2 mb-1.5">
+          <CalendarClock className="h-4 w-4 text-primary shrink-0" />
+          <h4 className="text-sm font-semibold">서비스 제공기간</h4>
+        </div>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {provider !== 'toss' && !USE_BILLING_KEY ? (
+            <>
+              결제일로부터 <strong>1개월(30일)</strong> 동안 선택한 플랜의 모든 기능을 이용할 수 있습니다.
+              이용 기간이 끝나면 서비스 제공이 종료되며, 만료 전 다시 결제하시면 이어서 이용할 수 있습니다.
+            </>
+          ) : (
+            <>
+              결제일로부터 <strong>1개월(30일)</strong> 동안 선택한 플랜의 모든 기능을 이용할 수 있으며,
+              이후 <strong>매월 같은 날짜</strong>에 자동으로 결제·갱신되어 서비스가 이어집니다. 언제든지 해지할 수 있습니다.
+            </>
+          )}
+        </p>
+      </div>
+
       {/* 액션 버튼 */}
       <div className="flex flex-col items-center gap-3">
         <Button

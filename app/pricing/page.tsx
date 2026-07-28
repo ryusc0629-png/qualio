@@ -38,10 +38,13 @@ export default function PricingPage() {
           </p>
         </div>
 
-        {/* 결제 방식 안내 — 정기결제(자동결제) 심사 요건 */}
-        <div className="max-w-2xl mx-auto mb-10 rounded-lg border border-border bg-muted/40 px-6 py-4 text-sm text-muted-foreground text-center">
+        {/* 결제 방식 · 서비스 제공기간 안내 — 정기결제(자동결제) 심사 요건 */}
+        <div className="max-w-2xl mx-auto mb-10 rounded-lg border border-border bg-muted/40 px-6 py-4 text-sm text-muted-foreground text-center space-y-2">
           <p>
             <span className="font-semibold text-foreground">결제 방식:</span> 등록한 카드로 <span className="font-semibold text-foreground">매월 자동 결제</span>되는 정기 구독 서비스 · 언제든지 해지 가능 · 해지 시 다음 결제일부터 청구되지 않습니다
+          </p>
+          <p>
+            <span className="font-semibold text-foreground">서비스 제공기간:</span> 결제일로부터 <span className="font-semibold text-foreground">1개월(30일)</span> 이용 후 자동 갱신 · <span className="font-semibold text-foreground">매월 동일한 날짜</span>에 자동 결제
           </p>
         </div>
 
