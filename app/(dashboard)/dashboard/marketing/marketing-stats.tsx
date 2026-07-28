@@ -55,12 +55,12 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
       .eq('business_id' as never, businessId)
       .gte('viewed_at' as never, periodStart) as unknown as Promise<{ data: { source: string; viewed_at: string }[] | null }>,
 
-    // 견적 퍼널 이벤트 — '거의 예약할 뻔한 고객' + '어느 질문에서 멈추나'(품질 신호). 타입 미반영이라 단언 사용
+    // 견적 퍼널 이벤트 — 문의 폼 완주율(시작 → 제출) 품질 신호용. 타입 미반영이라 단언 사용
     db
       .from('quote_funnel_events' as never)
-      .select('session_id, event_type, step' as never)
+      .select('session_id, event_type' as never)
       .eq('business_id' as never, businessId)
-      .gte('created_at' as never, periodStart) as unknown as Promise<{ data: { session_id: string; event_type: string; step: string | null }[] | null }>,
+      .gte('created_at' as never, periodStart) as unknown as Promise<{ data: { session_id: string; event_type: string }[] | null }>,
   ])
 
   // ── 성적표: 퀄리오가 만든 매출 ──
@@ -82,32 +82,15 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
     .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
   const upcomingRevenue = attributedRevenue - completedRevenue
 
-  // ── 핵심 레버: 거의 예약할 뻔한 고객(주소까지 입력·미예약) = 지금 연락하면 매출 되는 사람 ──
+  // ── 품질 신호: 문의 폼 완주율(시작 → 제출) ──
+  // 다단계 견적 계산기는 은퇴했고 전환은 문의 폼(hero-lead-form)이 담당 → step_completed·address_entered는
+  // 더 이상 안 쌓인다. 그래서 현재 폼에서 실제로 발생하는 form_started → quote_submitted로 완주율을 잰다.
   const funnelEvents = funnelResult.data ?? []
-  const bookedSessions = new Set(
-    funnelEvents.filter((e) => e.event_type === 'booking_submitted').map((e) => e.session_id),
-  )
-  const addressNotBooked = funnelEvents
-    .filter((e) => e.event_type === 'address_entered' && !bookedSessions.has(e.session_id))
-    .reduce<Set<string>>((set, e) => set.add(e.session_id), new Set()).size
-
-  // ── 품질 신호: 어느 질문에서 멈추나(견적 폼 이탈 지점) — 우리판 '체류시간' ──
-  const STEP_ORDER = ['service', 'space', 'ac_detail', 'unit_variant', 'unit_detail', 'context', 'date', 'notes', 'name', 'phone'] as const
-  const STEP_LABELS: Record<string, string> = {
-    service: '서비스 선택', space: '평수 입력', ac_detail: '에어컨 선택',
-    unit_variant: '구분 선택', unit_detail: '항목 선택', context: '주거 형태',
-    date: '날짜 선택', notes: '요청사항', name: '이름 입력', phone: '연락처 입력',
-  }
-  const stepSessionSets = new Map<string, Set<string>>()
-  for (const e of funnelEvents) {
-    if (e.event_type !== 'step_completed' || !e.step) continue
-    if (!stepSessionSets.has(e.step)) stepSessionSets.set(e.step, new Set())
-    stepSessionSets.get(e.step)!.add(e.session_id)
-  }
-  const stepStats = STEP_ORDER
-    .map((step) => ({ step, label: STEP_LABELS[step], count: stepSessionSets.get(step)?.size ?? 0 }))
-    .filter((s) => s.count > 0)
-  const stepMax = stepStats.reduce((m, s) => Math.max(m, s.count), 0)
+  const sessionsOf = (type: string) =>
+    new Set(funnelEvents.filter((e) => e.event_type === type).map((e) => e.session_id)).size
+  const startedSessions = sessionsOf('form_started')
+  const submittedSessions = sessionsOf('quote_submitted')
+  const completionRate = startedSessions > 0 ? Math.round((submittedSessions / startedSessions) * 100) : 0
 
   // ── 진단: 유입 경로(검색·AI·직접) — 사이트 전체(블로그+공개 페이지) 합산 ──
   const views = postViewsResult.data ?? []
@@ -204,20 +187,10 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
         </div>
         <div className="px-5 py-3 border-t bg-slate-50/50">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            방문자를 늘리는 것보다 <b className="text-foreground">이미 들어온 견적을 예약으로 바꾸는 것</b>이 매출을 가장 크게 올려요.
+            방문자를 늘리는 것보다 <b className="text-foreground">이미 들어온 문의를 예약으로 바꾸는 것</b>이 매출을 가장 크게 올려요.
             이 전환율을 올리는 데 집중하세요.
           </p>
         </div>
-        {/* 거의 예약할 뻔한 고객 — 지금 연락하면 매출 되는 사람(새는 돈) */}
-        {addressNotBooked > 0 && (
-          <div className="border-t px-5 py-3 bg-amber-50/70 flex items-start gap-2">
-            <span className="text-base shrink-0">📞</span>
-            <p className="text-xs text-amber-900 leading-relaxed">
-              주소까지 입력하고 예약은 안 한 고객이 <b>{addressNotBooked}명</b> 있어요.
-              지금 연락하면 예약으로 이어질 수 있는, 놓치면 아까운 고객이에요.
-            </p>
-          </div>
-        )}
       </div>
 
       {/* ── 3층 진단: 어디서 들어오나·어디서 멈추나 (접이식) ── */}
@@ -307,28 +280,26 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
             )}
           </div>
 
-          {/* 견적 폼 품질 신호 — 어느 질문에서 멈추나 */}
-          {stepStats.length > 0 && (
+          {/* 품질 신호 — 문의 폼 완주율(시작 대비 제출). 우리판 '체류시간' */}
+          {startedSessions > 0 && (
             <div className="rounded-xl border bg-white overflow-hidden">
               <div className="px-5 py-3 border-b bg-slate-50">
-                <p className="font-semibold text-sm">어디서 멈추나 — 견적 폼 이탈 지점</p>
-                <p className="text-xs text-muted-foreground mt-0.5">막대가 확 줄어드는 곳이 고객이 포기하는 지점이에요</p>
+                <p className="font-semibold text-sm">문의 폼 완주율</p>
+                <p className="text-xs text-muted-foreground mt-0.5">폼을 열어본 사람 중 실제로 문의를 보낸 비율</p>
               </div>
-              <div className="p-4 space-y-2">
-                {stepStats.map((s) => {
-                  const widthPct = stepMax > 0 ? Math.max((s.count / stepMax) * 100, 8) : 0
-                  return (
-                    <div key={s.step} className="flex items-center gap-2">
-                      <span className="text-xs text-muted-foreground w-20 shrink-0 truncate">{s.label}</span>
-                      <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-blue-400 rounded-full" style={{ width: `${widthPct}%` }} />
-                      </div>
-                      <span className="text-xs font-medium tabular-nums w-7 text-right shrink-0">{s.count}</span>
-                    </div>
-                  )
-                })}
-                <p className="text-[11px] text-muted-foreground/80 pt-1">
-                  네이버의 ‘체류시간’처럼, 우리 견적 폼이 잘 설득하는지 보여주는 품질 신호예요.
+              <div className="p-5">
+                <div className="flex items-baseline gap-2">
+                  <p className="text-3xl font-bold text-primary">{completionRate}%</p>
+                  <p className="text-sm text-muted-foreground">
+                    시작 {startedSessions}명 중 <b className="text-foreground">{submittedSessions}명</b> 제출
+                  </p>
+                </div>
+                <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(completionRate, 100)}%` }} />
+                </div>
+                <p className="text-[11px] text-muted-foreground/80 pt-3 leading-relaxed">
+                  네이버의 ‘체류시간’처럼, 문의 폼을 끝까지 채우는 비율이 우리 폼의 설득력을 보여주는 품질 신호예요.
+                  낮으면 폼이 길거나 어렵진 않은지 점검해요.
                 </p>
               </div>
             </div>
