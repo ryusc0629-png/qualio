@@ -58,6 +58,8 @@ export function buildStandardContractText(i: StandardContractInput): string {
   lines.push('')
   lines.push('[ 특약 사항 ]')
   lines.push(i.conditions?.trim() ? i.conditions.trim() : '(없음)')
+  lines.push('')
+  lines.push('계약일:        년        월        일')
 
   return lines.join('\n')
 }
