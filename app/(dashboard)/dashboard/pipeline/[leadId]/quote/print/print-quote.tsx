@@ -44,9 +44,10 @@ interface Business {
   name: string
   phone: string | null
   address: string | null
-  // 을(수급자) 사업자등록번호·대표명 — 계약서 서명란에 표기 (신규 컬럼이라 optional)
+  // 을(수급자) 사업자등록번호·대표명·입금 계좌 — 계약서 서명란에 표기 (신규 컬럼이라 optional)
   business_number?: string | null
   owner_name?: string | null
+  payment_account?: string | null
 }
 
 // both = 견적서+시방서 함께 / quote = 견적서만 / spec = 시방서만 / contract = 계약서만(사장님 전용)
@@ -380,6 +381,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
                 {business?.business_number && <p>사업자등록번호: {business.business_number}</p>}
                 <p>주소: {business?.address ?? '_______________'}</p>
                 <p>대표: {business?.owner_name ?? '_______________'}</p>
+                {business?.payment_account && <p>입금 계좌: {business.payment_account}</p>}
                 <p className="pt-4">(서명 또는 인) ______________</p>
               </div>
             </div>

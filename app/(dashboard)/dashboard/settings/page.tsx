@@ -32,7 +32,7 @@ export default async function SettingsPage() {
   const [businessResult, subscriptionResult, serviceCountResult, publicReportResult] = await Promise.all([
     db
       .from('businesses')
-      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, certifications, portfolio, target_customer' as never)
+      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, payment_account, certifications, portfolio, target_customer' as never)
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
@@ -76,6 +76,7 @@ export default async function SettingsPage() {
     owner_photo_url: string | null; owner_name: string | null
     owner_greeting: string | null; owner_video_url: string | null
     experience_years: number | null; business_number: string | null
+    payment_account: string | null
     certifications: string[] | null
     portfolio: { before: string; after: string }[] | null
     target_customer: string | null

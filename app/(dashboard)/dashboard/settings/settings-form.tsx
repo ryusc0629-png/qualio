@@ -78,6 +78,7 @@ interface Business {
   owner_video_url: string | null
   experience_years: number | null
   business_number: string | null
+  payment_account: string | null
   certifications: string[] | null
   portfolio: PortfolioItem[] | null
   target_customer: string | null
@@ -131,6 +132,8 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
     business.experience_years != null ? String(business.experience_years) : '',
   )
   const [businessNumber, setBusinessNumber] = useState(business.business_number ?? '')
+  // 정산(입금) 계좌 — 계약서 '을' 정보에 자동 표기
+  const [paymentAccount, setPaymentAccount] = useState(business.payment_account ?? '')
   const [certifications, setCertifications] = useState<string[]>(business.certifications ?? [])
   // 시공 사례(비포·애프터) 직접 등록 + 주 고객 유형(B2B/B2C 카피 분기)
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>(business.portfolio ?? [])
@@ -302,6 +305,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
       owner_video_url:           ownerVideoUrl.trim(),
       experience_years:          experienceYears.trim(),
       business_number:           businessNumber.trim(),
+      payment_account:           paymentAccount.trim(),
       certifications:            JSON.stringify(certifications.filter((c) => c.trim())),
       // 작업 전·후 두 장이 모두 있는 시공 사례만 저장
       portfolio:                 JSON.stringify(
@@ -487,6 +491,23 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
             if (next.businessNumber !== undefined) setBusinessNumber(next.businessNumber)
             if (next.certifications !== undefined) setCertifications(next.certifications)
           }}
+        />
+      </div>
+
+      {/* 정산(입금) 계좌 — 계약서·세금계산서 입금처에 자동 표기 */}
+      <div className="rounded-lg border bg-card p-5 space-y-3">
+        <div>
+          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">정산 계좌</h2>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            계약서의 <span className="font-medium text-foreground">‘을’ 정보</span>에 입금 계좌로 자동으로 들어가요.
+            한 번만 넣어두면 계약서마다 다시 안 적어도 돼요. (선택)
+          </p>
+        </div>
+        <Input
+          value={paymentAccount}
+          onChange={(e) => setPaymentAccount(e.target.value)}
+          placeholder="예: 국민은행 123456-78-901234 (예금주: 다트클린 홍길동)"
+          maxLength={80}
         />
       </div>
 
