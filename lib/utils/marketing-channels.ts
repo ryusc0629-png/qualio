@@ -16,6 +16,7 @@ export const MARKETING_CHANNELS: MarketingChannel[] = [
   { key: 'danggeun',    label: '당근',            emoji: '🥕', hint: '당근 게시글·프로필 링크' },
   { key: 'kakao',       label: '카카오톡',        emoji: '💬', hint: '채널/오픈채팅으로 보내는 링크' },
   { key: 'flyer',       label: '전단지·명함 QR',  emoji: '📄', hint: '인쇄물 QR코드로 만들 링크' },
+  { key: 'proposal',    label: '제안서 QR',       emoji: '📑', hint: '영업 제안서에 넣는 QR코드 링크(병원·업체 방문영업)' },
 ]
 
 // 유료 검색광고 채널 — 광고관리자(네이버/구글)에서 랜딩 URL에 ?ch= 로 심어 유입을 구분.
