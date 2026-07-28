@@ -362,9 +362,12 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
             {/* 본문 — 사장님이 편집한 텍스트(또는 표준 문안)를 그대로 표시 */}
             <div className="text-sm leading-7 whitespace-pre-wrap text-gray-800">{contractBody}</div>
 
-            {/* 마무리 문구 (계약일은 편집 본문에서 직접 기입) */}
-            <p className="text-center text-sm text-gray-700 mt-10 mb-10">
+            {/* 마무리 문구 + 계약일(공란 — 서명 시 직접 기입) */}
+            <p className="text-center text-sm text-gray-700 mt-10 mb-3">
               본 계약을 증명하기 위하여 계약서 2부를 작성하여 “갑”과 “을”이 서명·날인 후 각 1부씩 보관한다.
+            </p>
+            <p className="text-center text-sm text-gray-600 mb-10">
+              계약일:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;년&nbsp;&nbsp;&nbsp;&nbsp;월&nbsp;&nbsp;&nbsp;&nbsp;일
             </p>
 
             {/* 서명란 */}
