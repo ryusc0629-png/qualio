@@ -26,6 +26,7 @@ export interface B2bQuote {
   frequency: string | null
   worker_count: number | null
   spec_content: string | null
+  contract_content: string | null
   job_type: string | null
 }
 

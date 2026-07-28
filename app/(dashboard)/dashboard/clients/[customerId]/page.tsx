@@ -184,6 +184,7 @@ export default async function CustomerDetailPage({ params }: Props) {
     frequency: string | null
     worker_count: number | null
     spec_content: string | null
+    contract_content: string | null
     job_type: string | null
   }
   const { data: b2bQuotesRaw } = await db

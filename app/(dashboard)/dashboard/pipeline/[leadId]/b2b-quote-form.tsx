@@ -11,8 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { toast } from 'sonner'
 import { saveB2bQuoteAction, generateSpecAction, extractQuoteFromMeetingAction } from '@/lib/actions/b2b-quotes'
 import type { ExtractedQuoteFields } from '@/lib/ai/extract-quote-from-meeting'
-import { FileText, Plus, Trash2, Sparkles, MapPin, Loader2, Mic, AlertTriangle, GripVertical } from 'lucide-react'
+import { FileText, Plus, Trash2, Sparkles, MapPin, Loader2, Mic, AlertTriangle, GripVertical, FileSignature } from 'lucide-react'
 import { openAddressSearch } from '@/lib/address/postcode'
+import { buildStandardContractText } from '@/lib/contract/standard-contract'
 import {
   DndContext,
   closestCenter,
@@ -57,6 +58,7 @@ interface ExistingQuote {
   frequency: string | null
   worker_count: number | null
   spec_content: string | null
+  contract_content: string | null
   job_type: string | null
 }
 
@@ -271,6 +273,7 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
   const [frequency, setFrequency] = useState(existingQuote?.frequency ?? '')
   const [workerCount, setWorkerCount] = useState(existingQuote?.worker_count?.toString() ?? '')
   const [specContent, setSpecContent] = useState(existingQuote?.spec_content ?? '')
+  const [contractContent, setContractContent] = useState(existingQuote?.contract_content ?? '')
   const [jobType, setJobType] = useState<JobType>(existingQuote?.job_type === 'one_off' ? 'one_off' : 'recurring')
   const isOneOff = jobType === 'one_off'
 
@@ -385,6 +388,7 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
     frequency:    isOneOff ? undefined : (frequency || undefined),
     workerCount:  workerCount ? Number(workerCount) : undefined,
     specContent:  specContent || undefined,
+    contractContent: contractContent || undefined,
     jobType,
   })
 
@@ -735,6 +739,48 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
                 </p>
               </div>
             )}
+          </section>
+
+          {/* 계약서 */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">계약서</h3>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={() => {
+                  if (contractContent.trim() && !window.confirm('지금 작성한 계약서 내용을 표준 문안으로 새로 채울까요?\n\n현재 내용은 사라집니다.')) return
+                  setContractContent(buildStandardContractText({
+                    clientCompany: clientName,
+                    isOneOff,
+                    total,
+                    taxIncluded,
+                    frequency:   isOneOff ? null : (frequency || null),
+                    workerCount: workerCount ? Number(workerCount) : null,
+                    siteName:    siteName || null,
+                    siteAddress: siteAddress || null,
+                    conditions:  conditions || null,
+                  }))
+                  toast.success('표준 계약서를 불러왔어요! 필요한 부분을 고쳐 저장하세요')
+                }}
+              >
+                <FileSignature className="h-3.5 w-3.5 text-primary" />
+                표준 계약서 불러오기
+              </Button>
+            </div>
+            <Textarea
+              value={contractContent}
+              onChange={(e) => setContractContent(e.target.value)}
+              placeholder="‘표준 계약서 불러오기’를 누르면 견적 내용이 채워진 계약서 초안이 여기에 들어와요. 조항·계약 기간·특약 등 어디든 자유롭게 고칠 수 있어요."
+              rows={12}
+              className="resize-none font-mono text-xs leading-relaxed"
+            />
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              계약서 제목과 서명란(갑·을 상호·사업자번호)은 출력 시 자동으로 붙어요. 이 칸은 본문(조항·특약·계약 기간)만 편집하면 돼요.
+              계약서는 미리보기 화면의 <span className="font-medium text-foreground">계약서</span> 탭에서 인쇄·PDF로 저장할 수 있어요.
+            </p>
           </section>
 
           {/* 버튼 */}

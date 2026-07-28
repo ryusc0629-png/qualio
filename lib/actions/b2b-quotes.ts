@@ -34,6 +34,7 @@ const saveB2bQuoteSchema = z.object({
   frequency:    z.string().optional(),
   workerCount:  z.number().optional(),
   specContent:  z.string().optional(),
+  contractContent: z.string().optional(),
   jobType:      z.string().refine(
     (v) => ['recurring', 'one_off'].includes(v),
     { message: '유효하지 않은 작업 유형입니다' },
@@ -197,6 +198,7 @@ export const saveB2bQuoteAction = action
       frequency:    parsedInput.frequency ?? null,
       worker_count: parsedInput.workerCount ?? null,
       spec_content: parsedInput.specContent ?? null,
+      contract_content: parsedInput.contractContent ?? null,
       // 일회성이면 주기는 저장하지 않음 (정기 전제 제거)
       job_type:     parsedInput.jobType === 'one_off' ? 'one_off' : 'recurring',
       updated_at:   new Date().toISOString(),

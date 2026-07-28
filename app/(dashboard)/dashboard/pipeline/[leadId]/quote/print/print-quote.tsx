@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { formatAreaWithBoth } from '@/lib/utils/area'
+import { buildStandardContractText } from '@/lib/contract/standard-contract'
 
 interface QuoteItem {
   name: string
@@ -31,6 +32,8 @@ interface Quote {
   frequency: string | null
   worker_count: number | null
   spec_content: string | null
+  // 계약서 본문(사장님이 편집해 저장한 텍스트) — 없으면 표준 문안을 즉석 생성
+  contract_content?: string | null
   // 정기(recurring) / 일회성(one_off) — 횟수 열 라벨 결정에 사용
   job_type?: string | null
   // 견적 최초 저장일 — 발행일/작성일로 사용(재열람해도 바뀌지 않게 저장값 기준)
@@ -112,6 +115,21 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
   const issueDate = new Date(quote.created_at ?? Date.now()).toLocaleDateString('ko-KR', {
     year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Seoul',
   })
+
+  // 계약서 본문 — 사장님이 편집해 저장한 텍스트 우선, 없으면 견적 데이터로 표준 문안 즉석 생성
+  const contractBody = quote.contract_content?.trim()
+    ? quote.contract_content
+    : buildStandardContractText({
+        clientCompany: lead.company_name,
+        isOneOff,
+        total,
+        taxIncluded: quote.tax_included,
+        frequency: quote.frequency,
+        workerCount: quote.worker_count,
+        siteName: quote.site_name,
+        siteAddress: quote.site_address,
+        conditions: quote.conditions,
+      })
 
   // 탭 제목/PDF 파일명은 서버 metadata('견적서·시방서')로 고정한다.
   // (예전엔 여기서 document.title을 직접 바꿨는데, Next.js metadata와 충돌해
@@ -338,65 +356,8 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
               <p className="text-sm text-gray-500 mt-1">SERVICE AGREEMENT</p>
             </div>
 
-            {/* 당사자 */}
-            <p className="text-sm text-gray-800 mb-6 leading-7">
-              발주자 <b>{lead.company_name}</b>(이하 “갑”)과(와) 수급자 <b>{business?.name ?? '업체명'}</b>(이하 “을”)은
-              아래와 같이 청소 용역 계약을 체결한다.
-            </p>
-
-            {/* 계약 개요 */}
-            <table className="w-full border-collapse mb-8 text-sm">
-              <tbody>
-                <tr className="border-t border-gray-300">
-                  <th className="bg-gray-50 text-left py-2.5 px-3 w-32 font-medium text-gray-600 border-r border-gray-200">계약 금액</th>
-                  <td className="py-2.5 px-3 tabular-nums">
-                    {isOneOff ? '총 ' : '월 '}{total.toLocaleString()}원 ({quote.tax_included ? '부가세 포함' : '부가세 별도'})
-                  </td>
-                </tr>
-                <tr className="border-t border-gray-200">
-                  <th className="bg-gray-50 text-left py-2.5 px-3 font-medium text-gray-600 border-r border-gray-200">계약 기간</th>
-                  <td className="py-2.5 px-3 text-gray-500">&nbsp;&nbsp;&nbsp;&nbsp;년&nbsp;&nbsp;&nbsp;월&nbsp;&nbsp;&nbsp;일 부터&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;년&nbsp;&nbsp;&nbsp;월&nbsp;&nbsp;&nbsp;일 까지</td>
-                </tr>
-                {(quote.frequency || quote.worker_count) && (
-                  <tr className="border-t border-gray-200">
-                    <th className="bg-gray-50 text-left py-2.5 px-3 font-medium text-gray-600 border-r border-gray-200">작업 주기·인원</th>
-                    <td className="py-2.5 px-3">
-                      {quote.frequency ?? ''}{quote.frequency && quote.worker_count ? ' · ' : ''}{quote.worker_count ? `투입 ${quote.worker_count}명` : ''}
-                    </td>
-                  </tr>
-                )}
-                {(quote.site_name || quote.site_address) && (
-                  <tr className="border-t border-b border-gray-200">
-                    <th className="bg-gray-50 text-left py-2.5 px-3 font-medium text-gray-600 border-r border-gray-200">작업 장소</th>
-                    <td className="py-2.5 px-3">
-                      {quote.site_name ?? ''}{quote.site_name && quote.site_address ? ` (${quote.site_address})` : (quote.site_address ?? '')}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-
-            {/* 표준 조항 */}
-            <div className="space-y-3 text-sm leading-7 text-gray-800">
-              <p><b>제1조 (목적)</b> 본 계약은 “갑”이 “을”에게 위탁하는 청소 용역의 수행에 관하여 양 당사자의 권리와 의무를 정함을 목적으로 한다.</p>
-              <p><b>제2조 (용역의 내용 및 범위)</b> 용역의 구체적 작업 대상·범위·방법은 본 계약에 첨부되는 견적서 및 시방서에 따르며, 이는 본 계약의 일부를 구성한다.</p>
-              <p><b>제3조 (계약 기간)</b> 계약 기간은 위 표에 정한 바에 따른다. 기간 만료 30일 전까지 양 당사자의 별도 의사표시가 없으면 동일 조건으로 1년간 자동 연장된다.</p>
-              <p><b>제4조 (계약 금액 및 지급)</b> {isOneOff
-                ? '“갑”은 용역 완료 후 “을”이 발행하는 세금계산서에 따라 대금을 “을”이 지정하는 계좌로 지급한다.'
-                : '“갑”은 매월 “을”이 발행하는 세금계산서에 따라 당월 용역대금을 익월 말일까지 “을”이 지정하는 계좌로 지급한다.'}</p>
-              <p><b>제5조 (“을”의 의무)</b> “을”은 선량한 관리자의 주의로 성실히 용역을 수행하며, 작업 인력에 대한 교육·관리 및 4대보험·안전관리 책임을 진다.</p>
-              <p><b>제6조 (“갑”의 의무)</b> “갑”은 용역 수행에 필요한 장소·전기·수도 등 기본 여건을 제공하고, 정당한 사유 없이 용역 수행을 방해하지 아니한다.</p>
-              <p><b>제7조 (손해배상 및 보험)</b> “을”은 용역 수행 중 “을”의 귀책으로 “갑”에게 발생한 손해를 배상하며, 이를 위하여 배상책임보험에 가입할 수 있다.</p>
-              <p><b>제8조 (계약의 해지)</b> 일방이 본 계약을 위반하고 상대방의 시정 요구 후 7일 이내에 시정하지 아니한 경우 상대방은 계약을 해지할 수 있으며, “갑”과 “을”은 30일 전 서면 통지로 계약을 해지할 수 있다.</p>
-              <p><b>제9조 (비밀유지)</b> 양 당사자는 본 계약 및 용역 수행 과정에서 알게 된 상대방의 정보를 제3자에게 누설하지 아니한다.</p>
-              <p><b>제10조 (기타)</b> 본 계약에 정하지 아니한 사항은 관계 법령 및 상관례에 따르며, 분쟁 발생 시 상호 협의하여 해결한다. 아래 특약사항은 본문에 우선하여 적용한다.</p>
-            </div>
-
-            {/* 특약사항 (견적서의 계약 조건·특이사항을 그대로 사용) */}
-            <div className="mt-6 border rounded-lg p-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">특약 사항</p>
-              <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[2.5rem]">{quote.conditions ?? ''}</p>
-            </div>
+            {/* 본문 — 사장님이 편집한 텍스트(또는 표준 문안)를 그대로 표시 */}
+            <div className="text-sm leading-7 whitespace-pre-wrap text-gray-800">{contractBody}</div>
 
             {/* 마무리 문구 + 계약일 */}
             <p className="text-center text-sm text-gray-700 mt-10 mb-2">
