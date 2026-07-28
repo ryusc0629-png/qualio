@@ -884,7 +884,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
                 <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight">
                   직접 작업한 현장이에요
                 </h2>
-                <p className="text-muted-foreground mt-3 text-base">비포·애프터로 실제 결과를 확인하세요</p>
+                <p className="text-muted-foreground mt-3 text-base">저희가 직접 다녀온 실제 작업 현장이에요</p>
               </div>
 
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -893,25 +893,23 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
                     key={item.id}
                     className="rounded-2xl overflow-hidden bg-slate-50 border border-slate-100"
                   >
-                    {/* 비포/애프터 2분할 */}
+                    {/* 작업 현장 2분할 */}
                     <div className="grid grid-cols-2">
                       <div className="relative aspect-square overflow-hidden">
                         <img
                           src={item.before ?? ''}
-                          alt="작업 전"
+                          alt="작업 현장 사진"
                           loading="lazy"
                           className="w-full h-full object-cover"
                         />
-                        <span className="absolute top-2 left-2 rounded-md bg-black/60 px-2 py-0.5 text-[10px] font-bold text-white">전</span>
                       </div>
                       <div className="relative aspect-square overflow-hidden">
                         <img
                           src={item.after ?? ''}
-                          alt="작업 후"
+                          alt="작업 현장 사진"
                           loading="lazy"
                           className="w-full h-full object-cover"
                         />
-                        <span className="absolute top-2 right-2 rounded-md bg-primary px-2 py-0.5 text-[10px] font-bold text-white">후</span>
                       </div>
                     </div>
                   </div>
