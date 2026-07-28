@@ -450,7 +450,7 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
 
         <div className="space-y-6">
 
-          {/* 미팅 기록에서 자동 채우기 — 저장된 미팅이 있는 리드에서만 노출 */}
+          {/* 상담 기록에서 자동 채우기 — 저장된 상담(미팅·방문·메모 등)이 있는 리드에서만 노출 */}
           {leadId && hasMeeting && (
             <button
               type="button"
@@ -463,10 +463,10 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
                 : <Mic className="h-4 w-4 text-primary shrink-0" />}
               <span className="flex-1">
                 <span className="block text-sm font-medium">
-                  {extracting ? '미팅 내용을 불러오는 중...' : '미팅 내용으로 채우기'}
+                  {extracting ? '상담 내용을 불러오는 중...' : '상담 내용으로 채우기'}
                 </span>
                 <span className="block text-[11px] text-muted-foreground">
-                  저장한 미팅 기록에서 현장·주기·특이사항을 자동으로 넣어드려요 (빈칸만)
+                  저장한 상담 기록(미팅·방문·메모)에서 현장·주기·특이사항을 자동으로 넣어드려요 (빈칸만)
                 </span>
               </span>
             </button>

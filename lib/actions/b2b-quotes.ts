@@ -78,7 +78,9 @@ async function getAuth() {
   return { db, businessId: profile.business_id }
 }
 
-// 이 리드의 최근 미팅 기록(요약 우선, 없으면 원문)을 하나의 텍스트로 모음 — 없으면 null
+// 이 리드의 최근 상담 기록(요약 우선, 없으면 원문)을 하나의 텍스트로 모음 — 없으면 null
+// 미팅뿐 아니라 방문·메모·전화 상담도 포함(내용은 같은 상담 텍스트라 자동채우기 대상). 견적 로그(quote)는 제외.
+const MEETING_LIKE_TYPES = ['meeting', 'visit', 'note', 'call'] as const
 async function getLeadMeetingText(
   db: ReturnType<typeof createServiceClient>,
   businessId: string,
@@ -89,7 +91,7 @@ async function getLeadMeetingText(
     .select('content, transcript, activity_at')
     .eq('lead_id', leadId)
     .eq('business_id', businessId)
-    .eq('type', 'meeting')
+    .in('type', MEETING_LIKE_TYPES as unknown as string[])
     .order('activity_at', { ascending: false })
     .limit(3)
 
@@ -147,7 +149,7 @@ export const extractQuoteFromMeetingAction = action
 
     const meetingText = await getLeadMeetingText(db, businessId, parsedInput.leadId)
     if (!meetingText) {
-      throw new Error('[APP] 불러올 미팅 기록이 없어요. 먼저 미팅 녹음을 정리해 저장해주세요')
+      throw new Error('[APP] 불러올 상담 기록이 없어요. 먼저 상담 기록(미팅·방문·메모 등)을 저장해주세요')
     }
 
     const fields = await extractQuoteFromMeeting(meetingText)

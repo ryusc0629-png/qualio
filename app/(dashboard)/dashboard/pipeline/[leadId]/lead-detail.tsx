@@ -339,7 +339,7 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
           quotes={quotes}
           leadId={lead.id}
           clientName={lead.company_name}
-          hasMeeting={activities.some((a) => a.type === 'meeting')}
+          hasMeeting={activities.some((a) => ['meeting', 'visit', 'note', 'call'].includes(a.type))}
         />
       )}
 
