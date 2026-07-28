@@ -122,6 +122,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
     ? quote.contract_content
     : buildStandardContractText({
         clientCompany: lead.company_name,
+        businessName: business?.name ?? null,
         isOneOff,
         total,
         taxIncluded: quote.tax_included,

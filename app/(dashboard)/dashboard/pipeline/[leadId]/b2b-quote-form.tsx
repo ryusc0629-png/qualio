@@ -67,6 +67,8 @@ interface Props {
   leadId?: string
   customerId?: string
   clientName: string
+  // 우리 업체명(을) — 계약서 첫 문장 '수급자 OOO'에 자동 반영
+  businessName?: string
   existingQuote: ExistingQuote | null
   // 이 리드에 저장된 미팅 기록이 있으면 '미팅 내용으로 채우기' 버튼 노출
   hasMeeting?: boolean
@@ -217,7 +219,7 @@ function SortableQuoteItem({
   )
 }
 
-export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, hasMeeting, trigger }: Props) {
+export function B2bQuoteForm({ leadId, customerId, clientName, businessName, existingQuote, hasMeeting, trigger }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [, startTransition] = useTransition()
@@ -754,6 +756,7 @@ export function B2bQuoteForm({ leadId, customerId, clientName, existingQuote, ha
                   if (contractContent.trim() && !window.confirm('지금 작성한 계약서 내용을 표준 문안으로 새로 채울까요?\n\n현재 내용은 사라집니다.')) return
                   setContractContent(buildStandardContractText({
                     clientCompany: clientName,
+                    businessName:  businessName ?? null,
                     isOneOff,
                     total,
                     taxIncluded,

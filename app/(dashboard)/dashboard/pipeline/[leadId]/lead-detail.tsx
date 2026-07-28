@@ -91,7 +91,7 @@ const STAGE_ORDER = ['new', 'contacted', 'follow_up', 'quoted', 'negotiating', '
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────
 
-export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveStatus }: { lead: Lead; activities: Activity[]; quotes: ExistingQuote[]; alreadyConverted: boolean; liveStatus: LiveStatus | null }) {
+export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveStatus, businessName }: { lead: Lead; activities: Activity[]; quotes: ExistingQuote[]; alreadyConverted: boolean; liveStatus: LiveStatus | null; businessName?: string }) {
   // 고객 전환 시 프리필용 대표 견적서 — 가장 최근에 만든 것 (여러 장 중)
   const primaryQuote = quotes.length > 0 ? quotes[quotes.length - 1] : null
   const router = useRouter()
@@ -340,6 +340,7 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
           quotes={quotes}
           leadId={lead.id}
           clientName={lead.company_name}
+          businessName={businessName}
           hasMeeting={activities.some((a) => ['meeting', 'visit', 'note', 'call'].includes(a.type))}
         />
       )}

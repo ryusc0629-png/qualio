@@ -36,11 +36,13 @@ interface Props {
   leadId?: string
   customerId?: string
   clientName: string
+  // 우리 업체명(을) — 계약서 첫 문장에 자동 반영
+  businessName?: string
   hasMeeting?: boolean
 }
 
 // 한 거래처에 여러 장의 견적서를 만들고 각각 수정·미리보기·삭제할 수 있는 목록
-export function B2bQuoteList({ quotes, leadId, customerId, clientName, hasMeeting }: Props) {
+export function B2bQuoteList({ quotes, leadId, customerId, clientName, businessName, hasMeeting }: Props) {
   const router = useRouter()
   const [, startTransition] = useTransition()
 
@@ -82,6 +84,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, hasMeetin
           leadId={leadId}
           customerId={customerId}
           clientName={clientName}
+          businessName={businessName}
           existingQuote={null}
           hasMeeting={hasMeeting}
           trigger={
@@ -137,6 +140,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, hasMeetin
                     leadId={leadId}
                     customerId={customerId}
                     clientName={clientName}
+                    businessName={businessName}
                     existingQuote={quote}
                     hasMeeting={hasMeeting}
                     trigger={

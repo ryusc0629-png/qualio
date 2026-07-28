@@ -100,6 +100,13 @@ export default async function LeadDetailPage({
     }[],
   }))
 
+  // 계약서 '을'(수급자)에 넣을 우리 업체명
+  const { data: bizRow } = await db
+    .from('businesses')
+    .select('name')
+    .eq('id', profile.business_id)
+    .maybeSingle()
+
   return (
     <div className="max-w-2xl mx-auto">
       <LeadDetail
@@ -108,6 +115,7 @@ export default async function LeadDetailPage({
         quotes={quotes}
         alreadyConverted={alreadyConverted}
         liveStatus={liveStatus}
+        businessName={bizRow?.name ?? ''}
       />
     </div>
   )

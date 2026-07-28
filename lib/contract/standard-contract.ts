@@ -4,6 +4,7 @@
 
 export interface StandardContractInput {
   clientCompany: string
+  businessName?: string | null
   isOneOff: boolean
   total: number
   taxIncluded: boolean
@@ -27,7 +28,7 @@ export function buildStandardContractText(i: StandardContractInput): string {
     : '“갑”은 매월 “을”이 발행하는 세금계산서에 따라 당월 용역대금을 익월 말일까지 “을”이 지정하는 계좌로 지급한다.'
 
   const lines: string[] = []
-  lines.push(`발주자 ${i.clientCompany}(이하 “갑”)과(와) 수급자(이하 “을”)는 아래와 같이 청소 용역 계약을 체결한다.`)
+  lines.push(`발주자 ${i.clientCompany}(이하 “갑”)과(와) 수급자${i.businessName ? ` ${i.businessName}` : ''}(이하 “을”)는 아래와 같이 청소 용역 계약을 체결한다.`)
   lines.push('')
   lines.push('[ 계약 개요 ]')
   lines.push(`· 계약 금액: ${amount}`)
