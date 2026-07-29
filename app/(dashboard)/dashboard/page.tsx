@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { QuoteLinkShare } from '@/components/dashboard/quote-link-share'
 import { FollowUpSnoozeButton } from '@/components/dashboard/follow-up-snooze-button'
+import { CallLink } from '@/components/dashboard/call-link'
 import { WeeklyChart } from '@/components/dashboard/weekly-chart'
 import { OnboardingChecklist } from '@/components/dashboard/onboarding-checklist'
 import { InstallPrompt } from '@/components/pwa/install-prompt'
@@ -843,15 +844,7 @@ export default async function DashboardPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-3">
                       <span className="text-xs text-muted-foreground">{stage}</span>
-                      {lead.phone && (
-                        <a
-                          href={`tel:${lead.phone}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center hover:bg-violet-200 transition-colors"
-                        >
-                          <Phone className="h-3.5 w-3.5 text-violet-600" />
-                        </a>
-                      )}
+                      {lead.phone && <CallLink phone={lead.phone} />}
                       <FollowUpSnoozeButton leadId={lead.id} />
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </div>
