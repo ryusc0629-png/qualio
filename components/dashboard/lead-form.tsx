@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react'
 import { openAddressSearch } from '@/lib/address/postcode'
+import { formatPhone } from '@/lib/format/phone'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -182,7 +183,7 @@ export function LeadForm({
         <Label>전화번호</Label>
         <Input
           value={form.phone}
-          onChange={(e) => onChange('phone', e.target.value.replace(/[^0-9-]/g, ''))}
+          onChange={(e) => onChange('phone', formatPhone(e.target.value))}
           placeholder="예: 010-1234-5678"
           inputMode="tel"
           className="mt-1"
