@@ -14,14 +14,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { createLeadActivityAction, updateLeadStatusAction } from '@/lib/actions/crm'
+import { createLeadActivityAction, updateLeadStatusAction, updateLeadAction } from '@/lib/actions/crm'
+import { LeadForm, leadToFormValues, leadFormToInput, type LeadFormValues } from '@/components/dashboard/lead-form'
 import { DeleteActivityButton } from '@/components/dashboard/delete-activity-button'
 import { STAGE_CONFIG } from '../pipeline-list'
 import { ConvertToCustomerButton } from './convert-to-customer-button'
 import { B2bQuoteList } from '@/components/dashboard/b2b-quote-list'
 import type { LiveStatus } from '@/lib/utils/lead-live-status'
-import { Calendar, ArrowLeft, Plus, PhoneCall, MapPin as VisitIcon, FileText, StickyNote, Mic } from 'lucide-react'
+import { Calendar, ArrowLeft, Plus, PhoneCall, MapPin as VisitIcon, FileText, StickyNote, Mic, Pencil } from 'lucide-react'
 import Link from 'next/link'
 import { MeetingRecorder } from '@/components/dashboard/meeting-recorder'
 import { ContactActions } from '@/components/dashboard/contact-actions'
@@ -132,6 +139,32 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
     onSuccess: () => startTransition(() => router.refresh()),
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
+
+  // 거래처 정보 수정 (거래처명·담당자·전화·주소 등)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState<LeadFormValues>(() => leadToFormValues(lead))
+
+  const openEdit = () => {
+    setEditForm(leadToFormValues(lead)) // 열 때마다 최신 값으로 초기화
+    setEditOpen(true)
+  }
+
+  const handleEditFormChange = (key: keyof LeadFormValues, value: string) => {
+    setEditForm((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const { execute: executeUpdate, isPending: updating } = useAction(updateLeadAction, {
+    onSuccess: () => {
+      toast.success('저장했어요!')
+      setEditOpen(false)
+      startTransition(() => router.refresh())
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  const handleUpdate = () => {
+    executeUpdate({ leadId: lead.id, ...leadFormToInput(editForm) })
+  }
 
   const { execute: executeActivity, isPending: addingActivity } = useAction(createLeadActivityAction, {
     onSuccess: () => {
@@ -252,6 +285,16 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
                 </SelectContent>
               </Select>
             )}
+
+            {/* 거래처 정보 수정 (거래처명·주소·연락처 등) */}
+            <button
+              type="button"
+              onClick={openEdit}
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              <Pencil className="h-3 w-3" />
+              정보 수정
+            </button>
           </div>
         </div>
 
@@ -456,6 +499,23 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
           </div>
         )}
       </div>
+
+      {/* 거래처 정보 수정 다이얼로그 */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{isCompany ? '거래처 정보 수정' : '고객 정보 수정'}</DialogTitle>
+          </DialogHeader>
+          <LeadForm form={editForm} onChange={handleEditFormChange} />
+          <Button
+            onClick={handleUpdate}
+            disabled={updating || !editForm.company_name.trim()}
+            className="w-full h-12"
+          >
+            {updating ? '저장 중...' : '저장하기'}
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
