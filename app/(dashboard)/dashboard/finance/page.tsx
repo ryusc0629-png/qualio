@@ -5,7 +5,6 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import {
   formatWon,
   formatManwon,
-  DEFAULT_CONTRIBUTION_MARGIN,
 } from '@/lib/finance/constants'
 import { AddEntryForm } from '@/components/dashboard/finance/add-entry-form'
 import { FixedCostsManager, type FixedCost } from '@/components/dashboard/finance/fixed-costs-manager'
@@ -115,13 +114,10 @@ export default async function FinancePage({ searchParams }: PageProps) {
   const netProfit = revenue - totalExpense
   const hasFixed = fixedTotal > 0
 
-  // 공헌이익률 & 손익분기점
-  // 공헌이익률: 매출 기록이 있으면 실제 데이터로, 없으면 청소업 평균값(어림값)
-  const marginIsEstimated = revenue === 0
-  const margin = marginIsEstimated
-    ? DEFAULT_CONTRIBUTION_MARGIN
-    : Math.max(0.05, Math.min(1, (revenue - variableExpense) / revenue))
-  const breakEvenRevenue = hasFixed ? Math.round(fixedTotal / margin) : 0
+  // 손익분기점(본전) — 공헌이익률 없이 단순하게.
+  // 본전 매출 = 이번 달 총지출(변동비 + 고정비). 이만큼 벌면 순이익 0(본전)이라
+  // 상단 '순이익/부족한 돈'과 숫자가 정확히 맞아떨어진다.
+  const breakEvenRevenue = hasFixed ? totalExpense : 0
   const achievementPct = breakEvenRevenue > 0 ? (revenue / breakEvenRevenue) * 100 : revenue > 0 ? 100 : 0
   const remaining = Math.max(0, breakEvenRevenue - revenue)
 
@@ -274,17 +270,9 @@ export default async function FinancePage({ searchParams }: PageProps) {
 
           {/* 손익분기점 게이지 */}
           <div className="rounded-2xl border bg-white p-5">
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <h2 className="font-bold">손익분기점</h2>
-                <p className="text-xs text-muted-foreground">이번 달 이만큼 벌면 &lsquo;본전&rsquo;이에요</p>
-              </div>
-              {hasFixed && (
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">공헌이익률{marginIsEstimated ? ' (어림값)' : ''}</p>
-                  <p className="text-sm font-bold text-primary">{Math.round(margin * 100)}%</p>
-                </div>
-              )}
+            <div className="mb-2">
+              <h2 className="font-bold">손익분기점</h2>
+              <p className="text-xs text-muted-foreground">이번 달 이만큼 벌면 &lsquo;본전&rsquo;이에요</p>
             </div>
             <BreakEvenGauge
               achievementPct={achievementPct}
@@ -297,13 +285,10 @@ export default async function FinancePage({ searchParams }: PageProps) {
               <div className="mt-4 rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground leading-relaxed">
                 <p className="font-medium text-foreground/80">본전 매출은 이렇게 계산했어요</p>
                 <p className="mt-1 tabular-nums">
-                  고정비 {formatWon(fixedTotal)} ÷ 공헌이익률 {Math.round(margin * 100)}% = <span className="font-semibold text-foreground">{formatWon(breakEvenRevenue)}</span>
+                  고정비 {formatWon(fixedTotal)} + 지출(변동비) {formatWon(variableExpense)} = <span className="font-semibold text-foreground">{formatWon(breakEvenRevenue)}</span>
                 </p>
                 <p className="mt-1.5">
-                  공헌이익률은 매출에서 재료·인건비(변동비)를 뺀 비율이에요.
-                  {marginIsEstimated
-                    ? ' 지금은 기록이 없어 청소업 평균(65%)으로 어림잡았고, 실제 매출·지출을 넣으면 사장님 업체 값으로 자동으로 바뀌어요.'
-                    : ' 이번 달 실제 매출·지출로 계산한 값이에요.'}
+                  이번 달 쓴 돈(고정비 + 변동비)만큼 벌면 본전이에요. 이보다 더 벌면 그만큼이 순이익이 돼요.
                 </p>
               </div>
             )}

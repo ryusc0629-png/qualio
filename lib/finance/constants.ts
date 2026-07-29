@@ -41,9 +41,6 @@ export const CATEGORY_COLORS = [
   '#64748b', // slate-500  — 회색(기타)
 ]
 
-// 데이터가 없을 때 쓸 기본 공헌이익률(청소업 서비스 특성상 높은 편)
-export const DEFAULT_CONTRIBUTION_MARGIN = 0.65
-
 // ₩ 전체 표기 (예: 1,250,000원)
 export function formatWon(n: number): string {
   return `${Math.round(n).toLocaleString('ko-KR')}원`
