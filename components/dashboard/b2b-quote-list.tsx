@@ -28,6 +28,8 @@ export interface B2bQuote {
   spec_content: string | null
   contract_content: string | null
   job_type: string | null
+  discount_type?: string | null
+  discount_value?: number | null
 }
 
 interface Props {

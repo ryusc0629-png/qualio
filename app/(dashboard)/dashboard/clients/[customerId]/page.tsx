@@ -177,6 +177,8 @@ export default async function CustomerDetailPage({ params }: Props) {
     items: { name: string; unit: string; qty: number; unit_price: number }[]
     total_amount: number
     tax_included: boolean
+    discount_type?: string | null
+    discount_value?: number | null
     conditions: string | null
     site_name: string | null
     site_address: string | null

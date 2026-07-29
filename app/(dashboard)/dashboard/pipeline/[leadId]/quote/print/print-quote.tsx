@@ -25,6 +25,9 @@ interface Quote {
   items: unknown
   total_amount: number
   tax_included: boolean
+  // 할인: 'rate'(할인율 %) | 'amount'(정액 원) | null(없음)
+  discount_type?: string | null
+  discount_value?: number | null
   conditions: string | null
   site_name: string | null
   site_address: string | null
@@ -77,8 +80,16 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
   // 일회성만 수량×단가로 계산.
   const lineTotal = (it: QuoteItem) => (isOneOff ? it.qty * it.unit_price : it.unit_price)
   const subtotal = items.reduce((s, it) => s + lineTotal(it), 0)
-  const tax = quote.tax_included ? Math.floor(subtotal * 0.1) : 0
-  const total = subtotal + tax
+  // 할인은 소계에서 차감(소계 상한). 할인율=소계×%(원단위 내림), 정액=입력액.
+  const discountValue = quote.discount_value ?? 0
+  const discountAmount = quote.discount_type === 'rate'
+    ? Math.min(subtotal, Math.floor(subtotal * (discountValue / 100)))
+    : quote.discount_type === 'amount'
+      ? Math.min(subtotal, discountValue)
+      : 0
+  const taxable = subtotal - discountAmount
+  const tax = quote.tax_included ? Math.floor(taxable * 0.1) : 0
+  const total = taxable + tax
 
   // 일회성 단위 라벨 (식→수량 등). 정기는 항상 '횟수'
   const UNIT_COUNT_LABEL: Record<string, string> = {
@@ -284,6 +295,14 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
                 <span className="text-gray-600">소 계</span>
                 <span className="tabular-nums">{subtotal.toLocaleString()}원</span>
               </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between py-1">
+                  <span className="text-gray-600">
+                    할인{quote.discount_type === 'rate' ? ` (${discountValue}%)` : ''}
+                  </span>
+                  <span className="tabular-nums">− {discountAmount.toLocaleString()}원</span>
+                </div>
+              )}
               {quote.tax_included && (
                 <div className="flex justify-between py-1">
                   <span className="text-gray-600">부가세 (10%)</span>

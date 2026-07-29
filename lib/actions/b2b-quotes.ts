@@ -27,6 +27,12 @@ const saveB2bQuoteSchema = z.object({
   items:        z.array(quoteItemSchema).min(1, '항목을 하나 이상 입력해주세요'),
   totalAmount:  z.number().min(0),
   taxIncluded:  z.boolean(),
+  // 할인 — rate(할인율 %) | amount(정액 원). 없으면 discountType 생략
+  discountType: z.string().refine(
+    (v) => ['rate', 'amount'].includes(v),
+    { message: '유효하지 않은 할인 유형입니다' },
+  ).optional(),
+  discountValue: z.number().min(0).optional(),
   conditions:   z.string().optional(),
   siteName:     z.string().optional(),
   siteAddress:  z.string().optional(),
@@ -191,6 +197,9 @@ export const saveB2bQuoteAction = action
       items:        parsedInput.items,
       total_amount: parsedInput.totalAmount,
       tax_included: parsedInput.taxIncluded,
+      // 할인 없으면 type=null, value=0
+      discount_type:  parsedInput.discountType ?? null,
+      discount_value: parsedInput.discountValue ?? 0,
       conditions:   parsedInput.conditions ?? null,
       site_name:    parsedInput.siteName ?? null,
       site_address: parsedInput.siteAddress ?? null,

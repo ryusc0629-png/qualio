@@ -60,7 +60,12 @@ interface ExistingQuote {
   spec_content: string | null
   contract_content: string | null
   job_type: string | null
+  // 할인: 'rate'(할인율 %) | 'amount'(정액 원) | null(없음)
+  discount_type?: string | null
+  discount_value?: number | null
 }
+
+type DiscountType = 'none' | 'rate' | 'amount'
 
 interface Props {
   // 리드(영업 중) 또는 고객(계약 중) 중 하나에 연결
@@ -257,6 +262,13 @@ export function B2bQuoteForm({ leadId, customerId, clientName, businessName, exi
     })
   }
   const [taxIncluded, setTaxIncluded] = useState(existingQuote?.tax_included ?? false)
+  // 할인 — 할인율(%) 또는 정액(원). 기존 견적 복원 시 저장값 사용
+  const [discountType, setDiscountType] = useState<DiscountType>(
+    existingQuote?.discount_type === 'rate' || existingQuote?.discount_type === 'amount'
+      ? existingQuote.discount_type
+      : 'none'
+  )
+  const [discountValue, setDiscountValue] = useState<number>(existingQuote?.discount_value ?? 0)
   const [conditions, setConditions] = useState(existingQuote?.conditions ?? '')
   const [siteName, setSiteName] = useState(existingQuote?.site_name ?? '')
   const [siteAddress, setSiteAddress] = useState(existingQuote?.site_address ?? '')
@@ -299,8 +311,15 @@ export function B2bQuoteForm({ leadId, customerId, clientName, businessName, exi
   // 횟수는 방문 빈도를 보여주는 정보값일 뿐. 일회성만 수량×단가로 계산.
   const lineAmount = (it: QuoteItem) => (isOneOff ? it.qty * it.unit_price : it.unit_price)
   const subtotal = items.reduce((s, it) => s + lineAmount(it), 0)
-  const tax = taxIncluded ? Math.floor(subtotal * 0.1) : 0
-  const total = subtotal + tax
+  // 할인은 소계에서 차감(소계를 넘지 않게 상한). 할인율은 소계×%(원단위 내림), 정액은 입력액 그대로.
+  const discountAmount = discountType === 'none'
+    ? 0
+    : Math.min(subtotal, discountType === 'rate'
+        ? Math.floor(subtotal * (discountValue / 100))
+        : discountValue)
+  const taxable = subtotal - discountAmount           // 할인 반영 후 과세 대상
+  const tax = taxIncluded ? Math.floor(taxable * 0.1) : 0
+  const total = taxable + tax
 
   const { execute: executeSave, executeAsync: executeSaveAsync, isPending: saving } = useAction(saveB2bQuoteAction, {
     onSuccess: () => {
@@ -383,6 +402,9 @@ export function B2bQuoteForm({ leadId, customerId, clientName, businessName, exi
     items:        items.filter((it) => it.name).map((it) => ({ name: it.name, unit: it.unit, qty: it.qty, unit_price: it.unit_price })),
     totalAmount:  total,
     taxIncluded,
+    // 할인 없으면 type 생략(서버에서 null 저장), value는 0
+    discountType:  discountType === 'none' ? undefined : discountType,
+    discountValue: discountType === 'none' ? 0 : discountValue,
     conditions:   conditions || undefined,
     siteName:     siteName || undefined,
     siteAddress:  siteAddress || undefined,
@@ -584,6 +606,36 @@ export function B2bQuoteForm({ leadId, customerId, clientName, businessName, exi
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">소계</span>
                 <span>{subtotal.toLocaleString()}원</span>
+              </div>
+              {/* 할인 — 할인율(%) 또는 정액(원). 소계에서 차감 후 부가세 계산 */}
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground">할인</span>
+                  <select
+                    value={discountType}
+                    onChange={(e) => setDiscountType(e.target.value as DiscountType)}
+                    className="h-7 rounded-md border bg-background px-1.5 text-xs"
+                  >
+                    <option value="none">없음</option>
+                    <option value="rate">할인율 (%)</option>
+                    <option value="amount">정액 (원)</option>
+                  </select>
+                  {discountType !== 'none' && (
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      value={discountValue || ''}
+                      onChange={(e) => setDiscountValue(Math.max(0, Number(e.target.value) || 0))}
+                      placeholder={discountType === 'rate' ? '예: 10' : '예: 50000'}
+                      className="h-7 w-24 rounded-md border bg-background px-2 text-right text-xs"
+                    />
+                  )}
+                  {discountType === 'rate' && <span className="text-xs text-muted-foreground">%</span>}
+                </div>
+                {discountAmount > 0 && (
+                  <span className="text-sm text-primary">− {discountAmount.toLocaleString()}원</span>
+                )}
               </div>
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
