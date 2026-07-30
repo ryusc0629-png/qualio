@@ -128,3 +128,19 @@ export function buildRegionPromptHint(
   if (extras.length) lines.push(`추가 출장 지역(자연스럽게 1~2회 언급): ${extras.join(', ')}`)
   return lines.join('\n')
 }
+
+// SEO 제목·본문용 "자연 검색형" 지역명 반환.
+// 행정 정식명("울산광역시 울주군")이 아니라 사람들이 실제로 검색창에 치는 형태("울산 울주군")로 만든다.
+// 정식명을 제목 앞에 그대로 박으면 검색어와 안 맞고, 좋은 자리(제목 앞부분)를 낭비한다.
+export function naturalRegionLabel(address: string | null | undefined): string | null {
+  const parts = parseKoreanRegion(address)
+  // 짧은 시/도 별칭 사용 (울산광역시 → 울산). aliases 마지막 항목이 가장 짧은 통용명.
+  let shortSido: string | null = null
+  if (parts.sido) {
+    const entry = SIDO_TABLE.find((e) => e.full === parts.sido)
+    shortSido = entry ? entry.aliases[entry.aliases.length - 1] : parts.sido
+  }
+  const local = parts.gu ?? parts.gun ?? parts.si // 구/군/시(도 소속)
+  if (shortSido && local) return `${shortSido} ${local}` // 예: 울산 울주군
+  return local ?? shortSido // 하나만 있으면 그것만
+}

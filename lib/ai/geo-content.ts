@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { buildRegionPromptHint } from '@/lib/address/parse-region'
+import { buildRegionPromptHint, naturalRegionLabel } from '@/lib/address/parse-region'
 import { getKeywordStats, opportunityScore, type KeywordStat } from '@/lib/keyword/naver-searchad'
 
 /**
@@ -417,7 +417,7 @@ export async function generateGeoTitles(input: {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return copyFallback
 
-  const region = input.address ? input.address.split(' ').slice(0, 2).join(' ') : null
+  const region = naturalRegionLabel(input.address)
 
   const prompt = `당신은 한국 청소업체의 GEO 블로그 제목 카피라이터입니다.
 아래 "공략 검색어"마다, 그 검색 의도를 담아 사람이 클릭하고 싶은 한국어 블로그 제목을 정확히 1개씩 지으세요.
@@ -427,7 +427,8 @@ export async function generateGeoTitles(input: {
 - 해당 검색어의 핵심 키워드(지역명 포함)를 제목 앞부분에 자연스럽게 넣을 것${region ? ` — 지역: ${region}` : ''}
 - 딱딱한 키워드 나열 금지. 반드시 카피라이팅된 문장형 제목으로.
 - 절대 "~추천", "~잘하는 곳", "~순위" 처럼 검색어를 그대로 나열하며 끝내지 말 것(저품질).
-- 서로 다른 제목으로(중복·유사 금지)
+- 지역명은 '[지역]' 대괄호 고정 접두사로 앞에 붙이지 말 것 — 문장 속에 자연스럽게 녹일 것(모든 글이 같은 틀이면 네이버 유사문서로 판단돼 불리).
+- 서로 다른 제목으로(중복·유사 금지). 글마다 문장 구조도 다르게.
 
 공략 검색어 (순서 유지):
 ${input.targets.map((t, i) => `${i + 1}. ${t.question}${t.keyword ? ` (핵심 키워드: ${t.keyword})` : ''}`).join('\n')}
@@ -488,8 +489,8 @@ export async function generateTopicSuggestions(input: {
   const serviceNames = input.services.map((s) => s.name).join(', ')
   const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
   const currentMonthName = monthNames[input.currentMonth - 1]
-  // 지역명(시·구) — 지역+서비스 조합 키워드에 활용
-  const region = input.address ? input.address.split(' ').slice(0, 2).join(' ') : null
+  // 지역명(시·구) — 지역+서비스 조합 키워드에 활용. 자연 검색형("울산 울주군")으로.
+  const region = naturalRegionLabel(input.address)
 
   // 이미 쓴 제목을 AI에 그대로 넘겨 "글자가 달라도 같은 주제"를 의미 기준으로 걸러내게 함
   const avoidBlock = input.recentTitles && input.recentTitles.length > 0
