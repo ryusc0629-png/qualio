@@ -349,6 +349,23 @@ export const createCustomerWithContractAction = action
 
     if (customerError || !customer) throw new Error('[APP] 고객 등록에 실패했습니다')
 
+    // 1-2. 리드 시절 만든 견적서·시방서·계약서를 전환된 고객에게 그대로 연결
+    // (이게 없으면 견적서는 lead_id에만 붙은 채 남고, 고객 상세는 customer_id로만
+    //  조회하므로 "아직 만든 견적서가 없어요"로 보여 방어 자료가 유실된 것처럼 됨.
+    //  lead_id는 지우지 않아 리드 이력에서도 계속 보이게 유지)
+    if (parsedInput.lead_id) {
+      const { error: relinkError } = await db
+        .from('b2b_quotes')
+        .update({ customer_id: customer.id } as never)
+        .eq('lead_id', parsedInput.lead_id)
+        .is('customer_id', null)
+        .eq('business_id', businessId)
+      if (relinkError) {
+        // 고객 전환 자체는 성공시키되, 재연결 실패는 로그로 남겨 추적
+        console.error('[Customers] 견적서 고객 재연결 실패 — 고객은 정상 전환됨', relinkError)
+      }
+    }
+
     // 2. 계약 등록 (선택)
     if (parsedInput.hasContract === 'true') {
       if (!parsedInput.service_type) throw new Error('[APP] 서비스 유형을 입력해주세요')
