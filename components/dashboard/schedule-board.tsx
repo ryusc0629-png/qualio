@@ -18,6 +18,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { addDays, format, getDaysInMonth } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2, Smartphone } from 'lucide-react'
+import { formatPhone } from '@/lib/format/phone'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
 import { assignBookingAction, assignBookingAndPropagateAction, addWorkerAction, deleteWorkerAction, updateBookingWorkersAction } from '@/lib/actions/workers'
@@ -279,10 +280,10 @@ function AddWorkerDialog() {
           <div className="space-y-1.5">
             <Label className="text-xs">연락처</Label>
             <Input
-              placeholder="01012345678"
-              inputMode="numeric"
+              placeholder="010-1234-5678"
+              inputMode="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+              onChange={(e) => setPhone(formatPhone(e.target.value))}
               className="h-10"
             />
           </div>
