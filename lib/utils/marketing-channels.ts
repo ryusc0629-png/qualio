@@ -13,6 +13,7 @@ export const MARKETING_CHANNELS: MarketingChannel[] = [
   { key: 'naver_place', label: '네이버 플레이스', emoji: '🟢', hint: '플레이스 소개/설명란에 넣는 링크' },
   { key: 'naver_blog',  label: '네이버 블로그',   emoji: '📗', hint: '블로그 글 하단에 넣는 링크' },
   { key: 'instagram',   label: '인스타그램',      emoji: '📷', hint: '프로필/게시물의 링크' },
+  { key: 'youtube',     label: '유튜브',          emoji: '▶️', hint: '영상 설명란·채널 정보에 넣는 링크' },
   { key: 'danggeun',    label: '당근',            emoji: '🥕', hint: '당근 게시글·프로필 링크' },
   { key: 'kakao',       label: '카카오톡',        emoji: '💬', hint: '채널/오픈채팅으로 보내는 링크' },
   { key: 'flyer',       label: '전단지·명함 QR',  emoji: '📄', hint: '인쇄물 QR코드로 만들 링크' },
