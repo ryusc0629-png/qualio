@@ -15,6 +15,8 @@ export async function GET(request: NextRequest) {
   }
 
   const db = createServiceClient()
+  // 견적 CTA 링크의 절대주소 베이스 — auto-post와 동일하게 채널 원고 끝에 ?ch= 링크를 붙이기 위함
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
   // 채널 원고가 없는 발행 글 조회 — 포트폴리오(시공 사례) 제외, 네이버 원고가 비어 있는 것만
   const { data: posts } = await db
@@ -34,9 +36,9 @@ export async function GET(request: NextRequest) {
   const businessIds = [...new Set(posts.map((p) => p.business_id))]
   const { data: businesses } = await db
     .from('businesses' as never)
-    .select('id, name, address' as never)
+    .select('id, name, address, slug' as never)
     .in('id' as never, businessIds) as unknown as {
-      data: { id: string; name: string; address: string | null }[] | null
+      data: { id: string; name: string; address: string | null; slug: string | null }[] | null
     }
   const bizMap = new Map((businesses ?? []).map((b) => [b.id, b]))
 
@@ -54,6 +56,8 @@ export async function GET(request: NextRequest) {
       address: biz.address,
       geoTitle: post.title,
       geoContent: post.content,
+      // 견적 CTA 링크는 슬러그(깔끔) 우선, 없으면 UUID 폴백 — auto-post와 동일. 없으면 CTA·링크가 통째로 누락됨
+      quoteBaseUrl: `${appUrl}/q/${biz.slug ?? biz.id}`,
     })
     if (ok) {
       filled++
