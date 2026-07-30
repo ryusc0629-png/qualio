@@ -6,6 +6,7 @@ import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { B2bQuoteForm } from '@/app/(dashboard)/dashboard/pipeline/[leadId]/b2b-quote-form'
+import { AddBookingButton } from '@/components/dashboard/add-booking-button'
 import { deleteB2bQuoteAction } from '@/lib/actions/b2b-quotes'
 import { FileText, Plus, Pencil, Eye, Trash2, Link2 } from 'lucide-react'
 
@@ -38,13 +39,18 @@ interface Props {
   leadId?: string
   customerId?: string
   clientName: string
+  // 고객(계약 중) 화면일 때만 넘어옴 — 있으면 견적서로 바로 일정(예약)을 잡을 수 있음
+  customerPhone?: string | null
+  customerAddress?: string | null
   // 우리 업체명(을) — 계약서 첫 문장에 자동 반영
   businessName?: string
   hasMeeting?: boolean
 }
 
 // 한 거래처에 여러 장의 견적서를 만들고 각각 수정·미리보기·삭제할 수 있는 목록
-export function B2bQuoteList({ quotes, leadId, customerId, clientName, businessName, hasMeeting }: Props) {
+export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerPhone, customerAddress, businessName, hasMeeting }: Props) {
+  // 고객 화면(customerId+연락처)일 때만 견적서→일정 잡기 버튼 노출 (리드 화면엔 예약 개념 없음)
+  const canSchedule = Boolean(customerId && customerPhone)
   const router = useRouter()
   const [, startTransition] = useTransition()
 
@@ -156,6 +162,17 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, businessN
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
+                  {/* 일정 잡기 — 이 견적서 작업을 달력(예약)에 바로 올림. 서비스명·금액 자동 채움, 날짜만 선택 */}
+                  {canSchedule && (
+                    <AddBookingButton
+                      customer={{ name: clientName, phone: customerPhone ?? null, address: customerAddress ?? null }}
+                      prefill={{ cleaning_type: title, final_price: quote.total_amount }}
+                      triggerLabel="일정 잡기"
+                      triggerVariant="outline"
+                      triggerIcon="calendar"
+                      triggerClassName="h-8 px-2 text-xs"
+                    />
+                  )}
                   {/* 수정 — 이 견적서 내용을 그대로 불러와 편집 */}
                   <B2bQuoteForm
                     leadId={leadId}

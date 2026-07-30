@@ -99,6 +99,7 @@ export default async function CustomerDetailPage({ params }: Props) {
     final_price: number | null
     status: string
     memo: string | null
+    service_label: string | null
     cancellation_reason: string | null
     worker_id?: string | null
     contract_id?: string | null
@@ -113,7 +114,7 @@ export default async function CustomerDetailPage({ params }: Props) {
     : `customer_id.eq.${customerId}`
   const { data: bookings } = await db
     .from('bookings')
-    .select('id, scheduled_at, final_price, status, memo, cancellation_reason, worker_id, contract_id, quotes!quote_id(cleaning_type, space_size)' as never)
+    .select('id, scheduled_at, final_price, status, memo, service_label, cancellation_reason, worker_id, contract_id, quotes!quote_id(cleaning_type, space_size)' as never)
     .eq('business_id', profile.business_id)
     .or(bookingOrFilter as never)
     .is('deleted_at', null)
@@ -379,6 +380,8 @@ export default async function CustomerDetailPage({ params }: Props) {
         quotes={b2bQuotes}
         customerId={customer.id}
         clientName={customer.name}
+        customerPhone={customer.phone}
+        customerAddress={customer.address}
         businessName={bizNameRow?.legal_name || bizNameRow?.name || ''}
       />
 
@@ -520,13 +523,25 @@ export default async function CustomerDetailPage({ params }: Props) {
 
         {bookingList.length === 0 ? (
           <div className="bg-white rounded-xl border border-dashed border-border p-10 text-center">
-            <p className="text-sm text-muted-foreground">아직 예약 이력이 없어요</p>
+            <p className="text-sm text-muted-foreground">아직 잡힌 일정이 없어요</p>
+            {b2bQuotes.length > 0 ? (
+              <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                위 <span className="font-medium text-foreground">견적서·시방서</span>에서{' '}
+                <span className="font-medium text-primary">일정 잡기</span>를 누르면
+                <br />
+                이 작업을 바로 달력에 올릴 수 있어요
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-2">
+                위 <span className="font-medium text-foreground">예약 등록</span>으로 첫 일정을 잡아보세요
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-2">
             {bookingList.map((booking) => {
               const quote = booking.quotes as { cleaning_type: string | null; space_size: number | null } | null
-              const serviceName = quote?.cleaning_type ?? booking.memo ?? '직접 예약'
+              const serviceName = quote?.cleaning_type ?? booking.service_label ?? booking.memo ?? '직접 예약'
               const spaceLabel = quote?.space_size ? ` · ${quote.space_size}평` : ''
               const statusMeta = STATUS_META[booking.status] ?? { label: booking.status, className: 'bg-gray-100 text-gray-600' }
               const isCancelled = booking.status === 'cancelled'

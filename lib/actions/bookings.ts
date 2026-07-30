@@ -76,22 +76,8 @@ export const addBookingAction = action
       return { success: true }
     }
 
-    const { error } = await db.from('bookings').insert({
-      business_id: profile.business_id,
-      quote_id: null,
-      customer_name: parsedInput.customer_name,
-      customer_phone: parsedInput.customer_phone,
-      service_address: parsedInput.service_address,
-      scheduled_at: scheduledIso,
-      selected_tier: 'good',
-      final_price: parsedInput.final_price,
-      memo: parsedInput.memo ?? null,
-      status: 'confirmed',
-    })
-
-    if (error) throw new Error('[APP] 예약 추가에 실패했습니다')
-
-    // 수동 예약 추가 시 고객 DB 자동 등록 (전화번호 기준, 이미 있으면 스킵)
+    // 고객 DB 확인/등록 (전화번호 기준) — 예약을 customer_id로도 연결해두면
+    // 전화번호가 나중에 바뀌어도 고객 이력에서 누락되지 않음
     const { data: existing } = await db
       .from('customers')
       .select('id')
@@ -99,15 +85,39 @@ export const addBookingAction = action
       .eq('phone', parsedInput.customer_phone)
       .maybeSingle()
 
+    let customerId = existing?.id ?? null
     if (!existing) {
-      await db.from('customers').insert({
-        business_id: profile.business_id,
-        name: parsedInput.customer_name,
-        phone: parsedInput.customer_phone,
-        address: parsedInput.service_address ?? null,
-        type: 'one_time',
-      })
+      const { data: created } = await db
+        .from('customers')
+        .insert({
+          business_id: profile.business_id,
+          name: parsedInput.customer_name,
+          phone: parsedInput.customer_phone,
+          address: parsedInput.service_address ?? null,
+          type: 'one_time',
+        })
+        .select('id')
+        .maybeSingle()
+      customerId = created?.id ?? null
     }
+
+    const { error } = await db.from('bookings').insert({
+      business_id: profile.business_id,
+      quote_id: null,
+      customer_id: customerId,
+      customer_name: parsedInput.customer_name,
+      customer_phone: parsedInput.customer_phone,
+      service_address: parsedInput.service_address,
+      scheduled_at: scheduledIso,
+      selected_tier: 'good',
+      final_price: parsedInput.final_price,
+      // 입력한 서비스명을 저장 — 이력에 "직접 예약" 대신 실제 서비스명이 보이도록
+      service_label: parsedInput.cleaning_type,
+      memo: parsedInput.memo ?? null,
+      status: 'confirmed',
+    } as never)
+
+    if (error) throw new Error('[APP] 예약 추가에 실패했습니다')
 
     revalidatePath('/dashboard/schedule')
     revalidatePath('/dashboard/bookings')

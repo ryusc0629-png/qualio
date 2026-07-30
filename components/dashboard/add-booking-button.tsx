@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { addBookingAction } from '@/lib/actions/bookings'
-import { Plus, X, Check, Search } from 'lucide-react'
+import { Plus, X, Check, Search, CalendarPlus } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import { useAutoFocusRef } from '@/lib/hooks/use-auto-focus'
 import { openAddressSearch } from '@/lib/address/postcode'
@@ -34,23 +34,46 @@ const formatThousands = (v: string) => {
 
 interface Props {
   customer: { name: string; phone: string | null; address: string | null }
+  // 견적서 등에서 넘어올 때 서비스명·금액을 미리 채워 원터치로 일정만 잡게 함
+  prefill?: { cleaning_type?: string; final_price?: number }
+  // 트리거 버튼 문구/모양 (기본: '예약 등록'). 견적서 카드에선 '일정 잡기' 등으로 사용
+  triggerLabel?: string
+  triggerVariant?: 'default' | 'outline'
+  triggerClassName?: string
+  triggerIcon?: 'plus' | 'calendar'
+}
+
+// 초기 폼값 — prefill(서비스명·금액)과 고객 주소를 반영
+function buildDefaults(customer: Props['customer'], prefill?: Props['prefill']): Partial<FormInput> {
+  return {
+    service_address: customer.address ?? '',
+    cleaning_type: prefill?.cleaning_type ?? '',
+    final_price: prefill?.final_price ? String(prefill.final_price) : '',
+  }
 }
 
 // 고객 상세에서 그 고객으로 바로 예약을 등록 (클레임 등록과 동일한 흐름)
-export function AddBookingButton({ customer }: Props) {
+export function AddBookingButton({
+  customer,
+  prefill,
+  triggerLabel = '예약 등록',
+  triggerVariant = 'default',
+  triggerClassName,
+  triggerIcon = 'plus',
+}: Props) {
   const [open, setOpen] = useState(false)
   const focusRef = useAutoFocusRef<HTMLDivElement>()
   const router = useRouter()
 
   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormInput>({
     resolver: zodResolver(schema),
-    defaultValues: { service_address: customer.address ?? '' },
+    defaultValues: buildDefaults(customer, prefill),
   })
 
   const { execute, isPending } = useAction(addBookingAction, {
     onSuccess: () => {
       toast.success('예약을 등록했어요')
-      reset({ service_address: customer.address ?? '' })
+      reset(buildDefaults(customer, prefill))
       setOpen(false)
       router.refresh() // 서비스 이력에 즉시 반영
     },
@@ -74,10 +97,16 @@ export function AddBookingButton({ customer }: Props) {
   if (!customer.phone) return null
 
   if (!open) {
+    const TriggerIcon = triggerIcon === 'calendar' ? CalendarPlus : Plus
     return (
-      <Button onClick={() => setOpen(true)} size="sm" className="h-9">
-        <Plus className="h-4 w-4 mr-1" />
-        예약 등록
+      <Button
+        onClick={() => setOpen(true)}
+        size="sm"
+        variant={triggerVariant}
+        className={triggerClassName ?? 'h-9'}
+      >
+        <TriggerIcon className="h-4 w-4 mr-1" />
+        {triggerLabel}
       </Button>
     )
   }
