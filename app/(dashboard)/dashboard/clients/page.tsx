@@ -725,11 +725,9 @@ export default async function ClientsPage({
                           )}
                         </div>
                         <div className="flex items-center gap-1">
+                          {/* 견적서·시방서·계약서·서비스 이력이 모두 이 상세 페이지에 있어 버튼 하나로 통합 */}
                           <Link href={`/dashboard/clients/${customer.id}`} className="inline-flex items-center gap-0.5 text-xs text-primary hover:text-primary/80 px-2 py-1 rounded border border-primary/30 hover:border-primary/50">
-                            <FileText className="h-3 w-3" />견적서
-                          </Link>
-                          <Link href={`/dashboard/clients/${customer.id}`} className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-emerald-200 hover:border-emerald-400">
-                            이력<ChevronRight className="h-3 w-3" />
+                            <FileText className="h-3 w-3" />견적서·이력
                           </Link>
                           {customer.phone && <EditCustomerButton customer={{ ...customer, phone: customer.phone }} />}
                           <DeleteCustomerButton customerId={customer.id} customerName={customer.name} hasContract={hasAnyContract} />
