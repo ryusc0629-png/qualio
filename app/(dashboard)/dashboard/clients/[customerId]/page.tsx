@@ -189,16 +189,29 @@ export default async function CustomerDetailPage({ params }: Props) {
     contract_content: string | null
     job_type: string | null
   }
+  // 안전망: customer_id 뿐 아니라, 전환 전 리드(lead_id)에 붙어있던 견적서까지 함께 조회.
+  // 재연결이 어떤 이유로 누락되더라도 계약서·시방서가 고객 화면에서 절대 사라지지 않도록 함.
+  const quoteMatch = customer.lead_id
+    ? `customer_id.eq.${customerId},lead_id.eq.${customer.lead_id}`
+    : `customer_id.eq.${customerId}`
   const { data: b2bQuotesRaw } = await db
     .from('b2b_quotes')
     .select('*')
-    .eq('customer_id' as never, customerId)
     .eq('business_id', profile.business_id)
+    .or(quoteMatch as never)
     .order('created_at' as never, { ascending: true }) as unknown as { data: B2bQuoteExisting[] | null }
-  const b2bQuotes = (b2bQuotesRaw ?? []).map((q) => ({
-    ...q,
-    items: Array.isArray(q.items) ? q.items : [],
-  }))
+  // 같은 견적서가 양쪽 조건에 걸려 중복되지 않도록 id 기준 dedupe
+  const seenQuoteIds = new Set<string>()
+  const b2bQuotes = (b2bQuotesRaw ?? [])
+    .filter((q) => {
+      if (seenQuoteIds.has(q.id)) return false
+      seenQuoteIds.add(q.id)
+      return true
+    })
+    .map((q) => ({
+      ...q,
+      items: Array.isArray(q.items) ? q.items : [],
+    }))
 
   // 계약서 '을'(수급자)에 넣을 상호 — 사업자 상호(legal_name) 우선, 없으면 브랜드명(name)
   const { data: bizNameRow } = await db

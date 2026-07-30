@@ -56,9 +56,14 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, businessN
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
-  const handleDelete = (quoteId: string) => {
-    if (!window.confirm('이 견적서를 삭제할까요?\n삭제하면 되돌릴 수 없어요.')) return
-    executeDelete({ quoteId, leadId, customerId })
+  const handleDelete = (quote: B2bQuote) => {
+    // 시방서·계약서가 함께 보관된 견적서는 삭제 시 그 문서들도 영구 삭제되므로 더 강하게 경고
+    const hasDocs = Boolean(quote.spec_content || quote.contract_content)
+    const message = hasDocs
+      ? '이 견적서에는 시방서·계약서가 함께 보관돼 있어요.\n삭제하면 계약서·시방서까지 영구 삭제되어 되돌릴 수 없어요.\n정말 삭제할까요?'
+      : '이 견적서를 삭제할까요?\n삭제하면 되돌릴 수 없어요.'
+    if (!window.confirm(message)) return
+    executeDelete({ quoteId: quote.id, leadId, customerId })
   }
 
   // 고객에게 보낼 공개 링크 복사 — 이 링크만 보내면 고객이 견적서·시방서를 열람
@@ -132,8 +137,22 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, businessN
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {quote.quote_number ? `${quote.quote_number} · ` : ''}
                     <span className="font-semibold text-foreground">{quote.total_amount.toLocaleString('ko-KR')}원</span>
-                    {quote.spec_content ? ' · 시방서 있음' : ''}
                   </p>
+                  {/* 시방서·계약서 보관 상태를 눈에 띄게 — 사장님이 '문서가 안전히 있구나' 바로 확인 */}
+                  {(quote.spec_content || quote.contract_content) && (
+                    <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                      {quote.spec_content && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 font-medium">
+                          <FileText className="h-3 w-3" /> 시방서 보관됨
+                        </span>
+                      )}
+                      {quote.contract_content && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 font-medium">
+                          <FileText className="h-3 w-3" /> 계약서 보관됨
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
@@ -184,7 +203,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, businessN
                   {/* 삭제 */}
                   <button
                     type="button"
-                    onClick={() => handleDelete(quote.id)}
+                    onClick={() => handleDelete(quote)}
                     disabled={deleting}
                     className="p-2 text-muted-foreground hover:text-destructive rounded-md hover:bg-muted disabled:opacity-40"
                     aria-label="견적서 삭제"
