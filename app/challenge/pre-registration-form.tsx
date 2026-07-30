@@ -39,9 +39,9 @@ export function PreRegistrationForm() {
         <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
           <CheckCircle2 className="w-8 h-8 text-primary" />
         </div>
-        <p className="font-bold text-lg">사전신청이 접수됐어요!</p>
+        <p className="font-bold text-lg">사전예약이 접수됐어요!</p>
         <p className="text-sm text-muted-foreground break-keep">
-          챌린지 결과가 좋으면 가장 먼저 알림 드릴게요.
+          9월 1일 정식 오픈하면 가장 먼저 안내드릴게요.
           조금만 기다려 주세요.
         </p>
       </div>
@@ -115,10 +115,10 @@ export function PreRegistrationForm() {
       </div>
 
       <Button type="submit" disabled={isPending} className="w-full h-12 text-base font-bold">
-        {isPending ? '신청 중...' : '사전 알림 신청하기'}
+        {isPending ? '신청 중...' : '사전예약 신청하기'}
       </Button>
       <p className="text-xs text-center text-muted-foreground break-keep">
-        지금 신청하면 <b className="text-foreground">첫 달 무료</b> 혜택을 드려요.
+        지금 사전예약하면 <b className="text-foreground">첫 달 무료</b> 혜택을 드려요.
       </p>
     </form>
   )

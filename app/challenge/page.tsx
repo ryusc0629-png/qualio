@@ -4,9 +4,9 @@ import { SiteFooter } from '@/components/site-footer'
 import { PreRegistrationForm } from './pre-registration-form'
 
 export const metadata: Metadata = {
-  title: '청소 창업 90일 챌린지 — 사전 알림 신청 | 퀄리오',
+  title: '청소업체 매출 자동 상승 서비스 — 9월 1일 오픈, 사전예약 | 퀄리오',
   description:
-    '기술은 있는데 오더를 못 따서 남 밑으로, 플랫폼 종속으로 가는 청소 사장님을 위한 도구. 오더 따오는 것부터 운영까지 퀄리오가 다 합니다. 90일 안에 월매출 1,000만 원 도전을 실시간 공개.',
+    '기술은 있는데 오더를 못 따서 남 밑으로, 플랫폼 종속으로 가는 청소 사장님을 위한 도구. 오더 따오는 것부터 운영까지 퀄리오가 다 합니다. 2026년 9월 1일 정식 오픈 — 지금 사전예약하면 첫 달 무료. 90일 안에 월매출 1,000만 원 도전을 실시간 공개.',
 }
 
 // 퀄리오가 대신하는 워크플로우 — 기능이 아니라 '결과의 흐름'으로 쉽게
@@ -25,7 +25,7 @@ export default function ChallengeLandingPage() {
         <div className="max-w-xl mx-auto px-5 pt-12 pb-10 space-y-8">
           {/* 배지 */}
           <div className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-sm font-medium rounded-full px-3 py-1">
-            <Sparkles className="w-4 h-4" /> 90일 챌린지 · 사전 알림
+            <Sparkles className="w-4 h-4" /> 청소업체 매출 자동 상승 서비스 · 사전예약
           </div>
 
           {/* 헤드라인 — 진짜 통증: 기술은 있는데 오더가 없다 */}
@@ -83,10 +83,13 @@ export default function ChallengeLandingPage() {
           {/* 왜 지금 신청 + 폼 */}
           <div className="rounded-2xl border bg-card p-5 shadow-sm space-y-4">
             <div className="space-y-1">
-              <p className="font-bold break-keep">기술은 있는데 오더가 없어 고민이라면</p>
+              <div className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground text-xs font-bold rounded-full px-2.5 py-1">
+                2026년 9월 1일 정식 오픈
+              </div>
+              <p className="font-bold break-keep pt-1">기술은 있는데 오더가 없어 고민이라면</p>
               <p className="text-sm text-muted-foreground break-keep">
-                미리 신청해 두세요. 챌린지 결과가 좋으면 신청하신 분들께{' '}
-                <b className="text-foreground">가장 먼저 알림</b>을 드려요.{' '}
+                지금 사전예약해 두세요. 9월 1일 정식 오픈하면 사전예약하신 분들께{' '}
+                <b className="text-foreground">가장 먼저 안내</b>드려요.{' '}
                 <b className="text-foreground">첫 달 무료</b>.
               </p>
             </div>
