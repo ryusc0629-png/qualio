@@ -2,6 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AddServiceForm } from '@/components/dashboard/add-service-form'
 import { DeleteServiceButton } from '@/components/dashboard/delete-service-button'
+import { DuplicateServiceButton } from '@/components/dashboard/duplicate-service-button'
 import { EditServiceButton } from '@/components/dashboard/edit-service-button'
 import { ServicesGuideCard } from '@/components/dashboard/services-guide-card'
 import { Image, Zap } from 'lucide-react'
@@ -169,6 +170,7 @@ export default async function ServicesPage() {
                     availableServices={(services ?? []).map((s) => ({ id: s.id, name: s.name }))}
                     tierMultipliers={tierMultipliers}
                     />
+                    <DuplicateServiceButton id={service.id} />
                     <DeleteServiceButton id={service.id} />
                   </div>
                 </div>

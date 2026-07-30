@@ -222,6 +222,54 @@ export const updateServiceItemAction = action
     return { success: true }
   })
 
+// 서비스 항목 복제 액션 — 기존 서비스의 모든 설정을 그대로 복사(이름만 "(복사)")
+// 정기청소처럼 비슷한 서비스를 여러 개 만들 때, 매번 처음부터 입력하지 않도록 함
+export const duplicateServiceItemAction = action
+  .schema(z.object({ id: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('로그인이 필요합니다')
+
+    const db = createServiceClient()
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (!profile?.business_id) throw new Error('업체 정보를 찾을 수 없습니다')
+
+    // 본인 업체의 원본 서비스 전체 컬럼 조회 (가격·단위·플랜·할인·사진 등 모두 복사 대상)
+    const { data: source } = await db
+      .from('service_items')
+      .select('*')
+      .eq('id', parsedInput.id)
+      .eq('business_id', profile.business_id)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (!source) throw new Error('[APP] 복제할 서비스를 찾을 수 없습니다')
+
+    // 새 행으로 넣을 값 — 고유/타임스탬프 컬럼은 제거하고 이름만 "(복사)"로 변경
+    const copy = { ...source } as Record<string, unknown>
+    delete copy.id
+    delete copy.created_at
+    delete copy.updated_at
+    delete copy.deleted_at
+    copy.name = `${source.name} (복사)`
+
+    const { error } = await db.from('service_items').insert(copy as never)
+
+    if (error) throw new Error('[APP] 서비스 복제에 실패했습니다')
+
+    // 서비스 변경 시 번들 캐시 초기화 → 다음 견적 요청 시 AI가 새로 구성
+    await invalidateBundleCache(db, profile.business_id)
+
+    revalidatePath('/dashboard/services')
+    return { success: true }
+  })
+
 // 서비스 항목 삭제 액션 (soft delete)
 export const deleteServiceItemAction = action
   .schema(deleteServiceItemSchema)
