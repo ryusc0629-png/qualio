@@ -37,8 +37,12 @@ export async function GET(request: NextRequest) {
   }
 
   const secret = process.env.CRON_SECRET ?? ''
-  // 같은 배포 호스트로 호출 — 배포 URL 변경에 영향받지 않음
-  const origin = new URL(request.url).origin
+  // ★ self-fetch 대상은 반드시 '공개 도메인'(qualio.co.kr)을 써야 한다.
+  //   크론이 호출할 때 request.url 의 origin 은 Vercel 배포 보호(SSO)가 걸린 *.vercel.app
+  //   배포 URL이다. 거기로 self-fetch 하면 SSO 로그인(vercel.com/sso-api)으로 302 리다이렉트되어
+  //   auto-post(자동 발행 안전망)를 포함한 모든 하위 작업이 실제로 실행되지 못하고 조용히 실패한다.
+  //   공개 도메인은 보호가 없어 200으로 정상 실행된다. (코드베이스 공통 패턴과 동일)
+  const origin = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr').replace(/\/$/, '')
 
   // 하위 라우트마다 인증 방식이 달라 모든 헤더·쿼리를 함께 전달
   const headers = {
@@ -60,7 +64,10 @@ export async function GET(request: NextRequest) {
   const results = settled.map((r, i) => {
     const task = SUB_TASKS[i]
     if (r.status === 'fulfilled') {
-      return { task, ok: r.value.status === 200, status: r.value.status, body: r.value.body }
+      const ok = r.value.status === 200
+      // 비정상 응답(302 SSO 리다이렉트·401·5xx 등)도 로그로 드러낸다 — 조용한 실패 방지
+      if (!ok) console.error(`[Cron] daily-maintenance 하위 작업 비정상 응답 (${task}): status=${r.value.status}`)
+      return { task, ok, status: r.value.status, body: r.value.body }
     }
     const message = r.reason instanceof Error ? r.reason.message : '알 수 없는 오류'
     console.error(`[Cron] daily-maintenance 하위 작업 실패 (${task}):`, message)

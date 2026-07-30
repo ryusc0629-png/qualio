@@ -241,6 +241,20 @@ export async function GET(request: NextRequest) {
         (publishedThisMonth ?? []).map((p) => Number(new Date(new Date(p.published_at).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(8, 10)))
       )
 
+      // ★ '하루 상한' 가드 — 이 라우트가 하루에 여러 번 호출돼도(자가복구용 재시도·중복 크론)
+      //   오늘 발행 건수가 플랜의 일 한도(dailyLimit)를 넘지 못하게 막는다.
+      //   needed 는 '이번 달 페이스 대비 밀린 양'이라 라우트 호출마다 계속 >0 일 수 있어,
+      //   이 가드가 없으면 아침에 여러 번 트리거될 때 하루에 밀린 만큼 몰아 발행되는 사고가 난다.
+      //   9시 실행을 놓쳤을 때만(오늘 0건) 보충 발행되고, 이미 채웠으면 조용히 건너뛴다.
+      const publishedTodayCount = (publishedThisMonth ?? []).filter(
+        (p) => Number(new Date(new Date(p.published_at).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(8, 10)) === todayDayKST
+      ).length
+      const toPublish = Math.min(needed, Math.max(0, dailyLimit - publishedTodayCount))
+      if (toPublish === 0) {
+        results.push({ businessId: business.id, action: 'skipped-daily-cap' })
+        continue
+      }
+
       // 고정 계획표에서 오늘 발행할 슬롯을 가져온다(달력·수동 발행과 동일한 주제).
       const plan = await getOrCreatePostPlan(db, business.id, {
         month: monthKST,
@@ -272,14 +286,14 @@ export async function GET(request: NextRequest) {
       const realCases = await fetchRecentJobCases(db, business.id)
 
       const publishedTitlesThisRun: string[] = []
-      for (let i = 0; i < needed; i++) {
+      for (let i = 0; i < toPublish; i++) {
         const planned = todaySlot ? { topic: todaySlot.topic, keyword: todaySlot.keyword, title: todaySlot.label } : null
         const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas, autoImageGeneration: business.auto_image_generation ?? true }, services ?? [], publishedTitles, month, model, channelsEnabled, realCases, planned)
         publishedTitlesThisRun.push(title)
-        console.log(`[Cron] 자동 발행 완료 (${i + 1}/${needed}): ${business.name} — "${title}"`)
+        console.log(`[Cron] 자동 발행 완료 (${i + 1}/${toPublish}): ${business.name} — "${title}"`)
       }
 
-      results.push({ businessId: business.id, action: 'posted', count: needed, titles: publishedTitlesThisRun })
+      results.push({ businessId: business.id, action: 'posted', count: toPublish, titles: publishedTitlesThisRun })
 
     } catch (err) {
       const message = err instanceof Error ? err.message : '알 수 없는 오류'
