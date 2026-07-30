@@ -118,50 +118,102 @@ const SYSTEM = `너는 '청소 창업 90일 챌린지' 유튜브 영상을 다�
 반드시 emit_content 툴을 호출해 결과를 넘긴다.`
 
 // 구조화 출력 스키마 (툴 호출로 강제 → JSON 파싱 실패 원천 차단)
-const TB = { type: 'object', properties: { title: { type: 'string' }, body: { type: 'string' } }, required: ['title', 'body'] }
+// ★ 스키마는 '평평한 문자열 필드'로 둔다. blog/cafe를 중첩 객체({title,body})로 두면
+//   일부 입력에서 모델이 3편(afup/all/dongwoo)을 한 문자열로 뭉쳐 반환해 본문이 통째로
+//   빈 값이 되는 사고가 재현됐다. 채널마다 독립 문자열 필드를 주면 확실히 각각 채워온다.
+//   받은 뒤 generate()에서 기존 중첩 구조(data.blog / data.cafe.afup ...)로 리맵한다.
+const CLIP_ITEM = {
+  type: 'object',
+  properties: {
+    start: { type: 'string' }, end: { type: 'string' },
+    title: { type: 'string' }, caption: { type: 'string' }, reason: { type: 'string' },
+  },
+  required: ['start', 'end', 'title', 'caption', 'reason'],
+}
 const OUTPUT_TOOL = {
   name: 'emit_content',
-  description: '채널별 재가공 결과를 넘긴다',
+  description: '채널별 재가공 결과를 넘긴다. 각 채널 본문은 반드시 해당 문자열 필드에 직접 채운다(빈 값 금지·중첩 객체 금지).',
   input_schema: {
     type: 'object',
     properties: {
       summary: { type: 'string' },
-      blog: TB,
-      cafe: { type: 'object', properties: { afup: TB, all: TB, dongwoo: TB }, required: ['afup', 'all', 'dongwoo'] },
+      blog_title: { type: 'string' }, blog_body: { type: 'string', description: '네이버 블로그 본문(1200자+)' },
+      cafe_afup_title: { type: 'string' }, cafe_afup_body: { type: 'string', description: "카페 '아프니까 사장이다' 본문" },
+      cafe_all_title: { type: 'string' }, cafe_all_body: { type: 'string', description: "카페 '청소업의 모든 것' 칼럼 본문" },
+      cafe_dongwoo_title: { type: 'string' }, cafe_dongwoo_body: { type: 'string', description: "카페 '청소동우회' 본문" },
       threads: { type: 'string' },
       x: { type: 'string' },
       shorts_caption: { type: 'string' },
       hashtags: { type: 'string' },
-      clips: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            start: { type: 'string' }, end: { type: 'string' },
-            title: { type: 'string' }, caption: { type: 'string' }, reason: { type: 'string' },
-          },
-          required: ['start', 'end', 'title', 'caption', 'reason'],
-        },
-      },
+      clips: { type: 'array', items: CLIP_ITEM },
     },
-    required: ['summary', 'blog', 'cafe', 'threads', 'x', 'shorts_caption', 'hashtags', 'clips'],
+    required: [
+      'summary', 'blog_title', 'blog_body',
+      'cafe_afup_title', 'cafe_afup_body', 'cafe_all_title', 'cafe_all_body', 'cafe_dongwoo_title', 'cafe_dongwoo_body',
+      'threads', 'x', 'shorts_caption', 'hashtags', 'clips',
+    ],
   },
 }
+
+// 채널별 사람이 읽는 이름 (누락 점검·요약 출력 공용)
+const CHANNEL_LABELS = [
+  ['네이버 블로그', d => d.blog?.body],
+  ['카페 — 아프니까 사장이다', d => d.cafe?.afup?.body],
+  ['카페 — 청소업의 모든 것', d => d.cafe?.all?.body],
+  ['카페 — 청소동우회', d => d.cafe?.dongwoo?.body],
+  ['스레드', d => d.threads],
+  ['X', d => d.x],
+  ['숏폼 캡션', d => d.shorts_caption],
+  ['숏폼 클립', d => (d.clips || []).length ? 'ok' : ''],
+]
 
 async function generate(apiKey, stamped) {
   console.log('🤖 채널별 초안 생성 중 (Claude)...')
   const client = new Anthropic({ apiKey })
-  const msg = await client.messages.create({
+  // ★ max_tokens 32000 + 스트리밍: 블로그(1200자+)·카페 3편·스레드·X·숏폼·클립을 한 번에 만들어
+  //   출력이 큼. 16000이면 뒤쪽(카페=커뮤니티 글)이 잘려 네이버 블로그만 나오는 사고가 났음.
+  //   16000 초과는 SDK HTTP 타임아웃 방지를 위해 반드시 스트리밍(messages.stream)으로 받아야 함.
+  const stream = client.messages.stream({
     model: MODEL,
-    max_tokens: 16000,
+    max_tokens: 32000,
     system: SYSTEM,
     tools: [OUTPUT_TOOL],
     tool_choice: { type: 'tool', name: 'emit_content' },
     messages: [{ role: 'user', content: `에피소드 번호: EP.${ep}\n\n[자막 (타임스탬프 포함)]\n${stamped}` }],
   })
+  const msg = await stream.finalMessage()
   const tool = msg.content.find(b => b.type === 'tool_use')
   if (!tool) throw new Error('구조화 출력(tool_use)이 없습니다')
-  return tool.input
+  // ★ 토큰 한도에 걸려 JSON이 중간에 잘리면 카페 등 뒷 채널이 통째로 빠진 채 반환됨.
+  //   조용히 넘기지 말고 즉시 중단 → 부분 결과가 "전부 나온 것처럼" 배포되는 사고 차단.
+  if (msg.stop_reason === 'max_tokens') {
+    throw new Error('생성 결과가 토큰 한도(max_tokens)에 걸려 잘렸습니다. 카페 등 일부 채널이 누락됐을 수 있어 중단합니다. 자막을 줄이거나 MODEL/max_tokens를 조정 후 다시 실행하세요.')
+  }
+  // 평평한 필드 → 기존 중첩 구조로 리맵(나머지 코드는 data.blog/data.cafe.afup 형태를 그대로 사용)
+  const raw = tool.input
+  const data = {
+    summary: raw.summary,
+    blog: { title: raw.blog_title || '', body: raw.blog_body || '' },
+    cafe: {
+      afup: { title: raw.cafe_afup_title || '', body: raw.cafe_afup_body || '' },
+      all: { title: raw.cafe_all_title || '', body: raw.cafe_all_body || '' },
+      dongwoo: { title: raw.cafe_dongwoo_title || '', body: raw.cafe_dongwoo_body || '' },
+    },
+    threads: raw.threads,
+    x: raw.x,
+    shorts_caption: raw.shorts_caption,
+    hashtags: raw.hashtags,
+    clips: raw.clips || [],
+  }
+  // ★ 필수 채널(네이버 블로그 + 카페 3곳) 누락 가드 — 커뮤니티 글이 빠진 채 진행되는 사고 재발 방지
+  const missingRequired = CHANNEL_LABELS
+    .slice(0, 4) // 앞 4개(블로그+카페3)만 필수
+    .filter(([, get]) => !get(data))
+    .map(([label]) => label)
+  if (missingRequired.length) {
+    throw new Error(`필수 채널 글이 비어 있습니다: ${missingRequired.join(', ')}. 부분 결과는 저장하지 않고 중단합니다 — 다시 실행하세요.`)
+  }
+  return data
 }
 
 // ── 5. 파일 출력 ─────────────────────────────────────────────
@@ -295,7 +347,7 @@ function writeOutputs(data, srtPath, video) {
 }
 
 // ── 6. Ayrshare 자동 게시·예약 (--publish) ───────────────────
-const PLATFORMS = ['youtube', 'instagram', 'tiktok', 'threads', 'facebook'] // 연결된 5채널(X는 BYOK 미연결·네이버는 API 없음)
+const PLATFORMS = ['youtube', 'instagram', 'threads', 'facebook'] // 연결된 4채널(틱톡=계정 영구정지로 제외·X는 BYOK 미연결·네이버는 API 없음)
 
 // 인스타그램은 해시태그 최대 10개(초과 시 code 151로 전 채널 게시 거부) → 중복 제거 후 상위 N개만(외부 태그 extra 포함)
 function capHashtags(raw, extra = '', max = 10) {
@@ -400,45 +452,22 @@ async function runAnalytics() {
 }
 
 // ── 8. 네이버 초안 → 노션 자동 푸시 (NOTION_TOKEN 있을 때) ────
-// 노션에 '서식이 살아있는' 블록으로 넣는다(코드블록 원문 X). 그래야 네이버 블로그에
-// 붙여넣을 때 소제목=인용구, 강조=굵게로 서식이 적용되고 ##·** 기호가 literal로 안 남는다.
+// 채널별 내용을 '코드블록(plain text)'으로 넣는다. 그래야 네이버·카페 편집기에
+// 통째로 복붙할 때 줄바꿈이 하나도 안 뭉개지고 그대로 살아난다.
+// (인용구·볼드 같은 서식 블록으로 넣으면 붙여넣기 시 줄바꿈이 합쳐져 사용자가 다시 손봐야 함)
 function nHeading(t) { return { object: 'block', type: 'heading_3', heading_3: { rich_text: [{ type: 'text', text: { content: t } }] } } }
 
-// 인라인 마크다운(**볼드**, [텍스트](url)) → 노션 rich_text 배열
-function nRich(line) {
-  const out = []
-  const re = /\*\*([^*]+)\*\*|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g
-  let last = 0, m
-  while ((m = re.exec(line))) {
-    if (m.index > last) out.push({ type: 'text', text: { content: line.slice(last, m.index) } })
-    if (m[1] !== undefined) out.push({ type: 'text', text: { content: m[1] }, annotations: { bold: true } })
-    else out.push({ type: 'text', text: { content: m[2], link: { url: m[3] } } })
-    last = re.lastIndex
+// 코드블록(plain text) — 노션 rich_text 항목당 2000자 제한 방어를 위해 1900자씩 나눠 담는다
+function nCode(content) {
+  const s = String(content || '')
+  const chunks = []
+  for (let i = 0; i < s.length; i += 1900) chunks.push(s.slice(i, i + 1900))
+  if (!chunks.length) chunks.push(' ')
+  return {
+    object: 'block',
+    type: 'code',
+    code: { language: 'plain text', rich_text: chunks.map(c => ({ type: 'text', text: { content: c } })) },
   }
-  if (last < line.length) out.push({ type: 'text', text: { content: line.slice(last) } })
-  const rich = out.length ? out : [{ type: 'text', text: { content: line || ' ' } }]
-  // 노션 rich_text 항목당 2000자 제한 방어
-  return rich.map(r => r.text.content.length > 1900
-    ? { ...r, text: { ...r.text, content: r.text.content.slice(0, 1900) } } : r)
-}
-const nBlock = (type, line) => ({ object: 'block', type, [type]: { rich_text: nRich(line) } })
-
-// 마크다운 본문 → 노션 블록 배열. 소제목(##/###)·인용(>)은 네이버 '인용구'(quote)로 매핑.
-function mdToBlocks(text) {
-  const blocks = []
-  for (const raw of String(text || '').split('\n')) {
-    const line = raw.replace(/\s+$/, '')
-    if (!line.trim()) continue
-    if (/^([-*_])\1{2,}$/.test(line.trim())) { blocks.push({ object: 'block', type: 'divider', divider: {} }); continue }
-    const h = line.match(/^#{1,3}\s+(.*)$/)          // ## 소제목 → 인용구
-    if (h) { blocks.push(nBlock('quote', h[1])); continue }
-    const q = line.match(/^>\s?(.*)$/)               // > 인용 → 인용구
-    if (q) { blocks.push(nBlock('quote', q[1])); continue }
-    const b = line.match(/^[-*]\s+(.*)$/)            // - 항목 → 불릿
-    if (b) { blocks.push(nBlock('bulleted_list_item', b[1])); continue }
-    blocks.push(nBlock('paragraph', line))
-  }
-  return blocks
 }
 
 async function pushToNotion(outDir, data) {
@@ -451,12 +480,12 @@ async function pushToNotion(outDir, data) {
     ['카페 — 청소동우회', data.cafe?.dongwoo],
   ]
   const children = []
+  const skipped = []
   for (const [label, post] of channels) {
-    if (!post || (!post.title && !post.body)) continue
+    if (!post || (!post.title && !post.body)) { skipped.push(label); continue } // 빈 채널은 조용히 넘기지 말고 기록
     children.push(nHeading(label))
-    if (post.title) children.push(nBlock('paragraph', `**${post.title}**`)) // 제목은 굵게
-    children.push(...mdToBlocks(post.body))
-    children.push({ object: 'block', type: 'divider', divider: {} })
+    // 제목/본문을 하나의 코드블록에 담아 복붙 시 줄바꿈이 그대로 보존되게 함
+    children.push(nCode(`[제목]\n${post.title || ''}\n\n[본문]\n${post.body || ''}`))
   }
   if (!children.length) return
 
@@ -481,6 +510,7 @@ async function pushToNotion(outDir, data) {
     })
   }
   console.log(`📝 네이버 초안 → 노션: ${j.url}`)
+  if (skipped.length) console.log(`   ⚠️ 노션에 빠진 채널(내용 없음): ${skipped.join(', ')}`)
 }
 
 // ── 실행 ─────────────────────────────────────────────────────
@@ -496,6 +526,11 @@ async function pushToNotion(outDir, data) {
     console.log(`\n✅ 완료 → ${outDir}`)
     console.log('   채널별 .txt + 배포팩.md(노션 붙여넣기용) 생성됨')
     console.log(`   숏폼 클립 컷: ${flags.clips ? '생성됨' : '건너뜀(--clips 로 켜기)'}`)
+    // ★ 매 실행 채널 요약 — 네이버 블로그만 나오고 커뮤니티 글이 빠지는 사고를 즉시 눈에 띄게 함
+    const produced = CHANNEL_LABELS.filter(([, get]) => get(data)).map(([l]) => l)
+    const missing = CHANNEL_LABELS.filter(([, get]) => !get(data)).map(([l]) => l)
+    console.log(`\n📋 생성된 채널(${produced.length}/${CHANNEL_LABELS.length}): ${produced.join(', ')}`)
+    if (missing.length) console.log(`⚠️  누락된 채널: ${missing.join(', ')} — 필요하면 다시 실행하세요`)
     await pushToNotion(outDir, data) // 네이버 초안 → 노션(토큰 있을 때)
     if (flags.publish) await publishClips(data, outDir)
   } catch (e) {
