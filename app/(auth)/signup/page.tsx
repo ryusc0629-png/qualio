@@ -76,7 +76,7 @@ export default function SignupPage() {
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
         <CardTitle className="text-2xl">퀄리오 시작하기</CardTitle>
-        <CardDescription>청소 업체 관리를 스마트하게</CardDescription>
+        <CardDescription>청소 업체 매출, 자동으로 올려드려요</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

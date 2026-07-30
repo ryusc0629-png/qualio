@@ -23,8 +23,8 @@ const naverSiteVerification = process.env.NEXT_PUBLIC_NAVER_SITE_VERIFICATION
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://qualio.co.kr"),
-  title: "퀄리오 | 청소 업체 관리 솔루션",
-  description: "동네 소형 청소 업체를 프리미엄 기업으로",
+  title: "퀄리오 | 청소 업체 매출 올리는 솔루션",
+  description: "견적·예약·홍보 자동화로 청소 업체의 새 매출을 만듭니다",
   verification: {
     ...(googleSiteVerification ? { google: googleSiteVerification } : {}),
     ...(naverSiteVerification
