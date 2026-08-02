@@ -7,8 +7,8 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { B2bQuoteForm } from '@/app/(dashboard)/dashboard/pipeline/[leadId]/b2b-quote-form'
 import { AddBookingButton } from '@/components/dashboard/add-booking-button'
-import { deleteB2bQuoteAction } from '@/lib/actions/b2b-quotes'
-import { FileText, Plus, Pencil, Eye, Trash2, Link2 } from 'lucide-react'
+import { deleteB2bQuoteAction, duplicateB2bQuoteAction } from '@/lib/actions/b2b-quotes'
+import { FileText, Plus, Pencil, Eye, Trash2, Link2, Copy } from 'lucide-react'
 
 // b2b-quote-form.tsx의 ExistingQuote와 동일한 형태 (한 장의 견적서)
 export interface B2bQuote {
@@ -82,6 +82,14 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
   const { execute: executeDelete, isPending: deleting } = useAction(deleteB2bQuoteAction, {
     onSuccess: () => {
       toast.success('견적서를 삭제했어요')
+      startTransition(() => router.refresh())
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  const { execute: executeDuplicate, isPending: duplicating } = useAction(duplicateB2bQuoteAction, {
+    onSuccess: () => {
+      toast.success('견적서를 복사했어요! 목록에서 (복사)본을 수정하세요')
       startTransition(() => router.refresh())
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
@@ -218,6 +226,17 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
                       </button>
                     }
                   />
+                  {/* 견적서 복제 — 이 견적서를 그대로 복사해 '(복사)'본을 새로 만듦(다른 현장·수정본용) */}
+                  <button
+                    type="button"
+                    onClick={() => executeDuplicate({ quoteId: quote.id, leadId, customerId })}
+                    disabled={duplicating}
+                    className="p-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted disabled:opacity-40"
+                    aria-label="견적서 복제"
+                    title="견적서 복제 (복사본 만들기)"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
                   {/* 고객 링크 복사 — 고객에게 보낼 공개 링크를 바로 복사(보내기만 하면 고객이 열람) */}
                   {quote.public_token && (
                     <button

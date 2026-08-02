@@ -246,6 +246,76 @@ export const saveB2bQuoteAction = action
     return { success: true, quoteId, publicToken }
   })
 
+// 견적서 복제 — 이 견적서를 그대로 복사해 비슷한 새 견적서를 빠르게 만든다.
+// (다른 현장용·수정본 등) 새 견적번호를 부여하고, 공개 링크(public_token)는
+// DB가 새로 생성한다(견적서마다 고유 링크라 원본 링크를 재사용하면 안 됨).
+const duplicateB2bQuoteSchema = z.object({
+  quoteId:    z.string().uuid(),
+  leadId:     z.string().uuid().optional(),
+  customerId: z.string().uuid().optional(),
+})
+
+export const duplicateB2bQuoteAction = action
+  .schema(duplicateB2bQuoteSchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuth()
+
+    // 원본 견적서 조회 — 본인 업체 것만
+    const { data: src } = await db
+      .from('b2b_quotes')
+      .select('*')
+      .eq('id', parsedInput.quoteId)
+      .eq('business_id', businessId)
+      .maybeSingle() as unknown as { data: Record<string, unknown> | null }
+
+    if (!src) throw new Error('[APP] 복사할 견적서를 찾을 수 없습니다')
+
+    const quoteNumber = await getNextQuoteNumber(db, businessId)
+    // 새 견적서 이름 — 원본 이름(없으면 현장명·번호) 뒤에 '(복사)'를 붙여 목록에서 구분
+    const baseTitle =
+      (src.title as string | null)?.trim() ||
+      (src.site_name as string | null)?.trim() ||
+      (src.quote_number as string | null) ||
+      '견적서'
+
+    // 원본 내용은 그대로, id·공개링크·번호·생성일만 새로 부여 (public_token은 넣지 않아 DB가 자동 생성)
+    const payload = {
+      lead_id:          src.lead_id ?? null,
+      customer_id:      src.customer_id ?? null,
+      business_id:      businessId,
+      title:            `${baseTitle} (복사)`,
+      quote_number:     quoteNumber,
+      valid_until:      src.valid_until ?? null,
+      items:            src.items ?? [],
+      total_amount:     src.total_amount ?? 0,
+      tax_included:     src.tax_included ?? false,
+      discount_type:    src.discount_type ?? null,
+      discount_value:   src.discount_value ?? 0,
+      conditions:       src.conditions ?? null,
+      site_name:        src.site_name ?? null,
+      site_address:     src.site_address ?? null,
+      site_area:        src.site_area ?? null,
+      frequency:        src.frequency ?? null,
+      worker_count:     src.worker_count ?? null,
+      spec_content:     src.spec_content ?? null,
+      contract_content: src.contract_content ?? null,
+      job_type:         src.job_type ?? 'recurring',
+      updated_at:       new Date().toISOString(),
+    }
+
+    const { data: inserted, error } = await db
+      .from('b2b_quotes')
+      .insert(payload as never)
+      .select('id, public_token' as never)
+      .single() as unknown as { data: { id: string; public_token: string | null } | null; error: unknown }
+
+    if (error || !inserted) throw new Error('[APP] 견적서 복사에 실패했습니다')
+
+    if (parsedInput.customerId) revalidatePath(`/dashboard/clients/${parsedInput.customerId}`)
+    if (parsedInput.leadId) revalidatePath(`/dashboard/pipeline/${parsedInput.leadId}`)
+    return { success: true, quoteId: inserted.id, publicToken: inserted.public_token }
+  })
+
 // 견적서 삭제 — 한 거래처에 여러 장이 있을 때 개별 삭제
 const deleteB2bQuoteSchema = z.object({
   quoteId:    z.string().uuid(),
