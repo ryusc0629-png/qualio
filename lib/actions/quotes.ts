@@ -10,6 +10,7 @@ import { sendQuoteToCustomer } from '@/lib/kakao/quote-delivery'
 import { sendPushToBusiness } from '@/lib/push/web-push'
 import { detectBundleReview } from '@/lib/utils/booking-review'
 import { isBusinessService } from '@/lib/utils'
+import { findCustomerIdByPhone } from '@/lib/actions/_customer-lookup'
 
 // 공개 폼용 액션 클라이언트 (인증 불필요)
 const publicAction = createSafeActionClient({
@@ -458,15 +459,11 @@ export const createBookingAction = publicAction
       .eq('id', quote.id)
 
     // 예약 확정 시 고객 DB 자동 등록 (전화번호 기준, 이미 있으면 스킵)
+    // 숫자만으로 비교해 하이픈 형식 차이로 인한 고객 카드 중복을 막는다.
     if (parsedInput.customer_phone) {
-      const { data: existing } = await db
-        .from('customers')
-        .select('id')
-        .eq('business_id', quote.business_id)
-        .eq('phone', parsedInput.customer_phone)
-        .maybeSingle()
+      const existingId = await findCustomerIdByPhone(db, quote.business_id, parsedInput.customer_phone)
 
-      if (!existing) {
+      if (!existingId) {
         await db.from('customers').insert({
           business_id: quote.business_id,
           name: parsedInput.customer_name,
@@ -744,15 +741,11 @@ export const confirmBookingFromQuoteAction = authAction
       .eq('id', quote.id)
 
     // 예약 확정 시 고객 DB 자동 등록 (전화번호 기준, 이미 있으면 스킵)
+    // 숫자만으로 비교해 하이픈 형식 차이로 인한 고객 카드 중복을 막는다.
     if (quote.customer_phone) {
-      const { data: existing } = await db
-        .from('customers')
-        .select('id')
-        .eq('business_id', quote.business_id)
-        .eq('phone', quote.customer_phone)
-        .maybeSingle()
+      const existingId = await findCustomerIdByPhone(db, quote.business_id, quote.customer_phone)
 
-      if (!existing) {
+      if (!existingId) {
         await db.from('customers').insert({
           business_id: quote.business_id,
           name: quote.customer_name ?? '고객',

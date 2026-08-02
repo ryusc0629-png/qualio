@@ -10,6 +10,14 @@ import { getMarket } from '@/lib/i18n/locale'
 export const digitsOnly = (v: string) => v.replace(/[^0-9]/g, '')
 
 /**
+ * 전화번호 비교용 정규화 — 하이픈·공백 차이를 무시하고 숫자만 남긴다(null 안전).
+ *
+ * 왜: 같은 고객이라도 저장된 형식이 010-5526-5406 / 01055265406 처럼 달라
+ * 문자열 그대로 비교하면 다른 번호로 취급돼 고객 카드가 중복 생기던 문제를 막는다.
+ */
+export const normalizePhone = (v: string | null | undefined) => (v ?? '').replace(/[^0-9]/g, '')
+
+/**
  * 현재 마켓 규칙에 맞춰 전화번호에 하이픈을 자동 삽입한다(onChange용).
  */
 export function formatPhone(value: string): string {

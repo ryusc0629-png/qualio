@@ -6,6 +6,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateSpecSheet } from '@/lib/ai/spec-sheet'
 import { extractQuoteFromMeeting } from '@/lib/ai/extract-quote-from-meeting'
 import { revalidatePath } from 'next/cache'
+import { getNextQuoteNumber } from '@/lib/utils/quote-number'
 
 const quoteItemSchema = z.object({
   name:       z.string().min(1),
@@ -187,12 +188,18 @@ export const saveB2bQuoteAction = action
       existing = data
     }
 
+    // 새 견적서는 업체별 실제 순번을 서버에서 부여(클라이언트 값 무시) → 항상 연속·중복 없음
+    // 기존 견적서 수정은 이미 매겨진 번호를 그대로 유지
+    const quoteNumber = existing
+      ? (parsedInput.quoteNumber ?? null)
+      : await getNextQuoteNumber(db, businessId)
+
     const payload = {
       lead_id:      parsedInput.leadId ?? null,
       customer_id:  parsedInput.customerId ?? null,
       business_id:  businessId,
       title:        parsedInput.title ?? null,
-      quote_number: parsedInput.quoteNumber ?? null,
+      quote_number: quoteNumber,
       valid_until:  parsedInput.validUntil ?? null,
       items:        parsedInput.items,
       total_amount: parsedInput.totalAmount,

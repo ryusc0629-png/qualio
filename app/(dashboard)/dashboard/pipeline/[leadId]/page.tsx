@@ -2,6 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { LeadDetail } from './lead-detail'
 import { getLiveStatusForPhone } from '@/lib/utils/lead-live-status'
+import { getNextQuoteNumber } from '@/lib/utils/quote-number'
 
 // RPC 대신 직접 쿼리 사용 — RPC 가용성에 무관하게 안정적으로 데이터 조회
 
@@ -109,6 +110,9 @@ export default async function LeadDetailPage({
     .eq('id', profile.business_id)
     .maybeSingle() as unknown as { data: { name: string | null; legal_name: string | null } | null }
 
+  // 새 견적서에 자동 부여될 다음 순번(미리보기용)
+  const suggestedQuoteNumber = await getNextQuoteNumber(db, profile.business_id)
+
   return (
     <div className="max-w-2xl mx-auto">
       <LeadDetail
@@ -118,6 +122,7 @@ export default async function LeadDetailPage({
         alreadyConverted={alreadyConverted}
         liveStatus={liveStatus}
         businessName={bizRow?.legal_name || bizRow?.name || ''}
+        suggestedQuoteNumber={suggestedQuoteNumber}
       />
     </div>
   )

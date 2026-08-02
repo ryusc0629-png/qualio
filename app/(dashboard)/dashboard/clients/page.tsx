@@ -13,6 +13,7 @@ import { formatFrequency } from '@/lib/utils/frequency'
 import { contractAccruedRevenue } from '@/lib/utils/ltv'
 import { ClientSearchInput } from '@/components/dashboard/client-search-input'
 import { formatCompactKRW } from '@/lib/format/krw'
+import { normalizePhone } from '@/lib/format/phone'
 import { Phone, MapPin, Calendar, TrendingUp, ChevronRight, Building2, User, Archive, Star, FileText } from 'lucide-react'
 
 // ── 타입 ────────────────────────────────────────────────
@@ -221,16 +222,19 @@ export default async function ClientsPage({
   const services = [...serviceMap].map(([name, v]) => ({ name, base_price: v.base_price, unit: v.unit }))
 
   // 전화번호 → 예약 실적 맵
+  // 키는 숫자만(normalizePhone)으로 통일 — 예약은 01055265406, 고객 카드는 010-5526-5406처럼
+  // 형식이 달라도 같은 고객으로 묶어 이력·누적 매출이 올바른 카드에 붙게 한다.
   const bookingMap: Record<string, { ltv: number; count: number; lastDate: string }> = {}
   for (const b of completedBookings ?? []) {
-    if (!b.customer_phone) continue
-    const prev = bookingMap[b.customer_phone]
+    const key = normalizePhone(b.customer_phone)
+    if (!key) continue
+    const prev = bookingMap[key]
     if (prev) {
       prev.ltv += b.final_price ?? 0
       prev.count += 1
       if ((b.scheduled_at ?? '') > prev.lastDate) prev.lastDate = b.scheduled_at ?? ''
     } else {
-      bookingMap[b.customer_phone] = { ltv: b.final_price ?? 0, count: 1, lastDate: b.scheduled_at ?? '' }
+      bookingMap[key] = { ltv: b.final_price ?? 0, count: 1, lastDate: b.scheduled_at ?? '' }
     }
   }
 
@@ -253,7 +257,8 @@ export default async function ClientsPage({
   const registeredLeadIds = new Set((registeredLeadRows ?? []).map((r) => r.lead_id))
   const reviewedPhones = new Set(
     ((reviewClaimsResult as unknown as { data: { customer_phone: string }[] | null }).data ?? [])
-      .map((r) => r.customer_phone)
+      .map((r) => normalizePhone(r.customer_phone))
+      .filter(Boolean)
   )
   const today = new Date().toISOString().slice(0, 10)
 
@@ -261,7 +266,7 @@ export default async function ClientsPage({
 
   function sortCustomers(list: CustomerRow[]): CustomerRow[] {
     const withLtv = list.map(c => {
-      const bookingLtv = c.phone ? (bookingMap[c.phone]?.ltv ?? 0) : 0
+      const bookingLtv = c.phone ? (bookingMap[normalizePhone(c.phone)]?.ltv ?? 0) : 0
       // 통합 LTV = 일회성 예약 합계 + 계약 누적(경과 개월 × 월계약금)
       const ltv = bookingLtv + contractAccruedRevenue(contractMap[c.id] ?? [])
       return { c, ltv }
@@ -295,13 +300,13 @@ export default async function ClientsPage({
   const archivedLeads = (leads ?? []).filter(l => l.customer_type === 'company' && l.status === 'archived' && matchesSearch(l.company_name))
 
   // 개인 상담 리드 (leads의 individual, 아직 고객 미전환) — AI 상담·현장견적 문의로 들어온 개인
-  const individualCustomerPhones = new Set((customers ?? []).map(c => c.phone ?? '').filter(Boolean))
+  const individualCustomerPhones = new Set((customers ?? []).map(c => normalizePhone(c.phone)).filter(Boolean))
   const individualLeads = sortLeads(
     (leads ?? []).filter(l =>
       l.customer_type !== 'company' &&
       l.status !== 'archived' &&
       !registeredLeadIds.has(l.id) &&
-      !individualCustomerPhones.has(l.phone ?? '') &&
+      !individualCustomerPhones.has(normalizePhone(l.phone)) &&
       matchesSearch(l.company_name)
     )
   )
@@ -498,7 +503,7 @@ export default async function ClientsPage({
             </div>
           ) : (
             individualCustomers.map((customer) => {
-              const booking = customer.phone ? bookingMap[customer.phone] : undefined
+              const booking = customer.phone ? bookingMap[normalizePhone(customer.phone)] : undefined
               const customerContracts = contractMap[customer.id] ?? []
               const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
               const hasAnyContract = customerContracts.length > 0
@@ -522,7 +527,7 @@ export default async function ClientsPage({
                           <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">{customer.category}</span>
                         )}
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusMeta.className}`}>{statusMeta.label}</span>
-                        {customer.phone && reviewedPhones.has(customer.phone) && (
+                        {customer.phone && reviewedPhones.has(normalizePhone(customer.phone)) && (
                           <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 flex items-center gap-0.5">
                             <Star className="h-3 w-3" />
                             리뷰 작성
@@ -675,7 +680,7 @@ export default async function ClientsPage({
                 const customerContracts = contractMap[customer.id] ?? []
                 const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
                 const hasAnyContract = customerContracts.length > 0
-                const bookingLtv = customer.phone ? (bookingMap[customer.phone]?.ltv ?? 0) : 0
+                const bookingLtv = customer.phone ? (bookingMap[normalizePhone(customer.phone)]?.ltv ?? 0) : 0
                 // 통합 LTV = 일회성 예약 합계 + 계약 누적
                 const ltv = bookingLtv + contractAccruedRevenue(customerContracts)
                 return (

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, useRef } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -96,9 +96,42 @@ const ACTIVITY_CONFIG: Record<string, { text: string; icon: typeof PhoneCall; co
 
 const STAGE_ORDER = ['new', 'contacted', 'follow_up', 'quoted', 'negotiating', 'contracted', 'rejected']
 
+// ── 상담 기록 내용 (길면 4줄로 접고 더보기) ──────────────────
+function ActivityContent({ text }: { text: string | null }) {
+  const [expanded, setExpanded] = useState(false)
+  const [clamped, setClamped] = useState(false)
+  const ref = useRef<HTMLParagraphElement>(null)
+
+  // 접힌 상태에서 넘치는지 측정 → '더보기' 노출 여부 결정
+  useEffect(() => {
+    const el = ref.current
+    if (el && !expanded) setClamped(el.scrollHeight > el.clientHeight + 1)
+  }, [text, expanded])
+
+  return (
+    <div className="mt-0.5">
+      <p
+        ref={ref}
+        className={`text-sm text-muted-foreground whitespace-pre-wrap ${expanded ? '' : 'line-clamp-4'}`}
+      >
+        {text}
+      </p>
+      {clamped && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 text-xs font-medium text-primary"
+        >
+          {expanded ? '접기' : '더보기'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ── 메인 컴포넌트 ──────────────────────────────────────────
 
-export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveStatus, businessName }: { lead: Lead; activities: Activity[]; quotes: ExistingQuote[]; alreadyConverted: boolean; liveStatus: LiveStatus | null; businessName?: string }) {
+export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveStatus, businessName, suggestedQuoteNumber }: { lead: Lead; activities: Activity[]; quotes: ExistingQuote[]; alreadyConverted: boolean; liveStatus: LiveStatus | null; businessName?: string; suggestedQuoteNumber?: string }) {
   // 고객 전환 시 프리필용 대표 견적서 — 가장 최근에 만든 것 (여러 장 중)
   const primaryQuote = quotes.length > 0 ? quotes[quotes.length - 1] : null
   const router = useRouter()
@@ -384,6 +417,7 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
           leadId={lead.id}
           clientName={lead.company_name}
           businessName={businessName}
+          suggestedQuoteNumber={suggestedQuoteNumber}
           hasMeeting={activities.some((a) => ['meeting', 'visit', 'note', 'call'].includes(a.type))}
         />
       )}
@@ -488,9 +522,7 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
                         })}
                       </span>
                     </div>
-                    <p className="text-sm text-muted-foreground mt-0.5 whitespace-pre-wrap">
-                      {activity.content}
-                    </p>
+                    <ActivityContent text={activity.content} />
                   </div>
                   <DeleteActivityButton activityId={activity.id} />
                 </div>

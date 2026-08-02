@@ -35,7 +35,8 @@ const formatThousands = (v: string) => {
 interface Props {
   customer: { name: string; phone: string | null; address: string | null }
   // 견적서 등에서 넘어올 때 서비스명·금액을 미리 채워 원터치로 일정만 잡게 함
-  prefill?: { cleaning_type?: string; final_price?: number }
+  // vatRemoved: 견적서 부가세(10%)를 뺀 공급가액을 넣었음을 안내(견적이 부가세 포함일 때)
+  prefill?: { cleaning_type?: string; final_price?: number; vatRemoved?: boolean }
   // 트리거 버튼 문구/모양 (기본: '예약 등록'). 견적서 카드에선 '일정 잡기' 등으로 사용
   triggerLabel?: string
   triggerVariant?: 'default' | 'outline'
@@ -150,9 +151,9 @@ export function AddBookingButton({
             {errors.scheduled_at && <p className="text-xs text-destructive">{errors.scheduled_at.message}</p>}
           </div>
 
-          {/* 금액 */}
+          {/* 금액 — 매출은 부가세 별도(공급가액) 기준으로 기록 */}
           <div className="space-y-1">
-            <Label htmlFor="final_price">금액 (필수)</Label>
+            <Label htmlFor="final_price">금액 (부가세 별도)</Label>
             <Input
               id="final_price"
               inputMode="numeric"
@@ -160,6 +161,12 @@ export function AddBookingButton({
               value={formatThousands(watch('final_price') ?? '')}
               onChange={(e) => setValue('final_price', digitsOnly(e.target.value), { shouldValidate: true })}
             />
+            {/* 부가세 별도 안내 — 견적서에서 부가세를 뺀 금액을 넣었으면 그 사실도 함께 알려줌 */}
+            <p className="text-xs text-muted-foreground">
+              {prefill?.vatRemoved
+                ? '견적서 부가세(10%)를 뺀 금액이에요 · 매출은 부가세 별도로 기록돼요'
+                : '부가세 별도(공급가액) 금액을 넣어주세요 · 세금계산서엔 10%가 더해져요'}
+            </p>
             {errors.final_price && <p className="text-xs text-destructive">{errors.final_price.message}</p>}
           </div>
 

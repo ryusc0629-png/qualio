@@ -7,6 +7,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { sendRescheduleAlimtalk } from '@/lib/kakao/alimtalk'
 import { sendOnMyWayForBooking } from '@/lib/kakao/on-my-way'
+import { findCustomerIdByPhone } from '@/lib/actions/_customer-lookup'
 
 // 한국 전화번호 검증
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
@@ -77,16 +78,11 @@ export const addBookingAction = action
     }
 
     // 고객 DB 확인/등록 (전화번호 기준) — 예약을 customer_id로도 연결해두면
-    // 전화번호가 나중에 바뀌어도 고객 이력에서 누락되지 않음
-    const { data: existing } = await db
-      .from('customers')
-      .select('id')
-      .eq('business_id', profile.business_id)
-      .eq('phone', parsedInput.customer_phone)
-      .maybeSingle()
-
-    let customerId = existing?.id ?? null
-    if (!existing) {
+    // 전화번호가 나중에 바뀌어도 고객 이력에서 누락되지 않음.
+    // 하이픈 유무 등 형식 차이를 무시하고 숫자만으로 찾아, 법인 고객이 이미 있는데도
+    // 일회성 예약 때문에 개인 고객 카드가 중복 생기던 문제를 막는다.
+    let customerId = await findCustomerIdByPhone(db, profile.business_id, parsedInput.customer_phone)
+    if (!customerId) {
       const { data: created } = await db
         .from('customers')
         .insert({
@@ -229,15 +225,11 @@ export const updateBookingStatusAction = action
     if (error) throw new Error('[APP] 상태 변경에 실패했습니다')
 
     // 청소 완료 → 고객 DB 자동 upsert (전화번호 기준, 이미 있으면 스킵)
+    // 숫자만으로 비교해 하이픈 형식 차이로 인한 중복 카드 생성을 막는다.
     if (parsedInput.status === 'completed' && bookingForCustomer?.customer_phone?.trim()) {
-      const { data: existing } = await db
-        .from('customers')
-        .select('id')
-        .eq('business_id', profile.business_id)
-        .eq('phone', bookingForCustomer.customer_phone)
-        .maybeSingle()
+      const existingId = await findCustomerIdByPhone(db, profile.business_id, bookingForCustomer.customer_phone)
 
-      if (!existing) {
+      if (!existingId) {
         await db.from('customers').insert({
           business_id: profile.business_id,
           name: bookingForCustomer.customer_name,

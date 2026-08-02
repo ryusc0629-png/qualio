@@ -75,6 +75,8 @@ interface Props {
   // 우리 업체명(을) — 계약서 첫 문장 '수급자 OOO'에 자동 반영
   businessName?: string
   existingQuote: ExistingQuote | null
+  // 새 견적서에 자동 부여될 다음 순번(예: Q-2026-0007) — 서버가 저장 시 최종 확정
+  suggestedQuoteNumber?: string
   // 이 리드에 저장된 미팅 기록이 있으면 '미팅 내용으로 채우기' 버튼 노출
   hasMeeting?: boolean
   // 다이얼로그 여는 버튼을 직접 지정 (견적서 목록의 '수정'·'새 견적서 만들기' 등). 없으면 기본 버튼
@@ -224,7 +226,7 @@ function SortableQuoteItem({
   )
 }
 
-export function B2bQuoteForm({ leadId, customerId, clientName, businessName, existingQuote, hasMeeting, trigger }: Props) {
+export function B2bQuoteForm({ leadId, customerId, clientName, businessName, existingQuote, suggestedQuoteNumber, hasMeeting, trigger }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [, startTransition] = useTransition()
@@ -235,10 +237,11 @@ export function B2bQuoteForm({ leadId, customerId, clientName, businessName, exi
     : `/dashboard/pipeline/${leadId}/quote/print`
 
   const today = new Date().toISOString().slice(0, 10)
-  const defaultQuoteNumber = `Q-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`
+  // 견적 번호는 서버가 실제 순번으로 자동 부여 — 새 견적서엔 미리보기용 다음 순번을 표시
+  const isNewQuote = !existingQuote
+  const quoteNumber = existingQuote?.quote_number ?? suggestedQuoteNumber ?? ''
 
   const [title, setTitle] = useState(existingQuote?.title ?? '')
-  const [quoteNumber, setQuoteNumber] = useState(existingQuote?.quote_number ?? defaultQuoteNumber)
   const [validUntil, setValidUntil] = useState(existingQuote?.valid_until ?? '')
   const [items, setItems] = useState<FormItem[]>(
     existingQuote?.items && (existingQuote.items as QuoteItem[]).length > 0
@@ -534,7 +537,15 @@ export function B2bQuoteForm({ leadId, customerId, clientName, businessName, exi
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">견적 번호</Label>
-                <Input value={quoteNumber} onChange={(e) => setQuoteNumber(e.target.value)} className="mt-1 h-9" />
+                <Input
+                  value={quoteNumber}
+                  readOnly
+                  placeholder="저장하면 자동으로 매겨져요"
+                  className="mt-1 h-9 bg-muted/50 text-muted-foreground"
+                />
+                {isNewQuote && (
+                  <p className="mt-1 text-[11px] text-muted-foreground">순서대로 자동으로 매겨져요</p>
+                )}
               </div>
               <div>
                 <Label className="text-xs">유효 기간</Label>

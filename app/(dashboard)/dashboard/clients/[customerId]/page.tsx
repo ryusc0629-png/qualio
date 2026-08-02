@@ -14,6 +14,7 @@ import { ClaimAssignee } from '@/components/dashboard/claim-assignee'
 import { B2bQuoteList } from '@/components/dashboard/b2b-quote-list'
 import { DeleteActivityButton } from '@/components/dashboard/delete-activity-button'
 import { contractAccruedRevenue, type ContractLike } from '@/lib/utils/ltv'
+import { getNextQuoteNumber } from '@/lib/utils/quote-number'
 import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
 
 interface Props {
@@ -285,6 +286,9 @@ export default async function CustomerDetailPage({ params }: Props) {
     ContractLike & { id: string; service_type: string | null; frequency: string }
   >
 
+  // 새 견적서에 자동 부여될 다음 순번(미리보기용)
+  const suggestedQuoteNumber = await getNextQuoteNumber(db, profile.business_id)
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
 
@@ -383,6 +387,7 @@ export default async function CustomerDetailPage({ params }: Props) {
         customerPhone={customer.phone}
         customerAddress={customer.address}
         businessName={bizNameRow?.legal_name || bizNameRow?.name || ''}
+        suggestedQuoteNumber={suggestedQuoteNumber}
       />
 
       {/* 정기계약 — 계약을 고객 허브에 직접 표시 (주기·월금액·다음 방문·완료/예정 횟수) */}
