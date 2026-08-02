@@ -190,6 +190,7 @@ export default async function CustomerDetailPage({ params }: Props) {
     spec_content: string | null
     contract_content: string | null
     job_type: string | null
+    amount_mode?: string | null
   }
   // 안전망: customer_id 뿐 아니라, 전환 전 리드(lead_id)에 붙어있던 견적서까지 함께 조회.
   // 재연결이 어떤 이유로 누락되더라도 계약서·시방서가 고객 화면에서 절대 사라지지 않도록 함.

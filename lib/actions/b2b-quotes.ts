@@ -46,6 +46,11 @@ const saveB2bQuoteSchema = z.object({
     (v) => ['recurring', 'one_off'].includes(v),
     { message: '유효하지 않은 작업 유형입니다' },
   ).optional(),
+  // 금액 입력 방식: itemized(항목별 계산) | lump(총액 직접) — 재열람·미리보기에서 방식 유지용
+  amountMode:   z.string().refine(
+    (v) => ['itemized', 'lump'].includes(v),
+    { message: '유효하지 않은 금액 입력 방식입니다' },
+  ).optional(),
 })
 
 const generateSpecSchema = z.object({
@@ -217,6 +222,7 @@ export const saveB2bQuoteAction = action
       contract_content: parsedInput.contractContent ?? null,
       // 일회성이면 주기는 저장하지 않음 (정기 전제 제거)
       job_type:     parsedInput.jobType === 'one_off' ? 'one_off' : 'recurring',
+      amount_mode:  parsedInput.amountMode ?? null,
       updated_at:   new Date().toISOString(),
     }
 
@@ -300,6 +306,7 @@ export const duplicateB2bQuoteAction = action
       spec_content:     src.spec_content ?? null,
       contract_content: src.contract_content ?? null,
       job_type:         src.job_type ?? 'recurring',
+      amount_mode:      src.amount_mode ?? null,
       updated_at:       new Date().toISOString(),
     }
 

@@ -39,6 +39,8 @@ interface Quote {
   contract_content?: string | null
   // 정기(recurring) / 일회성(one_off) — 횟수 열 라벨 결정에 사용
   job_type?: string | null
+  // 금액 입력 방식: itemized(항목별 계산) | lump(총액 직접). null=옛 견적(수량으로 추정)
+  amount_mode?: string | null
   // 견적 최초 저장일 — 발행일/작성일로 사용(재열람해도 바뀌지 않게 저장값 기준)
   created_at?: string | null
 }
@@ -97,12 +99,14 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
   }
   const countLabel = isOneOff ? (UNIT_COUNT_LABEL[(items[0]?.unit ?? '').trim()] ?? '수량') : '횟수'
 
-  // 일회성 총액형(모든 수량 1) — 수량·단가 열 숨기고 금액만
-  const isLumpQuote = isOneOff && items.length > 0 && items.every((it) => (it.qty ?? 1) === 1)
-  // 정기는 방문이 2회 이상일 때만 '횟수' 열을 정보용으로 표시(곱하지 않음)
-  const showRecurringCount = !isOneOff && items.some((it) => (it.qty ?? 1) > 1)
-  const showCountCol = (isOneOff && !isLumpQuote) || showRecurringCount
-  const showUnitPriceCol = isOneOff && !isLumpQuote
+  // 금액 입력 방식 — 저장값(amount_mode) 우선. 없으면(옛 견적) 모든 수량이 1인지로 추정.
+  // 항목별(itemized)이면 횟수/수량 열을 항상 표시(정기 '주 1회'도 보이도록), 총액(lump)이면 숨김.
+  const inferredLump = items.length > 0 && items.every((it) => (it.qty ?? 1) === 1)
+  const isLumpQuote = quote.amount_mode === 'lump' || (quote.amount_mode == null && inferredLump)
+  const isItemized = !isLumpQuote
+  const showCountCol = isItemized
+  // 단가 열은 일회성 항목별일 때만 (정기는 횟수를 곱하지 않아 금액=단가라 중복)
+  const showUnitPriceCol = isOneOff && isItemized
 
   const hasSpec = !!quote.spec_content
   // 계약서 탭은 사장님 전용(내부·미리보기) + '표준 계약서 불러오기'로 저장한 계약서가 있을 때만 노출.

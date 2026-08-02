@@ -60,6 +60,8 @@ interface ExistingQuote {
   spec_content: string | null
   contract_content: string | null
   job_type: string | null
+  // 금액 입력 방식: 'itemized'(항목별 계산) | 'lump'(총액 직접). null=옛 견적(수량으로 추정)
+  amount_mode?: string | null
   // 할인: 'rate'(할인율 %) | 'amount'(정액 원) | null(없음)
   discount_type?: string | null
   discount_value?: number | null
@@ -296,13 +298,15 @@ export function B2bQuoteForm({ leadId, customerId, clientName, businessName, exi
 
   // 금액 입력 방식: itemized(수량×단가) vs lump(총액 직접 — 월 정기 등 정액 계약)
   // 저장 구조는 동일(항목 배열+총액). lump은 각 줄 수량을 1로 두고 '금액'만 입력.
-  // 기존 견적은 모든 수량이 1이면 총액 방식으로 복원(숫자는 어느 쪽이든 동일)
-  const [amountMode, setAmountMode] = useState<'itemized' | 'lump'>(
-    existingQuote && (existingQuote.items as QuoteItem[] | undefined)?.length
-      && (existingQuote.items as QuoteItem[]).every((it) => (it.qty ?? 1) === 1)
-      ? 'lump'
-      : 'itemized'
-  )
+  // 저장된 amount_mode를 우선 사용 → 재열람 시 방식이 바뀌지 않음(수량 1 추정 오류 방지).
+  // 옛 견적(amount_mode 없음)만 모든 수량이 1이면 총액 방식으로 추정.
+  const [amountMode, setAmountMode] = useState<'itemized' | 'lump'>(() => {
+    if (existingQuote?.amount_mode === 'itemized' || existingQuote?.amount_mode === 'lump') {
+      return existingQuote.amount_mode
+    }
+    const its = (existingQuote?.items as QuoteItem[] | undefined) ?? []
+    return existingQuote && its.length > 0 && its.every((it) => (it.qty ?? 1) === 1) ? 'lump' : 'itemized'
+  })
   const isLump = amountMode === 'lump'
   // 총액 방식으로 바꾸면 각 줄 수량을 1로 고정(금액=단가로 그대로 합산됨)
   const switchAmountMode = (mode: 'itemized' | 'lump') => {
@@ -417,6 +421,8 @@ export function B2bQuoteForm({ leadId, customerId, clientName, businessName, exi
     specContent:  specContent || undefined,
     contractContent: contractContent || undefined,
     jobType,
+    // 금액 입력 방식을 함께 저장 — 재열람·미리보기에서 방식이 유지됨
+    amountMode,
   })
 
   const handleSave = () => {
