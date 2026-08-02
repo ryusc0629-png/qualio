@@ -75,11 +75,13 @@ type B2bQuoteRow = {
 
 // ── 상수 ────────────────────────────────────────────────
 
-const CUSTOMER_STATUS: Record<string, { label: string; className: string }> = {
-  contract:   { label: '정기계약',    className: 'bg-emerald-100 text-emerald-700' },
-  repeat:     { label: '재방문 고객', className: 'bg-primary/10 text-primary' },
-  first:      { label: '첫방문 완료', className: 'bg-blue-100 text-blue-700' },
-  registered: { label: '등록됨',      className: 'bg-gray-100 text-gray-500' },
+// 거래 형태 배지 — '누구(개인/거래처)'와는 독립된 축.
+// 정기계약(활성)이 있으면 '정기계약중', 없으면 '일회성'으로 자동 표시.
+// 거래처든 개인이든 계약 등록 전에는 '일회성'으로 보인다(거래처의 계약 전 대청소 등).
+function txFormBadge(hasActiveContract: boolean): { label: string; className: string } {
+  return hasActiveContract
+    ? { label: '정기계약중', className: 'bg-emerald-100 text-emerald-700' }
+    : { label: '일회성', className: 'bg-amber-100 text-amber-700' }
 }
 
 const PIPELINE_STAGE: Record<string, { text: string; color: string }> = {
@@ -94,8 +96,8 @@ const PIPELINE_STAGE: Record<string, { text: string; color: string }> = {
 
 const TABS = [
   { key: 'all',        label: '전체' },
-  { key: 'individual', label: '개인·일반 고객' },
-  { key: 'company',    label: '정기계약·법인 고객' },
+  { key: 'individual', label: '개인 고객' },
+  { key: 'company',    label: '거래처' },
 ]
 
 const SORT_OPTIONS = [
@@ -328,7 +330,7 @@ export default async function ClientsPage({
       {/* 요약 통계 */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white rounded-xl border p-4">
-          <p className="text-xs text-muted-foreground">개인·일반 고객</p>
+          <p className="text-xs text-muted-foreground">개인 고객</p>
           <p className="text-2xl font-bold mt-1 tabular-nums text-blue-600">
             {individualCustomers.length}<span className="text-sm font-normal text-muted-foreground ml-0.5">명</span>
           </p>
@@ -338,7 +340,7 @@ export default async function ClientsPage({
           </p>
         </div>
         <div className="bg-white rounded-xl border p-4">
-          <p className="text-xs text-muted-foreground">정기계약·법인 고객</p>
+          <p className="text-xs text-muted-foreground">거래처</p>
           <p className="text-2xl font-bold mt-1 tabular-nums text-violet-600">
             {activeLeads.length}<span className="text-sm font-normal text-muted-foreground ml-0.5">곳</span>
           </p>
@@ -401,7 +403,7 @@ export default async function ClientsPage({
           {activeTab === 'all' && (
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-blue-600" />
-              <h2 className="text-sm font-semibold text-blue-600">개인·일반 고객</h2>
+              <h2 className="text-sm font-semibold text-blue-600">개인 고객</h2>
               <span className="text-xs text-muted-foreground">({individualCustomers.length}명)</span>
             </div>
           )}
@@ -511,8 +513,7 @@ export default async function ClientsPage({
               const ltv = (booking?.ltv ?? 0) + contractAccruedRevenue(customerContracts)
               const bookingCount = booking?.count ?? 0
               const lastVisitDate = booking?.lastDate ?? null
-              const statusKey = activeContract ? 'contract' : bookingCount >= 2 ? 'repeat' : bookingCount === 1 ? 'first' : 'registered'
-              const statusMeta = CUSTOMER_STATUS[statusKey]!
+              const txBadge = txFormBadge(Boolean(activeContract))
 
               return (
                 <div key={`customer-${customer.id}`} className="bg-white rounded-xl border border-border p-4 hover:border-primary/30 transition-colors">
@@ -526,7 +527,8 @@ export default async function ClientsPage({
                         {customer.category && (
                           <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">{customer.category}</span>
                         )}
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusMeta.className}`}>{statusMeta.label}</span>
+                        {/* 거래 형태(일회성/정기) — 신원(개인)과 별개로 계약 유무에 따라 자동 표시 */}
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${txBadge.className}`}>{txBadge.label}</span>
                         {customer.phone && reviewedPhones.has(normalizePhone(customer.phone)) && (
                           <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 flex items-center gap-0.5">
                             <Star className="h-3 w-3" />
@@ -599,7 +601,7 @@ export default async function ClientsPage({
           {activeTab === 'all' && (
             <div className="flex items-center gap-2 mt-2">
               <Building2 className="h-4 w-4 text-violet-600" />
-              <h2 className="text-sm font-semibold text-violet-600">정기계약·법인 고객</h2>
+              <h2 className="text-sm font-semibold text-violet-600">거래처</h2>
               <span className="text-xs text-muted-foreground">({activeLeads.length}곳 영업 중)</span>
             </div>
           )}
@@ -625,7 +627,7 @@ export default async function ClientsPage({
                   <div className="flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-violet-100 text-violet-700">법인</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-violet-100 text-violet-700">거래처</span>
                         <Link href={`/dashboard/pipeline/${lead.id}`} className="font-semibold hover:text-primary hover:underline transition-colors">
                           {lead.company_name}
                         </Link>
@@ -688,10 +690,12 @@ export default async function ClientsPage({
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-violet-100 text-violet-700">법인</span>
+                          <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-violet-100 text-violet-700">거래처</span>
                           <Link href={`/dashboard/clients/${customer.id}`} className="font-semibold hover:text-primary hover:underline">
                             {customer.name}
                           </Link>
+                          {/* 거래 형태(일회성/정기) — 신원(거래처)과 별개로 계약 유무에 따라 자동 표시 */}
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${txFormBadge(Boolean(activeContract)).className}`}>{txFormBadge(Boolean(activeContract)).label}</span>
                           {customer.category && (
                             <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">{customer.category}</span>
                           )}

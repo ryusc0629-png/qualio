@@ -90,9 +90,11 @@ export function LeadForm({
     ? Number(form.monthly_budget).toLocaleString('ko-KR')
     : ''
 
+  // 구분은 '누구인가'(개인/사업장)만 정한다. 일회성·정기 여부는 계약 등록으로 자동 표시하므로
+  // 라벨에서 '정기계약'·'일회성' 문구를 빼 오해(거래처=무조건 정기)를 없앤다.
   const TYPE_OPTIONS = [
-    { value: 'company', title: '거래처', desc: '회사·정기계약' },
-    { value: 'individual', title: '일반', desc: '개인·일회성' },
+    { value: 'company', title: '사업장·거래처', desc: '회사·상가·병원' },
+    { value: 'individual', title: '개인 고객', desc: '가정집 등' },
   ]
 
   const isCompany = (form.customer_type || 'company') === 'company'
@@ -142,6 +144,10 @@ export function LeadForm({
             )
           })}
         </div>
+        {/* 온보딩 안내 — 구분은 '누구'만 정하는 것이고, 일회성/정기는 자동임을 알려줌 */}
+        <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
+          💡 일회성·정기 여부는 계약을 등록하면 자동으로 표시돼요. 거래처도 일회성 작업만 할 수 있어요.
+        </p>
       </div>
 
       <div>

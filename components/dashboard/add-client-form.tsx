@@ -289,17 +289,21 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
                   <input type="radio" value="individual" {...leadForm.register('customer_type')} className="accent-primary" />
                   <div>
                     <p className="text-sm font-medium">개인 고객</p>
-                    <p className="text-xs text-muted-foreground">개인·일회성</p>
+                    <p className="text-xs text-muted-foreground">가정집 등</p>
                   </div>
                 </label>
                 <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                   <input type="radio" value="company" {...leadForm.register('customer_type')} className="accent-primary" />
                   <div>
-                    <p className="text-sm font-medium">법인 고객</p>
-                    <p className="text-xs text-muted-foreground">법인·정기계약</p>
+                    <p className="text-sm font-medium">사업장·거래처</p>
+                    <p className="text-xs text-muted-foreground">회사·상가·병원</p>
                   </div>
                 </label>
               </div>
+              {/* 구분은 '누구'만 정함 — 일회성/정기는 계약 등록으로 자동 표시 */}
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                💡 일회성·정기 여부는 계약을 등록하면 자동으로 표시돼요. 거래처도 일회성 작업만 할 수 있어요.
+              </p>
               {leadForm.formState.errors.customer_type && (
                 <p className="text-xs text-destructive">{leadForm.formState.errors.customer_type.message}</p>
               )}
@@ -417,17 +421,21 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
                   <input type="radio" value="one_time" {...customerForm.register('type')} className="accent-primary" />
                   <div>
                     <p className="text-sm font-medium">개인 고객</p>
-                    <p className="text-xs text-muted-foreground">개인·일회성</p>
+                    <p className="text-xs text-muted-foreground">가정집 등</p>
                   </div>
                 </label>
                 <label className="flex items-center gap-2 rounded-lg border p-3 cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                   <input type="radio" value="recurring" {...customerForm.register('type')} className="accent-primary" />
                   <div>
-                    <p className="text-sm font-medium">법인 고객</p>
-                    <p className="text-xs text-muted-foreground">법인·정기계약</p>
+                    <p className="text-sm font-medium">사업장·거래처</p>
+                    <p className="text-xs text-muted-foreground">회사·상가·병원</p>
                   </div>
                 </label>
               </div>
+              {/* 구분은 '누구'만 정함 — 일회성/정기는 계약 등록으로 자동 표시 */}
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                💡 일회성·정기 여부는 계약을 등록하면 자동으로 표시돼요. 거래처도 일회성 작업만 할 수 있어요.
+              </p>
               {customerForm.formState.errors.type && (
                 <p className="text-xs text-destructive">{customerForm.formState.errors.type.message}</p>
               )}
