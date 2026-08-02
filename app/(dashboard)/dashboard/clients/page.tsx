@@ -344,7 +344,7 @@ export default async function ClientsPage({
           <p className="text-2xl font-bold mt-1 tabular-nums text-violet-600">
             {activeLeads.length}<span className="text-sm font-normal text-muted-foreground ml-0.5">곳</span>
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">계약 중인 고객 {companyCustomers.length}곳</p>
+          <p className="text-xs text-muted-foreground mt-0.5">등록된 거래처 {companyCustomers.length}곳</p>
         </div>
         <div className="bg-white rounded-xl border p-4">
           <p className="text-xs text-muted-foreground">월 정기 매출</p>
@@ -674,10 +674,10 @@ export default async function ClientsPage({
             })
           )}
 
-          {/* 계약 중인 법인 고객 (type='recurring') */}
+          {/* 등록된 거래처(법인 고객, type='recurring') — 계약 유무는 각 카드의 배지로 표시 */}
           {companyCustomers.length > 0 && (
             <div className="mt-3 space-y-2">
-              <p className="text-xs text-muted-foreground px-1">계약 중인 고객</p>
+              <p className="text-xs text-muted-foreground px-1">등록된 거래처</p>
               {companyCustomers.map((customer) => {
                 const customerContracts = contractMap[customer.id] ?? []
                 const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
