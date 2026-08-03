@@ -686,7 +686,14 @@ export default async function ClientsPage({
                 // 통합 LTV = 일회성 예약 합계 + 계약 누적
                 const ltv = bookingLtv + contractAccruedRevenue(customerContracts)
                 return (
-                  <div key={`company-${customer.id}`} className="bg-emerald-50 rounded-xl border border-emerald-100 p-4 hover:border-emerald-300 transition-colors">
+                  <div
+                    key={`company-${customer.id}`}
+                    className={`rounded-xl border p-4 transition-colors ${
+                      activeContract
+                        ? 'bg-emerald-50 border-emerald-100 hover:border-emerald-300' // 정기계약중 — 초록 강조
+                        : 'bg-white border-border hover:border-primary/30' // 일회성 거래처 — 중립(계약 전 대청소 등)
+                    }`}
+                  >
                     <div className="flex items-start gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">

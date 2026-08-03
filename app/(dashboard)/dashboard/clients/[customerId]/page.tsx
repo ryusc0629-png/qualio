@@ -284,8 +284,14 @@ export default async function CustomerDetailPage({ params }: Props) {
     contractVisits.set(b.contract_id, cur)
   }
   const contractList = (customerContracts ?? []) as Array<
-    ContractLike & { id: string; service_type: string | null; frequency: string }
+    ContractLike & { id: string; service_type: string | null; frequency: string; status: string }
   >
+
+  // 거래 형태(일회성/정기)는 '누구(개인/거래처)'와 독립된 축.
+  // 활성 정기계약이 있을 때만 '정기계약중'. 거래처라도 계약 전이면 '일회성'(계약 전 대청소 등).
+  // (customer.type==='recurring'은 '거래처' 신원 플래그일 뿐 거래형태가 아님 — 목록 페이지와 동일 규칙)
+  const hasActiveContract = contractList.some((c) => c.status === 'active')
+  const isCompany = customer.type === 'recurring'
 
   // 새 견적서에 자동 부여될 다음 순번(미리보기용)
   const suggestedQuoteNumber = await getNextQuoteNumber(db, profile.business_id)
@@ -313,13 +319,18 @@ export default async function CustomerDetailPage({ params }: Props) {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+            {/* 누구(개인/거래처) — 신원 축 */}
             <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-              customer.type === 'recurring'
-                ? 'bg-emerald-100 text-emerald-700'
-                : 'bg-gray-100 text-gray-600'
+              isCompany ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
             }`}>
-              {customer.type === 'recurring' ? '정기 고객' : '일회성'}
+              {isCompany ? '거래처' : '개인'}
+            </span>
+            {/* 거래 형태(일회성/정기) — 신원과 별개로 활성 계약 유무에 따라 자동 표시 */}
+            <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+              hasActiveContract ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+            }`}>
+              {hasActiveContract ? '정기계약중' : '일회성'}
             </span>
             {reviewCount > 0 && (
               <span className="text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-700 flex items-center gap-0.5">
