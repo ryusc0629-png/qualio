@@ -81,6 +81,10 @@ interface Props {
   suggestedQuoteNumber?: string
   // 이 리드에 저장된 미팅 기록이 있으면 '미팅 내용으로 채우기' 버튼 노출
   hasMeeting?: boolean
+  // 상담 기록을 불러올 리드 id — 저장(leadId)과 별개.
+  // 거래처(customerId) 허브에서 견적을 만들 때, 전환 전 리드(customer.lead_id)의 상담 기록을
+  // 자동채우기 소스로만 쓰기 위함(저장 payload에는 섞지 않음)
+  meetingLeadId?: string
   // 다이얼로그 여는 버튼을 직접 지정 (견적서 목록의 '수정'·'새 견적서 만들기' 등). 없으면 기본 버튼
   trigger?: React.ReactNode
 }
@@ -228,10 +232,13 @@ function SortableQuoteItem({
   )
 }
 
-export function B2bQuoteForm({ leadId, customerId, clientName, businessName, existingQuote, suggestedQuoteNumber, hasMeeting, trigger }: Props) {
+export function B2bQuoteForm({ leadId, customerId, clientName, businessName, existingQuote, suggestedQuoteNumber, hasMeeting, meetingLeadId, trigger }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [, startTransition] = useTransition()
+
+  // 상담 기록을 읽어올 리드 — 리드 화면이면 leadId, 거래처 화면이면 전환 전 리드(meetingLeadId)
+  const meetingSourceLeadId = leadId ?? meetingLeadId
 
   // 미리보기(인쇄) 경로 — 고객이면 고객 경로, 아니면 리드 경로
   const printHref = customerId
@@ -487,11 +494,11 @@ export function B2bQuoteForm({ leadId, customerId, clientName, businessName, exi
 
         <div className="space-y-6">
 
-          {/* 상담 기록에서 자동 채우기 — 저장된 상담(미팅·방문·메모 등)이 있는 리드에서만 노출 */}
-          {leadId && hasMeeting && (
+          {/* 상담 기록에서 자동 채우기 — 저장된 상담(미팅·방문·메모 등)이 있으면 노출 (리드·거래처 공통) */}
+          {meetingSourceLeadId && hasMeeting && (
             <button
               type="button"
-              onClick={() => executeExtract({ leadId })}
+              onClick={() => executeExtract({ leadId: meetingSourceLeadId })}
               disabled={extracting}
               className="w-full flex items-center gap-2.5 rounded-lg border border-primary/30 bg-primary/5 p-3 text-left transition-colors hover:bg-primary/10 disabled:opacity-60"
             >

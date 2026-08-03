@@ -389,6 +389,8 @@ export default async function CustomerDetailPage({ params }: Props) {
         customerAddress={customer.address}
         businessName={bizNameRow?.legal_name || bizNameRow?.name || ''}
         suggestedQuoteNumber={suggestedQuoteNumber}
+        meetingLeadId={customer.lead_id ?? undefined}
+        hasMeeting={salesActivities.some((a) => ['meeting', 'visit', 'note', 'call'].includes(a.type))}
       />
 
       {/* 정기계약 — 계약을 고객 허브에 직접 표시 (주기·월금액·다음 방문·완료/예정 횟수) */}

@@ -48,6 +48,8 @@ interface Props {
   // 새 견적서에 자동 부여될 다음 순번(미리보기용) — 서버가 저장 시 최종 확정
   suggestedQuoteNumber?: string
   hasMeeting?: boolean
+  // 상담 기록을 불러올 리드 id(자동채우기 소스) — 거래처 허브에서 전환 전 리드(customer.lead_id) 전달용
+  meetingLeadId?: string
 }
 
 // 견적서의 '부가세 미포함(공급가액)' 금액 — 견적서 저장 로직(b2b-quote-form)의 taxable과 동일하게
@@ -74,7 +76,7 @@ function supplyAmount(quote: B2bQuote): number {
 }
 
 // 한 거래처에 여러 장의 견적서를 만들고 각각 수정·미리보기·삭제할 수 있는 목록
-export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerPhone, customerAddress, businessName, suggestedQuoteNumber, hasMeeting }: Props) {
+export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerPhone, customerAddress, businessName, suggestedQuoteNumber, hasMeeting, meetingLeadId }: Props) {
   // 고객 화면(customerId+연락처)일 때만 견적서→일정 잡기 버튼 노출 (리드 화면엔 예약 개념 없음)
   const canSchedule = Boolean(customerId && customerPhone)
   const router = useRouter()
@@ -135,6 +137,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
           existingQuote={null}
           suggestedQuoteNumber={suggestedQuoteNumber}
           hasMeeting={hasMeeting}
+          meetingLeadId={meetingLeadId}
           trigger={
             <Button size="sm" className="h-8">
               <Plus className="h-3.5 w-3.5 mr-1" />
@@ -216,6 +219,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
                     businessName={businessName}
                     existingQuote={quote}
                     hasMeeting={hasMeeting}
+                    meetingLeadId={meetingLeadId}
                     trigger={
                       <button
                         type="button"
