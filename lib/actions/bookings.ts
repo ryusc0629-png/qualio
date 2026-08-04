@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache'
 import { sendRescheduleAlimtalk } from '@/lib/kakao/alimtalk'
 import { sendOnMyWayForBooking } from '@/lib/kakao/on-my-way'
 import { findCustomerIdByPhone } from '@/lib/actions/_customer-lookup'
+import { inputToUtcIso } from '@/lib/format/datetime'
 
 // 한국 전화번호 검증
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
@@ -55,7 +56,9 @@ export const addBookingAction = action
 
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
-    const scheduledIso = new Date(parsedInput.scheduled_at).toISOString()
+    // datetime-local 입력(타임존 없음)은 KST 벽시계 시각으로 해석해 저장 — 그냥 new Date()로 파싱하면
+    // Vercel(UTC)에선 08:00이 08:00 UTC로 저장돼 KST 표시에서 17:00으로 밀림
+    const scheduledIso = inputToUtcIso(parsedInput.scheduled_at)
 
     // 중복 제출 방어 — 같은 고객·일시·금액의 예약이 이미 있으면 또 만들지 않음
     // (추가 직후 일정 화면에 안 보여 다시 누르는 경우 등으로 같은 예약이 2번 박히던 문제 방지)
@@ -281,7 +284,7 @@ export const rescheduleBookingAction = action
     }
 
     const oldScheduledAt = booking.scheduled_at
-    const newScheduledAt = new Date(parsedInput.new_scheduled_at).toISOString()
+    const newScheduledAt = inputToUtcIso(parsedInput.new_scheduled_at)
 
     // 일정 업데이트
     const { error } = await db
