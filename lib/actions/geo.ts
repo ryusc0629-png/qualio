@@ -29,11 +29,11 @@ export const generateGeoContentAction = action
     const [businessResult, servicesResult] = await Promise.all([
       db
         .from('businesses')
-        .select('id, name, address, description, slug, testimonials, service_areas' as never)
+        .select('id, name, address, description, slug, service_areas' as never)
         .eq('id', profile.business_id)
         .maybeSingle() as unknown as Promise<{ data: {
           id: string; name: string; address: string | null; description: string | null
-          slug: string | null; testimonials: { quote: string; author: string }[] | null
+          slug: string | null
           service_areas: string[] | null
         } | null }>,
       db
@@ -65,7 +65,6 @@ export const generateGeoContentAction = action
       address: business.address,
       description: business.description,
       services,
-      testimonials: business.testimonials,
       serviceAreas: business.service_areas,
     })
 

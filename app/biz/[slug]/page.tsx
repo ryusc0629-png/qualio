@@ -82,7 +82,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
 
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, instagram_url, youtube_url, service_areas, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, certifications, portfolio, target_customer' as never)
+    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, instagram_url, youtube_url, service_areas, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, certifications, portfolio, target_customer' as never)
     .eq('slug', slug)
     .maybeSingle() as { data: {
       id: string; name: string; phone: string | null; address: string | null
@@ -94,7 +94,6 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
       logo_url: string | null; hero_image_url: string | null
       brand_color: string | null; brand_color_secondary: string | null
       hero_style: string | null; hero_title: string | null; hero_subtitle: string | null
-      testimonials: { quote: string; author: string }[] | null
       strengths: { key: string; title: string; desc: string }[] | null
       owner_photo_url: string | null; owner_name: string | null
       owner_greeting: string | null; owner_video_url: string | null
@@ -945,7 +944,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
           </FadeIn>
         </section>
 
-        {/* ── 고객 후기 ── 실제 수집된 후기를 우선 전시, 없으면 사장님이 쓴 추천사로 대체 */}
+        {/* ── 고객 후기 ── 실제 수집·인증된 후기만 전시(자작 추천사는 사용 안 함) */}
         {reviewSummary.items.length > 0 ? (
           <section className="py-20 sm:py-28 bg-slate-50">
             <FadeIn>
@@ -974,32 +973,6 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
                     </div>
                     <p className="text-sm leading-relaxed text-slate-700">&ldquo;{r.comment}&rdquo;</p>
                     <p className="text-xs text-muted-foreground font-medium">{r.customerName}님</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-            </FadeIn>
-          </section>
-        ) : business.testimonials && business.testimonials.length > 0 ? (
-          <section className="py-20 sm:py-28 bg-slate-50">
-            <FadeIn>
-            <div className="max-w-5xl mx-auto px-6">
-              <div className="text-center mb-12">
-                <p className="text-primary font-semibold text-xs mb-3 tracking-widest uppercase">고객 후기</p>
-                <h2 className="text-3xl sm:text-4xl font-black tracking-tight">실제 고객의 이야기</h2>
-              </div>
-              <div className="grid sm:grid-cols-3 gap-4 max-w-4xl mx-auto">
-                {business.testimonials.map((t, idx) => (
-                  <div key={idx} className="rounded-3xl bg-white p-7 space-y-4 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex gap-0.5">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
-                      ))}
-                    </div>
-                    <p className="text-sm leading-relaxed text-slate-700">
-                      &ldquo;{t.quote}&rdquo;
-                    </p>
-                    <p className="text-xs text-muted-foreground font-medium">{t.author}</p>
                   </div>
                 ))}
               </div>

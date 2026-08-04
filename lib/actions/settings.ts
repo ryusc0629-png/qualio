@@ -48,7 +48,6 @@ const updateBusinessSchema = z.object({
   hero_image_url:   z.string().max(500).optional(),
   hero_title:       z.string().max(30).optional(),
   hero_subtitle:    z.string().max(100).optional(),
-  testimonials:   z.string().optional(), // JSON string: [{quote, author}]
   strengths:      z.string().optional(), // JSON string: [{key, title, desc}]
   owner_photo_url: z.string().max(500).optional(),
   owner_name:      z.string().max(30).optional(),
@@ -141,9 +140,6 @@ export const updateBusinessAction = action
         hero_image_url:            (parsedInput.hero_image_url        || null) as never,
         hero_title:                (parsedInput.hero_title            || null) as never,
         hero_subtitle:             (parsedInput.hero_subtitle         || null) as never,
-        testimonials:              (parsedInput.testimonials
-          ? JSON.parse(parsedInput.testimonials)
-          : []) as never,
         strengths:                 (parsedInput.strengths
           ? JSON.parse(parsedInput.strengths)
           : []) as never,

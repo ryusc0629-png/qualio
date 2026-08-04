@@ -57,7 +57,6 @@ interface GeoInput {
   address: string | null
   description: string | null
   services: ServiceItem[]
-  testimonials?: { quote: string; author: string }[] | null
   serviceAreas?: string[] | null // 추가 출장 지역 (주소 사다리 외 더 넓은 지역)
 }
 
@@ -92,11 +91,6 @@ export async function generateGeoContent(input: GeoInput): Promise<GeoContent> {
     ? [...byCategory.entries()].map(([cat, items]) => `[${cat}] ${items.join(', ')}`).join('\n')
     : '청소 서비스'
 
-  // 실제 고객 후기 — 있으면 설명·FAQ에 신뢰 근거로 활용
-  const reviewBlock = input.testimonials && input.testimonials.length > 0
-    ? `\n실제 고객 후기(과장 없이 신뢰 근거로만 활용):\n${input.testimonials.map((t) => `- "${t.quote}" — ${t.author}`).join('\n')}`
-    : ''
-
   // 지역 사다리 — 핵심 동/구에 집중하되 상위 지역(시·도·권역)을 가끔 언급해 검색 범위 확장
   const regionHint = buildRegionPromptHint(input.address, input.serviceAreas)
 
@@ -116,7 +110,7 @@ export async function generateGeoContent(input: GeoInput): Promise<GeoContent> {
 ${regionHint}
 업체 소개: ${input.description || '청소 전문 업체'}
 제공 서비스(카테고리별):
-${serviceList}${reviewBlock}
+${serviceList}
 
 중요: 위에 주어진 실제 정보(서비스·가격·지역·후기)만 사용하세요. 없는 사실을 지어내지 마세요.
 
