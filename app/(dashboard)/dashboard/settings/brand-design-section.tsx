@@ -121,15 +121,10 @@ export function BrandDesignSection({
   const previewHref = slug ? `/biz/${slug}` : undefined
 
   return (
-    <div className="rounded-lg border bg-card p-5 space-y-5">
-      <div>
-        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-          웹사이트 디자인
-        </h2>
-        <p className="text-xs text-muted-foreground mt-1">
-          고객에게 보이는 내 업체 홍보 페이지의 색상과 분위기를 골라보세요.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <p className="text-xs text-muted-foreground">
+        고객에게 보이는 내 업체 홍보 페이지의 색상과 분위기를 골라보세요.
+      </p>
 
       {/* ── 히어로 문구 직접 입력 ── */}
       <div className="space-y-3">

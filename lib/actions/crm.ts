@@ -54,6 +54,7 @@ const createActivitySchema = z.object({
   type: z.string().refine((v) => ACTIVITY_TYPES.includes(v as typeof ACTIVITY_TYPES[number]), '유효하지 않은 유형입니다'),
   content: z.string().min(1, '내용을 입력해주세요'),
   transcript: z.string().optional(), // 미팅 녹음 받아쓴 원문
+  photos: z.array(z.string()).optional(), // 현장 사진 URL 목록(페이지 안 카메라로 촬영)
   activity_at: z.string().optional(),
 })
 
@@ -65,6 +66,12 @@ const deleteLeadSchema = z.object({
 // 상담 기록 삭제 스키마
 const deleteActivitySchema = z.object({
   activityId: z.string().uuid(),
+})
+
+// 상담 기록 수정 스키마 — 미팅 내용(정리/메모)을 나중에 고칠 수 있게
+const updateActivitySchema = z.object({
+  activityId: z.string().uuid(),
+  content: z.string().min(1, '내용을 입력해주세요'),
 })
 
 // 견적 → 잠재고객 전환 스키마
@@ -229,6 +236,7 @@ export const createLeadActivityAction = action
       type:        parsedInput.type,
       content:     parsedInput.content,
       transcript:  parsedInput.transcript ?? null,
+      photos:      (parsedInput.photos ?? []) as never, // database.ts 타입 미반영 → 단언
       activity_at: parsedInput.activity_at ?? new Date().toISOString(),
     })
 
@@ -251,6 +259,24 @@ export const deleteLeadActivityAction = action
 
     if (error) throw new Error('[APP] 상담 기록 삭제에 실패했습니다')
     revalidatePath('/dashboard/pipeline')
+    return { success: true }
+  })
+
+// 상담 기록 내용 수정 — 미팅 정리/메모를 나중에 바로잡을 수 있게(내 업체 것만)
+export const updateLeadActivityAction = action
+  .schema(updateActivitySchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuthenticatedBusinessId()
+
+    const { error } = await db
+      .from('lead_activities')
+      .update({ content: parsedInput.content })
+      .eq('id', parsedInput.activityId)
+      .eq('business_id', businessId)
+
+    if (error) throw new Error('[APP] 상담 기록 수정에 실패했습니다')
+    revalidatePath('/dashboard/pipeline')
+    revalidatePath('/dashboard/clients')
     return { success: true }
   })
 

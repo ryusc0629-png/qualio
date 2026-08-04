@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ChevronLeft, Calendar, Receipt, ChevronRight, FileText, User, Star, ShieldAlert, AlertTriangle, CheckCircle2, ClipboardList, Repeat, PhoneCall, StickyNote, Mic } from 'lucide-react'
 import { formatFrequency } from '@/lib/utils/frequency'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
+import { CustomerSalesStageSelect } from '@/components/dashboard/customer-sales-stage-select'
 import { CustomerOnMyWayToggle } from '@/components/dashboard/customer-on-my-way-toggle'
 import { ContactActions } from '@/components/dashboard/contact-actions'
 import { AddClaimForm } from '@/components/dashboard/add-claim-form'
@@ -13,6 +14,7 @@ import { ClaimActions } from '@/components/dashboard/claim-actions'
 import { ClaimAssignee } from '@/components/dashboard/claim-assignee'
 import { B2bQuoteList } from '@/components/dashboard/b2b-quote-list'
 import { DeleteActivityButton } from '@/components/dashboard/delete-activity-button'
+import { EditableActivityContent } from '@/components/dashboard/editable-activity-content'
 import { contractAccruedRevenue, type ContractLike } from '@/lib/utils/ltv'
 import { getNextQuoteNumber } from '@/lib/utils/quote-number'
 import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
@@ -79,7 +81,7 @@ export default async function CustomerDetailPage({ params }: Props) {
 
   const { data: customer } = await db
     .from('customers')
-    .select('id, name, phone, address, category, type, notes, lead_id, created_at')
+    .select('id, name, phone, address, category, type, notes, lead_id, sales_stage, created_at')
     .eq('id', customerId)
     .eq('business_id', profile.business_id)
     .maybeSingle()
@@ -224,11 +226,11 @@ export default async function CustomerDetailPage({ params }: Props) {
     .maybeSingle() as unknown as { data: { name: string | null; legal_name: string | null } | null }
 
   // 잠재고객(리드) 시절 영업 기록 — 전환된 고객이면 상담·통화·견적 이력을 이어서 보여줌
-  type LeadActivity = { id: string; type: string; content: string | null; activity_at: string }
+  type LeadActivity = { id: string; type: string; content: string | null; activity_at: string; photos: string[] | null }
   const { data: leadActivities } = customer.lead_id
     ? await db
         .from('lead_activities' as never)
-        .select('id, type, content, activity_at' as never)
+        .select('id, type, content, activity_at, photos' as never)
         .eq('lead_id' as never, customer.lead_id)
         .order('activity_at' as never, { ascending: false }) as unknown as { data: LeadActivity[] | null }
     : { data: null }
@@ -287,6 +289,14 @@ export default async function CustomerDetailPage({ params }: Props) {
     ContractLike & { id: string; service_type: string | null; frequency: string; status: string }
   >
 
+  // 서비스 이력에는 '정기계약 자동생성 예정 방문'을 숨긴다.
+  // 정기 방문은 미래 날짜로 수십 건 쌓여 스크롤만 길어지고, 이미 위 '정기계약' 요약(다음 방문·예정 횟수)과
+  // 일정/배정 페이지에서 관리된다. 남기는 것 = 일회성 예약 전부 · 완료된 정기 방문(실제 이력) · 지난 정기 방문.
+  const isUpcomingRecurringVisit = (b: BookingWithWorker) =>
+    Boolean(b.contract_id) && b.status !== 'completed' && b.scheduled_at > nowIso
+  const historyBookings = bookingList.filter((b) => !isUpcomingRecurringVisit(b))
+  const hiddenRecurringCount = bookingList.length - historyBookings.length
+
   // 거래 형태(일회성/정기)는 '누구(개인/거래처)'와 독립된 축.
   // 활성 정기계약이 있을 때만 '정기계약중'. 거래처라도 계약 전이면 '일회성'(계약 전 대청소 등).
   // (customer.type==='recurring'은 '거래처' 신원 플래그일 뿐 거래형태가 아님 — 목록 페이지와 동일 규칙)
@@ -332,6 +342,8 @@ export default async function CustomerDetailPage({ params }: Props) {
             }`}>
               {hasActiveContract ? '정기계약중' : '일회성'}
             </span>
+            {/* 영업 상태 — 자동 배지와 별개로 손으로 지정(전환 후 진행 중인 정기계약 영업 등) */}
+            <CustomerSalesStageSelect customerId={customer.id} currentStage={customer.sales_stage} />
             {reviewCount > 0 && (
               <span className="text-xs px-2 py-1 rounded-full font-medium bg-amber-100 text-amber-700 flex items-center gap-0.5">
                 <Star className="h-3 w-3" />
@@ -536,29 +548,48 @@ export default async function CustomerDetailPage({ params }: Props) {
       {/* 서비스 이력 */}
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-muted-foreground">서비스 이력</h2>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-muted-foreground">서비스 이력</h2>
+            {hiddenRecurringCount > 0 && (
+              <p className="text-xs text-muted-foreground/80 mt-0.5">
+                정기 방문 {hiddenRecurringCount}건은 <span className="font-medium text-foreground/70">일정</span>에서 관리돼요
+              </p>
+            )}
+          </div>
           <AddBookingButton customer={{ name: customer.name, phone: customer.phone, address: customer.address }} />
         </div>
 
-        {bookingList.length === 0 ? (
+        {historyBookings.length === 0 ? (
           <div className="bg-white rounded-xl border border-dashed border-border p-10 text-center">
-            <p className="text-sm text-muted-foreground">아직 잡힌 일정이 없어요</p>
-            {b2bQuotes.length > 0 ? (
-              <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                위 <span className="font-medium text-foreground">견적서·시방서</span>에서{' '}
-                <span className="font-medium text-primary">일정 잡기</span>를 누르면
-                <br />
-                이 작업을 바로 달력에 올릴 수 있어요
-              </p>
+            {hiddenRecurringCount > 0 ? (
+              <>
+                <p className="text-sm text-muted-foreground">정기 방문 {hiddenRecurringCount}건이 일정에 잡혀 있어요</p>
+                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                  정기청소 일정은 위 <span className="font-medium text-foreground">정기계약</span> 요약과{' '}
+                  <span className="font-medium text-primary">일정</span> 페이지에서 확인하세요
+                </p>
+              </>
             ) : (
-              <p className="text-xs text-muted-foreground mt-2">
-                위 <span className="font-medium text-foreground">예약 등록</span>으로 첫 일정을 잡아보세요
-              </p>
+              <>
+                <p className="text-sm text-muted-foreground">아직 잡힌 일정이 없어요</p>
+                {b2bQuotes.length > 0 ? (
+                  <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                    위 <span className="font-medium text-foreground">견적서·시방서</span>에서{' '}
+                    <span className="font-medium text-primary">일정 잡기</span>를 누르면
+                    <br />
+                    이 작업을 바로 달력에 올릴 수 있어요
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    위 <span className="font-medium text-foreground">예약 등록</span>으로 첫 일정을 잡아보세요
+                  </p>
+                )}
+              </>
             )}
           </div>
         ) : (
           <div className="space-y-2">
-            {bookingList.map((booking) => {
+            {historyBookings.map((booking) => {
               const quote = booking.quotes as { cleaning_type: string | null; space_size: number | null } | null
               const serviceName = quote?.cleaning_type ?? booking.service_label ?? booking.memo ?? '직접 예약'
               const spaceLabel = quote?.space_size ? ` · ${quote.space_size}평` : ''
@@ -649,7 +680,8 @@ export default async function CustomerDetailPage({ params }: Props) {
               <p className="text-sm text-muted-foreground">이 고객으로 전환되기 전 영업 기록이 없어요</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            // 상담 기록이 길거나 많아도 이 박스는 고정 높이 — 내부에서만 스크롤(overscroll-contain으로 배경 밀림 차단)
+            <div className="space-y-2 max-h-[32rem] overflow-y-auto overscroll-contain pr-1">
               {salesActivities.map((activity) => {
                 const cfg = ACTIVITY_CONFIG[activity.type] ?? ACTIVITY_CONFIG.note!
                 const Icon = cfg.icon
@@ -666,7 +698,17 @@ export default async function CustomerDetailPage({ params }: Props) {
                         </span>
                       </div>
                       {activity.content && (
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap mt-1">{activity.content}</p>
+                        <EditableActivityContent activityId={activity.id} content={activity.content} />
+                      )}
+                      {activity.photos && activity.photos.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {activity.photos.map((url, i) => (
+                            <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="block h-16 w-16 rounded-lg overflow-hidden border">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={url} alt={`현장 사진 ${i + 1}`} className="h-full w-full object-cover" />
+                            </a>
+                          ))}
+                        </div>
                       )}
                     </div>
                     <DeleteActivityButton activityId={activity.id} />

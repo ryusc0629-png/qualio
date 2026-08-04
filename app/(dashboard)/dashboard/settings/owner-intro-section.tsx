@@ -39,19 +39,11 @@ export function OwnerIntroSection({ photoUrl, name, greeting, videoUrl, onChange
   }
 
   return (
-    <div className="rounded-lg border bg-card p-5 space-y-4">
-      <div>
-        <div className="flex items-center gap-2">
-          <UserRound className="h-4 w-4 text-primary" />
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-            대표 인사말
-          </h2>
-        </div>
-        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-          사장님 얼굴과 짧은 인사말을 넣으면 <span className="font-medium text-foreground">‘진짜 사람이 하는 곳’</span>이라는
-          믿음이 생겨서 문의로 훨씬 잘 이어져요. 얼굴 사진 한 장과 두세 줄이면 충분해요. (선택)
-        </p>
-      </div>
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        사장님 얼굴과 짧은 인사말을 넣으면 <span className="font-medium text-foreground">‘진짜 사람이 하는 곳’</span>이라는
+        믿음이 생겨서 문의로 훨씬 잘 이어져요. 얼굴 사진 한 장과 두세 줄이면 충분해요. (선택)
+      </p>
 
       {/* 대표 사진 — 원형 미리보기 */}
       <div className="space-y-2">

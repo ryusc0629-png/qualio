@@ -1,7 +1,7 @@
 'use client'
 
 import { Input } from '@/components/ui/input'
-import { Plus, Trash2, Check, Sparkles } from 'lucide-react'
+import { Plus, Trash2, Check } from 'lucide-react'
 import {
   STRENGTH_PRESETS,
   getStrengthIcon,
@@ -36,20 +36,12 @@ export function StrengthsSection({ value, onChange }: Props) {
   const available = STRENGTH_PRESETS.filter((p) => !usedKeys.has(p.key))
 
   return (
-    <div className="rounded-lg border bg-card p-5 space-y-4">
-      <div>
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-            우리 업체 강점
-          </h2>
-        </div>
-        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-          고객이 다른 곳 말고 <span className="font-medium text-foreground">우리를 선택하는 이유</span>예요.
-          해당하는 것을 눌러서 켜면 홍보 페이지에 <span className="font-medium text-foreground">‘우리만의 차이’</span> 칸으로
-          자동으로 올라가요. 눌러 켠 다음 문구는 우리 업체에 맞게 고칠 수 있어요. (최대 {MAX_STRENGTHS}개)
-        </p>
-      </div>
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        고객이 다른 곳 말고 <span className="font-medium text-foreground">우리를 선택하는 이유</span>예요.
+        해당하는 것을 눌러서 켜면 홍보 페이지에 <span className="font-medium text-foreground">‘우리만의 차이’</span> 칸으로
+        자동으로 올라가요. 눌러 켠 다음 문구는 우리 업체에 맞게 고칠 수 있어요. (최대 {MAX_STRENGTHS}개)
+      </p>
 
       {/* 팔레트 — 해당되는 것 눌러서 켜기 */}
       {available.length > 0 && (

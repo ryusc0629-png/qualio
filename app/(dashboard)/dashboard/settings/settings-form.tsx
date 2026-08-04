@@ -6,8 +6,8 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Plus, Trash2, Quote } from 'lucide-react'
 import { updateBusinessAction } from '@/lib/actions/settings'
+import { CollapsibleSection } from './collapsible-section'
 import { BrandDesignSection } from './brand-design-section'
 import { StrengthsSection } from './strengths-section'
 import { OwnerIntroSection } from './owner-intro-section'
@@ -20,11 +20,6 @@ import { BaseAddressPicker } from './base-address-picker'
 import { normalizeHex, type HeroStyle } from '@/lib/brand'
 import { parseKoreanRegion } from '@/lib/address/parse-region'
 import { homeSidoAreaValues } from '@/lib/address/korea-regions'
-
-interface Testimonial {
-  quote: string
-  author: string
-}
 
 type RewardType = 'none' | 'discount_amount' | 'discount_rate' | 'gifticon'
 
@@ -70,7 +65,6 @@ interface Business {
   slug: string | null
   hero_title: string | null
   hero_subtitle: string | null
-  testimonials: Testimonial[] | null
   strengths: Strength[] | null
   owner_photo_url: string | null
   owner_name: string | null
@@ -118,9 +112,6 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
   const [heroImageUrl, setHeroImageUrl] = useState(business.hero_image_url ?? '')
   const [heroTitle, setHeroTitle] = useState(business.hero_title ?? '')
   const [heroSubtitle, setHeroSubtitle] = useState(business.hero_subtitle ?? '')
-  const [testimonials, setTestimonials] = useState<Testimonial[]>(
-    business.testimonials ?? []
-  )
   // 우리 업체 강점 — 홈페이지 "우리만의 차이" 섹션에 자동 반영
   const [strengths, setStrengths] = useState<Strength[]>(business.strengths ?? [])
   // 대표 인사말 — 얼굴 사진 + 이름 + 인사말 + 인사말 영상(유튜브)
@@ -194,7 +185,6 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
     { key: 'business_number', label: '사업자 등록', hint: '‘사업자 등록 업체’ 배지가 붙어요', done: businessNumber.replace(/[^0-9]/g, '').length === 10, essential: false },
     { key: 'certifications', label: '자격증·보유장비', hint: '전문성을 증명하는 항목이에요', done: certifications.filter((c) => c.trim()).length > 0, essential: false },
     { key: 'portfolio', label: '시공 사례 사진 (비포·애프터)', hint: '청소는 사진이 가장 강력해요', done: publicReportCount > 0 || portfolio.some((p) => p.before?.trim() && p.after?.trim()), essential: false },
-    { key: 'testimonials', label: '고객 추천사', hint: '후기가 없을 때 신뢰를 채워줘요', done: testimonials.filter((t) => t.quote.trim()).length > 0, essential: false },
     { key: 'youtube', label: '시공 영상 (유튜브)', hint: '말보다 영상이 확실해요', done: !!business.youtube_url?.trim(), essential: false },
   ]
 
@@ -220,11 +210,13 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
       business_number: 'field-credentials',
       certifications: 'field-credentials',
       portfolio: 'field-portfolio',
-      testimonials: 'field-testimonials',
       youtube: 'field-youtube',
     }
     const el = document.getElementById(idMap[key])
     if (!el) return
+    // 접힌 아코디언 섹션 안이면 먼저 펼친다(안 그러면 스크롤해도 내용이 안 보임)
+    const details = el.closest('details')
+    if (details) details.open = true
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     // Tailwind purge 영향 없이 인라인 스타일로 잠깐 강조
     el.style.outline = '2px solid #ef4444'
@@ -295,9 +287,6 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
       hero_image_url:            heroImageUrl.trim(),
       hero_title:                heroTitle.trim(),
       hero_subtitle:             heroSubtitle.trim(),
-      testimonials:              JSON.stringify(
-        testimonials.filter((t) => t.quote.trim())
-      ),
       // 제목 있는 강점만 저장 (빈 카드 제외)
       strengths:                 JSON.stringify(
         strengths.filter((s) => s.title.trim())
@@ -324,9 +313,8 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
       {/* 홈페이지 완성도(숨고식) — 채울수록 설득력이 강해진다는 걸 % 진행바로 안내 */}
       <CompletenessPanel items={completenessItems} onJump={jumpTo} />
 
-      {/* 업체 기본 정보 */}
-      <div className="rounded-lg border bg-card p-5 space-y-4">
-        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">기본 정보</h2>
+      {/* 업체 기본 정보 (주 고객 유형 포함) */}
+      <CollapsibleSection title="기본 정보" defaultOpen>
 
         <div id="field-name" className="space-y-2">
           <Label htmlFor="name">업체명 <span className="text-destructive">(필수)</span></Label>
@@ -368,17 +356,16 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
           />
           <p className="text-xs text-muted-foreground">고객 견적 폼 상단에 표시됩니다</p>
         </div>
-      </div>
 
-      {/* 주 고객 유형 — 홍보 페이지 카피(공감·프로세스)를 B2B/B2C에 맞게 분기 */}
-      <div className="rounded-lg border bg-card p-5 space-y-3">
-        <div>
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">주 고객 유형</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            누구에게 청소를 파는지에 따라 홍보 페이지 문구가 자동으로 맞춰져요.
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
+        {/* 주 고객 유형 — 홍보 페이지 카피(공감·프로세스)를 B2B/B2C에 맞게 분기 */}
+        <div className="space-y-2 pt-4 border-t">
+          <div>
+            <Label>주 고객 유형</Label>
+            <p className="text-xs text-muted-foreground mt-1">
+              누구에게 청소를 파는지에 따라 홍보 페이지 문구가 자동으로 맞춰져요.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
           {([
             { value: 'b2b' as const, label: '상업공간 (B2B)', desc: '사무실·상가·병원·공장 정기청소' },
             { value: 'b2c' as const, label: '가정 (B2C)', desc: '이사·입주·가정 청소' },
@@ -397,17 +384,15 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
               <span className="text-[11px] text-muted-foreground mt-0.5">{opt.desc}</span>
             </button>
           ))}
+          </div>
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* 출장 지역 (검색 노출) */}
-      <div className="rounded-lg border bg-card p-5 space-y-4">
-        <div>
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">출장 지역</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            위 주소를 기준으로 검색에 노출될 지역이 자동 설정돼요. 더 멀리까지 출장 가시면 지역을 추가하세요.
-          </p>
-        </div>
+      <CollapsibleSection
+        title="출장 지역"
+        description="위 주소 기준으로 검색 노출 지역이 자동 설정돼요. 더 멀리 가시면 추가하세요."
+      >
 
         {/* 내 시/도 전체 — 주소 기준 자동 설정(출장업이라 내 지역은 전부 포함) */}
         {homeAreas.length > 0 ? (
@@ -434,9 +419,10 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
             homeSido={parseKoreanRegion(address).sido}
           />
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* 웹사이트 디자인 (브랜드 커스터마이징) */}
+      <CollapsibleSection title="홍보 페이지 디자인">
       <BrandDesignSection
         businessId={business.id}
         businessName={name || business.name}
@@ -462,13 +448,17 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
           if (next.heroSubtitle !== undefined) setHeroSubtitle(next.heroSubtitle)
         }}
       />
+      </CollapsibleSection>
 
       {/* 우리 업체 강점 (홍보 페이지 '우리만의 차이'에 자동 반영) */}
-      <div id="field-strengths">
-        <StrengthsSection value={strengths} onChange={setStrengths} />
-      </div>
+      <CollapsibleSection title="우리 업체 강점">
+        <div id="field-strengths">
+          <StrengthsSection value={strengths} onChange={setStrengths} />
+        </div>
+      </CollapsibleSection>
 
       {/* 대표 인사말 (홍보 페이지 '대표 인사말' 섹션에 자동 반영) */}
+      <CollapsibleSection title="대표 인사말">
       <div id="field-owner-intro">
         <OwnerIntroSection
           photoUrl={ownerPhotoUrl}
@@ -483,8 +473,10 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
           }}
         />
       </div>
+      </CollapsibleSection>
 
       {/* 전문성·신뢰 (경력·사업자·자격증 → 홍보 페이지 상단 신뢰 앵커) */}
+      <CollapsibleSection title="전문성·신뢰 (경력·자격증)">
       <div id="field-credentials">
         <CredentialsSection
           experienceYears={experienceYears}
@@ -497,16 +489,13 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
           }}
         />
       </div>
+      </CollapsibleSection>
 
       {/* 계약서·세금계산서 정보 — 계약서 '을'(수급자) 정보에 자동 표기 */}
-      <div className="rounded-lg border bg-card p-5 space-y-4">
-        <div>
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">계약서·세금계산서 정보</h2>
-          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-            계약서의 <span className="font-medium text-foreground">‘을’(수급자) 정보</span>에 자동으로 들어가요.
-            한 번만 넣어두면 계약서마다 다시 안 적어도 돼요. (선택)
-          </p>
-        </div>
+      <CollapsibleSection
+        title="계약서·세금계산서 정보"
+        description="계약서 '을'(수급자) 정보에 자동으로 들어가요. 한 번만 넣어두면 계약서마다 다시 안 적어도 돼요. (선택)"
+      >
 
         <div className="space-y-1.5">
           <Label htmlFor="legal_name" className="text-xs">사업자 상호 (사업자등록증상 이름)</Label>
@@ -533,18 +522,19 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
             maxLength={80}
           />
         </div>
-      </div>
+      </CollapsibleSection>
 
       {/* 시공 사례 (비포·애프터 직접 등록 → 홍보 페이지 '시공 사례' 갤러리에 자동 반영) */}
-      <div id="field-portfolio">
-        <PortfolioSection value={portfolio} onChange={setPortfolio} />
-      </div>
+      <CollapsibleSection title="시공 사례 (비포·애프터)">
+        <div id="field-portfolio">
+          <PortfolioSection value={portfolio} onChange={setPortfolio} />
+        </div>
+      </CollapsibleSection>
 
-      {/* 리뷰 수집 채널 */}
-      <div className="rounded-lg border bg-card p-5 space-y-4">
+      {/* 리뷰 수집 채널 (후기 보상 포함) */}
+      <CollapsibleSection title="리뷰 수집 채널">
         <div>
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">리뷰 수집 채널</h2>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-muted-foreground">
             리뷰 요청 알림톡에 연결할 채널을 선택하세요. 한 채널에 리뷰가 모이면 다른 채널로 전환할 수 있어요.
           </p>
           <div className="mt-2.5 rounded-lg bg-primary/5 border border-primary/15 px-3 py-2.5">
@@ -631,67 +621,13 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
             />
           </div>
         </div>
-      </div>
 
-      {/* SNS·영상 연동 */}
-      <div className="rounded-lg border bg-card p-5 space-y-4">
-        <div>
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">SNS·영상 연동</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            SNS 채널을 연결하면 홍보 페이지 하단에 노출되고, 검색·AI가 같은 업체로 인식해 신뢰도가 올라가요.
-          </p>
-        </div>
-        <div id="field-youtube" className="space-y-2">
-          <Label htmlFor="youtube_url">유튜브 시공 영상 URL</Label>
-          <Input
-            id="youtube_url"
-            name="youtube_url"
-            defaultValue={business.youtube_url ?? ''}
-            placeholder="https://www.youtube.com/watch?v=..."
-          />
-          <p className="text-xs text-muted-foreground">등록 시 고객 견적서에 시공 영상이 자동 표시됩니다</p>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="instagram_url">인스타그램 URL</Label>
-          <Input
-            id="instagram_url"
-            name="instagram_url"
-            defaultValue={business.instagram_url ?? ''}
-            placeholder="https://www.instagram.com/내계정"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="naver_blog_url">내 네이버 블로그 주소</Label>
-          <Input
-            id="naver_blog_url"
-            name="naver_blog_url"
-            defaultValue={business.naver_blog_id ? `https://blog.naver.com/${business.naver_blog_id}` : ''}
-            placeholder="https://blog.naver.com/내아이디"
-          />
-          <p className="text-xs text-muted-foreground">
-            홍보 글을 복사한 뒤 <span className="font-medium text-foreground">블로그 열기</span>를 누르면 이 블로그의 글쓰기 화면으로 바로 연결돼요
-          </p>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="danggeun_business_url">내 당근 비즈프로필 주소</Label>
-          <Input
-            id="danggeun_business_url"
-            name="danggeun_business_url"
-            defaultValue={business.danggeun_business_url ?? ''}
-            placeholder="https://www.daangn.com/kr/business-profiles/..."
-          />
-          <p className="text-xs text-muted-foreground">
-            넣어두면 <span className="font-medium text-foreground">당근 열기</span>를 눌렀을 때 내 비즈프로필로 연결돼요. 비워두면 당근 비즈니스 홈으로 연결돼요
-          </p>
-        </div>
-      </div>
-
-      {/* 후기 보상 설정 */}
-      <div className="rounded-lg border bg-card p-5 space-y-4">
-        <div>
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">후기 보상</h2>
-          <p className="text-xs text-muted-foreground mt-1">후기를 남긴 고객에게 드릴 혜택을 설정하세요</p>
-        </div>
+        {/* 후기 보상 — 리뷰 남긴 고객에게 드릴 혜택 */}
+        <div className="space-y-4 pt-4 border-t">
+          <div>
+            <Label>후기 보상</Label>
+            <p className="text-xs text-muted-foreground mt-1">후기를 남긴 고객에게 드릴 혜택을 설정하세요</p>
+          </div>
 
         {/* 보상 유형 선택 */}
         <div className="space-y-2">
@@ -809,68 +745,58 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
             )}
           </div>
         )}
-      </div>
+        </div>
+      </CollapsibleSection>
 
-      {/* 고객 추천사 */}
-      <div id="field-testimonials" className="rounded-lg border bg-card p-5 space-y-4">
-        <div>
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">고객 추천사</h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            실제 고객 후기를 직접 입력하면 홍보 페이지에 카드로 표시됩니다. 최대 3개까지 등록할 수 있어요.
+      {/* SNS·영상 연동 */}
+      <CollapsibleSection
+        title="SNS·영상 연동"
+        description="SNS를 연결하면 홍보 페이지 하단에 노출되고, 검색·AI가 같은 업체로 인식해 신뢰도가 올라가요."
+      >
+        <div id="field-youtube" className="space-y-2">
+          <Label htmlFor="youtube_url">유튜브 시공 영상 URL</Label>
+          <Input
+            id="youtube_url"
+            name="youtube_url"
+            defaultValue={business.youtube_url ?? ''}
+            placeholder="https://www.youtube.com/watch?v=..."
+          />
+          <p className="text-xs text-muted-foreground">등록 시 고객 견적서에 시공 영상이 자동 표시됩니다</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="instagram_url">인스타그램 URL</Label>
+          <Input
+            id="instagram_url"
+            name="instagram_url"
+            defaultValue={business.instagram_url ?? ''}
+            placeholder="https://www.instagram.com/내계정"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="naver_blog_url">내 네이버 블로그 주소</Label>
+          <Input
+            id="naver_blog_url"
+            name="naver_blog_url"
+            defaultValue={business.naver_blog_id ? `https://blog.naver.com/${business.naver_blog_id}` : ''}
+            placeholder="https://blog.naver.com/내아이디"
+          />
+          <p className="text-xs text-muted-foreground">
+            홍보 글을 복사한 뒤 <span className="font-medium text-foreground">블로그 열기</span>를 누르면 이 블로그의 글쓰기 화면으로 바로 연결돼요
           </p>
         </div>
-
         <div className="space-y-2">
-          {testimonials.map((t, idx) => (
-            <div key={idx} className="rounded-lg border bg-muted/30 p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-                  <Quote className="h-3 w-3" />
-                  추천사 {idx + 1}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setTestimonials((prev) => prev.filter((_, i) => i !== idx))}
-                  className="text-muted-foreground hover:text-destructive transition-colors"
-                  aria-label="삭제"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-              <textarea
-                value={t.quote}
-                onChange={(e) => setTestimonials((prev) =>
-                  prev.map((item, i) => i === idx ? { ...item, quote: e.target.value } : item)
-                )}
-                placeholder="예: 입주청소를 맡겼는데 정말 꼼꼼하게 해주셔서 만족했어요. 다음에도 또 부탁드릴게요!"
-                maxLength={200}
-                rows={2}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-              />
-              <Input
-                value={t.author}
-                onChange={(e) => setTestimonials((prev) =>
-                  prev.map((item, i) => i === idx ? { ...item, author: e.target.value } : item)
-                )}
-                placeholder="예: 강남구 이사청소 고객님"
-                maxLength={30}
-                className="h-8 text-sm"
-              />
-            </div>
-          ))}
+          <Label htmlFor="danggeun_business_url">내 당근 비즈프로필 주소</Label>
+          <Input
+            id="danggeun_business_url"
+            name="danggeun_business_url"
+            defaultValue={business.danggeun_business_url ?? ''}
+            placeholder="https://www.daangn.com/kr/business-profiles/..."
+          />
+          <p className="text-xs text-muted-foreground">
+            넣어두면 <span className="font-medium text-foreground">당근 열기</span>를 눌렀을 때 내 비즈프로필로 연결돼요. 비워두면 당근 비즈니스 홈으로 연결돼요
+          </p>
         </div>
-
-        {testimonials.length < 3 && (
-          <button
-            type="button"
-            onClick={() => setTestimonials((prev) => [...prev, { quote: '', author: '' }])}
-            className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/30 py-3 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
-          >
-            <Plus className="h-4 w-4" />
-            추천사 추가
-          </button>
-        )}
-      </div>
+      </CollapsibleSection>
 
       {/* 저장 버튼 — 화면 하단 고정(fixed). 모바일은 탭바 위, 데스크탑은 사이드바 옆 정렬 */}
       <div className="fixed left-0 right-0 md:left-56 z-30 bottom-[calc(3.5rem_+_env(safe-area-inset-bottom))] md:bottom-0 border-t bg-background/95 backdrop-blur px-4 py-3 md:px-6">

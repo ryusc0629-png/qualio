@@ -11,6 +11,7 @@ import { sendPushToBusiness } from '@/lib/push/web-push'
 import { detectBundleReview } from '@/lib/utils/booking-review'
 import { isBusinessService } from '@/lib/utils'
 import { findCustomerIdByPhone } from '@/lib/actions/_customer-lookup'
+import { inputToUtcIso } from '@/lib/format/datetime'
 
 // 공개 폼용 액션 클라이언트 (인증 불필요)
 const publicAction = createSafeActionClient({
@@ -724,7 +725,7 @@ export const confirmBookingFromQuoteAction = authAction
       customer_name:   quote.customer_name ?? '고객',
       customer_phone:  quote.customer_phone ?? '',
       service_address: parsedInput.service_address ?? '',
-      scheduled_at:    new Date(parsedInput.scheduled_at).toISOString(),
+      scheduled_at:    inputToUtcIso(parsedInput.scheduled_at),
       selected_tier:   parsedInput.selected_tier,
       final_price:     parsedInput.final_price,
       status:          'confirmed',
@@ -772,7 +773,7 @@ export const confirmBookingFromQuoteAction = authAction
             businessName:   business.name,
             businessPhone:  business.phone ?? null,
             cleaningType:   quote.cleaning_type ?? '청소 서비스',
-            scheduledAt:    new Date(parsedInput.scheduled_at).toISOString(),
+            scheduledAt:    inputToUtcIso(parsedInput.scheduled_at),
             serviceAddress: parsedInput.service_address ?? '',
             selectedTier:   parsedInput.selected_tier as 'good' | 'better' | 'best',
             finalPrice:     parsedInput.final_price,

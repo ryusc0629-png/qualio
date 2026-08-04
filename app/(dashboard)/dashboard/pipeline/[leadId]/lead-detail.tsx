@@ -24,6 +24,7 @@ import { toast } from 'sonner'
 import { createLeadActivityAction, updateLeadStatusAction, updateLeadAction } from '@/lib/actions/crm'
 import { LeadForm, leadToFormValues, leadFormToInput, type LeadFormValues } from '@/components/dashboard/lead-form'
 import { DeleteActivityButton } from '@/components/dashboard/delete-activity-button'
+import { EditableActivityContent } from '@/components/dashboard/editable-activity-content'
 import { STAGE_CONFIG } from '../pipeline-list'
 import { ConvertToCustomerButton } from './convert-to-customer-button'
 import { B2bQuoteList } from '@/components/dashboard/b2b-quote-list'
@@ -84,6 +85,7 @@ type Activity = {
   content: string | null
   activity_at: string
   created_at: string
+  photos?: string[] | null
 }
 
 const ACTIVITY_CONFIG: Record<string, { text: string; icon: typeof PhoneCall; color: string }> = {
@@ -95,39 +97,6 @@ const ACTIVITY_CONFIG: Record<string, { text: string; icon: typeof PhoneCall; co
 }
 
 const STAGE_ORDER = ['new', 'contacted', 'follow_up', 'quoted', 'negotiating', 'contracted', 'rejected']
-
-// ── 상담 기록 내용 (길면 4줄로 접고 더보기) ──────────────────
-function ActivityContent({ text }: { text: string | null }) {
-  const [expanded, setExpanded] = useState(false)
-  const [clamped, setClamped] = useState(false)
-  const ref = useRef<HTMLParagraphElement>(null)
-
-  // 접힌 상태에서 넘치는지 측정 → '더보기' 노출 여부 결정
-  useEffect(() => {
-    const el = ref.current
-    if (el && !expanded) setClamped(el.scrollHeight > el.clientHeight + 1)
-  }, [text, expanded])
-
-  return (
-    <div className="mt-0.5">
-      <p
-        ref={ref}
-        className={`text-sm text-muted-foreground whitespace-pre-wrap ${expanded ? '' : 'line-clamp-4'}`}
-      >
-        {text}
-      </p>
-      {clamped && (
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-1 text-xs font-medium text-primary"
-        >
-          {expanded ? '접기' : '더보기'}
-        </button>
-      )}
-    </div>
-  )
-}
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────
 
@@ -398,7 +367,11 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
             quote={
               primaryQuote
                 ? {
-                    total_amount: primaryQuote.total_amount,
+                    // 계약 월정액 prefill은 부가세 별도(공급가액) 기준 — 세금포함 견적이면 환산.
+                    // (안 하면 월정액이 ~10% 부풀어 저장돼 계약금액·LTV가 과대계상됨)
+                    total_amount: primaryQuote.tax_included
+                      ? Math.round(primaryQuote.total_amount / 1.1)
+                      : primaryQuote.total_amount,
                     frequency: primaryQuote.frequency,
                     serviceName: primaryQuote.items[0]?.name ?? null,
                     jobType: primaryQuote.job_type,
@@ -522,7 +495,17 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
                         })}
                       </span>
                     </div>
-                    <ActivityContent text={activity.content} />
+                    <EditableActivityContent activityId={activity.id} content={activity.content} />
+                    {activity.photos && activity.photos.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {activity.photos.map((url, i) => (
+                          <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="block h-16 w-16 rounded-lg overflow-hidden border">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt={`현장 사진 ${i + 1}`} className="h-full w-full object-cover" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <DeleteActivityButton activityId={activity.id} />
                 </div>

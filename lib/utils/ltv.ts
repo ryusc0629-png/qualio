@@ -33,3 +33,17 @@ export function contractAccruedRevenue(contracts: ContractLike[]): number {
 export function customerLtv(oneOffTotal: number, contracts: ContractLike[]): number {
   return oneOffTotal + contractAccruedRevenue(contracts)
 }
+
+// 특정 시점(sinceIso, 'YYYY-MM-DD...' 허용) 이후로 계약이 발생시킨 매출.
+// 마케팅 성과의 '최근 N개월' 창처럼 기간 한정 집계에 쓴다. 계약 시작이 창보다 이르면
+// 창 시작부터로 잘라 누적하고, terminated 계약이 창 이전에 끝났으면 0.
+// 개월 계산은 contractMonthsElapsed(최소 1개월)와 동일해 LTV 숫자와 어긋나지 않는다.
+export function contractRevenueSince(contracts: ContractLike[], sinceIso: string): number {
+  const since = sinceIso.slice(0, 10)
+  return contracts.reduce((sum, c) => {
+    const endpoint = c.status === 'terminated' ? c.end_date : null
+    if (endpoint && endpoint < since) return sum // 창 시작 전에 종료된 계약은 제외
+    const effectiveStart = c.start_date > since ? c.start_date : since
+    return sum + contractMonthsElapsed(effectiveStart, endpoint) * (c.contract_price ?? 0)
+  }, 0)
+}

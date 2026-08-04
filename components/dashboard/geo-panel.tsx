@@ -129,14 +129,11 @@ export function GeoPanel({
   }
 
   return (
-    <div className="rounded-lg border bg-card p-5 space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-            GEO 자동화
-          </h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            ChatGPT·Gemini·Perplexity에 인용되는 업체 페이지를 자동 생성합니다
+          <p className="text-xs text-muted-foreground">
+            ChatGPT·Gemini·Perplexity 같은 AI 검색에 인용되는 업체 페이지를 자동으로 만들어요
           </p>
         </div>
         <Button

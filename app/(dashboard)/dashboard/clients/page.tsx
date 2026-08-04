@@ -11,6 +11,7 @@ import { ExcludeQuoteButton } from '@/components/dashboard/exclude-quote-button'
 import { CancelledQuotesSection, type CancelledQuote } from '@/components/dashboard/cancelled-quotes-section'
 import { formatFrequency } from '@/lib/utils/frequency'
 import { contractAccruedRevenue } from '@/lib/utils/ltv'
+import { isActiveSalesStage, salesStageMeta } from '@/lib/business/sales-stage'
 import { ClientSearchInput } from '@/components/dashboard/client-search-input'
 import { formatCompactKRW } from '@/lib/format/krw'
 import { normalizePhone } from '@/lib/format/phone'
@@ -40,6 +41,7 @@ type CustomerRow = {
   type: string
   notes: string | null
   lead_id: string | null
+  sales_stage: string | null
   created_at: string
 }
 
@@ -158,7 +160,7 @@ export default async function ClientsPage({
     { data: cancelledQuotes },
   ] = await Promise.all([
     db.from('customers')
-      .select('id, name, phone, address, category, type, notes, lead_id, created_at')
+      .select('id, name, phone, address, category, type, notes, lead_id, sales_stage, created_at')
       .eq('business_id', businessId),
 
     db.from('contracts')
@@ -295,6 +297,8 @@ export default async function ClientsPage({
   // type 필드 기준으로 개인/법인 분리 + 검색 필터
   const individualCustomers = sortCustomers((customers ?? []).filter(c => c.type !== 'recurring' && matchesSearch(c.name)))
   const companyCustomers = sortCustomers((customers ?? []).filter(c => c.type === 'recurring' && matchesSearch(c.name)))
+  // 전환된 거래처 중 지금 영업(정기계약 업셀 등) 진행 중인 곳 — 자동 배지와 별개로 손으로 지정한 것
+  const companyInSales = companyCustomers.filter(c => isActiveSalesStage(c.sales_stage))
 
   const activeLeads = sortLeads(
     (leads ?? []).filter(l => l.customer_type === 'company' && l.status !== 'archived' && !registeredLeadIds.has(l.id) && matchesSearch(l.company_name))
@@ -602,7 +606,7 @@ export default async function ClientsPage({
             <div className="flex items-center gap-2 mt-2">
               <Building2 className="h-4 w-4 text-violet-600" />
               <h2 className="text-sm font-semibold text-violet-600">거래처</h2>
-              <span className="text-xs text-muted-foreground">({activeLeads.length}곳 영업 중)</span>
+              <span className="text-xs text-muted-foreground">({activeLeads.length + companyInSales.length}곳 영업 중)</span>
             </div>
           )}
 
@@ -703,6 +707,12 @@ export default async function ClientsPage({
                           </Link>
                           {/* 거래 형태(일회성/정기) — 신원(거래처)과 별개로 계약 유무에 따라 자동 표시 */}
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${txFormBadge(Boolean(activeContract)).className}`}>{txFormBadge(Boolean(activeContract)).label}</span>
+                          {/* 영업 상태 — 자동 배지와 별개로 손으로 지정한 진행 중 영업 단계 */}
+                          {salesStageMeta(customer.sales_stage) && (
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${salesStageMeta(customer.sales_stage)!.className}`}>
+                              영업 중 · {salesStageMeta(customer.sales_stage)!.label}
+                            </span>
+                          )}
                           {customer.category && (
                             <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">{customer.category}</span>
                           )}

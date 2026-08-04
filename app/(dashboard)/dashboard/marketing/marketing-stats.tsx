@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { isAiSource } from '@/lib/utils/detect-view-source'
+import { contractRevenueSince, type ContractLike } from '@/lib/utils/ltv'
 
 interface MarketingStatsProps {
   businessId: string
@@ -17,7 +18,7 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
   const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1)).toISOString()
   const periodLabel = `최근 ${months}개월`
 
-  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, pageViewsResult, funnelResult] = await Promise.all([
+  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, pageViewsResult, funnelResult, contractsResult] = await Promise.all([
     // 견적 신청 (기간 내) — 테스트 견적 제외용으로 id·is_test 조회
     db
       .from('quotes')
@@ -61,6 +62,13 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
       .select('session_id, event_type' as never)
       .eq('business_id' as never, businessId)
       .gte('created_at' as never, periodStart) as unknown as Promise<{ data: { session_id: string; event_type: string }[] | null }>,
+
+    // 정기계약 — 이 기간에 발생한 계약(정기청소) 매출 집계용. 방문 예약은 0원 저장이라
+    // 예약 합계에 안 잡히므로 계약을 따로 더해야 실제 '퀄리오로 만든 매출'이 된다.
+    db
+      .from('contracts')
+      .select('contract_price, start_date, end_date, status')
+      .eq('business_id', businessId),
   ])
 
   // ── 성적표: 현재 매출(이 기간 예약 전체) ──
@@ -79,11 +87,16 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
   // 현재 매출 — 이 기간 예약(확정·진행·완료) 전체. 견적 경유 여부와 무관하게 실제 매출을 보여준다.
   const REVENUE_STATUSES = ['confirmed', 'in_progress', 'completed']
   const revenueBookings = bookingRows.filter((b) => REVENUE_STATUSES.includes(b.status))
-  const totalRevenue = revenueBookings.reduce((sum, b) => sum + (b.final_price ?? 0), 0)
+  const bookingRevenue = revenueBookings.reduce((sum, b) => sum + (b.final_price ?? 0), 0)
   const completedRevenue = bookingRows
     .filter((b) => b.status === 'completed')
     .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
-  const upcomingRevenue = totalRevenue - completedRevenue
+  const upcomingRevenue = bookingRevenue - completedRevenue
+
+  // 정기계약 매출(이 기간분) — 예약 매출과 별개 축. 합쳐야 '퀄리오로 만든 매출' 전체가 된다.
+  const contractRows = (contractsResult.data ?? []) as ContractLike[]
+  const contractRevenue = contractRevenueSince(contractRows, periodStart)
+  const totalRevenue = bookingRevenue + contractRevenue
 
   // ── 품질 신호: 문의 폼 완주율(시작 → 제출) ──
   // 다단계 견적 계산기는 은퇴했고 전환은 문의 폼(hero-lead-form)이 담당 → step_completed·address_entered는
@@ -147,24 +160,33 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
         {totalRevenue > 0 ? (
           <>
             <p className="mt-1.5 text-sm text-emerald-900/80">
-              이 기간에 확정·완료된 <b>예약 매출</b>이에요
+              이 기간에 만든 <b>예약·정기계약 매출</b>이에요
             </p>
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              <span className="inline-flex items-center gap-1 rounded-lg bg-white/70 border border-emerald-100 px-2.5 py-1 text-emerald-700">
-                이미 완료 <b>₩{completedRevenue.toLocaleString('ko-KR')}</b>
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-lg bg-white/70 border border-emerald-100 px-2.5 py-1 text-emerald-700/80">
-                예정 <b>₩{upcomingRevenue.toLocaleString('ko-KR')}</b>
-              </span>
+              {completedRevenue > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-lg bg-white/70 border border-emerald-100 px-2.5 py-1 text-emerald-700">
+                  예약 완료 <b>₩{completedRevenue.toLocaleString('ko-KR')}</b>
+                </span>
+              )}
+              {upcomingRevenue > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-lg bg-white/70 border border-emerald-100 px-2.5 py-1 text-emerald-700/80">
+                  예약 예정 <b>₩{upcomingRevenue.toLocaleString('ko-KR')}</b>
+                </span>
+              )}
+              {contractRevenue > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-100 border border-emerald-200 px-2.5 py-1 text-emerald-800 font-medium">
+                  정기계약 <b>₩{contractRevenue.toLocaleString('ko-KR')}</b>
+                </span>
+              )}
             </div>
           </>
         ) : (
           <p className="mt-1.5 text-sm text-emerald-900/70">
-            아직 이 기간에 매출이 없어요. 예약이 확정되면 여기에 매출이 쌓여요.
+            아직 이 기간에 매출이 없어요. 예약이 확정되거나 정기계약이 잡히면 여기에 매출이 쌓여요.
           </p>
         )}
         <p className="mt-3 pt-3 border-t border-emerald-100 text-xs text-emerald-900/60 leading-relaxed">
-          이 기간에 잡힌 예약(확정·진행·완료)의 매출 합계예요. 퀄리오에서 관리하는 실제 매출이에요.
+          이 기간에 잡힌 예약(확정·진행·완료)과 정기계약의 매출 합계예요. 정기계약은 월정액 × 이 기간의 개월 수로 쌓여요. 퀄리오에서 관리하는 실제 매출이에요.
         </p>
       </div>
 

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { Award, BadgeCheck, Plus, X } from 'lucide-react'
+import { BadgeCheck, Plus, X } from 'lucide-react'
 
 interface Props {
   experienceYears: string
@@ -51,19 +51,11 @@ export function CredentialsSection({
   }
 
   return (
-    <div className="rounded-lg border bg-card p-5 space-y-4">
-      <div>
-        <div className="flex items-center gap-2">
-          <Award className="h-4 w-4 text-primary" />
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-            전문성·신뢰
-          </h2>
-        </div>
-        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-          경력·사업자 등록·자격증을 넣으면 홍보 페이지 위쪽에 <span className="font-medium text-foreground">‘믿을 수 있는 업체’</span>라는
-          신뢰 도장이 찍혀요. 특히 제안서 QR로 들어온 고객이 바로 확인하는 부분이에요. (선택)
-        </p>
-      </div>
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        경력·사업자 등록·자격증을 넣으면 홍보 페이지 위쪽에 <span className="font-medium text-foreground">‘믿을 수 있는 업체’</span>라는
+        신뢰 도장이 찍혀요. 특히 제안서 QR로 들어온 고객이 바로 확인하는 부분이에요. (선택)
+      </p>
 
       {/* 경력 연차 */}
       <div className="space-y-1.5">

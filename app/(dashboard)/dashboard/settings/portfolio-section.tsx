@@ -93,19 +93,11 @@ export function PortfolioSection({ value, onChange }: Props) {
   }
 
   return (
-    <div className="rounded-lg border bg-card p-5 space-y-4">
-      <div>
-        <div className="flex items-center gap-2">
-          <Images className="h-4 w-4 text-primary" />
-          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
-            시공 사례 (비포·애프터)
-          </h2>
-        </div>
-        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-          작업 전·후 사진을 직접 올리면 홍보 페이지 <span className="font-medium text-foreground">‘시공 사례’</span>에 나란히 보여요.
-          청소는 <span className="font-medium text-foreground">사진 한 장이 가장 강력한 설득</span>이에요. 최대 6개까지 등록할 수 있어요. (선택)
-        </p>
-      </div>
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        작업 전·후 사진을 직접 올리면 홍보 페이지 <span className="font-medium text-foreground">‘시공 사례’</span>에 나란히 보여요.
+        청소는 <span className="font-medium text-foreground">사진 한 장이 가장 강력한 설득</span>이에요. 최대 6개까지 등록할 수 있어요. (선택)
+      </p>
 
       {value.length === 0 ? (
         <div className="text-center py-8 space-y-3 rounded-xl border-2 border-dashed border-muted-foreground/20">

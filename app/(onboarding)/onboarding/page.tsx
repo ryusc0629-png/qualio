@@ -44,8 +44,11 @@ export default function OnboardingPage() {
   const { execute, isPending } = useAction(createBusinessAction, {
     onSuccess: () => {
       toast.success('업체가 등록되었습니다!')
-      // 결제 페이지로 이동 (유료 플랜 선택 필수)
-      window.location.replace('/upgrade')
+      // 베타 기간(NEXT_PUBLIC_BETA_OPEN=true)엔 결제 없이 바로 대시보드로,
+      // 그 외엔 결제 페이지로 이동(유료 플랜 선택 필수)
+      window.location.replace(
+        process.env.NEXT_PUBLIC_BETA_OPEN === 'true' ? '/dashboard' : '/upgrade',
+      )
     },
     onError: ({ error }) => {
       toast.error(error.serverError ?? '업체 등록에 실패했습니다')

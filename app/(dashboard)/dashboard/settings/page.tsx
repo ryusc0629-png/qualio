@@ -6,6 +6,7 @@ import { CancelSubscriptionButton } from '@/components/dashboard/cancel-subscrip
 import { GeoPanel } from '@/components/dashboard/geo-panel'
 import { CopyLinkButton } from '@/components/dashboard/copy-link-button'
 import { PushNotificationToggle } from '@/components/dashboard/push-notification-toggle'
+import { CollapsibleSection } from './collapsible-section'
 import type { PlanId } from '@/lib/config/plans'
 import Link from 'next/link'
 import { Layers, ChevronRight } from 'lucide-react'
@@ -32,7 +33,7 @@ export default async function SettingsPage() {
   const [businessResult, subscriptionResult, serviceCountResult, publicReportResult] = await Promise.all([
     db
       .from('businesses')
-      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, testimonials, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, legal_name, payment_account, certifications, portfolio, target_customer' as never)
+      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, legal_name, payment_account, certifications, portfolio, target_customer' as never)
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
@@ -71,7 +72,6 @@ export default async function SettingsPage() {
     logo_url: string | null; hero_image_url: string | null; brand_color: string | null
     brand_color_secondary: string | null; hero_style: string | null
     hero_title: string | null; hero_subtitle: string | null
-    testimonials: { quote: string; author: string }[] | null
     strengths: { key: string; title: string; desc: string }[] | null
     owner_photo_url: string | null; owner_name: string | null
     owner_greeting: string | null; owner_video_url: string | null
@@ -150,7 +150,11 @@ export default async function SettingsPage() {
         </div>
       )}
 
-      {/* GEO 자동화 패널 — 미리보기 체크리스트에서 여기로 이동시키기 위해 id 부여 */}
+      {/* 홍보 페이지 내용(GEO) — 미리보기 체크리스트에서 여기로 이동시키기 위해 id 부여 */}
+      <CollapsibleSection
+        title="홍보 페이지 내용"
+        description="검색·AI(ChatGPT·Gemini)에 노출되는 업체 소개·FAQ를 자동으로 만들어요."
+      >
       <div id="field-geo">
       <GeoPanel
         businessId={business.id}
@@ -165,6 +169,7 @@ export default async function SettingsPage() {
         seoGeneratedAt={business.seo_generated_at ?? null}
       />
       </div>
+      </CollapsibleSection>
 
       {/* 업체 정보 */}
       <SettingsForm

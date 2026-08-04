@@ -6,6 +6,8 @@ import { revalidatePath } from 'next/cache'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { action } from '@/lib/safe-action'
 import { generateVisitsForContract } from '@/lib/recurring/generate'
+import { inputToUtcIso } from '@/lib/format/datetime'
+import { SALES_STAGE_VALUES } from '@/lib/business/sales-stage'
 
 // 공통 인증 헬퍼
 async function getAuthenticatedBusinessId() {
@@ -142,6 +144,32 @@ export const updateCustomerAction = action
     return { success: true }
   })
 
+// 거래처 영업 상태 변경 — 자동 일회성/정기 배지와 별개로, 진행 중 영업 단계를 손으로 지정('' = 영업 없음)
+const updateSalesStageSchema = z.object({
+  customerId: z.string().uuid(),
+  stage: z.string().refine(
+    (v) => v === '' || (SALES_STAGE_VALUES as readonly string[]).includes(v),
+    { message: '유효하지 않은 영업 상태입니다' },
+  ),
+})
+
+export const updateCustomerSalesStageAction = action
+  .schema(updateSalesStageSchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuthenticatedBusinessId()
+
+    const { error } = await db
+      .from('customers')
+      .update({ sales_stage: parsedInput.stage || null })
+      .eq('id', parsedInput.customerId)
+      .eq('business_id', businessId)
+
+    if (error) throw new Error('[APP] 영업 상태 변경에 실패했습니다')
+    revalidatePath('/dashboard/clients')
+    revalidatePath(`/dashboard/clients/${parsedInput.customerId}`)
+    return { success: true }
+  })
+
 // 기사 출발 알림 수신 설정 토글 (고객별)
 const setOnMyWaySchema = z.object({
   customerId: z.string().uuid(),
@@ -239,7 +267,8 @@ export const createActiveCustomerAction = action
         customer_name: parsedInput.name,
         customer_phone: parsedInput.phone,
         service_address: parsedInput.address || '',
-        scheduled_at: new Date(parsedInput.job_scheduled_at).toISOString(),
+        // 폼 입력 시각을 KST 벽시계로 해석해 저장 (+09:00 붙은 값은 그대로 통과) — 9시간 밀림 방지
+        scheduled_at: inputToUtcIso(parsedInput.job_scheduled_at),
         selected_tier: 'good',
         final_price: price,
         memo: parsedInput.job_service || null,

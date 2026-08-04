@@ -32,7 +32,11 @@ export default async function DashboardLayout({
   const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean)
   const isAdmin = adminEmails.includes(user.email ?? '')
 
-  if (!isAdmin) {
+  // 베타 기간(NEXT_PUBLIC_BETA_OPEN=true)엔 결제 게이트를 통째로 열어 테스터가 결제 없이 사용.
+  // 결제를 켤 때 이 환경변수를 제거하면 기존 페이월이 그대로 복구된다.
+  const betaOpen = process.env.NEXT_PUBLIC_BETA_OPEN === 'true'
+
+  if (!isAdmin && !betaOpen) {
     // 구독 플랜 확인 — 베타 또는 만료된 취소 구독이면 결제 페이지로 이동
     const { data: subscription } = await db
       .from('subscriptions')
