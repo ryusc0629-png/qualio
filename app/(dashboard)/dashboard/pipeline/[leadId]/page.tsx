@@ -34,7 +34,8 @@ export default async function LeadDetailPage({
       .maybeSingle(),
     db
       .from('lead_activities')
-      .select('id, type, content, activity_at, created_at')
+      // photos는 database.ts 타입 미반영 → select 문자열 단언, 결과는 아래 pass에서 Activity[]로 단언
+      .select('id, type, content, activity_at, created_at, photos' as never)
       .eq('lead_id', leadId)
       .eq('business_id', profile.business_id)
       .order('activity_at', { ascending: false }),
@@ -118,7 +119,9 @@ export default async function LeadDetailPage({
     <div className="max-w-2xl mx-auto">
       <LeadDetail
         lead={leadData}
-        activities={activitiesResult.data ?? []}
+        activities={(activitiesResult.data ?? []) as unknown as {
+          id: string; type: string; content: string | null; activity_at: string; created_at: string; photos: string[] | null
+        }[]}
         quotes={quotes}
         alreadyConverted={alreadyConverted}
         liveStatus={liveStatus}
