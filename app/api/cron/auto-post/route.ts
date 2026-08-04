@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
-import { fetchRecentJobCases } from '@/lib/ai/job-cases'
+import { fetchRecentJobCases, fetchRecentCasePhotos } from '@/lib/ai/job-cases'
 import { generatePostImagesSmart, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
@@ -117,10 +117,18 @@ async function publishOnePost(
     ? `\`\`\`json\n${JSON.stringify({ keyPoints: postContent.keyPoints ?? [], faqs: postContent.faqs ?? [] })}\n\`\`\`\n`
     : ''
 
-  // 포스트 주제에 맞는 이미지 자동 생성 (토글 ON일 때만, 실패해도 포스팅 진행)
-  const imageUrls = business.autoImageGeneration
-    ? await generatePostImagesSmart(postContent.imagePrompts, postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
-    : []
+  // 이미지 — ①공개 승인된 작업보고의 진짜 비포/애프터 사진을 최우선으로 싣는다(실사례=설득력·해자).
+  //          ②실사진이 없을 때만 AI 이미지 생성으로 폴백(토글 ON 시). 실사진이 있으면 AI 생성 비용도 아낀다.
+  const casePhotos = await fetchRecentCasePhotos(db, business.id)
+  const realPhotoUrls = [...casePhotos.before, ...casePhotos.after].slice(0, POST_IMAGE_COUNT)
+  const usingRealPhotos = realPhotoUrls.length > 0
+  const imageUrls = usingRealPhotos
+    ? realPhotoUrls
+    : business.autoImageGeneration
+      ? await generatePostImagesSmart(postContent.imagePrompts, postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
+      : []
+  // 대표 이미지(커버)는 '결과'가 드러나는 애프터 사진을 우선(실사진일 때) — 눈길을 끄는 게 애프터라서.
+  const coverUrl = (usingRealPhotos ? casePhotos.after[0] : undefined) ?? imageUrls[0] ?? null
 
   const fullContent = metaBlock + postContent.content
   const { data: saved, error } = await db.from('biz_posts').insert({
@@ -129,7 +137,7 @@ async function publishOnePost(
     title: postContent.title,
     content: fullContent,
     summary: postContent.summary,
-    image_url: imageUrls[0] ?? null,
+    image_url: coverUrl,
     image_urls: imageUrls,
     ai_generated: true,
     published: true,

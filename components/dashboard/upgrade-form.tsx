@@ -373,7 +373,7 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
               )}
 
               <div className="mb-3">
-                <p className="text-xs text-muted-foreground">{plan.tagline}</p>
+                {plan.tagline && <p className="text-xs text-muted-foreground">{plan.tagline}</p>}
                 <h3 className="font-bold text-lg">{plan.label}</h3>
                 <p className="text-xl font-bold text-primary mt-1">{formatPrice(plan.price)}</p>
               </div>

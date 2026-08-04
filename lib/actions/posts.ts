@@ -9,7 +9,7 @@ import { revalidatePath } from 'next/cache'
 import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
 import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContentEnabled } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
-import { fetchRecentJobCases } from '@/lib/ai/job-cases'
+import { fetchRecentJobCases, fetchRecentCasePhotos } from '@/lib/ai/job-cases'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 import { getOrCreatePostPlan, pickTodayPlanSlot } from '@/lib/geo/post-plan'
 import { getRelatedKeywords } from '@/lib/keyword/naver-searchad'
@@ -120,8 +120,14 @@ export const generatePostAction = action
       : ''
     const fullContent = metaBlock + postContent.content
 
-    // 이미지 자동 생성 (실패해도 포스팅 진행) — 힌트 없으면 제목 기반 맥락 생성, 게시물당 1회 N장
-    const imageUrls = await generatePostImagesSmart(postContent.imagePrompts, postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
+    // 이미지 — 공개 승인된 작업보고의 진짜 비포/애프터 사진 우선, 없으면 AI 생성 폴백(자동발행과 동일 규칙)
+    const casePhotos = await fetchRecentCasePhotos(db, businessId)
+    const realPhotoUrls = [...casePhotos.before, ...casePhotos.after].slice(0, POST_IMAGE_COUNT)
+    const usingRealPhotos = realPhotoUrls.length > 0
+    const imageUrls = usingRealPhotos
+      ? realPhotoUrls
+      : await generatePostImagesSmart(postContent.imagePrompts, postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
+    const coverUrl = (usingRealPhotos ? casePhotos.after[0] : undefined) ?? imageUrls[0] ?? null
 
     // DB 저장
     const { data: post, error } = await db
@@ -132,7 +138,7 @@ export const generatePostAction = action
         title: postContent.title,
         content: fullContent,
         summary: postContent.summary,
-        image_url: imageUrls[0] ?? null,
+        image_url: coverUrl,
         image_urls: imageUrls,
         ai_generated: true,
         published: true,

@@ -7,7 +7,7 @@ import { SiteFooter } from '@/components/site-footer'
 
 export const metadata: Metadata = {
   title: '요금제 | 퀄리오',
-  description: '퀄리오 구독 요금제 안내 — Starter, Pro, Scale',
+  description: '퀄리오 구독 요금제 안내 — 시작·성장·확장',
 }
 
 // 공개 가격 안내 페이지 — 포트원(PortOne) 결제 심사 필수
@@ -68,7 +68,7 @@ export default function PricingPage() {
 
               {/* 플랜 정보 */}
               <div className="mb-6">
-                <p className="text-xs text-muted-foreground mb-1">{plan.tagline}</p>
+                {plan.tagline && <p className="text-xs text-muted-foreground mb-1">{plan.tagline}</p>}
                 <h2 className="text-2xl font-bold mb-1">{plan.label}</h2>
                 <div className="text-3xl font-bold mb-2">
                   {formatPrice(plan.price)}

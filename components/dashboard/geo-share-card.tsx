@@ -166,7 +166,7 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
       <div>
         <p className="font-semibold text-sm">🔎 AI 검색 노출률</p>
         <p className="text-xs text-muted-foreground mt-1">
-          {formatKstDate(latest.checked_at)} 측정 · 손님 질문 {latest.total}개 기준
+          {formatKstDate(latest.checked_at)} 측정 · 손님 검색어 {latest.total}개 기준
           {measureEnabled && ' · 매주 자동 측정돼요'}
         </p>
       </div>
@@ -185,7 +185,7 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
         )}
       </div>
       <p className="text-sm text-muted-foreground -mt-2">
-        손님 질문 <b>{latest.total}개</b> 중 <b className="text-foreground">{latest.cited}개</b>에서
+        손님 검색어 <b>{latest.total}개</b> 중 <b className="text-foreground">{latest.cited}개</b>에서
         AI 검색에 우리 업체가 잡혔어요.
       </p>
 
@@ -219,7 +219,7 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
       {competitorRanks.length > 0 && (
         <div className="rounded-lg border p-4">
           <p className="text-sm font-semibold">
-            🏆 AI 추천 순위 <span className="text-xs font-normal text-muted-foreground">(이 질문들 기준)</span>
+            🏆 AI 추천 순위 <span className="text-xs font-normal text-muted-foreground">(이 검색어들 기준)</span>
           </p>
           <ul className="mt-2 space-y-1.5">
             {competitorRanks.slice(0, 5).map((c, i) => (
@@ -228,14 +228,14 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
                   <span className={`w-4 text-center text-xs ${i === 0 ? 'text-amber-500 font-bold' : 'text-muted-foreground'}`}>{i + 1}</span>
                   <span className="truncate text-foreground/80">{c.name}</span>
                 </span>
-                <span className="text-xs text-muted-foreground shrink-0">{c.count}개 질문</span>
+                <span className="text-xs text-muted-foreground shrink-0">{c.count}개 검색어</span>
               </li>
             ))}
           </ul>
           <div className="mt-2 pt-2 border-t flex items-center justify-between text-sm font-semibold text-emerald-700">
             <span>우리 업체</span>
             <span className="text-xs">
-              {usCount > 0 ? `${usRank}위 · ${usCount}개 질문에서 추천` : '아직 순위 밖 — 글이 쌓이면 올라가요'}
+              {usCount > 0 ? `${usRank}위 · ${usCount}개 검색어에서 추천` : '아직 순위 밖 — 글이 쌓이면 올라가요'}
             </span>
           </div>
         </div>
@@ -244,7 +244,7 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
       {/* 이미 잡히는 질문(승) — 잡힌 것도 있고 아직인 것도 있을 때만 별도 표시 */}
       {citedQuestions.length > 0 && weakQuestions.length > 0 && (
         <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-4">
-          <p className="text-sm font-semibold text-emerald-900">✅ 이미 AI에 잡히는 질문</p>
+          <p className="text-sm font-semibold text-emerald-900">✅ 이미 AI에 잡히는 검색어</p>
           <ul className="mt-2 space-y-1">
             {citedQuestions.map((d) => (
               <li key={d.query} className="text-sm text-emerald-900/80">· {d.query}</li>
@@ -256,9 +256,9 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
       {/* 아직 안 잡히는 질문(패) — 질문별로 지금 잡히는 경쟁 채널까지(승패 드릴다운) */}
       {weakQuestions.length > 0 && (
         <div className="rounded-lg bg-amber-50 border border-amber-100 p-4">
-          <p className="text-sm font-semibold text-amber-900">아직 안 잡히는 질문</p>
+          <p className="text-sm font-semibold text-amber-900">아직 안 잡히는 검색어</p>
           <p className="text-xs text-amber-900/70 mt-1">
-            자동 발행이 <b>이 질문들부터 우선</b> 글을 씁니다. 글이 쌓이면 다음 측정 때 잡히기 시작해요. (따로 하실 일 없어요)
+            자동 발행이 <b>이 검색어들부터 우선</b> 글을 씁니다. 글이 쌓이면 다음 측정 때 잡히기 시작해요. (따로 하실 일 없어요)
           </p>
           <ul className="mt-3 space-y-2.5">
             {weakQuestions.map((d) => {
@@ -280,7 +280,7 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
 
       {weakQuestions.length === 0 && (
         <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-4">
-          <p className="text-sm font-semibold text-emerald-900">모든 질문에서 우리 업체가 잡혔어요! 🎉</p>
+          <p className="text-sm font-semibold text-emerald-900">모든 검색어에서 우리 업체가 잡혔어요! 🎉</p>
           <p className="text-xs text-emerald-900/70 mt-1">계속 글을 쌓아 이 자리를 지켜요.</p>
         </div>
       )}
@@ -291,7 +291,7 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
           <p className="text-sm font-semibold text-foreground">지금 0%인 건 정상이에요</p>
           <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
             AI 검색은 글이 쌓이고 검색엔진에 반영되기까지 보통 <b>2~4주</b>가 걸려요. 이제 막 시작한 단계라 0%가 자연스러워요.
-            자동 발행이 위 질문들부터 글을 쓰고 있으니, <b>매주 측정 결과로 조금씩 올라가는 걸</b> 보시게 됩니다.
+            자동 발행이 위 검색어들부터 글을 쓰고 있으니, <b>매주 측정 결과로 조금씩 올라가는 걸</b> 보시게 됩니다.
           </p>
         </div>
       )}

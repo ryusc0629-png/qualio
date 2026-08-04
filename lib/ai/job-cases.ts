@@ -39,3 +39,36 @@ export async function fetchRecentJobCases(
     })
     .filter(Boolean)
 }
+
+// 자동 발행 글에 실을 "진짜 비포/애프터 사진"을 가져온다.
+// ★사장님이 공개로 승인한(is_public) 작업보고의 사진만 사용 — 미승인 고객 현장 사진이
+//   동의 없이 공개되는 것을 막는다(홈 비포/애프터 갤러리와 동일한 승인 기준).
+// AI 생성 이미지보다 실제 시공 사진이 청소업 설득력이 훨씬 크다(실사례=복제 불가 해자).
+export async function fetchRecentCasePhotos(
+  db: ServiceDb,
+  businessId: string,
+  reportLimit = 3,
+): Promise<{ before: string[]; after: string[] }> {
+  // 1) 공개 승인된 최근 작업보고 id
+  const { data: reports } = await db
+    .from('reports')
+    .select('id' as never)
+    .eq('business_id' as never, businessId)
+    .eq('is_public' as never, true as never)
+    .order('created_at' as never, { ascending: false })
+    .limit(reportLimit) as unknown as { data: { id: string }[] | null }
+
+  const reportIds = (reports ?? []).map((r) => r.id)
+  if (reportIds.length === 0) return { before: [], after: [] }
+
+  // 2) 그 보고들의 비포/애프터 사진
+  const { data: photos } = await db
+    .from('report_photos')
+    .select('url, type, sort_order')
+    .in('report_id', reportIds)
+    .order('sort_order', { ascending: true })
+
+  const before = (photos ?? []).filter((p) => p.type === 'before').map((p) => p.url)
+  const after = (photos ?? []).filter((p) => p.type === 'after').map((p) => p.url)
+  return { before, after }
+}

@@ -25,12 +25,12 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
       .eq('business_id', businessId)
       .gte('created_at', periodStart),
 
-    // 예약 (quote_id 있는 것만 — 마케팅 유입 전환). 건수 + 매출 겸용
+    // 예약 — 현재 매출(전체) + 견적→예약 전환(quote_id 있는 것) 겸용. 삭제 건 제외.
     db
       .from('bookings')
       .select('final_price, status, quote_id')
       .eq('business_id', businessId)
-      .not('quote_id', 'is', null)
+      .is('deleted_at', null)
       .gte('created_at', periodStart),
 
     // 블로그 글 조회 (유입 소스 + 추이용)
@@ -63,7 +63,7 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
       .gte('created_at' as never, periodStart) as unknown as Promise<{ data: { session_id: string; event_type: string }[] | null }>,
   ])
 
-  // ── 성적표: 퀄리오가 만든 매출 ──
+  // ── 성적표: 현재 매출(이 기간 예약 전체) ──
   // 테스트/장난 견적(is_test) 제외 — 사장님 본인 테스트·호기심 클릭이 통계를 오염시키지 않게
   const quoteRows = (quotesResult.data ?? []) as unknown as { id: string; is_test: boolean | null }[]
   const testQuoteIds = new Set(quoteRows.filter((q) => q.is_test).map((q) => q.id))
@@ -71,16 +71,19 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
 
   const bookingRows = ((bookingsResult.data ?? []) as { final_price: number | null; status: string; quote_id: string | null }[])
     .filter((b) => !(b.quote_id && testQuoteIds.has(b.quote_id)))
-  const bookingCount = bookingRows.length
+  // 견적(문의 폼·견적서)에서 이어진 예약만 — 2층 '견적 → 예약' 전환 퍼널용
+  const quoteBookingRows = bookingRows.filter((b) => b.quote_id !== null)
+  const bookingCount = quoteBookingRows.length
   const conversionRate = quoteCount > 0 ? Math.round((bookingCount / quoteCount) * 100) : 0
 
+  // 현재 매출 — 이 기간 예약(확정·진행·완료) 전체. 견적 경유 여부와 무관하게 실제 매출을 보여준다.
   const REVENUE_STATUSES = ['confirmed', 'in_progress', 'completed']
   const revenueBookings = bookingRows.filter((b) => REVENUE_STATUSES.includes(b.status))
-  const attributedRevenue = revenueBookings.reduce((sum, b) => sum + (b.final_price ?? 0), 0)
+  const totalRevenue = revenueBookings.reduce((sum, b) => sum + (b.final_price ?? 0), 0)
   const completedRevenue = bookingRows
     .filter((b) => b.status === 'completed')
     .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
-  const upcomingRevenue = attributedRevenue - completedRevenue
+  const upcomingRevenue = totalRevenue - completedRevenue
 
   // ── 품질 신호: 문의 폼 완주율(시작 → 제출) ──
   // 다단계 견적 계산기는 은퇴했고 전환은 문의 폼(hero-lead-form)이 담당 → step_completed·address_entered는
@@ -131,20 +134,20 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
 
   return (
     <div className="space-y-4">
-      {/* ── 1층 성적표: 퀄리오가 만든 매출 ── */}
+      {/* ── 1층 성적표: 현재 매출(이 기간 예약 전체) ── */}
       <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5">
         <div className="flex items-center gap-1.5">
           <span className="text-base">🎉</span>
-          <p className="text-sm font-semibold text-emerald-800">퀄리오가 만든 매출</p>
+          <p className="text-sm font-semibold text-emerald-800">퀄리오로 운영하며 만든 매출</p>
           <span className="text-xs text-emerald-600/70">· {periodLabel}</span>
         </div>
         <p className="mt-2 text-3xl font-extrabold text-emerald-700 tracking-tight">
-          ₩{attributedRevenue.toLocaleString('ko-KR')}
+          ₩{totalRevenue.toLocaleString('ko-KR')}
         </p>
-        {attributedRevenue > 0 ? (
+        {totalRevenue > 0 ? (
           <>
             <p className="mt-1.5 text-sm text-emerald-900/80">
-              견적 <b>{quoteCount}건</b>이 예약 <b>{bookingCount}건</b>·매출로 이어졌어요
+              이 기간에 확정·완료된 <b>예약 매출</b>이에요
             </p>
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               <span className="inline-flex items-center gap-1 rounded-lg bg-white/70 border border-emerald-100 px-2.5 py-1 text-emerald-700">
@@ -157,11 +160,11 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
           </>
         ) : (
           <p className="mt-1.5 text-sm text-emerald-900/70">
-            아직 매출로 이어진 예약이 없어요. 홍보 링크를 공유하고 견적을 받으면 여기에 매출이 쌓여요.
+            아직 이 기간에 매출이 없어요. 예약이 확정되면 여기에 매출이 쌓여요.
           </p>
         )}
         <p className="mt-3 pt-3 border-t border-emerald-100 text-xs text-emerald-900/60 leading-relaxed">
-          우리 홍보 페이지·자동 글로 들어온 견적이 실제 예약·매출로 이어진 금액이에요. 이게 마케팅의 최종 성적표예요.
+          이 기간에 잡힌 예약(확정·진행·완료)의 매출 합계예요. 퀄리오에서 관리하는 실제 매출이에요.
         </p>
       </div>
 
