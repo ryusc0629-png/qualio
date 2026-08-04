@@ -42,3 +42,10 @@ next-env.d.ts
 
 # 계정 리셋 스크립트 백업 (실제 고객 데이터 — 커밋 금지)
 scripts/backups/
+
+# Supabase CLI 로컬 임시 상태 (버전 파일 등 — CLI가 자동 갱신, 커밋 대상 아님)
+supabase/.temp/
+
+# 파이썬 캐시
+__pycache__/
+*.pyc
