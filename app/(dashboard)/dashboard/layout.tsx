@@ -32,9 +32,15 @@ export default async function DashboardLayout({
   const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean)
   const isAdmin = adminEmails.includes(user.email ?? '')
 
+  // 결제 심사용 계정은 베타 개방과 무관하게 항상 결제창(/upgrade)을 봐야 한다(카드사·PG 심사 캡처용).
+  // 기본값=포트원 심사 계정. 다른 심사 계정이 있으면 PAYMENT_REVIEW_EMAILS(콤마 구분)로 추가/변경.
+  const reviewEmails = (process.env.PAYMENT_REVIEW_EMAILS ?? 'portone-review@qualio.co.kr')
+    .split(',').map((e) => e.trim()).filter(Boolean)
+  const isPaymentReviewer = reviewEmails.includes(user.email ?? '')
+
   // 베타 기간(NEXT_PUBLIC_BETA_OPEN=true)엔 결제 게이트를 통째로 열어 테스터가 결제 없이 사용.
-  // 결제를 켤 때 이 환경변수를 제거하면 기존 페이월이 그대로 복구된다.
-  const betaOpen = process.env.NEXT_PUBLIC_BETA_OPEN === 'true'
+  // 단, 결제 심사 계정은 제외 — 결제창을 봐야 하므로. 결제 켤 때 이 환경변수 제거로 페이월 복구.
+  const betaOpen = process.env.NEXT_PUBLIC_BETA_OPEN === 'true' && !isPaymentReviewer
 
   if (!isAdmin && !betaOpen) {
     // 구독 플랜 확인 — 베타 또는 만료된 취소 구독이면 결제 페이지로 이동
