@@ -6,7 +6,7 @@ import { ko } from 'date-fns/locale'
 import Link from 'next/link'
 import {
   Phone, Clock, User, ChevronRight,
-  Pencil, Check, X, CalendarDays, CheckCircle2, Send, Star, Users, PhoneCall,
+  Pencil, Check, X, CalendarDays, CheckCircle2, Send, Star, Users, PhoneCall, Trash2,
 } from 'lucide-react'
 import { MapNavButton } from '@/components/dashboard/map-nav-button'
 import { toast } from 'sonner'
@@ -34,6 +34,7 @@ import {
   updateBookingTimeAction,
   cancelBookingFromScheduleAction,
   restoreBookingFromScheduleAction,
+  deleteBookingFromScheduleAction,
   updateBookingStatusAction,
 } from '@/lib/actions/workers'
 import { clearBookingReviewAction, sendOnMyWayAction } from '@/lib/actions/bookings'
@@ -77,6 +78,8 @@ interface Props {
   onWorkersChange: (bookingId: string, newWorkerIds: string[]) => void
   onTimeChange:    (bookingId: string, newScheduledAt: string) => void
   onCancel:        (bookingId: string) => void
+  // 잘못 넣은 일정 삭제 — 보드에서 카드를 완전히 제거
+  onDelete?:       (bookingId: string) => void
   onStatusChange?: (bookingId: string, newStatus: string) => void
   // 클레임 등록/해결 시 캘린더 배지를 즉시 갱신 (새로고침 없이)
   onClaimChange?:  (bookingId: string, hasOpenClaim: boolean) => void
@@ -130,6 +133,7 @@ export function BookingDetailSheet({
   onWorkersChange,
   onTimeChange,
   onCancel,
+  onDelete,
   onStatusChange,
   onClaimChange,
   onReviewChange,
@@ -218,6 +222,19 @@ export function BookingDetailSheet({
       if (!booking) return
       onStatusChange?.(booking.id, 'confirmed') // 보드에서 카드 즉시 복구(흐림 해제)
       toast.success('다시 예약을 잡았어요')
+      onClose()
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 잘못 넣은 일정 삭제 액션 — 비동기 완료 시점에 booking이 바뀌어도 정확히 그 예약을 제거
+  const pendingDeleteId = useRef<string | null>(null)
+  const { execute: deleteBooking, isPending: deletePending } = useAction(deleteBookingFromScheduleAction, {
+    onSuccess: () => {
+      const id = pendingDeleteId.current ?? booking?.id ?? null
+      pendingDeleteId.current = null
+      toast.success('일정을 삭제했어요')
+      if (id) onDelete?.(id) // 보드에서 카드 완전히 제거
       onClose()
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
@@ -313,6 +330,14 @@ export function BookingDetailSheet({
     if (!booking) return
     pendingCancelId.current = booking.id
     cancelBooking({ bookingId: booking.id, reason: cancelReason.trim() || undefined })
+  }
+
+  // 잘못 넣은 일정 삭제 — 되돌릴 수 없어 확인 후 진행
+  const handleDeleteBooking = () => {
+    if (!booking) return
+    if (!confirm('이 일정을 완전히 삭제할까요?\n삭제하면 되돌릴 수 없어요.')) return
+    pendingDeleteId.current = booking.id
+    deleteBooking({ bookingId: booking.id })
   }
 
   // 날짜 변경 저장 (팀원은 유지)
@@ -792,21 +817,31 @@ export function BookingDetailSheet({
               <Button
                 variant="outline"
                 className="w-full h-12 text-destructive border-destructive/30 hover:bg-destructive/5 hover:text-destructive font-semibold"
-                disabled={cancelPending}
+                disabled={cancelPending || deletePending}
                 onClick={handleCancelBooking}
               >
                 {cancelPending ? '취소 중...' : '예약 취소하기'}
               </Button>
             )}
+            {/* 잘못 넣은 일정 삭제 — 취소(이력 남김)와 달리 목록에서 아예 제거 */}
+            <Button
+              variant="ghost"
+              className="w-full h-11 gap-2 text-muted-foreground hover:bg-destructive/5 hover:text-destructive font-medium"
+              disabled={deletePending || cancelPending}
+              onClick={handleDeleteBooking}
+            >
+              <Trash2 className="h-4 w-4" />
+              {deletePending ? '삭제 중...' : '잘못 넣은 일정이에요 · 삭제하기'}
+            </Button>
           </div>
         )}
 
-        {/* 취소·노쇼 예약 — 다시 예약 잡기 (고객 재예약 대비) */}
+        {/* 취소·노쇼 예약 — 다시 예약 잡기 (고객 재예약 대비) + 잘못 넣은 일정 삭제 */}
         {isCancelled && booking && (
           <div className="px-5 pb-5 pt-3 border-t border-border">
             <Button
               className="w-full h-12 font-semibold gap-2 bg-emerald-600 hover:bg-emerald-700"
-              disabled={restorePending}
+              disabled={restorePending || deletePending}
               onClick={() => restoreBooking({ bookingId: booking.id })}
             >
               {restorePending ? '처리 중...' : '다시 예약 잡기'}
@@ -814,6 +849,15 @@ export function BookingDetailSheet({
             <p className="text-xs text-muted-foreground text-center mt-2">
               이 고객이 다시 예약하면 눌러서 일정에 되살릴 수 있어요
             </p>
+            <Button
+              variant="ghost"
+              className="w-full h-11 mt-2 gap-2 text-destructive hover:bg-destructive/5 hover:text-destructive font-semibold"
+              disabled={deletePending || restorePending}
+              onClick={handleDeleteBooking}
+            >
+              <Trash2 className="h-4 w-4" />
+              {deletePending ? '삭제 중...' : '잘못 넣은 일정이에요 · 삭제하기'}
+            </Button>
           </div>
         )}
 

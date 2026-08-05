@@ -524,6 +524,12 @@ export function ScheduleBoard({
     setSelectedBookingId(null)
   }
 
+  // 잘못 넣은 일정 삭제 시 카드를 보드에서 완전히 제거 (취소와 달리 흔적 없이 사라짐)
+  const handleSheetDelete = (bookingId: string) => {
+    setBookings((prev) => prev.filter((b) => b.id !== bookingId))
+    setSelectedBookingId(null)
+  }
+
   const handleSheetStatusChange = (bookingId: string, newStatus: string) => {
     setBookings((prev) =>
       prev.map((b) => b.id === bookingId ? { ...b, status: newStatus } : b)
@@ -884,6 +890,7 @@ export function ScheduleBoard({
         onWorkersChange={handleSheetWorkersChange}
         onTimeChange={handleSheetTimeChange}
         onCancel={handleSheetCancel}
+        onDelete={handleSheetDelete}
         onStatusChange={handleSheetStatusChange}
         onClaimChange={handleSheetClaimChange}
         onReviewChange={handleSheetReviewChange}

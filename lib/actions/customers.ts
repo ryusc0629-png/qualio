@@ -196,8 +196,8 @@ export const setCustomerOnMyWayAction = action
   })
 
 // 활성 고객 등록 — 고객유형별 분기
-// 개인(one_time): 첫 작업 일정 입력 시 예약 생성 → 캘린더 노출
-// 법인(recurring): 정기계약 입력 시 계약 생성
+// 개인/거래처 공통: 첫 작업 일정 입력 시 예약 생성 → 캘린더 노출 (일회성 작업)
+// 거래처(recurring): 정기계약 입력 시 계약 생성 (첫 작업 예약과 별개, 동시 가능)
 const createActiveCustomerSchema = z.object({
   name: z.string().min(1, '업체명을 입력해주세요'),
   phone: z.string().min(1, '연락처를 입력해주세요'),
@@ -248,8 +248,8 @@ export const createActiveCustomerAction = action
 
     if (customerError || !customer) throw new Error('[APP] 고객 등록에 실패했습니다')
 
-    // 2-a. 개인 고객 — 첫 작업 예약 생성 (선택) → 캘린더 노출
-    if (parsedInput.type === 'one_time' && parsedInput.scheduleJob === 'true') {
+    // 2-a. 첫 작업 예약 생성 (선택) → 캘린더 노출 · 개인/거래처 모두 일회성 작업 가능
+    if (parsedInput.scheduleJob === 'true') {
       if (!parsedInput.job_scheduled_at) throw new Error('[APP] 작업 날짜·시간을 입력해주세요')
 
       // 항목별 견적이 있으면 합계가 금액 — 없으면 단일 금액 사용

@@ -274,8 +274,8 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
             </p>
 
             <div className="space-y-1">
-              <Label htmlFor="lead-name">{leadIsIndividual ? '고객명 (필수)' : '업체명 (필수)'}</Label>
-              <Input id="lead-name" placeholder={leadIsIndividual ? '예: 김영희' : '강남 웰니스 카페'} autoComplete="off" {...leadForm.register('company_name')} />
+              <Label htmlFor="lead-name">{leadForm.watch('customer_type') === '' ? '업체명 또는 고객명 (필수)' : leadIsIndividual ? '고객명 (필수)' : '업체명 (필수)'}</Label>
+              <Input id="lead-name" placeholder={leadForm.watch('customer_type') === '' ? '예: 강남 웰니스 카페 / 김영희' : leadIsIndividual ? '예: 김영희' : '예: 강남 웰니스 카페'} autoComplete="off" {...leadForm.register('company_name')} />
               {leadForm.formState.errors.company_name && (
                 <p className="text-xs text-destructive">{leadForm.formState.errors.company_name.message}</p>
               )}
@@ -378,7 +378,7 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
           <form
             onSubmit={customerForm.handleSubmit((data) => {
               // 첫 작업 일정을 켰다면 날짜·시간은 둘 다 골라야 함 (필수)
-              if (custIsIndividual && scheduleJob) {
+              if (scheduleJob) {
                 if (!jobDate) { toast.error('작업 날짜를 선택해주세요'); return }
                 if (!jobTime) { toast.error('작업 시간을 선택해주세요'); return }
               }
@@ -406,8 +406,8 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
             </p>
 
             <div className="space-y-1">
-              <Label htmlFor="cust-name">{custIsIndividual ? '고객명 (필수)' : '업체명 (필수)'}</Label>
-              <Input id="cust-name" placeholder={custIsIndividual ? '예: 김영희' : '청라 오피스빌딩'} autoComplete="off" {...customerForm.register('name')} />
+              <Label htmlFor="cust-name">{custType === '' ? '업체명 또는 고객명 (필수)' : custIsIndividual ? '고객명 (필수)' : '업체명 (필수)'}</Label>
+              <Input id="cust-name" placeholder={custType === '' ? '예: 청라 오피스빌딩 / 김영희' : custIsIndividual ? '예: 김영희' : '예: 청라 오피스빌딩'} autoComplete="off" {...customerForm.register('name')} />
               {customerForm.formState.errors.name && (
                 <p className="text-xs text-destructive">{customerForm.formState.errors.name.message}</p>
               )}
@@ -497,8 +497,8 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
               />
             </div>
 
-            {/* 개인 고객 — 첫 작업 일정 (선택) → 캘린더 노출 */}
-            {custIsIndividual && (
+            {/* 첫 작업 일정 (선택) → 캘린더 노출 · 개인/거래처 모두 일회성 작업 예약 가능 */}
+            {(custIsIndividual || custIsCompany) && (
               <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input

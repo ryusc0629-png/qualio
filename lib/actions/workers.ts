@@ -178,6 +178,34 @@ export const restoreBookingFromScheduleAction = action
     return { success: true }
   })
 
+// 잘못 넣은 일정 삭제 — 소프트 삭제(deleted_at)로 보드에서 완전히 사라짐
+// 취소(status='cancelled')는 이력이 흐리게 남지만, 삭제는 실수로 넣은 일정을 목록에서 아예 치움
+export const deleteBookingFromScheduleAction = action
+  .schema(z.object({ bookingId: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { data: booking } = await db
+      .from('bookings')
+      .select('id')
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+      .maybeSingle()
+
+    if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
+
+    const { error } = await db
+      .from('bookings')
+      .update({ deleted_at: new Date().toISOString() } as never)
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+
+    if (error) throw new Error('[APP] 일정 삭제에 실패했어요')
+    revalidatePath('/dashboard/schedule')
+    revalidatePath('/dashboard/work')
+    return { success: true }
+  })
+
 // 예약 드래그앤드롭 — 날짜 + 담당자(단일) 동시 변경
 // 드래그로 배정하면 해당 담당자 1명으로 교체됨 (다중 배정은 상세 시트에서)
 export const assignBookingAction = action
