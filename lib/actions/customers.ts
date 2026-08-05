@@ -6,7 +6,9 @@ import { revalidatePath } from 'next/cache'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { action } from '@/lib/safe-action'
 import { generateVisitsForContract } from '@/lib/recurring/generate'
+import { sendPushToBusiness } from '@/lib/push/web-push'
 import { inputToUtcIso } from '@/lib/format/datetime'
+import { normalizePhone } from '@/lib/format/phone'
 import { SALES_STAGE_VALUES } from '@/lib/business/sales-stage'
 
 // 공통 인증 헬퍼
@@ -45,7 +47,7 @@ export const createCustomerAction = action
     const { error } = await db.from('customers').insert({
       business_id: businessId,
       name: parsedInput.name,
-      phone: parsedInput.phone,
+      phone: normalizePhone(parsedInput.phone),
       address: parsedInput.address || null,
       category: parsedInput.category || null,
       type: parsedInput.type,
@@ -89,7 +91,7 @@ export const updateCustomerAction = action
       .from('customers')
       .update({
         name: parsedInput.name,
-        phone: parsedInput.phone,
+        phone: normalizePhone(parsedInput.phone),
         address: parsedInput.address || null,
         category: parsedInput.category || null,
         type: parsedInput.type,
@@ -112,10 +114,10 @@ export const updateCustomerAction = action
         .from('bookings')
         .update({
           customer_name: parsedInput.name,
-          customer_phone: parsedInput.phone,
+          customer_phone: normalizePhone(parsedInput.phone),
         })
         .eq('business_id', businessId)
-        .eq('customer_phone', prev.phone)
+        .eq('customer_phone', normalizePhone(prev.phone))
 
       if (bookingError) {
         console.error('[Customers] 예약 고객정보 동기화 실패:', bookingError)
@@ -125,9 +127,9 @@ export const updateCustomerAction = action
       // 클레임도 같은 번호로 연결돼 있어 함께 동기화 — 고객 상세 이력이 어긋나지 않게
       const { error: claimError } = await db
         .from('claims' as never)
-        .update({ customer_name: parsedInput.name, customer_phone: parsedInput.phone } as never)
+        .update({ customer_name: parsedInput.name, customer_phone: normalizePhone(parsedInput.phone) } as never)
         .eq('business_id' as never, businessId)
-        .eq('customer_phone' as never, prev.phone)
+        .eq('customer_phone' as never, normalizePhone(prev.phone))
 
       if (claimError) {
         console.error('[Customers] 클레임 고객정보 동기화 실패:', claimError)
@@ -235,7 +237,7 @@ export const createActiveCustomerAction = action
       .insert({
         business_id: businessId,
         name: parsedInput.name,
-        phone: parsedInput.phone,
+        phone: normalizePhone(parsedInput.phone),
         address: parsedInput.address || null,
         category: parsedInput.category || null,
         type: parsedInput.type,
@@ -265,7 +267,7 @@ export const createActiveCustomerAction = action
         business_id: businessId,
         quote_id: null,
         customer_name: parsedInput.name,
-        customer_phone: parsedInput.phone,
+        customer_phone: normalizePhone(parsedInput.phone),
         service_address: parsedInput.address || '',
         // 폼 입력 시각을 KST 벽시계로 해석해 저장 (+09:00 붙은 값은 그대로 통과) — 9시간 밀림 방지
         scheduled_at: inputToUtcIso(parsedInput.job_scheduled_at),
@@ -366,7 +368,7 @@ export const createCustomerWithContractAction = action
       .insert({
         business_id: businessId,
         name: parsedInput.name,
-        phone: parsedInput.phone,
+        phone: normalizePhone(parsedInput.phone),
         address: parsedInput.address || null,
         category: parsedInput.category || null,
         type,
@@ -435,6 +437,17 @@ export const createCustomerWithContractAction = action
         })
       } catch (e) {
         console.error('[Customers] 정기 방문 자동 생성 실패 — 계약은 정상 등록됨', e)
+        // 방문이 안 깔렸는데 조용히 넘어가면 매출 손실 → 대표폰에 즉시 알림
+        try {
+          await sendPushToBusiness(businessId, {
+            title: '정기 방문 일정을 자동으로 못 만들었어요',
+            body: '계약은 등록됐지만 방문 일정이 비어 있어요. 일정에서 방문을 직접 추가해주세요.',
+            url: '/dashboard/contracts',
+            tag: 'visit-gen-failed',
+          })
+        } catch (pushErr) {
+          console.error('[Customers] 방문 생성 실패 알림 발송 실패:', pushErr)
+        }
       }
     }
 
@@ -472,7 +485,7 @@ export const deleteCustomerAction = action
         .from('bookings')
         .update({ deleted_at: new Date().toISOString() })
         .eq('business_id', businessId)
-        .eq('customer_phone', customer.phone)
+        .eq('customer_phone', normalizePhone(customer.phone))
         .is('deleted_at', null)
 
       if (bookingError) {
@@ -485,7 +498,7 @@ export const deleteCustomerAction = action
         .from('claims' as never)
         .delete()
         .eq('business_id' as never, businessId)
-        .eq('customer_phone' as never, customer.phone)
+        .eq('customer_phone' as never, normalizePhone(customer.phone))
 
       if (claimError) {
         console.error('[Customers] 고객 클레임 정리 실패:', claimError)

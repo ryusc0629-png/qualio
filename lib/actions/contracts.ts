@@ -6,6 +6,21 @@ import { revalidatePath } from 'next/cache'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { action } from '@/lib/safe-action'
 import { generateVisitsForContract } from '@/lib/recurring/generate'
+import { sendPushToBusiness } from '@/lib/push/web-push'
+
+// 정기방문 자동생성이 실패하면(예약이 안 깔림) 대표폰에 즉시 알림 — 조용히 넘어가면 방문 누락=매출 손실
+async function notifyVisitGenFailed(businessId: string) {
+  try {
+    await sendPushToBusiness(businessId, {
+      title: '정기 방문 일정을 자동으로 못 만들었어요',
+      body: '계약은 등록됐지만 방문 일정이 비어 있어요. 일정에서 방문을 직접 추가해주세요.',
+      url: '/dashboard/contracts',
+      tag: 'visit-gen-failed',
+    })
+  } catch (e) {
+    console.error('[Contracts] 방문 생성 실패 알림 발송 실패:', e)
+  }
+}
 
 // 공통 인증 헬퍼
 async function getAuthenticatedBusinessId() {
@@ -85,6 +100,7 @@ export const createContractAction = action
       })
     } catch (e) {
       console.error('[Contracts] 정기 방문 자동 생성 실패 — 계약은 정상 등록됨', e)
+      await notifyVisitGenFailed(businessId)
     }
 
     revalidatePath('/dashboard/contracts')
@@ -135,6 +151,7 @@ export const updateContractStatusAction = action
           await generateVisitsForContract(db as unknown as SupabaseClient, contract)
         } catch (e) {
           console.error('[Contracts] 재활성화 방문 생성 실패', e)
+          await notifyVisitGenFailed(businessId)
         }
       }
     } else {

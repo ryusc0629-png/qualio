@@ -87,6 +87,7 @@ export default async function DashboardPage() {
     { data: fieldPriceChanges },
     { count: openClaimCount },
     { count: needsReviewCount },
+    { data: contractVisitLinks },
   ] = await Promise.all([
     // 이번 달 완료 예약 — 청소일(scheduled_at) 기준.
     // updated_at은 담당자 배정·정기방문 생성 등 어떤 수정에도 갱신돼, 과거 완료 건이 이번 달로 잘못 잡힘
@@ -101,8 +102,8 @@ export default async function DashboardPage() {
       .is('deleted_at', null)
       .gte('scheduled_at', lastMonthStart).lt('scheduled_at', thisMonthStart),
 
-    // 활성 정기 계약
-    db.from('contracts').select('contract_price')
+    // 활성 정기 계약 (매출 합산 + 방문 누락 감지용 날짜)
+    db.from('contracts').select('id, contract_price, start_date, end_date')
       .eq('business_id', businessId).eq('status', 'active'),
 
     // 오늘 예약
@@ -218,6 +219,16 @@ export default async function DashboardPage() {
       .eq('needs_review' as never, true)
       .not('status' as never, 'in', '("completed","cancelled","no_show")')
       .is('deleted_at' as never, null) as unknown as Promise<{ count: number | null }>,
+
+    // 앞으로 예정된(오늘 이후) 정기계약 방문 — 계약별 방문 누락 감지용
+    // (활성 계약인데 여기 안 잡히면 자동생성이 실패했거나 일정이 비어 있다는 신호)
+    db.from('bookings' as never)
+      .select('contract_id' as never)
+      .eq('business_id' as never, businessId)
+      .not('contract_id' as never, 'is', null)
+      .gte('scheduled_at' as never, todayStartUTC.toISOString())
+      .not('status' as never, 'in', '("cancelled","completed","no_show")')
+      .is('deleted_at' as never, null) as unknown as Promise<{ data: { contract_id: string }[] | null }>,
   ])
 
   // ── 계산 ──────────────────────────────────────────────
@@ -227,6 +238,18 @@ export default async function DashboardPage() {
   const lastMonthCount     = completedLastMonth?.length ?? 0
   const avgDealSize        = monthCompletedCount > 0 ? Math.round(monthRevenue / monthCompletedCount) : 0
   const monthlyContractRevenue = (activeContracts ?? []).reduce((s, c) => s + (c.contract_price ?? 0), 0)
+
+  // 방문 누락 감지: 지금 유효기간 안(시작함 & 안 끝남)인 활성 계약인데 앞으로 예정된 방문이 하나도 없는 경우.
+  // 자동생성 예외·고객정보 누락·크론 누락 등 원인과 무관하게 "일정이 비어 있다"는 결과만으로 잡아낸다.
+  const contractsWithUpcomingVisit = new Set(
+    (contractVisitLinks ?? []).map((b) => b.contract_id),
+  )
+  const missingVisitContractCount = (activeContracts ?? []).filter(
+    (c) =>
+      c.start_date <= todayKSTStr &&
+      (!c.end_date || c.end_date >= todayKSTStr) &&
+      !contractsWithUpcomingVisit.has(c.id),
+  ).length
 
   const revenueDiff    = monthRevenue - lastMonthRevenue
   const revenuePct     = lastMonthRevenue > 0 ? Math.round((revenueDiff / lastMonthRevenue) * 100) : null
@@ -296,7 +319,8 @@ export default async function DashboardPage() {
     (unreviewedCount ?? 0) > 0 || (unassignedCount ?? 0) > 0 || todayFollowUpCount > 0 ||
     (doneReelCount ?? 0) > 0 || (pendingPortfolioCount ?? 0) > 0 || (pendingChannelCount ?? 0) > 0 ||
     fieldPriceChangedCount > 0 || (openClaimCount ?? 0) > 0 || (needsReviewCount ?? 0) > 0 ||
-    (pendingMonthlyReportCount ?? 0) > 0 || (pendingReengagementCount ?? 0) > 0
+    (pendingMonthlyReportCount ?? 0) > 0 || (pendingReengagementCount ?? 0) > 0 ||
+    missingVisitContractCount > 0
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
@@ -319,6 +343,20 @@ export default async function DashboardPage() {
       {/* 액션 알림 */}
       {hasAlerts && (
         <div className="space-y-2">
+          {missingVisitContractCount > 0 && (
+            <Link href="/dashboard/contracts">
+              <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 hover:bg-red-100 transition-colors">
+                <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-red-800">
+                    예정된 방문이 없는 정기계약이 {missingVisitContractCount}건 있어요
+                  </p>
+                  <p className="text-xs text-red-600 mt-0.5">계약은 진행 중인데 앞으로 잡힌 방문이 없어요 — 눌러서 일정을 확인해주세요</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-red-400 shrink-0" />
+              </div>
+            </Link>
+          )}
           {(pendingMonthlyReportCount ?? 0) > 0 && (
             <Link href="/dashboard/monthly-reports">
               <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 hover:bg-emerald-100 transition-colors">
