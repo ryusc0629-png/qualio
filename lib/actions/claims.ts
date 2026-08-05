@@ -5,6 +5,7 @@ import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
 import { sendPushToWorker } from '@/lib/push/web-push'
+import { generateClaimReplies } from '@/lib/ai/claim-reply'
 import { revalidatePath } from 'next/cache'
 
 // 인증 + business_id 조회 헬퍼 (crm.ts와 동일 패턴)
@@ -184,6 +185,43 @@ export const resolveClaimAction = action
     revalidatePath('/dashboard/schedule')
     revalidatePath('/dashboard/clients/[customerId]', 'page')
     return { success: true }
+  })
+
+// 클레임 응대 문구 초안 생성 — 고객에게 보낼 3단계 응대(접수·조치·마무리) 초안
+const claimRepliesSchema = z.object({
+  claimId: z.string().uuid(),
+})
+
+export const generateClaimRepliesAction = action
+  .schema(claimRepliesSchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuthenticatedBusinessId()
+
+    const { data: claim } = (await db
+      .from('claims' as never)
+      .select('customer_name, title, content, is_urgent')
+      .eq('id' as never, parsedInput.claimId)
+      .eq('business_id' as never, businessId)
+      .maybeSingle()) as unknown as {
+      data: { customer_name: string; title: string; content: string | null; is_urgent: boolean } | null
+    }
+    if (!claim) throw new Error('[APP] 클레임을 찾을 수 없습니다')
+
+    const { data: business } = await db
+      .from('businesses')
+      .select('name')
+      .eq('id', businessId)
+      .maybeSingle()
+
+    const replies = await generateClaimReplies({
+      businessName: business?.name ?? '저희 업체',
+      customerName: claim.customer_name,
+      title: claim.title,
+      content: claim.content,
+      isUrgent: claim.is_urgent,
+    })
+
+    return { success: true, replies }
   })
 
 // 다시 열기(미해결로 되돌리기) 스키마

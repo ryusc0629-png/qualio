@@ -4,6 +4,7 @@ import { ShieldAlert, Phone, CheckCircle2, AlertTriangle, ClipboardList } from '
 import { AddClaimForm } from '@/components/dashboard/add-claim-form'
 import { ClaimActions } from '@/components/dashboard/claim-actions'
 import { ClaimAssignee } from '@/components/dashboard/claim-assignee'
+import { ClaimReplyHelper } from '@/components/dashboard/claim-reply-helper'
 import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
 
 interface ClaimRow {
@@ -141,6 +142,9 @@ export default async function ClaimsPage() {
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <ClaimAssignee claimId={claim.id} currentWorkerId={claim.assigned_worker_id} workers={workers} />
                 </div>
+
+                {/* 고객에게 뭐라고 말할지 — 응대 3단계 문구 초안(직접 전달) */}
+                <ClaimReplyHelper claimId={claim.id} />
 
                 <ClaimActions claimId={claim.id} status={claim.status} />
               </article>
