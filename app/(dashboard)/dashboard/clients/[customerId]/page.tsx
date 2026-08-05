@@ -455,6 +455,14 @@ export default async function CustomerDetailPage({ params }: Props) {
                       {contract.end_date ? ` · ${new Date(contract.end_date + 'T00:00:00').toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' })} 종료` : ' · 무기한'}
                     </span>
                   </div>
+                  {/* 초도(첫) 진단·작업 리포트 — 정착기 고객 만족·신뢰용 */}
+                  <Link
+                    href={`/dashboard/contracts/${contract.id}/onboarding-report`}
+                    className="flex items-center justify-center gap-1.5 h-10 rounded-lg border border-emerald-200 bg-emerald-50 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  >
+                    <ClipboardList className="h-4 w-4" />
+                    초도 진단 리포트 만들기
+                  </Link>
                 </div>
               )
             })}
