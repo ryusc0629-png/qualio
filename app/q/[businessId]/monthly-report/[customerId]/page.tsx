@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { CheckCircle2, Clock, Calendar, User, Phone, Sparkles } from 'lucide-react'
 import { ReportPhotoSection } from '../../report/[reportId]/report-photos'
+import { PrintReportButton } from './print-button'
 
 // ── 월 범위 계산 (KST 기준) ────────────────────────────────
 // month는 'YYYY-MM'. 없으면 이번 달(KST). 시작~끝을 UTC ISO로 반환.
@@ -148,8 +149,8 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
   const upcomingCount = bookings.filter((b) => b.status !== 'completed').length
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-emerald-50/60 to-white">
-      <div className="mx-auto max-w-xl px-4 py-8 space-y-5">
+    <main className="min-h-screen bg-gradient-to-b from-emerald-50/60 to-white print:bg-white print:from-white [-webkit-print-color-adjust:exact] [print-color-adjust:exact]">
+      <div className="mx-auto max-w-xl px-4 py-8 space-y-5 print:py-2">
         {/* 헤더 */}
         <header className="text-center space-y-1.5">
           <p className="text-sm font-semibold text-emerald-600">{business.name}</p>
@@ -157,8 +158,13 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
           <p className="text-sm text-gray-500">{customer.name} 담당자님께</p>
         </header>
 
+        {/* PDF 저장·인쇄 (인쇄물에는 안 보임) */}
+        <div className="flex justify-center print:hidden">
+          <PrintReportButton />
+        </div>
+
         {/* 요약 카드 */}
-        <section className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
+        <section className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm break-inside-avoid">
           <div className="grid grid-cols-2 gap-3">
             <div className="text-center rounded-xl bg-emerald-50 py-4">
               <p className="text-3xl font-bold text-emerald-600">{completedCount}회</p>
@@ -200,7 +206,7 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
               const report = reportMap.get(b.id)
               const service = b.quotes?.cleaning_type ?? b.memo ?? '정기 청소'
               return (
-                <article key={b.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm space-y-2.5">
+                <article key={b.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm space-y-2.5 break-inside-avoid">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-semibold text-gray-900">{formatVisitDate(b.scheduled_at)}</span>
                     {isDone ? (
