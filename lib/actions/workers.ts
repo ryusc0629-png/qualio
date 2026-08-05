@@ -69,36 +69,41 @@ export const deleteWorkerAction = action
     return { success: true }
   })
 
+// KST(UTC+9) 기준 날짜는 보존하고 시각(HH:mm)만 교체한 UTC ISO 문자열을 만든다.
+function replaceKstTime(iso: string, newTime: string): string {
+  const kstOffset = 9 * 60 * 60 * 1000
+  const kstDate = new Date(new Date(iso).getTime() + kstOffset)
+  const dateStr = kstDate.toISOString().slice(0, 10)
+  return new Date(`${dateStr}T${newTime}:00+09:00`).toISOString()
+}
+
 // 예약 시간 변경 (날짜 유지, 시간만 교체)
+// applyToContract=true면, 이 예약이 속한 정기계약의 '앞으로의 모든 방문' 시각도 함께 바꾸고
+// 계약 자체에도 기본 시각을 저장해 이후 자동 생성될 방문까지 같은 시간으로 깔리게 한다.
 export const updateBookingTimeAction = action
   .schema(z.object({
     bookingId: z.string().uuid(),
     newTime:   z.string().regex(/^\d{2}:\d{2}$/, '시간 형식이 올바르지 않습니다'),
+    applyToContract: z.boolean().optional(),
   }))
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getBusinessId()
 
     const { data: booking } = await db
       .from('bookings')
-      .select('scheduled_at, status')
+      .select('scheduled_at, status, contract_id' as never)
       .eq('id', parsedInput.bookingId)
       .eq('business_id', businessId)
-      .maybeSingle()
+      .maybeSingle() as unknown as {
+        data: { scheduled_at: string; status: string; contract_id: string | null } | null
+      }
 
     if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
-    if (['completed', 'cancelled', 'no_show'].includes(booking.status as string)) {
+    if (['completed', 'cancelled', 'no_show'].includes(booking.status)) {
       throw new Error('[APP] 완료·취소된 예약은 변경할 수 없습니다')
     }
 
-    const current = new Date(booking.scheduled_at as string)
-    const [hours, minutes] = parsedInput.newTime.split(':').map(Number)
-    // KST(UTC+9) 기준 날짜를 보존하고 시간만 교체
-    const kstOffset = 9 * 60 * 60 * 1000
-    const kstDate = new Date(current.getTime() + kstOffset)
-    const dateStr = kstDate.toISOString().slice(0, 10)
-    const newScheduledAt = new Date(
-      `${dateStr}T${String(hours!).padStart(2, '0')}:${String(minutes!).padStart(2, '0')}:00+09:00`
-    ).toISOString()
+    const newScheduledAt = replaceKstTime(booking.scheduled_at, parsedInput.newTime)
 
     const { error } = await db
       .from('bookings')
@@ -107,8 +112,47 @@ export const updateBookingTimeAction = action
       .eq('business_id', businessId)
 
     if (error) throw new Error('[APP] 시간 변경에 실패했습니다')
+
+    // 정기계약 전체에 적용 — 앞으로의 미완료 방문 시각을 일괄 교체
+    const contractId = booking.contract_id
+    let propagated = 0
+    if (parsedInput.applyToContract && contractId) {
+      // 이후 자동 생성될 방문도 같은 시각으로 깔리도록 계약에 기본 시각 저장
+      await db
+        .from('contracts')
+        .update({ visit_time: parsedInput.newTime } as never)
+        .eq('id', contractId)
+        .eq('business_id', businessId)
+
+      // '앞으로' = 오늘(KST) 0시 이후. 이미 지난·완료·취소 방문은 건드리지 않는다.
+      const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000)
+      const todayStartUtc = new Date(`${nowKST.toISOString().slice(0, 10)}T00:00:00+09:00`).toISOString()
+
+      const { data: siblings } = await db
+        .from('bookings')
+        .select('id, scheduled_at')
+        .eq('contract_id' as never, contractId)
+        .eq('business_id', businessId)
+        .in('status', ['confirmed', 'in_progress'])
+        .gte('scheduled_at', todayStartUtc)
+        .is('deleted_at', null) as unknown as {
+          data: { id: string; scheduled_at: string }[] | null
+        }
+
+      for (const s of siblings ?? []) {
+        const at = replaceKstTime(s.scheduled_at, parsedInput.newTime)
+        const { error: sErr } = await db
+          .from('bookings')
+          .update({ scheduled_at: at })
+          .eq('id', s.id)
+          .eq('business_id', businessId)
+        if (!sErr) propagated++
+      }
+    }
+
     revalidatePath('/dashboard/schedule')
-    return { success: true, newScheduledAt }
+    revalidatePath('/dashboard/contracts')
+    return { success: true, newScheduledAt, propagated, contractId }
   })
 
 // 일정 보드에서 예약 취소

@@ -62,6 +62,7 @@ interface Booking {
   workerIds: string[]
   cleaning_type: string | null
   customer_id: string | null
+  contract_id?: string | null // 정기계약 소속이면 계약 id — 시간 일괄 변경에 사용
   reportId?: string | null
   reviewSent?: boolean
   hasReviewHistory?: boolean
@@ -76,7 +77,8 @@ interface Props {
   workers: Worker[]
   onClose: () => void
   onWorkersChange: (bookingId: string, newWorkerIds: string[]) => void
-  onTimeChange:    (bookingId: string, newScheduledAt: string) => void
+  // propagate가 있으면 같은 정기계약의 앞으로의 방문 시각도 함께 갱신하라는 뜻
+  onTimeChange:    (bookingId: string, newScheduledAt: string, propagate?: { contractId: string; newTime: string }) => void
   onCancel:        (bookingId: string) => void
   // 잘못 넣은 일정 삭제 — 보드에서 카드를 완전히 제거
   onDelete?:       (bookingId: string) => void
@@ -142,6 +144,8 @@ export function BookingDetailSheet({
   const [editingDate, setEditingDate] = useState(false)
   const [dateValue, setDateValue]     = useState('')
   const [timeValue, setTimeValue]     = useState('')
+  // 정기계약 소속 예약일 때, 시간 변경을 계약 전체(앞으로의 모든 방문)에 적용할지
+  const [applyToContract, setApplyToContract] = useState(true)
   const [currentReportId, setCurrentReportId]     = useState<string | null>(null)
   const [currentReviewSent, setCurrentReviewSent] = useState(false)
   const [reviewDialogOpen, setReviewDialogOpen]   = useState(false)
@@ -179,9 +183,20 @@ export function BookingDetailSheet({
   const { execute: saveTime, isPending: timePending } = useAction(updateBookingTimeAction, {
     onSuccess: ({ data }) => {
       if (!booking || !data?.newScheduledAt) return
-      onTimeChange(booking.id, data.newScheduledAt)
+      const propagated = data.propagated ?? 0
+      onTimeChange(
+        booking.id,
+        data.newScheduledAt,
+        propagated > 0 && data.contractId
+          ? { contractId: data.contractId, newTime: timeValue }
+          : undefined,
+      )
       setEditingTime(false)
-      toast.success('시간을 변경했어요!')
+      toast.success(
+        propagated > 0
+          ? `이 시간으로 앞으로 ${propagated}개 방문을 바꿨어요!`
+          : '시간을 변경했어요!',
+      )
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -315,7 +330,11 @@ export function BookingDetailSheet({
 
   const handleSaveTime = () => {
     if (!booking || !timeValue) return
-    saveTime({ bookingId: booking.id, newTime: timeValue })
+    saveTime({
+      bookingId: booking.id,
+      newTime: timeValue,
+      applyToContract: Boolean(booking.contract_id) && applyToContract,
+    })
   }
 
   // 취소 버튼 → 사유 입력 다이얼로그 열기
@@ -365,6 +384,7 @@ export function BookingDetailSheet({
   const startEditTime = () => {
     if (!booking) return
     setTimeValue(format(new Date(booking.scheduled_at), 'HH:mm'))
+    setApplyToContract(true) // 정기계약이면 기본으로 전체 적용을 켜둔다
     setEditingTime(true)
   }
 
@@ -510,6 +530,22 @@ export function BookingDetailSheet({
                       )
                     })}
                   </div>
+                  {/* 정기계약이면 — 앞으로의 모든 방문에 함께 적용할지 */}
+                  {booking?.contract_id && (
+                    <label className="flex items-start gap-2 pt-1 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={applyToContract}
+                        onChange={(e) => setApplyToContract(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 accent-primary shrink-0"
+                      />
+                      <span className="text-xs text-muted-foreground leading-snug">
+                        이 정기계약의 <span className="font-medium text-foreground">앞으로 모든 방문</span>도 이 시간으로 바꾸기
+                        <br />
+                        <span className="text-[11px]">(이미 지난 방문·완료된 방문은 그대로 둬요)</span>
+                      </span>
+                    </label>
+                  )}
                   {/* 선택된 시간 + 저장/취소 */}
                   <div className="flex items-center gap-2 pt-1">
                     <span className="text-sm font-medium">{timeValue}</span>

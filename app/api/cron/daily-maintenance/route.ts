@@ -23,6 +23,7 @@ const SUB_TASKS = [
   'quote-followup',
   'reengagement',
   'followup-reminder', // 오늘 연락할 B2B 거래처 대표 폰 푸시 알림
+  'remind-workers', // 내일 배정된 현장을 직원·도급사 폰(현장 앱)에 미리 푸시
   'generate-recurring-visits', // 정기계약 → 향후 방문 자동 생성(롤링 60일)
   'metrics-snapshot', // 본사 지표 월별 스냅샷(NRR/코호트 기반)
   'prepare-monthly-reports', // 매월 초 지난달 거래처 리포트 준비 + 대표 푸시(검토 후 발송)

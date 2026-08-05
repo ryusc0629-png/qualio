@@ -221,6 +221,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           needsReview:      b.needs_review ?? false,
           reviewReason:     b.review_reason ?? null,
           isRecurring:      !!b.contract_id,
+          contract_id:      b.contract_id ?? null,
         }))}
         weekStart={rangeStart.toISOString()}
         weekLabel={rangeLabel}

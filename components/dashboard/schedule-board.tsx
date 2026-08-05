@@ -56,6 +56,7 @@ interface Booking {
   workerIds: string[] // 배정된 모든 팀원 ID (팀장 포함)
   cleaning_type: string | null
   customer_id: string | null
+  contract_id?: string | null
   reportId?: string | null
   reviewSent?: boolean
   hasReviewHistory?: boolean
@@ -512,9 +513,33 @@ export function ScheduleBoard({
     )
   }
 
-  const handleSheetTimeChange = (bookingId: string, newScheduledAt: string) => {
+  const handleSheetTimeChange = (
+    bookingId: string,
+    newScheduledAt: string,
+    propagate?: { contractId: string; newTime: string },
+  ) => {
+    // 정기계약 전체 적용이면, 화면에 보이는 같은 계약의 앞으로의 방문 시각도 함께 갱신
+    const kstTodayStart = (() => {
+      const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000)
+      return new Date(`${nowKST.toISOString().slice(0, 10)}T00:00:00+09:00`).toISOString()
+    })()
+    const replaceKstTime = (iso: string, newTime: string) => {
+      const kstDate = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000)
+      return new Date(`${kstDate.toISOString().slice(0, 10)}T${newTime}:00+09:00`).toISOString()
+    }
     setBookings((prev) =>
-      prev.map((b) => b.id === bookingId ? { ...b, scheduled_at: newScheduledAt } : b)
+      prev.map((b) => {
+        if (b.id === bookingId) return { ...b, scheduled_at: newScheduledAt }
+        if (
+          propagate &&
+          b.contract_id === propagate.contractId &&
+          !['completed', 'cancelled', 'no_show'].includes(b.status) &&
+          b.scheduled_at >= kstTodayStart
+        ) {
+          return { ...b, scheduled_at: replaceKstTime(b.scheduled_at, propagate.newTime) }
+        }
+        return b
+      })
     )
   }
 

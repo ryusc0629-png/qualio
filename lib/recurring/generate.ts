@@ -7,7 +7,16 @@ import { computeVisitDates } from './visit-dates'
 // 사장님이 일정에서 지운 방문을 다음 실행 때 되살리지 않는다.
 
 const HORIZON_DAYS = 60 // 오늘부터 60일치를 미리 깔아둔다 (크론이 매일 한 칸씩 전진)
-const VISIT_HOUR_KST = 9 // 시간 미지정 — 오전 9시로 깔고 사장님이 일정에서 조정
+const DEFAULT_VISIT_TIME = '09:00' // 계약에 시간 미지정 시 — 오전 9시로 깔고 사장님이 일정에서 조정
+
+// 계약의 visit_time("HH:mm")을 안전하게 정규화. 없거나 형식이 이상하면 기본값(09:00).
+function normalizeVisitTime(raw: string | null | undefined): string {
+  if (raw && /^\d{1,2}:\d{2}$/.test(raw)) {
+    const [h, m] = raw.split(':')
+    return `${h.padStart(2, '0')}:${m}`
+  }
+  return DEFAULT_VISIT_TIME
+}
 
 export interface ContractForGen {
   id: string
@@ -20,6 +29,7 @@ export interface ContractForGen {
   status: string
   last_generated_until: string | null
   default_worker_id?: string | null // 거래처 고정 담당자 — 있으면 새 방문을 이 사람에게 바로 배정
+  visit_time?: string | null // 방문 기본 시각(KST "HH:mm"). 없으면 09:00
 }
 
 function ymd(d: Date): string {
@@ -83,7 +93,7 @@ export async function generateVisitsForContract(
     (existing ?? []).map((b: { scheduled_at: string }) => ymd(new Date(b.scheduled_at))),
   )
 
-  const hour = String(VISIT_HOUR_KST).padStart(2, '0')
+  const visitTime = normalizeVisitTime(contract.visit_time)
   const defaultWorkerId = contract.default_worker_id ?? null
   const rows = dates
     .filter((d) => !existingDates.has(d))
@@ -93,7 +103,7 @@ export async function generateVisitsForContract(
       customer_name: customer.name,
       customer_phone: customer.phone,
       service_address: customer.address ?? '',
-      scheduled_at: new Date(`${d}T${hour}:00:00+09:00`).toISOString(),
+      scheduled_at: new Date(`${d}T${visitTime}:00+09:00`).toISOString(),
       selected_tier: 'good',
       final_price: 0, // 월정액 계약이라 방문 단건 과금 없음 (매출·LTV 이중계상 방지)
       status: 'confirmed',
