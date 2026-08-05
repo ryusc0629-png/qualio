@@ -66,12 +66,12 @@ export function RegisterFromLeadButton({ lead, alreadyRegistered }: RegisterFrom
 
   const { execute, isPending } = useAction(createCustomerWithContractAction, {
     onSuccess: () => {
-      toast.success('고객으로 등록되었습니다')
+      toast.success('고객으로 등록했어요!')
       reset()
       setOpen(false)
     },
     onError: ({ error }) => {
-      toast.error(error.serverError ?? '등록에 실패했습니다')
+      toast.error(error.serverError ?? '등록 못 했어요. 다시 눌러주세요')
     },
   })
 

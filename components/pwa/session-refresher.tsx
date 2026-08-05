@@ -17,10 +17,11 @@ export function SessionRefresher() {
 
     const sync = () => {
       if (document.visibilityState === 'visible') {
-        // startAutoRefresh는 호출 즉시 만료 여부를 확인해 필요하면 바로 갱신한다
-        void supabase.auth.startAutoRefresh()
+        // startAutoRefresh는 호출 즉시 만료 여부를 확인해 필요하면 바로 갱신한다.
+        // 네트워크 순단 등으로 실패해도 앱이 죽지 않도록 조용히 로그만 남긴다(다음 sync에서 재시도됨).
+        supabase.auth.startAutoRefresh().catch((e) => console.error('[Session] 자동 갱신 실패:', e))
       } else {
-        void supabase.auth.stopAutoRefresh()
+        supabase.auth.stopAutoRefresh().catch(() => {})
       }
     }
 

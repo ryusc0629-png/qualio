@@ -49,6 +49,8 @@ export function Sidebar({ businessName, isAdmin = false, isOpen = false, onClose
   const handleLogout = () => {
     startTransition(async () => {
       await logoutAction()
+      // 세션 삭제 후 완전 새로고침으로 이동 — 서버 컴포넌트 캐시까지 비워 확실히 로그아웃 상태로 진입
+      window.location.replace('/login')
     })
   }
 

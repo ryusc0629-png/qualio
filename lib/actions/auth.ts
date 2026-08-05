@@ -3,7 +3,6 @@
 import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
 
 // 로그인 입력값 검증 스키마
 const loginSchema = z.object({
@@ -90,9 +89,10 @@ export const signupAction = action
     return { redirectTo: '/onboarding' }
   })
 
-// 로그아웃 액션 — 세션 삭제 후 로그인 페이지로 이동
+// 로그아웃 액션 — 세션 삭제만 하고, 페이지 이동은 클라이언트에서 window.location.replace로 처리
+// (서버액션 redirect는 서버 컴포넌트 캐시가 남아 로그아웃됐는데도 화면이 대시보드에 머무를 수 있음)
 export async function logoutAction() {
   const supabase = await createClient()
   await supabase.auth.signOut()
-  redirect('/login')
+  return { success: true }
 }

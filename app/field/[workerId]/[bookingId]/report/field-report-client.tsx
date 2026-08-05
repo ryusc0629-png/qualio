@@ -156,7 +156,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   // 작업 중 영상 클립 저장 (업로드 완료 시 자동 호출)
   const { execute: saveClips } = useAction(fieldSaveWorkClipsAction, {
     onSuccess: () => setClipsSaved(true),
-    onError: () => toast.error('영상 저장에 실패했어요. 페이지를 나가기 전에 다시 시도해주세요'),
+    onError: () => toast.error('영상 저장 못 했어요. 인터넷 확인 후 다시 눌러주세요'),
   })
 
   // 릴스 편집 요청

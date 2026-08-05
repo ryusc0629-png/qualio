@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   async headers() {
@@ -16,4 +17,11 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Sentry로 감싸 오류 수집을 활성화한다.
+// org/project는 Sentry 프로젝트 식별자. 소스맵 업로드(SENTRY_AUTH_TOKEN)는 아직 미설정이라
+// 빌드 시 조용히 건너뛴다(오류 수집 자체는 정상 동작).
+export default withSentryConfig(nextConfig, {
+  org: "qualio",
+  project: "javascript-nextjs",
+  silent: !process.env.CI,
+});

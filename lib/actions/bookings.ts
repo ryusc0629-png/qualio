@@ -203,15 +203,15 @@ export const updateBookingStatusAction = action
 
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
-    // 완료 처리 시 고객 정보 미리 조회 (upsert용)
-    let bookingForCustomer: { customer_name: string; customer_phone: string | null; service_address: string | null } | null = null
+    // 완료 처리 시 고객 정보 미리 조회 (upsert + customer_id 연결용)
+    let bookingForCustomer: { customer_id: string | null; customer_name: string; customer_phone: string | null; service_address: string | null } | null = null
     if (parsedInput.status === 'completed') {
       const { data } = await db
         .from('bookings')
-        .select('customer_name, customer_phone, service_address')
+        .select('customer_id, customer_name, customer_phone, service_address' as never)
         .eq('id', parsedInput.id)
         .eq('business_id', profile.business_id)
-        .maybeSingle()
+        .maybeSingle() as unknown as { data: { customer_id: string | null; customer_name: string; customer_phone: string | null; service_address: string | null } | null }
       bookingForCustomer = data
     }
 
@@ -230,16 +230,31 @@ export const updateBookingStatusAction = action
     // 청소 완료 → 고객 DB 자동 upsert (전화번호 기준, 이미 있으면 스킵)
     // 숫자만으로 비교해 하이픈 형식 차이로 인한 중복 카드 생성을 막는다.
     if (parsedInput.status === 'completed' && bookingForCustomer?.customer_phone?.trim()) {
-      const existingId = await findCustomerIdByPhone(db, profile.business_id, bookingForCustomer.customer_phone)
+      let customerId = await findCustomerIdByPhone(db, profile.business_id, bookingForCustomer.customer_phone)
 
-      if (!existingId) {
-        await db.from('customers').insert({
-          business_id: profile.business_id,
-          name: bookingForCustomer.customer_name,
-          phone: bookingForCustomer.customer_phone,
-          address: bookingForCustomer.service_address ?? null,
-          type: 'one_time',
-        })
+      if (!customerId) {
+        const { data: created } = await db
+          .from('customers')
+          .insert({
+            business_id: profile.business_id,
+            name: bookingForCustomer.customer_name,
+            phone: bookingForCustomer.customer_phone,
+            address: bookingForCustomer.service_address ?? null,
+            type: 'one_time',
+          })
+          .select('id')
+          .maybeSingle()
+        customerId = created?.id ?? null
+      }
+
+      // 예약에 고객 카드가 연결돼 있지 않으면 지금 연결 —
+      // 공개 견적 등으로 customer_id 없이 생긴 예약이 완료돼도 고객 이력에서 누락되지 않도록.
+      if (customerId && !bookingForCustomer.customer_id) {
+        await db
+          .from('bookings')
+          .update({ customer_id: customerId } as never)
+          .eq('id', parsedInput.id)
+          .eq('business_id', profile.business_id)
       }
     }
 

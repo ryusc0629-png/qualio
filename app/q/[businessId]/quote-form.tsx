@@ -299,7 +299,11 @@ function InlineCalendar({ onSelect }: { onSelect: (label: string, value: string)
 
   const handleConfirm = () => {
     if (!selected) return
-    onSelect(formatDateLabel(selected), selected.toISOString().split('T')[0])
+    // selected는 로컬(KST) 자정. toISOString()은 UTC로 변환돼 하루 전 날짜가 되므로(KST 자정 = 전날 15:00 UTC) 로컬 연·월·일을 직접 조립한다
+    const y  = selected.getFullYear()
+    const m  = String(selected.getMonth() + 1).padStart(2, '0')
+    const dd = String(selected.getDate()).padStart(2, '0')
+    onSelect(formatDateLabel(selected), `${y}-${m}-${dd}`)
   }
 
   return (
@@ -736,7 +740,8 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
     execute({
       business_id:    businessId,
       service_id:     selectedServiceId,
-      space_size:     isAcMode ? acTotalCount : isUnitMode ? 0 : Number(spaceSize),
+      // unit 모드는 unit_selections로 금액을 계산하므로 space_size 불필요(0을 보내면 서버 .min(1) 검증에 걸려 제출이 전면 실패함) → undefined로 전송
+      space_size:     isAcMode ? acTotalCount : isUnitMode ? undefined : Number(spaceSize),
       preferred_date: preferredDate || undefined,
       extra_notes:    combinedNotes || undefined,
       customer_name:  customerName.trim(),

@@ -54,47 +54,86 @@ export const createBusinessAction = action
 
     if (existing?.business_id) return { success: true }
 
-    // 3. 업체 생성 (가입 경로 함께 저장)
-    // 새 컬럼(acquisition_*)은 마이그레이션 후 database.ts 타입이 갱신되므로 그 전까지 단언 처리
-    const bizPayload = {
-      owner_id: user.id,
-      name: parsedInput.name,
-      phone: parsedInput.phone,
-      acquisition_source: parsedInput.acquisitionSource,
-      acquisition_detail: parsedInput.acquisitionDetail || null,
-      acquisition_referrer: parsedInput.acquisitionReferrer || null,
-      acquisition_utm: parsedInput.acquisitionUtm || null,
-    }
-    const { data: business, error: bizError } = await db
-      .from('businesses')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .insert(bizPayload as any)
-      .select('id')
-      .single()
+    // 프로필 행 보장 — 회원가입 트리거(handle_new_user)가 실패해 profiles 행이 없으면
+    // businesses.owner_id FK(→ profiles.id) 위반으로 업체 생성 자체가 막혀 사용자가 온보딩에서 잠긴다.
+    // (그러면 로그인할 때마다 다시 온보딩으로 돌아와 업체가 중복 생성되는 루프에 빠진다)
+    // 이미 있으면 그대로 두고(full_name·business_id 보존), 없을 때만 생성한다.
+    const fullName = (user.user_metadata as { full_name?: string } | null)?.full_name ?? ''
+    await db
+      .from('profiles')
+      .upsert({ id: user.id, full_name: fullName }, { onConflict: 'id', ignoreDuplicates: true })
 
-    if (bizError) throw new Error('[APP] 업체 생성에 실패했습니다')
+    // 3. 업체 생성 (가입 경로 함께 저장)
+    // 이 사장님이 주인인 업체가 이미 있으면 새로 만들지 않고 재사용한다 —
+    // 이전 온보딩이 업체 생성 후 프로필 연결(4단계) 전에 끊겼던 경우, 다시 시도할 때
+    // 업체가 하나 더 생기던 중복을 막는다. (maybeSingle 대신 limit로 받아 이미 중복이 있어도 안전)
+    const { data: ownedBusinesses } = await db
+      .from('businesses')
+      .select('id')
+      .eq('owner_id', user.id)
+      .limit(1)
+
+    let businessId = ownedBusinesses?.[0]?.id ?? null
+
+    if (!businessId) {
+      // 새 컬럼(acquisition_*)은 마이그레이션 후 database.ts 타입이 갱신되므로 그 전까지 단언 처리
+      const bizPayload = {
+        owner_id: user.id,
+        name: parsedInput.name,
+        phone: parsedInput.phone,
+        acquisition_source: parsedInput.acquisitionSource,
+        acquisition_detail: parsedInput.acquisitionDetail || null,
+        acquisition_referrer: parsedInput.acquisitionReferrer || null,
+        acquisition_utm: parsedInput.acquisitionUtm || null,
+      }
+      const { data: business, error: bizError } = await db
+        .from('businesses')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .insert(bizPayload as any)
+        .select('id')
+        .single()
+
+      if (bizError || !business) throw new Error('[APP] 업체 생성에 실패했습니다')
+      businessId = business.id
+    }
 
     // 4. 프로필에 업체 ID 연결
     const { error: profileError } = await db
       .from('profiles')
-      .update({ business_id: business.id })
+      .update({ business_id: businessId })
       .eq('id', user.id)
 
     if (profileError) throw new Error('[APP] 프로필 업데이트에 실패했습니다')
 
-    // 5. beta 구독 플랜 생성
-    await db.from('subscriptions').insert({
-      business_id: business.id,
-      plan: 'beta',
-      status: 'active',
-    })
+    // 5. beta 구독 플랜 생성 — 없을 때만 (재사용 업체엔 이미 있을 수 있어 중복 방지)
+    const { data: existingSub } = await db
+      .from('subscriptions')
+      .select('id')
+      .eq('business_id', businessId)
+      .limit(1)
 
-    // 6. 기본 견적 3단계(Good/Better/Best) 자동 생성
-    await db.from('quote_tiers').insert([
-      { business_id: business.id, tier: 'good',   label: '기본',     price_multiplier: 1.0, highlight: false, sort_order: 0 },
-      { business_id: business.id, tier: 'better', label: '추천',     price_multiplier: 1.2, highlight: true,  sort_order: 1 },
-      { business_id: business.id, tier: 'best',   label: '프리미엄', price_multiplier: 1.5, highlight: false, sort_order: 2 },
-    ])
+    if (!existingSub || existingSub.length === 0) {
+      await db.from('subscriptions').insert({
+        business_id: businessId,
+        plan: 'beta',
+        status: 'active',
+      })
+    }
+
+    // 6. 기본 견적 3단계(Good/Better/Best) 자동 생성 — 없을 때만
+    const { data: existingTiers } = await db
+      .from('quote_tiers')
+      .select('id')
+      .eq('business_id', businessId)
+      .limit(1)
+
+    if (!existingTiers || existingTiers.length === 0) {
+      await db.from('quote_tiers').insert([
+        { business_id: businessId, tier: 'good',   label: '기본',     price_multiplier: 1.0, highlight: false, sort_order: 0 },
+        { business_id: businessId, tier: 'better', label: '추천',     price_multiplier: 1.2, highlight: true,  sort_order: 1 },
+        { business_id: businessId, tier: 'best',   label: '프리미엄', price_multiplier: 1.5, highlight: false, sort_order: 2 },
+      ])
+    }
 
     return { success: true }
   })

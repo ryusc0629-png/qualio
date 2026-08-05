@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { RefreshCw } from 'lucide-react'
 import { AddContractForm } from '@/components/dashboard/add-contract-form'
 import { ContractStatusSelect } from '@/components/dashboard/contract-status-select'
 import { formatFrequency } from '@/lib/utils/frequency'
@@ -109,9 +110,10 @@ export default async function ContractsPage() {
       {/* 계약 목록 */}
       {!contracts || contracts.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center">
-          <p className="text-sm text-muted-foreground">등록된 정기계약이 없습니다</p>
+          <RefreshCw className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">아직 등록된 정기계약이 없어요</p>
           <p className="text-xs text-muted-foreground mt-1">
-            고객 관리에서 정기 고객을 등록한 후 계약을 추가하세요
+            고객 관리에서 거래처를 등록한 뒤, 위 &lsquo;계약 추가&rsquo; 버튼으로 정기계약을 만들어요
           </p>
         </div>
       ) : (

@@ -18,7 +18,7 @@ const publicAction = createSafeActionClient({
   handleServerError(e) {
     if (e.message.startsWith('[APP]')) return e.message.replace('[APP] ', '')
     console.error('[PublicAction Error]', e)
-    return '요청 처리 중 오류가 발생했습니다'
+    return '잠시 문제가 있었어요. 잠시 후 다시 시도해주세요'
   },
 })
 
@@ -37,17 +37,25 @@ const calculateAndCreateQuoteSchema = z.object({
   business_id: z.string().uuid('올바른 업체 정보가 아닙니다'),
   service_id: z.string().uuid('서비스를 선택해주세요'),
   space_size: z.coerce.number().min(1).max(300).optional(),
-  preferred_date: z.string().optional(),
+  preferred_date: z.string().max(30).optional(),
   extra_notes: z.string().max(500).optional(),
-  customer_name: z.string().optional(),
-  customer_phone: z.string().optional(),
-  company_name: z.string().optional(), // B2B 서비스에서 고객이 입력한 회사명
+  // 공개 폼이라 이름·연락처는 선택(가격만 보고 갈 수도 있음)이지만, 값이 있으면 형식을 검증한다 —
+  // 아무 번호나 통과하면 그 번호로 알림톡이 잘못 발송되고(제3자 스팸·Solapi 비용) 견적 목록도 오염됨.
+  customer_name: z.string().max(50).optional(),
+  customer_phone: z
+    .string()
+    .max(20)
+    .optional()
+    .transform((v) => v?.replace(/-/g, '') || undefined)
+    .refine((v) => !v || phoneRegex.test(v), '올바른 전화번호 형식이 아닙니다'),
+  company_name: z.string().max(100).optional(), // B2B 서비스에서 고객이 입력한 회사명
   // 에어컨 유형별 선택 수량 { wall_standard: 2, stand_standard: 1 }
-  ac_selections: z.record(z.string(), z.number().min(0)).optional(),
+  // — 봇이 비정상 수량으로 터무니없는 금액을 만들지 않도록 정수·상한을 둔다
+  ac_selections: z.record(z.string(), z.number().int().min(0).max(1000)).optional(),
   // 항목별 선택 수량 { "화장실": 2, "주방": 1 }
-  unit_selections: z.record(z.string(), z.number().min(0)).optional(),
+  unit_selections: z.record(z.string(), z.number().int().min(0).max(1000)).optional(),
   // 구분 선택 (신축/구축 등) — unit_variants가 있는 서비스에만 전달
-  unit_variant: z.string().optional(),
+  unit_variant: z.string().max(50).optional(),
 })
 
 export const calculateAndCreateQuoteAction = publicAction
@@ -802,10 +810,16 @@ export const confirmBookingFromQuoteAction = authAction
 const consultationRequestSchema = z.object({
   business_id:    z.string().uuid(),
   service_id:     z.string().uuid(),
-  customer_name:  z.string().min(1),
-  customer_phone: z.string().min(8),
-  company_name:   z.string().optional(), // B2B 서비스에서 고객이 입력한 회사명
-  notes:          z.string().optional(),
+  customer_name:  z.string().min(1).max(50),
+  // 숫자만 남겨 한국 전화번호 형식을 검증 — 아무 번호나 리드로 쌓이고 대표 폰이 스팸 알림받는 것 방지
+  customer_phone: z
+    .string()
+    .min(8)
+    .max(20)
+    .transform((v) => v.replace(/[^0-9]/g, ''))
+    .refine((v) => phoneRegex.test(v), '올바른 전화번호 형식이 아닙니다'),
+  company_name:   z.string().max(100).optional(), // B2B 서비스에서 고객이 입력한 회사명
+  notes:          z.string().max(500).optional(),
 })
 
 export const createConsultationRequestAction = publicAction

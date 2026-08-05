@@ -20,14 +20,14 @@ export function CancelSubscriptionButton() {
         const data = await res.json() as { success?: boolean; error?: string }
 
         if (!res.ok) {
-          toast.error(data.error ?? '구독 취소에 실패했습니다')
+          toast.error(data.error ?? '구독 취소 못 했어요. 다시 눌러주세요')
           return
         }
 
-        toast.success('구독이 취소되었습니다. 결제 기간 만료 후 서비스가 종료됩니다.')
+        toast.success('구독을 취소했어요. 결제 기간 끝까지는 그대로 쓸 수 있어요')
         window.location.replace('/dashboard/settings')
       } catch {
-        toast.error('네트워크 오류가 발생했습니다. 다시 시도해주세요.')
+        toast.error('연결이 불안정해요. 인터넷 확인 후 다시 눌러주세요')
       }
     })
   }

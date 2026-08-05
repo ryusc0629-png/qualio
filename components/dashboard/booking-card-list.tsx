@@ -115,8 +115,9 @@ export function BookingCardList({ bookings, businessId }: { bookings: BookingIte
       {/* 활성 예약 */}
       {activeBookings.length === 0 ? (
         <div className="bg-white rounded-xl border border-dashed border-border p-12 text-center space-y-2">
+          <Calendar className="h-10 w-10 mx-auto mb-1 text-muted-foreground/50" />
           <p className="text-sm text-muted-foreground">처리할 예약이 없어요</p>
-          <p className="text-xs text-muted-foreground">전화로 받은 예약은 오른쪽 위 버튼으로 직접 추가해보세요</p>
+          <p className="text-xs text-muted-foreground">전화로 받은 예약은 오른쪽 위 &lsquo;예약 추가&rsquo; 버튼으로 직접 추가해보세요</p>
         </div>
       ) : (
         <div className="space-y-2">

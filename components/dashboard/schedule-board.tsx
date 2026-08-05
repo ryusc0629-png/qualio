@@ -17,7 +17,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { addDays, format, getDaysInMonth } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2, Smartphone } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2, Smartphone, CalendarDays } from 'lucide-react'
 import { formatPhone } from '@/lib/format/phone'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
@@ -835,8 +835,9 @@ export function ScheduleBoard({
       {/* 빈 상태 */}
       {bookings.length === 0 && (
         <div className="text-center py-12 text-sm text-muted-foreground">
+          <CalendarDays className="h-10 w-10 mx-auto mb-3 text-muted-foreground/50" />
           <p>이번 주 확정된 예약이 없어요</p>
-          <p className="text-xs mt-1">예약 탭에서 예약을 추가하면 여기 표시돼요</p>
+          <p className="text-xs mt-1">위 &lsquo;신규 일정 추가&rsquo; 버튼으로 예약을 추가하면 여기 표시돼요</p>
         </div>
       )}
 
