@@ -6,6 +6,8 @@ import {
   sanitizeMessages,
   type ConsultService,
 } from '@/lib/ai/consult-chat'
+import { checkRateLimit } from '@/lib/ratelimit/check'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 // 고객용 AI 상담 스트리밍 엔드포인트 — 로그인 불필요
 // POST body: { messages: { role, content }[] }
@@ -102,6 +104,26 @@ export async function POST(
   const { businessId: raw } = await params
   const idOrSlug = raw.normalize('NFC')
 
+  const db = createServiceClient()
+
+  // IP 단위 레이트리밋 — 공개 엔드포인트라 로그인 없이 무제한 호출되면 Anthropic 비용이 폭증한다.
+  // 같은 IP: 5분에 20회. 초과 시 429(친절 안내)로 Anthropic 호출 전에 차단.
+  const ip =
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    req.headers.get('x-real-ip') ||
+    'unknown'
+  const ipAllowed = await checkRateLimit(
+    db as unknown as SupabaseClient,
+    `chat_ip:${ip}`,
+    20,
+    300,
+  )
+  if (!ipAllowed) {
+    return new Response('[APP] 잠깐만요, 너무 빠르게 보냈어요. 잠시 후 다시 시도해주세요', {
+      status: 429,
+    })
+  }
+
   let body: unknown
   try {
     body = await req.json()
@@ -114,8 +136,6 @@ export async function POST(
     return new Response('[APP] 질문을 입력해주세요', { status: 400 })
   }
 
-  const db = createServiceClient()
-
   // 업체 + 노출 서비스 조회 (UUID면 id, 아니면 slug) — 견적 페이지와 동일 기준
   const { data: business } = await (UUID_RE.test(idOrSlug)
     ? db.from('businesses').select('id, name, description').eq('id', idOrSlug)
@@ -124,6 +144,18 @@ export async function POST(
 
   if (!business) {
     return new Response('[APP] 업체를 찾을 수 없어요', { status: 404 })
+  }
+
+  // 업체 단위 레이트리밋 — 여러 IP로 분산 호출돼도 한 업체당 총 비용을 상한선으로 묶는다.
+  // 같은 업체: 1시간에 150회. 닫힌 베타 상담량엔 충분하고, 폭주 시 총액을 방어.
+  const bizAllowed = await checkRateLimit(
+    db as unknown as SupabaseClient,
+    `chat_biz:${business.id}`,
+    150,
+    3600,
+  )
+  if (!bizAllowed) {
+    return new Response('[APP] 상담 요청이 많아 잠시 후 다시 시도해주세요', { status: 429 })
   }
 
   const { data: services } = await db

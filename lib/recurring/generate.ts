@@ -103,9 +103,11 @@ export async function generateVisitsForContract(
     }))
 
   if (rows.length > 0) {
+    // upsert(ignoreDuplicates) — 동시 실행 레이스로 같은 방문이 이미 들어갔으면 조용히 스킵.
+    // (contract_id, scheduled_at) 유니크 인덱스가 arbiter. select는 실제 삽입된 행만 반환.
     const { data: inserted } = await db
       .from('bookings')
-      .insert(rows)
+      .upsert(rows, { onConflict: 'contract_id,scheduled_at', ignoreDuplicates: true })
       .select('id')
 
     // 고정 담당자가 있으면 booking_workers도 함께 채워 다중배정 UI와 정합성 유지
