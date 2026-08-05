@@ -88,6 +88,14 @@ export default async function ReportPage({
 
   if (!report) notFound()
 
+  // '미리 챙긴 것'은 아직 database.ts 타입에 없어 별도 조회(as never 캐스트)
+  const { data: preventiveRow } = (await db
+    .from('reports')
+    .select('preventive_note' as never)
+    .eq('id', reportId)
+    .maybeSingle()) as unknown as { data: { preventive_note: string | null } | null }
+  const preventiveNote = preventiveRow?.preventive_note ?? null
+
   const { data: photos } = await db
     .from('report_photos')
     .select('id, url, type, caption, sort_order')
@@ -234,6 +242,14 @@ export default async function ReportPage({
               <p className="text-sm whitespace-pre-wrap leading-relaxed">{reportNotes.rawText}</p>
             </div>
           )
+        )}
+
+        {/* 미리 챙긴 것 · 지켜볼 것 — 문제 생기기 전에 먼저 봐준다는 신뢰 */}
+        {preventiveNote && preventiveNote.trim() && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 space-y-1.5">
+            <p className="text-sm font-bold text-emerald-900">미리 챙긴 것 · 지켜볼 것</p>
+            <p className="text-sm text-emerald-900/90 whitespace-pre-wrap leading-relaxed">{preventiveNote}</p>
+          </div>
         )}
 
         {/* 추천 서비스 */}

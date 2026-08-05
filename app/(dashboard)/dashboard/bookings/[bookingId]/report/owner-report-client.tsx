@@ -45,6 +45,7 @@ interface AiReportData {
 interface ExistingReport {
   id: string
   notes: string | null
+  preventiveNote: string | null
   sentAt: string | null
   beforeUrls: string[]
   afterUrls: string[]
@@ -70,6 +71,8 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
   const [reelStatus] = useState(existingReport?.reelStatus ?? 'idle')
   const [reelUrl] = useState<string | null>(existingReport?.reelUrl ?? null)
   const [notes, setNotes] = useState(existingReport?.notes ?? '')
+  // 미리 챙긴 것·지켜볼 것 — 문제 생기기 전에 먼저 발견·조치한 예방 케어(고객 만족 엔진)
+  const [preventiveNote, setPreventiveNote] = useState(existingReport?.preventiveNote ?? '')
   const [before, setBefore] = useState<PhotoSlot[]>(
     existingReport?.beforeUrls.map((url) => ({ url, uploading: false })) ?? []
   )
@@ -142,6 +145,7 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
         saveReport({
           bookingId:       booking.id,
           notes:           formatted,
+          preventiveNote:  preventiveNote.trim() || undefined,
           beforePhotoUrls: before.filter((p) => !p.uploading && p.url).map((p) => p.url),
           afterPhotoUrls:  after.filter((p) => !p.uploading && p.url).map((p) => p.url),
           sendAlimtalk:    false,
@@ -202,6 +206,7 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
     saveReport({
       bookingId:       booking.id,
       notes:           notes.trim() || undefined,
+      preventiveNote:  preventiveNote.trim() || undefined,
       beforePhotoUrls: before.filter((p) => !p.uploading && p.url).map((p) => p.url),
       afterPhotoUrls:  after.filter((p) => !p.uploading && p.url).map((p) => p.url),
       sendAlimtalk:    false,
@@ -590,6 +595,23 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
             )}
           </div>
         )}
+
+        {/* 미리 챙긴 것 · 지켜볼 것 — 문제 생기기 전에 먼저 챙기는 예방 케어 */}
+        <div className="rounded-xl bg-emerald-50/60 border border-emerald-100 p-4 space-y-2">
+          <div>
+            <Label className="text-sm font-medium text-emerald-800">미리 챙긴 것 · 지켜볼 것</Label>
+            <p className="text-xs text-emerald-700">
+              아직 문제는 아니지만 미리 발견해 챙긴 것, 다음에 지켜볼 것을 적어두세요.
+              고객이 보는 리포트에 담겨 “문제 생기기 전에 봐준다”는 신뢰가 됩니다. (선택)
+            </p>
+          </div>
+          <Textarea
+            placeholder="예: 줄눈에 곰팡이 올라오기 시작해 미리 잡아뒀어요. 배수구 물 빠짐이 조금 느려져 다음에 한 번 더 볼게요."
+            value={preventiveNote}
+            onChange={(e) => setPreventiveNote(e.target.value)}
+            rows={3}
+          />
+        </div>
 
         <div className="rounded-xl bg-white border p-4 space-y-3">
           <div>

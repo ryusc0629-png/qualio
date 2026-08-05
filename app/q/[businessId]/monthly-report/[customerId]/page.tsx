@@ -104,12 +104,14 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
   // 방문별 작업 리포트 + 사진(after 우선)
   const bookingIds = bookings.map((b) => b.id)
   const reportMap = new Map<string, { notes: string | null; photos: { url: string; caption?: string }[] }>()
+  // 방문별 '미리 챙긴 것' — 이번 달치를 모아 상단에 '문제 생기기 전에 챙긴 것들'로 보여준다
+  const preventiveByBooking = new Map<string, string>()
   if (bookingIds.length > 0) {
     const { data: reports } = (await db
       .from('reports')
-      .select('id, booking_id, notes')
+      .select('id, booking_id, notes, preventive_note')
       .in('booking_id', bookingIds)) as unknown as {
-      data: { id: string; booking_id: string; notes: string | null }[] | null
+      data: { id: string; booking_id: string; notes: string | null; preventive_note: string | null }[] | null
     }
     const reportIds = (reports ?? []).map((r) => r.id)
     const photosByReport = new Map<string, { url: string; caption?: string }[]>()
@@ -132,8 +134,16 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
     }
     for (const r of reports ?? []) {
       reportMap.set(r.booking_id, { notes: r.notes, photos: photosByReport.get(r.id) ?? [] })
+      if (r.preventive_note && r.preventive_note.trim()) {
+        preventiveByBooking.set(r.booking_id, r.preventive_note.trim())
+      }
     }
   }
+
+  // 이번 달 '미리 챙긴 것' 목록 — 방문 날짜와 함께 (완료 방문만)
+  const preventiveItems = bookings
+    .filter((b) => b.status === 'completed' && preventiveByBooking.has(b.id))
+    .map((b) => ({ date: b.scheduled_at, note: preventiveByBooking.get(b.id)! }))
 
   // 계약 정보(요약 카드용) — 이 고객의 계약 중 이 달과 겹치는 것
   const { data: contracts } = (await db
@@ -188,6 +198,24 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
             </div>
           )}
         </section>
+
+        {/* 이번 달 미리 챙긴 것들 — 문제 생기기 전에 먼저 봐준다는 신뢰 */}
+        {preventiveItems.length > 0 && (
+          <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm break-inside-avoid space-y-2.5">
+            <h2 className="text-sm font-semibold text-emerald-800 flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4 text-emerald-500" />
+              이번 달 미리 챙긴 것들
+            </h2>
+            <ul className="space-y-2">
+              {preventiveItems.map((it, i) => (
+                <li key={i} className="text-sm text-emerald-900/90 leading-relaxed">
+                  <span className="text-emerald-600 font-medium">{formatVisitDate(it.date)}</span>
+                  <span className="whitespace-pre-wrap"> · {it.note}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {/* 방문 타임라인 */}
         {bookings.length === 0 ? (

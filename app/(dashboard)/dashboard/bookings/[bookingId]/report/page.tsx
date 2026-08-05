@@ -36,12 +36,13 @@ export default async function OwnerReportPage({ params }: Props) {
   // 기존 보고서 + 사진 + 릴스 정보 조회
   const { data: report } = await db
     .from('reports')
-    .select('id, notes, kakao_sent_at, is_public, ai_report_data, reel_status, reel_url, report_photos(url, type, sort_order)' as never)
+    .select('id, notes, preventive_note, kakao_sent_at, is_public, ai_report_data, reel_status, reel_url, report_photos(url, type, sort_order)' as never)
     .eq('booking_id', bookingId)
     .maybeSingle() as {
       data: {
         id: string
         notes: string | null
+        preventive_note: string | null
         kakao_sent_at: string | null
         is_public: boolean | null
         ai_report_data: {
@@ -89,6 +90,7 @@ export default async function OwnerReportPage({ params }: Props) {
       existingReport={report ? {
         id: report.id,
         notes: report.notes,
+        preventiveNote: report.preventive_note ?? null,
         sentAt: report.kakao_sent_at,
         beforeUrls: existingBefore,
         afterUrls: existingAfter,
