@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { RefreshCw } from 'lucide-react'
 import { AddContractForm } from '@/components/dashboard/add-contract-form'
 import { ContractStatusSelect } from '@/components/dashboard/contract-status-select'
+import { ContractLockupCell } from '@/components/dashboard/contract-lockup-cell'
 import { formatFrequency } from '@/lib/utils/frequency'
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
@@ -28,9 +29,24 @@ export default async function ContractsPage() {
   // 계약 목록 (고객 정보 조인)
   const { data: contracts } = await db
     .from('contracts')
-    .select('id, customer_id, service_type, frequency, contract_price, start_date, end_date, status, notes, customers!contracts_customer_id_fkey(name, phone)')
+    .select('id, customer_id, service_type, frequency, contract_price, start_date, end_date, status, notes, requires_lockup, expected_duration_minutes, customers!contracts_customer_id_fkey(name, phone)' as never)
     .eq('business_id', profile.business_id)
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: false }) as unknown as {
+      data: {
+        id: string
+        customer_id: string
+        service_type: string
+        frequency: string
+        contract_price: number
+        start_date: string
+        end_date: string | null
+        status: string
+        notes: string | null
+        requires_lockup: boolean | null
+        expected_duration_minutes: number | null
+        customers: { name: string; phone: string | null } | { name: string; phone: string | null }[] | null
+      }[] | null
+    }
 
   // 고객 목록 (계약 등록 폼용)
   const { data: customers } = await db
@@ -128,6 +144,7 @@ export default async function ContractsPage() {
                 <th className="text-left px-4 py-3 font-medium">시작일</th>
                 <th className="text-left px-4 py-3 font-medium">종료일</th>
                 <th className="text-left px-4 py-3 font-medium">다음 방문</th>
+                <th className="text-center px-4 py-3 font-medium">문단속</th>
                 <th className="text-center px-4 py-3 font-medium">상태</th>
               </tr>
             </thead>
@@ -172,6 +189,13 @@ export default async function ContractsPage() {
                       {visits && visits.completed > 0 && (
                         <p className="text-[11px] text-muted-foreground font-normal mt-0.5">{visits.completed}회 완료</p>
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <ContractLockupCell
+                        contractId={contract.id}
+                        requiresLockup={contract.requires_lockup ?? false}
+                        expectedDurationMinutes={contract.expected_duration_minutes ?? null}
+                      />
                     </td>
                     <td className="px-4 py-3 text-center">
                       <ContractStatusSelect

@@ -171,3 +171,33 @@ export const updateContractStatusAction = action
     revalidatePath('/dashboard')
     return { success: true }
   })
+
+// 현장 문단속 설정 변경 — "문단속 필요" 여부와 "예상 소요 시간(분)"
+const updateContractLockupSchema = z.object({
+  contractId: z.string().uuid(),
+  requiresLockup: z.boolean(),
+  // 문단속 필요일 때만 의미 있음. 30분~8시간 범위.
+  expectedDurationMinutes: z.coerce.number().int().min(30).max(480).optional(),
+})
+
+export const updateContractLockupAction = action
+  .schema(updateContractLockupSchema)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuthenticatedBusinessId()
+
+    const { error } = await db
+      .from('contracts')
+      .update({
+        requires_lockup: parsedInput.requiresLockup,
+        expected_duration_minutes: parsedInput.requiresLockup
+          ? (parsedInput.expectedDurationMinutes ?? 120)
+          : null,
+      } as never)
+      .eq('id', parsedInput.contractId)
+      .eq('business_id', businessId)
+
+    if (error) throw new Error('[APP] 문단속 설정 저장에 실패했습니다')
+
+    revalidatePath('/dashboard/contracts')
+    return { success: true }
+  })

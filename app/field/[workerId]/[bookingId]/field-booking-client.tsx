@@ -15,6 +15,8 @@ import {
   fieldCompletePaymentAction,
   fieldRequestPaymentAction,
   fieldSendOnMyWayAction,
+  fieldSaveOpenPhotosAction,
+  fieldSaveLockupPhotosAction,
 } from '@/lib/actions/field'
 import { FieldBookingItemsEditor } from '@/components/field/field-booking-items-editor'
 import { ContactActions } from '@/components/dashboard/contact-actions'
@@ -33,6 +35,9 @@ import {
   ChevronUp,
   Film,
   Send,
+  Lock,
+  DoorOpen,
+  CheckCircle,
 } from 'lucide-react'
 
 interface BookingData {
@@ -57,6 +62,11 @@ interface Props {
   reportSentAt: string | null
   notifyOnMyWay: boolean
   onMyWaySentAt: string | null
+  requiresLockup: boolean
+  existingOpenPhotoUrls: string[]
+  existingLockupPhotoUrls: string[]
+  checkinAt: string | null
+  checkoutAt: string | null
   existingBeforeUrls: string[]
   existingCustomerRequest: string
   existingNextVisitNote: string
@@ -73,7 +83,7 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(diff / 86400)}일 전`
 }
 
-export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, notifyOnMyWay, onMyWaySentAt, existingBeforeUrls, existingCustomerRequest, existingNextVisitNote, memoUpdatedById, memoUpdatedByName, memoUpdatedAt }: Props) {
+export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, notifyOnMyWay, onMyWaySentAt, requiresLockup, existingOpenPhotoUrls, existingLockupPhotoUrls, checkinAt, checkoutAt, existingBeforeUrls, existingCustomerRequest, existingNextVisitNote, memoUpdatedById, memoUpdatedByName, memoUpdatedAt }: Props) {
   const [currentStatus, setCurrentStatus] = useState(booking.status)
   const [onMyWaySent, setOnMyWaySent] = useState(!!onMyWaySentAt)
   // 현장에서 항목을 조정하면 결제 금액도 실시간으로 따라간다
@@ -91,6 +101,34 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
     existingBeforeUrls.map((url) => ({ url, uploading: false }))
   )
   const beforeInputRef = useRef<HTMLInputElement>(null)
+
+  // 문단속 인증 — 오픈(도착)/마감(잠금) 사진
+  const [openPhotos, setOpenPhotos] = useState<PhotoSlot[]>(
+    existingOpenPhotoUrls.map((url) => ({ url, uploading: false }))
+  )
+  const [lockupPhotos, setLockupPhotos] = useState<PhotoSlot[]>(
+    existingLockupPhotoUrls.map((url) => ({ url, uploading: false }))
+  )
+  const [checkinTime, setCheckinTime] = useState<string | null>(checkinAt)
+  const [checkoutTime, setCheckoutTime] = useState<string | null>(checkoutAt)
+  const openInputRef = useRef<HTMLInputElement>(null)
+  const lockupInputRef = useRef<HTMLInputElement>(null)
+
+  const { execute: saveOpenPhotos } = useAction(fieldSaveOpenPhotosAction, {
+    onSuccess: ({ data }) => {
+      if (data?.checkinAt) setCheckinTime(data.checkinAt)
+      toast.success('도착(문 오픈) 사진이 저장됐어요!')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  const { execute: saveLockupPhotos } = useAction(fieldSaveLockupPhotosAction, {
+    onSuccess: ({ data }) => {
+      setCheckoutTime(data?.done ? new Date().toISOString() : null)
+      if (data?.done) toast.success('문단속(잠금) 사진이 저장됐어요! 마감 완료')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
 
   // 작업 시작
   const { execute: startWork, isPending: isStarting } = useAction(fieldStartWorkAction, {
@@ -209,6 +247,54 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
     })
   }
 
+  // 문단속 사진(오픈/마감) 공용 업로더 — folder와 저장 콜백만 다르다
+  const uploadLockupPhotos = async (
+    files: FileList,
+    folder: 'open' | 'lockup',
+    photos: PhotoSlot[],
+    setPhotos: React.Dispatch<React.SetStateAction<PhotoSlot[]>>,
+    save: (urls: string[]) => void,
+  ) => {
+    const remaining = 5 - photos.length
+    if (remaining <= 0) {
+      toast.error('사진은 최대 5장까지 올릴 수 있어요')
+      return
+    }
+    const toUpload = Array.from(files).slice(0, remaining)
+    setPhotos((prev) => [...prev, ...toUpload.map(() => ({ url: '', uploading: true }))])
+
+    const supabase = createClient()
+    const uploaded: string[] = []
+    for (const file of toUpload) {
+      const ext = file.name.split('.').pop() ?? 'jpg'
+      const path = `${businessId}/${booking.id}/${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error } = await supabase.storage.from('report-photos').upload(path, file, { upsert: true })
+      if (error) {
+        toast.error('사진 업로드에 실패했어요')
+        continue
+      }
+      uploaded.push(supabase.storage.from('report-photos').getPublicUrl(path).data.publicUrl)
+    }
+
+    const finalUrls = [...photos.filter((p) => !p.uploading && p.url).map((p) => p.url), ...uploaded]
+    setPhotos(finalUrls.map((url) => ({ url, uploading: false })))
+    save(finalUrls)
+  }
+
+  const removeLockupPhoto = (
+    url: string,
+    photos: PhotoSlot[],
+    setPhotos: React.Dispatch<React.SetStateAction<PhotoSlot[]>>,
+    save: (urls: string[]) => void,
+  ) => {
+    const updated = photos.filter((p) => p.url !== url)
+    setPhotos(updated)
+    save(updated.filter((p) => p.url).map((p) => p.url))
+  }
+
+  const fmtKstTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' })
+
   // 시간 포맷
   const time = new Date(booking.scheduledAt).toLocaleTimeString('ko-KR', {
     hour: '2-digit',
@@ -270,6 +356,141 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
             </div>
           </div>
         </div>
+
+        {/* 문단속 인증 — '문단속 필요' 현장에서만. 도착(오픈) + 마감(잠금) 사진 */}
+        {requiresLockup && (
+          <div className="rounded-xl border-2 border-amber-400 bg-amber-50 overflow-hidden">
+            <div className="px-4 py-3 flex items-center gap-2 border-b border-amber-200">
+              <Lock className="h-4 w-4 text-amber-600" />
+              <p className="font-bold text-amber-900">문단속 인증 (필수)</p>
+            </div>
+            <div className="p-4 space-y-4">
+              <p className="text-xs text-amber-800">
+                이 현장은 문단속이 중요해요. <span className="font-semibold">도착해서 문 열 때</span> 한 장,
+                <span className="font-semibold"> 다 끝내고 잠근 뒤</span> 한 장 찍어 올려주세요.
+              </p>
+
+              {/* ① 도착 · 문 오픈 */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-900">
+                  <DoorOpen className="h-4 w-4" />
+                  <span>① 도착 · 문 오픈 사진</span>
+                  {checkinTime && (
+                    <span className="ml-auto text-xs font-medium text-amber-700">출근 인증 {fmtKstTime(checkinTime)}</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {openPhotos.map((photo) => (
+                    <div key={photo.url || 'up'} className="relative w-20 h-20 rounded-lg overflow-hidden border bg-white">
+                      {photo.uploading ? (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      ) : (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={photo.url} alt="오픈 사진" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeLockupPhoto(photo.url, openPhotos, setOpenPhotos, (u) => saveOpenPhotos({ workerId, bookingId: booking.id, photoUrls: u }))}
+                            className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
+                          >
+                            <X className="h-3 w-3 text-white" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                  {openPhotos.length < 5 && (
+                    <button
+                      type="button"
+                      onClick={() => openInputRef.current?.click()}
+                      className="w-20 h-20 rounded-lg border-2 border-dashed border-amber-400/60 flex flex-col items-center justify-center gap-1 bg-white/50"
+                    >
+                      <Camera className="h-5 w-5 text-amber-600" />
+                      <span className="text-[10px] text-amber-700">사진 추가</span>
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={openInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.length) uploadLockupPhotos(e.target.files, 'open', openPhotos, setOpenPhotos, (u) => saveOpenPhotos({ workerId, bookingId: booking.id, photoUrls: u }))
+                    e.target.value = ''
+                  }}
+                />
+              </div>
+
+              {/* ② 마감 · 문 잠금 */}
+              <div className="space-y-2 border-t border-amber-200 pt-3">
+                <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-900">
+                  <Lock className="h-4 w-4" />
+                  <span>② 마감 · 문 잠금 사진</span>
+                  {checkoutTime && (
+                    <span className="ml-auto flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                      <CheckCircle className="h-3.5 w-3.5" /> 문단속 완료 {fmtKstTime(checkoutTime)}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {lockupPhotos.map((photo) => (
+                    <div key={photo.url || 'up'} className="relative w-20 h-20 rounded-lg overflow-hidden border bg-white">
+                      {photo.uploading ? (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      ) : (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={photo.url} alt="잠금 사진" className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeLockupPhoto(photo.url, lockupPhotos, setLockupPhotos, (u) => saveLockupPhotos({ workerId, bookingId: booking.id, photoUrls: u }))}
+                            className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
+                          >
+                            <X className="h-3 w-3 text-white" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                  {lockupPhotos.length < 5 && (
+                    <button
+                      type="button"
+                      onClick={() => lockupInputRef.current?.click()}
+                      className="w-20 h-20 rounded-lg border-2 border-dashed border-amber-400/60 flex flex-col items-center justify-center gap-1 bg-white/50"
+                    >
+                      <Camera className="h-5 w-5 text-amber-600" />
+                      <span className="text-[10px] text-amber-700">사진 추가</span>
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={lockupInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.length) uploadLockupPhotos(e.target.files, 'lockup', lockupPhotos, setLockupPhotos, (u) => saveLockupPhotos({ workerId, bookingId: booking.id, photoUrls: u }))
+                    e.target.value = ''
+                  }}
+                />
+                {!checkoutTime && (
+                  <p className="text-[11px] text-amber-700">
+                    나가기 전 꼭 올려주세요. 예상 시간이 지나도 안 올라오면 사장님께 알림이 가요.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 메모 섹션 — 작업 중이거나 완료 전 */}
         {(currentStatus === 'in_progress' || currentStatus === 'confirmed') && (

@@ -884,3 +884,67 @@ export const fieldDeleteBookingItemAction = action
 
     return { success: true }
   })
+
+// ── 현장 문단속(오픈/마감) 인증 ────────────────────────────
+// 도착해서 문 열 때 오픈 사진, 다 끝내고 잠근 뒤 마감 사진을 올린다.
+// 오픈 사진 시각(checkin_at)이 알림 기준점이 되고, 마감 사진이 없으면 크론이 알림을 보낸다.
+
+// 도착·문 오픈 사진 저장 (checkin_at을 최초 1회만 기록 = 출근 기준점)
+export const fieldSaveOpenPhotosAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+    photoUrls: z.array(z.string().url()).max(5),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    // 사진이 처음 올라올 때만 checkin_at 기록 (재업로드로 기준점이 밀리지 않게)
+    const { data: cur } = await db
+      .from('bookings')
+      .select('checkin_at' as never)
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', worker.business_id)
+      .maybeSingle() as unknown as { data: { checkin_at: string | null } | null }
+
+    const patch: Record<string, unknown> = { open_photo_urls: parsedInput.photoUrls }
+    if (parsedInput.photoUrls.length > 0 && !cur?.checkin_at) {
+      patch.checkin_at = new Date().toISOString()
+    }
+
+    const { error } = await db
+      .from('bookings')
+      .update(patch as never)
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', worker.business_id)
+    if (error) throw new Error('[APP] 사진 저장에 실패했어요. 다시 시도해주세요')
+
+    return { success: true, checkinAt: (patch.checkin_at as string) ?? cur?.checkin_at ?? null }
+  })
+
+// 마감·문 잠금 사진 저장 (checkout_at 기록 = 문단속 완료)
+export const fieldSaveLockupPhotosAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+    photoUrls: z.array(z.string().url()).max(5),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    // 사진이 하나라도 있으면 마감 완료로 보고 checkout_at 기록, 모두 지우면 해제
+    const done = parsedInput.photoUrls.length > 0
+    const { error } = await db
+      .from('bookings')
+      .update({
+        lockup_photo_urls: parsedInput.photoUrls,
+        checkout_at: done ? new Date().toISOString() : null,
+      } as never)
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', worker.business_id)
+    if (error) throw new Error('[APP] 사진 저장에 실패했어요. 다시 시도해주세요')
+
+    return { success: true, done }
+  })

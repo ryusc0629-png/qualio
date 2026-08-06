@@ -49,7 +49,7 @@ export default async function FieldBookingPage({ params }: Props) {
   // 예약 상세 조회 (메모 최종 저장자 포함)
   const { data: booking } = await db
     .from('bookings')
-    .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, customer_request, quote_id, memo_updated_by, memo_updated_at, on_my_way_sent_at' as never)
+    .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, customer_request, quote_id, memo_updated_by, memo_updated_at, on_my_way_sent_at, contract_id, checkin_at, checkout_at, open_photo_urls, lockup_photo_urls' as never)
     .eq('id', bookingId)
     .eq('business_id', worker.business_id)
     .maybeSingle() as { data: {
@@ -58,9 +58,22 @@ export default async function FieldBookingPage({ params }: Props) {
       status: string; memo: string | null; customer_request: string | null; quote_id: string | null
       memo_updated_by: string | null; memo_updated_at: string | null
       on_my_way_sent_at: string | null
+      contract_id: string | null; checkin_at: string | null; checkout_at: string | null
+      open_photo_urls: string[] | null; lockup_photo_urls: string[] | null
     } | null }
 
   if (!booking) notFound()
+
+  // 문단속 설정 — 이 방문이 '문단속 필요' 정기계약 소속인지 확인
+  let requiresLockup = false
+  if (booking.contract_id) {
+    const { data: contract } = await db
+      .from('contracts')
+      .select('requires_lockup' as never)
+      .eq('id', booking.contract_id)
+      .maybeSingle() as { data: { requires_lockup: boolean | null } | null }
+    requiresLockup = contract?.requires_lockup === true
+  }
 
   // 메모 최종 저장자 이름 조회
   let memoUpdatedByName: string | null = null
@@ -128,6 +141,11 @@ export default async function FieldBookingPage({ params }: Props) {
       reportSentAt={report?.kakao_sent_at ?? null}
       notifyOnMyWay={notifyOnMyWay}
       onMyWaySentAt={booking.on_my_way_sent_at}
+      requiresLockup={requiresLockup}
+      existingOpenPhotoUrls={booking.open_photo_urls ?? []}
+      existingLockupPhotoUrls={booking.lockup_photo_urls ?? []}
+      checkinAt={booking.checkin_at}
+      checkoutAt={booking.checkout_at}
       existingBeforeUrls={beforeUrls}
       existingCustomerRequest={(booking.customer_request as string) ?? ''}
       existingNextVisitNote={savedNextVisitNote}
