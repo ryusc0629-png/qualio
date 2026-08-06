@@ -5,6 +5,7 @@ import { AddClientForm } from '@/components/dashboard/add-client-form'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { DeleteCustomerButton } from '@/components/dashboard/delete-customer-button'
 import { ContractStatusSelect } from '@/components/dashboard/contract-status-select'
+import { ContractLockupCell } from '@/components/dashboard/contract-lockup-cell'
 import { ConfirmBookingButton } from '@/components/dashboard/confirm-booking-button'
 import { CancelQuoteButton } from '@/components/dashboard/cancel-quote-button'
 import { ExcludeQuoteButton } from '@/components/dashboard/exclude-quote-button'
@@ -67,6 +68,8 @@ type ContractRow = {
   status: string
   start_date: string
   end_date: string | null
+  requires_lockup: boolean | null
+  expected_duration_minutes: number | null
 }
 
 type B2bQuoteRow = {
@@ -164,7 +167,7 @@ export default async function ClientsPage({
       .eq('business_id', businessId),
 
     db.from('contracts')
-      .select('id, customer_id, service_type, frequency, contract_price, status, start_date, end_date')
+      .select('id, customer_id, service_type, frequency, contract_price, status, start_date, end_date, requires_lockup, expected_duration_minutes' as never)
       .eq('business_id', businessId),
 
     db.from('bookings')
@@ -243,7 +246,7 @@ export default async function ClientsPage({
   }
 
   const contractMap: Record<string, ContractRow[]> = {}
-  for (const c of contracts ?? []) {
+  for (const c of (contracts ?? []) as unknown as ContractRow[]) {
     if (!contractMap[c.customer_id]) contractMap[c.customer_id] = []
     contractMap[c.customer_id]!.push(c)
   }
@@ -318,7 +321,7 @@ export default async function ClientsPage({
   )
 
   const totalLtv = (completedBookings ?? []).reduce((s, b) => s + (b.final_price ?? 0), 0)
-  const monthlyRecurring = (contracts ?? []).filter(c => c.status === 'active').reduce((s, c) => s + c.contract_price, 0)
+  const monthlyRecurring = ((contracts ?? []) as unknown as ContractRow[]).filter(c => c.status === 'active').reduce((s, c) => s + c.contract_price, 0)
 
   return (
     <div className="max-w-4xl mx-auto space-y-5">
@@ -565,6 +568,11 @@ export default async function ClientsPage({
                             {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
                           </p>
                           <ContractStatusSelect contractId={activeContract.id} currentStatus={activeContract.status} />
+                          <ContractLockupCell
+                            contractId={activeContract.id}
+                            requiresLockup={activeContract.requires_lockup ?? false}
+                            expectedDurationMinutes={activeContract.expected_duration_minutes ?? null}
+                          />
                         </div>
                       )}
                     </div>
@@ -729,10 +737,19 @@ export default async function ClientsPage({
                             </p>
                           )}
                           {activeContract && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
-                              <span className="text-emerald-600 font-medium ml-2">{activeContract.contract_price.toLocaleString('ko-KR')}원/월</span>
-                            </p>
+                            <>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
+                                <span className="text-emerald-600 font-medium ml-2">{activeContract.contract_price.toLocaleString('ko-KR')}원/월</span>
+                              </p>
+                              <div className="mt-1.5">
+                                <ContractLockupCell
+                                  contractId={activeContract.id}
+                                  requiresLockup={activeContract.requires_lockup ?? false}
+                                  expectedDurationMinutes={activeContract.expected_duration_minutes ?? null}
+                                />
+                              </div>
+                            </>
                           )}
                         </div>
                       </div>
