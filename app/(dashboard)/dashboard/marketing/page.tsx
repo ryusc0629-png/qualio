@@ -1,5 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { Suspense } from 'react'
 import { PostList } from './post-list'
 import { MarketingStats } from './marketing-stats'
@@ -152,6 +153,17 @@ export default async function MarketingPage({
           마케팅 전문가 데이터로 홍보 글을 자동 작성합니다. 글이 쌓일수록 AI 검색엔진에 더 자주 노출됩니다.
         </p>
       </div>
+
+      <Link
+        href="/dashboard/marketing/proposal"
+        className="flex items-center justify-between rounded-xl border bg-card px-4 py-3.5 hover:bg-muted transition-colors"
+      >
+        <div>
+          <p className="text-sm font-semibold">📄 회사 소개서 만들기</p>
+          <p className="text-xs text-muted-foreground mt-0.5">업체 정보로 자동 완성 · PDF로 저장해 손님에게 보내기</p>
+        </div>
+        <span className="text-muted-foreground text-lg">›</span>
+      </Link>
 
       <PostList
         posts={posts}
