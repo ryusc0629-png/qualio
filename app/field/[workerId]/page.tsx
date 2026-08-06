@@ -1,7 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { MapPin, Clock, ChevronRight, Briefcase } from 'lucide-react'
+import { MapPin, Clock, ChevronRight, Briefcase, CalendarClock } from 'lucide-react'
 import { WorkerPushToggle } from '@/components/field/worker-push-toggle'
 
 // workers 테이블 타입 (Supabase 타입 아직 미생성)
@@ -96,6 +96,35 @@ export default async function FieldDashboard({ params }: Props) {
 
   const jobs = bookings ?? []
 
+  // 내일 일정 — 직원이 전날 미리 파악하도록 (전날 알림에서 이 화면으로 온다)
+  const kstTomorrow = new Date(kstNow.getTime() + 24 * 60 * 60 * 1000)
+  const tomorrowStr = kstTomorrow.toISOString().slice(0, 10)
+  const tomorrowStart = new Date(`${tomorrowStr}T00:00:00+09:00`).toISOString()
+  const tomorrowEnd = new Date(`${tomorrowStr}T23:59:59+09:00`).toISOString()
+
+  const { data: tomorrowBookings } = assignedIds.length > 0
+    ? await (db
+        .from('bookings')
+        .select('id, customer_name, service_address, scheduled_at, final_price, status, memo')
+        .eq('business_id', worker.business_id)
+        .or(`worker_id.eq.${workerId},id.in.(${assignedIds.join(',')})`)
+        .gte('scheduled_at', tomorrowStart)
+        .lte('scheduled_at', tomorrowEnd)
+        .not('status', 'in', '("cancelled","no_show")')
+        .order('scheduled_at', { ascending: true }) as unknown as Promise<{ data: BookingRow[] | null }>)
+    : await (db
+        .from('bookings')
+        .select('id, customer_name, service_address, scheduled_at, final_price, status, memo')
+        .eq('business_id', worker.business_id)
+        .eq('worker_id' as never, workerId)
+        .gte('scheduled_at', tomorrowStart)
+        .lte('scheduled_at', tomorrowEnd)
+        .not('status', 'in', '("cancelled","no_show")')
+        .order('scheduled_at', { ascending: true }) as unknown as Promise<{ data: BookingRow[] | null }>)
+
+  const tomorrowJobs = tomorrowBookings ?? []
+  const tomorrowDateDisplay = kstTomorrow.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', timeZone: 'Asia/Seoul' })
+
   const statusLabel: Record<string, string> = {
     confirmed:   '예정',
     in_progress: '작업 중',
@@ -134,6 +163,50 @@ export default async function FieldDashboard({ params }: Props) {
   const pendingCount = jobs.filter((j) => j.status === 'confirmed' || j.status === 'in_progress').length
   const completedCount = jobs.filter((j) => j.status === 'completed').length
 
+  // 오늘/내일 목록에서 같은 카드를 재사용
+  const renderJob = (job: BookingRow) => (
+    <Link
+      key={job.id}
+      href={`/field/${workerId}/${job.id}`}
+      className={`block rounded-xl bg-white border transition-colors ${cardAccent[job.status] ?? 'hover:border-primary/30'}`}
+    >
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">{formatTime(job.scheduled_at)}</span>
+          </div>
+          <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColor[job.status] ?? 'bg-gray-100 text-gray-600'}`}>
+            {statusLabel[job.status] ?? job.status}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between mb-1.5">
+          <h3 className="font-semibold">{job.customer_name}</h3>
+          <span className="text-sm font-medium text-primary">{formatPrice(job.final_price)}</span>
+        </div>
+
+        {job.service_address && (
+          <div className="flex items-start gap-1.5 text-sm text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span className="line-clamp-1">{job.service_address}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="border-t px-4 py-2.5 flex items-center justify-between text-xs text-muted-foreground">
+        <span>
+          {job.status === 'confirmed' && '탭하여 작업 시작'}
+          {job.status === 'in_progress' && '탭하여 수금 완료'}
+          {job.status === 'completed' && '작업 완료됨'}
+          {job.status === 'cancelled' && '취소된 예약'}
+          {job.status === 'no_show' && '고객 불참'}
+        </span>
+        <ChevronRight className="h-4 w-4" />
+      </div>
+    </Link>
+  )
+
   return (
     <div className="min-h-dvh bg-gray-50">
       {/* 헤더 */}
@@ -166,48 +239,21 @@ export default async function FieldDashboard({ params }: Props) {
             <p className="text-xs text-muted-foreground">새 작업이 배정되면 이 화면에 자동으로 나타나요</p>
           </div>
         ) : (
-          jobs.map((job) => (
-            <Link
-              key={job.id}
-              href={`/field/${workerId}/${job.id}`}
-              className={`block rounded-xl bg-white border transition-colors ${cardAccent[job.status] ?? 'hover:border-primary/30'}`}
-            >
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm font-medium">{formatTime(job.scheduled_at)}</span>
-                  </div>
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusColor[job.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                    {statusLabel[job.status] ?? job.status}
-                  </span>
-                </div>
+          jobs.map((job) => renderJob(job))
+        )}
 
-                <div className="flex items-center justify-between mb-1.5">
-                  <h3 className="font-semibold">{job.customer_name}</h3>
-                  <span className="text-sm font-medium text-primary">{formatPrice(job.final_price)}</span>
-                </div>
-
-                {job.service_address && (
-                  <div className="flex items-start gap-1.5 text-sm text-muted-foreground">
-                    <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                    <span className="line-clamp-1">{job.service_address}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t px-4 py-2.5 flex items-center justify-between text-xs text-muted-foreground">
-                <span>
-                  {job.status === 'confirmed' && '탭하여 작업 시작'}
-                  {job.status === 'in_progress' && '탭하여 수금 완료'}
-                  {job.status === 'completed' && '작업 완료됨'}
-                  {job.status === 'cancelled' && '취소된 예약'}
-                  {job.status === 'no_show' && '고객 불참'}
-                </span>
-                <ChevronRight className="h-4 w-4" />
-              </div>
-            </Link>
-          ))
+        {/* 내일 일정 — 전날 미리 챙기기 */}
+        {tomorrowJobs.length > 0 && (
+          <div className="pt-5">
+            <div className="flex items-center gap-2 mb-2">
+              <CalendarClock className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">내일 일정 · {tomorrowDateDisplay}</h2>
+              <span className="text-xs text-muted-foreground">({tomorrowJobs.length}건)</span>
+            </div>
+            <div className="space-y-3">
+              {tomorrowJobs.map((job) => renderJob(job))}
+            </div>
+          </div>
         )}
 
         {/* 앱 알림 켜기 — 클레임 처리 요청 등을 폰으로 받기 (직원 종속 핵심 길목) */}

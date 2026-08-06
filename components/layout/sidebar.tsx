@@ -14,6 +14,7 @@ import {
   CalendarDays,
   Wallet,
   ShieldCheck,
+  Lock,
   X,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -32,6 +33,7 @@ interface SidebarProps {
 const navItems = [
   { href: '/dashboard',          label: '홈',          desc: undefined,        icon: LayoutDashboard, exact: true },
   { href: '/dashboard/schedule', label: '일정·배정',   desc: undefined,        icon: CalendarDays },
+  { href: '/dashboard/attendance', label: '문단속·출퇴근', desc: '현장 도착·마감 확인', icon: Lock },
   { href: '/dashboard/marketing',label: '마케팅',      desc: undefined,        icon: Megaphone },
   { href: '/dashboard/clients',  label: '고객 관리',   desc: '상담·견적·거래처', icon: Users },
   { href: '/dashboard/finance',  label: '매출·지출',   desc: '손익·본전 계산',   icon: Wallet },
