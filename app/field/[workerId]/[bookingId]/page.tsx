@@ -142,6 +142,7 @@ export default async function FieldBookingPage({ params }: Props) {
       notifyOnMyWay={notifyOnMyWay}
       onMyWaySentAt={booking.on_my_way_sent_at}
       requiresLockup={requiresLockup}
+      isRecurring={!!booking.contract_id}
       existingOpenPhotoUrls={booking.open_photo_urls ?? []}
       existingLockupPhotoUrls={booking.lockup_photo_urls ?? []}
       checkinAt={booking.checkin_at}

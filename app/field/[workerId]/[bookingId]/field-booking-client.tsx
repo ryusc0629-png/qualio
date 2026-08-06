@@ -63,6 +63,7 @@ interface Props {
   notifyOnMyWay: boolean
   onMyWaySentAt: string | null
   requiresLockup: boolean
+  isRecurring: boolean
   existingOpenPhotoUrls: string[]
   existingLockupPhotoUrls: string[]
   checkinAt: string | null
@@ -83,7 +84,7 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(diff / 86400)}일 전`
 }
 
-export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, notifyOnMyWay, onMyWaySentAt, requiresLockup, existingOpenPhotoUrls, existingLockupPhotoUrls, checkinAt, checkoutAt, existingBeforeUrls, existingCustomerRequest, existingNextVisitNote, memoUpdatedById, memoUpdatedByName, memoUpdatedAt }: Props) {
+export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, notifyOnMyWay, onMyWaySentAt, requiresLockup, isRecurring, existingOpenPhotoUrls, existingLockupPhotoUrls, checkinAt, checkoutAt, existingBeforeUrls, existingCustomerRequest, existingNextVisitNote, memoUpdatedById, memoUpdatedByName, memoUpdatedAt }: Props) {
   const [currentStatus, setCurrentStatus] = useState(booking.status)
   const [onMyWaySent, setOnMyWaySent] = useState(!!onMyWaySentAt)
   // 현장에서 항목을 조정하면 결제 금액도 실시간으로 따라간다
@@ -170,7 +171,9 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
   const { execute: completePayment, isPending: isCompleting } = useAction(fieldCompletePaymentAction, {
     onSuccess: ({ data }) => {
       setCurrentStatus('completed')
-      if (data?.reviewSkipped) {
+      if (isRecurring) {
+        toast.success('작업을 완료했어요!')
+      } else if (data?.reviewSkipped) {
         toast.success('수금 완료! (리뷰 요청 미발송)')
       } else {
         toast.success('수금 완료!')
@@ -646,8 +649,8 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
           </div>
         )}
 
-        {/* 항목별 금액 조정 — 작업 중이거나 완료 전 */}
-        {(currentStatus === 'in_progress' || currentStatus === 'confirmed') && (
+        {/* 항목별 금액 조정 — 일회성 현장에서만 (정기청소는 월말 정산이라 현장 추가 항목 없음) */}
+        {!isRecurring && (currentStatus === 'in_progress' || currentStatus === 'confirmed') && (
           <FieldBookingItemsEditor
             workerId={workerId}
             bookingId={booking.id}
@@ -718,10 +721,10 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
             <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4 space-y-1.5">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                <p className="font-medium text-emerald-800">수금 완료</p>
+                <p className="font-medium text-emerald-800">{isRecurring ? '작업 완료' : '수금 완료'}</p>
               </div>
               <p className="text-xs text-emerald-700 ml-7">
-                리뷰 요청이 고객에게 자동 발송됐어요
+                {isRecurring ? '정기청소는 월말에 정산돼요' : '리뷰 요청이 고객에게 자동 발송됐어요'}
               </p>
             </div>
 
@@ -766,7 +769,24 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
             </div>
           )}
 
-          {currentStatus === 'in_progress' && !paymentRequested && (
+          {/* 정기청소 — 월말 정산이라 결제 요청 없이 '작업 완료하기'만 */}
+          {currentStatus === 'in_progress' && isRecurring && (
+            <Button
+              size="lg"
+              className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700"
+              disabled={isCompleting}
+              onClick={() => {
+                if (confirm('이 현장 작업을 완료할까요?')) {
+                  completePayment({ workerId, bookingId: booking.id, skipReview: true })
+                }
+              }}
+            >
+              <CheckCircle2 className="h-5 w-5" />
+              {isCompleting ? '처리 중...' : '작업 완료하기'}
+            </Button>
+          )}
+
+          {currentStatus === 'in_progress' && !isRecurring && !paymentRequested && (
             <div className="space-y-2">
               <Button
                 size="lg"
@@ -795,7 +815,7 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
             </div>
           )}
 
-          {currentStatus === 'in_progress' && paymentRequested && (
+          {currentStatus === 'in_progress' && !isRecurring && paymentRequested && (
             <div className="space-y-2">
               <Button
                 size="lg"

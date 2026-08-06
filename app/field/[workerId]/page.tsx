@@ -123,7 +123,9 @@ export default async function FieldDashboard({ params }: Props) {
         .order('scheduled_at', { ascending: true }) as unknown as Promise<{ data: BookingRow[] | null }>)
 
   const tomorrowJobs = tomorrowBookings ?? []
-  const tomorrowDateDisplay = kstTomorrow.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', timeZone: 'Asia/Seoul' })
+  // 표시는 실제 시각(now)에 Asia/Seoul을 적용한다. kstNow(이미 +9h)에 다시 timeZone을 주면
+  // 이중 보정(+18h)되어 자정 부근에서 하루 밀려 보인다.
+  const tomorrowDateDisplay = new Date(now.getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', timeZone: 'Asia/Seoul' })
 
   const statusLabel: Record<string, string> = {
     confirmed:   '예정',
@@ -159,7 +161,7 @@ export default async function FieldDashboard({ params }: Props) {
     return price.toLocaleString('ko-KR') + '원'
   }
 
-  const dateDisplay = kstNow.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', timeZone: 'Asia/Seoul' })
+  const dateDisplay = now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', timeZone: 'Asia/Seoul' })
   const pendingCount = jobs.filter((j) => j.status === 'confirmed' || j.status === 'in_progress').length
   const completedCount = jobs.filter((j) => j.status === 'completed').length
 
