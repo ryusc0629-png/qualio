@@ -13,6 +13,7 @@ import { FrequencyPicker } from '@/components/dashboard/frequency-picker'
 import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { createLeadAction } from '@/lib/actions/crm'
 import { createActiveCustomerAction } from '@/lib/actions/customers'
+import { SourceChannelSelect } from '@/components/dashboard/source-channel-select'
 import { Plus, X, Search, Trash2 } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import { formatPhone } from '@/lib/format/phone'
@@ -36,6 +37,7 @@ const leadSchema = z.object({
   category: z.string().optional(),
   next_follow_up_date: z.string().optional(),
   notes: z.string().optional(),
+  channel: z.string().optional(),
 })
 
 const customerSchema = z.object({
@@ -59,6 +61,7 @@ const customerSchema = z.object({
   frequency: z.string().optional(),
   contract_price: z.string().optional(),
   start_date: z.string().optional(),
+  channel: z.string().optional(),
 })
 
 type LeadInput = z.infer<typeof leadSchema>
@@ -366,6 +369,8 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
                 className="w-full min-h-[60px] rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none"
               />
             </div>
+
+            <SourceChannelSelect id="lead-channel" {...leadForm.register('channel')} />
 
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" className="flex-1" onClick={handleClose}>취소</Button>
@@ -679,6 +684,8 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
                 )}
               </div>
             )}
+
+            <SourceChannelSelect id="cust-channel" {...customerForm.register('channel')} />
 
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" className="flex-1" onClick={handleClose}>취소</Button>

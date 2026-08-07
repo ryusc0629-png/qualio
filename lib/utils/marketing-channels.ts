@@ -34,8 +34,19 @@ export const AUTO_CHANNELS: MarketingChannel[] = [
   { key: 'post', label: '자동발행 글', emoji: '✍️', hint: '자동 발행되는 블로그 글의 견적 버튼에서 온 방문' },
 ]
 
-// 알려진 모든 채널(홍보·광고·자동) — 통계 순회·라벨·검증의 단일 출처
-export const ALL_CHANNELS: MarketingChannel[] = [...AD_CHANNELS, ...MARKETING_CHANNELS, ...AUTO_CHANNELS]
+// 오프라인·수기 유입 — 링크(?ch=)로 안 들어와 사장님이 손으로 고르는 유입원.
+// 전화·소개처럼 QR/링크로 못 잡는 손님을 예약 등록 때 '어떻게 알고 오셨어요?'로 채널에 편입한다.
+export const OFFLINE_CHANNELS: MarketingChannel[] = [
+  { key: 'referral', label: '소개·지인', emoji: '🤝', hint: '기존 고객·지인 소개로 온 손님' },
+  { key: 'phone',    label: '전화 문의', emoji: '📞', hint: '광고·간판을 보고 바로 전화한 손님' },
+]
+
+// 알려진 모든 채널(홍보·광고·자동·오프라인) — 통계 순회·라벨·검증의 단일 출처
+export const ALL_CHANNELS: MarketingChannel[] = [...AD_CHANNELS, ...MARKETING_CHANNELS, ...AUTO_CHANNELS, ...OFFLINE_CHANNELS]
+
+// 수기 등록('어떻게 알고 오셨어요?') 드롭다운 선택지 — 사장님이 고를 만한 유입원만, 쉬운 순서로.
+// 광고(naver_pl/google_search)·자동발행(post)은 시스템이 자동으로 붙이므로 제외.
+export const MANUAL_SOURCE_OPTIONS: MarketingChannel[] = [...OFFLINE_CHANNELS, ...MARKETING_CHANNELS]
 
 const CHANNEL_KEYS = new Set(ALL_CHANNELS.map((c) => c.key))
 

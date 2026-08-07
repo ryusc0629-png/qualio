@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { normalizeChannel } from '@/lib/utils/marketing-channels'
 
 const LEAD_STATUSES = ['new', 'contacted', 'follow_up', 'quoted', 'negotiating', 'contracted', 'rejected', 'archived'] as const
 const ACTIVITY_TYPES = ['call', 'visit', 'quote', 'note', 'meeting'] as const
@@ -24,6 +25,8 @@ const createLeadSchema = z.object({
   monthly_budget: z.number().optional(),
   next_follow_up_date: z.string().optional(),
   notes: z.string().optional(),
+  // 유입경로('어떻게 알고 오셨어요?') — 전화·소개 등 오프라인 유입을 채널에 편입
+  channel: z.string().max(50).optional(),
 })
 
 // 상태 변경 스키마
@@ -137,7 +140,9 @@ export const createLeadAction = action
       // 빈 문자열('')이 date 컬럼에 들어가면 22007 오류 → 빈 값은 반드시 null 로
       next_follow_up_date: parsedInput.next_follow_up_date || null,
       notes:               parsedInput.notes ?? null,
-    })
+      // 유입 채널 — 알려진 채널 키만 저장(임의값은 null)
+      channel:             normalizeChannel(parsedInput.channel),
+    } as never)
 
     if (error) {
       console.error('[createLeadAction] DB 오류:', error)

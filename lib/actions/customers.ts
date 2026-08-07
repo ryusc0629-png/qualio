@@ -10,6 +10,7 @@ import { sendPushToBusiness } from '@/lib/push/web-push'
 import { inputToUtcIso } from '@/lib/format/datetime'
 import { normalizePhone } from '@/lib/format/phone'
 import { SALES_STAGE_VALUES } from '@/lib/business/sales-stage'
+import { normalizeChannel } from '@/lib/utils/marketing-channels'
 
 // 공통 인증 헬퍼
 async function getAuthenticatedBusinessId() {
@@ -224,6 +225,8 @@ const createActiveCustomerSchema = z.object({
   frequency: z.string().optional(),
   contract_price: z.string().optional(),
   start_date: z.string().optional(),
+  // 유입경로('어떻게 알고 오셨어요?') — 첫 작업 예약에 채널로 남김
+  channel: z.string().optional(),
 })
 
 export const createActiveCustomerAction = action
@@ -275,7 +278,9 @@ export const createActiveCustomerAction = action
         final_price: price,
         memo: parsedInput.job_service || null,
         status: 'confirmed',
-      })
+        // 유입 채널 — 손으로 등록한 손님도 '어떻게 알고 오셨나'를 채널로 남겨 매출 귀속
+        channel: normalizeChannel(parsedInput.channel),
+      } as never)
         .select('id')
         .single()
 
