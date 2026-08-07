@@ -38,6 +38,8 @@ const bugReportSchema = z.object({
   // 신고 당시 화면 경로 — 클라이언트가 window.location.pathname 등을 담아 보냄
   pageUrl: z.string().max(500).optional(),
   userAgent: z.string().max(500).optional(),
+  // 첨부 이미지·영상 공개 URL (브라우저에서 스토리지로 직접 업로드한 뒤 URL만 전달)
+  mediaUrls: z.array(z.string().url()).max(5).optional(),
 })
 
 export const submitBugReportAction = action
@@ -54,6 +56,7 @@ export const submitBugReportAction = action
       message: parsedInput.message.trim(),
       page_url: parsedInput.pageUrl ?? null,
       user_agent: parsedInput.userAgent ?? null,
+      media_urls: parsedInput.mediaUrls && parsedInput.mediaUrls.length > 0 ? parsedInput.mediaUrls : null,
     })
 
     if (error) {

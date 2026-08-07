@@ -12,8 +12,14 @@ type BugReport = {
   message: string
   page_url: string | null
   user_agent: string | null
+  media_urls: string[] | null
   status: string
   created_at: string
+}
+
+// 확장자로 영상 여부 판단 (첨부 렌더링용)
+function isVideoUrl(url: string): boolean {
+  return /\.(mp4|mov|webm|m4v|avi|ogg)(\?|$)/i.test(url)
 }
 
 // 처리 상태 라벨/색상
@@ -28,7 +34,7 @@ export default async function BugReportsPage() {
   const looseDb = createServiceClient() as unknown as SupabaseClient
   const { data } = (await looseDb
     .from('bug_reports')
-    .select('id, business_id, reporter_name, message, page_url, user_agent, status, created_at')
+    .select('id, business_id, reporter_name, message, page_url, user_agent, media_urls, status, created_at')
     .order('created_at', { ascending: false })) as unknown as { data: BugReport[] | null }
 
   const rows = data ?? []
@@ -95,6 +101,30 @@ export default async function BugReportsPage() {
                 <p className="mt-1.5 whitespace-pre-wrap break-words text-sm text-foreground">
                   {r.message}
                 </p>
+                {/* 첨부 이미지·영상 — 클릭하면 원본 새 탭 */}
+                {r.media_urls && r.media_urls.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {r.media_urls.map((url) =>
+                      isVideoUrl(url) ? (
+                        <video
+                          key={url}
+                          src={url}
+                          controls
+                          className="h-32 rounded-lg border bg-black"
+                        />
+                      ) : (
+                        <a key={url} href={url} target="_blank" rel="noreferrer">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={url}
+                            alt="신고 첨부"
+                            className="h-24 w-24 rounded-lg border object-cover transition-opacity hover:opacity-80"
+                          />
+                        </a>
+                      ),
+                    )}
+                  </div>
+                )}
                 {r.page_url && (
                   <p className="mt-1.5 text-[11px] text-muted-foreground">
                     화면: <span className="font-mono">{r.page_url}</span>
