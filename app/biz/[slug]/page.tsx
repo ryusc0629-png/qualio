@@ -1085,6 +1085,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
                   businessId={business.id}
                   businessName={business.name}
                   services={formServices}
+                  channel={ch ?? null}
                 />
               </div>
             ) : (

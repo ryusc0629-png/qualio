@@ -5,6 +5,7 @@ import { Suspense } from 'react'
 import { PostList } from './post-list'
 import { MarketingStats } from './marketing-stats'
 import { ChannelLinksCard } from './channel-links-card'
+import { ChannelPerformanceCard } from './channel-performance-card'
 import { MarketingPeriodSelector } from './period-selector'
 import { GeoShareCard } from '@/components/dashboard/geo-share-card'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
@@ -201,6 +202,14 @@ export default async function MarketingPage({
           </div>
         }>
           <MarketingStats businessId={profile.business_id} months={months} />
+        </Suspense>
+
+        <Suspense fallback={
+          <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
+            채널별 성과를 불러오는 중...
+          </div>
+        }>
+          <ChannelPerformanceCard businessId={profile.business_id} months={months} />
         </Suspense>
 
         <Suspense fallback={

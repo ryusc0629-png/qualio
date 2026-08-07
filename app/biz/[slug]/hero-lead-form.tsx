@@ -27,6 +27,8 @@ interface Props {
   businessId: string
   businessName: string
   services: HeroFormService[]
+  // 유입 채널(?ch=) — 이 랜딩으로 데려온 홍보 채널. 문의/견적 오더에 그대로 도장 찍는다.
+  channel?: string | null
 }
 
 // 평수(평당)·개수(개) 서비스는 규모 입력이 필요
@@ -44,7 +46,7 @@ function isConsultType(s: HeroFormService): boolean {
   )
 }
 
-export function HeroLeadForm({ businessId, businessName, services }: Props) {
+export function HeroLeadForm({ businessId, businessName, services, channel }: Props) {
   const [serviceId, setServiceId] = useState(services[0]?.id ?? '')
   const [size, setSize] = useState('')
   const [company, setCompany] = useState('')
@@ -131,6 +133,7 @@ export function HeroLeadForm({ businessId, businessName, services }: Props) {
         customer_name: trimmedName,
         customer_phone: phoneDigits,
         company_name: businessMode ? trimmedCompany : undefined,
+        channel: channel ?? undefined,
       })
     } else {
       quoteAction.execute({
@@ -140,6 +143,7 @@ export function HeroLeadForm({ businessId, businessName, services }: Props) {
         customer_name: trimmedName,
         customer_phone: phoneDigits,
         company_name: businessMode ? trimmedCompany : undefined,
+        channel: channel ?? undefined,
       })
     }
   }

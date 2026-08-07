@@ -12,6 +12,7 @@ import { detectBundleReview } from '@/lib/utils/booking-review'
 import { isBusinessService } from '@/lib/utils'
 import { findCustomerIdByPhone } from '@/lib/actions/_customer-lookup'
 import { inputToUtcIso } from '@/lib/format/datetime'
+import { normalizeChannel } from '@/lib/utils/marketing-channels'
 
 // 공개 폼용 액션 클라이언트 (인증 불필요)
 const publicAction = createSafeActionClient({
@@ -56,6 +57,8 @@ const calculateAndCreateQuoteSchema = z.object({
   unit_selections: z.record(z.string(), z.number().int().min(0).max(1000)).optional(),
   // 구분 선택 (신축/구축 등) — unit_variants가 있는 서비스에만 전달
   unit_variant: z.string().max(50).optional(),
+  // 유입 채널(?ch=) — 어느 홍보 채널에서 온 견적인지 오더에 도장 찍기용
+  channel: z.string().max(50).optional(),
 })
 
 export const calculateAndCreateQuoteAction = publicAction
@@ -295,6 +298,8 @@ export const calculateAndCreateQuoteAction = publicAction
         customer_name:  parsedInput.customer_name || null,
         customer_phone: parsedInput.customer_phone || null,
         is_test:       isTestQuote,
+        // 유입 채널 — 알려진 채널 키만 저장(임의값은 null로 걸러 통계 오염 방지)
+        channel:       normalizeChannel(parsedInput.channel),
       } as never)
       .select('id')
       .single()
@@ -409,12 +414,18 @@ export const createBookingAction = publicAction
   .action(async ({ parsedInput }) => {
     const db = createServiceClient()
 
-    // 견적 조회 (pending 상태인지 확인)
+    // 견적 조회 (pending 상태인지 확인) — 유입 채널(channel)도 함께 읽어 예약에 승계
     const { data: quote } = await db
       .from('quotes')
-      .select('id, business_id, cleaning_type, good_price, better_price, best_price, preferred_date, status')
+      .select('id, business_id, cleaning_type, good_price, better_price, best_price, preferred_date, status, channel' as never)
       .eq('id', parsedInput.quote_id)
-      .maybeSingle()
+      .maybeSingle() as unknown as {
+        data: {
+          id: string; business_id: string; cleaning_type: string
+          good_price: number | null; better_price: number | null; best_price: number | null
+          preferred_date: string | null; status: string; channel: string | null
+        } | null
+      }
 
     if (!quote) throw new Error('[APP] 견적 정보를 찾을 수 없습니다')
     if (quote.status !== 'pending') throw new Error('[APP] 이미 처리된 견적입니다')
@@ -445,6 +456,8 @@ export const createBookingAction = publicAction
       status: 'confirmed',
       needs_review: review.needsReview,
       review_reason: review.reason,
+      // 견적의 유입 채널을 예약에 승계 — 매출을 채널까지 귀속
+      channel: quote.channel ?? null,
     } as never).select('id').single()
 
     if (bookingError || !newBooking) throw new Error('[APP] 예약 생성에 실패했습니다')
@@ -712,14 +725,21 @@ export const confirmBookingFromQuoteAction = authAction
       .maybeSingle()
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
-    // 견적 조회 — 본인 업체, pending 상태만 허용
+    // 견적 조회 — 본인 업체, pending 상태만 허용 (유입 채널도 함께 읽어 예약에 승계)
     const { data: quote } = await db
       .from('quotes')
-      .select('id, business_id, cleaning_type, customer_name, customer_phone, good_price, better_price, best_price')
+      .select('id, business_id, cleaning_type, customer_name, customer_phone, good_price, better_price, best_price, channel' as never)
       .eq('id', parsedInput.quote_id)
       .eq('business_id', profile.business_id)
       .eq('status', 'pending')
-      .maybeSingle()
+      .maybeSingle() as unknown as {
+        data: {
+          id: string; business_id: string; cleaning_type: string
+          customer_name: string | null; customer_phone: string | null
+          good_price: number | null; better_price: number | null; best_price: number | null
+          channel: string | null
+        } | null
+      }
 
     if (!quote) throw new Error('[APP] 견적 정보를 찾을 수 없거나 이미 처리된 견적입니다')
 
@@ -739,6 +759,8 @@ export const confirmBookingFromQuoteAction = authAction
       status:          'confirmed',
       needs_review:    review.needsReview,
       review_reason:   review.reason,
+      // 견적의 유입 채널을 예약에 승계 — 매출을 채널까지 귀속
+      channel:         quote.channel ?? null,
     } as never).select('id').single() as unknown as { data: { id: string } | null; error: unknown }
 
     if (bookingError || !newBooking) throw new Error('[APP] 예약 생성에 실패했습니다')
@@ -820,12 +842,15 @@ const consultationRequestSchema = z.object({
     .refine((v) => phoneRegex.test(v), '올바른 전화번호 형식이 아닙니다'),
   company_name:   z.string().max(100).optional(), // B2B 서비스에서 고객이 입력한 회사명
   notes:          z.string().max(500).optional(),
+  // 유입 채널(?ch=) — 제안서 QR·전단지 QR 등 오프라인 영업 유입도 리드에 채널로 남긴다
+  channel:        z.string().max(50).optional(),
 })
 
 export const createConsultationRequestAction = publicAction
   .schema(consultationRequestSchema)
   .action(async ({ parsedInput }) => {
     const db = createServiceClient()
+    const channel = normalizeChannel(parsedInput.channel)
 
     const { data: service } = await db
       .from('service_items')
@@ -855,10 +880,10 @@ export const createConsultationRequestAction = publicAction
     // 같은 번호 리드가 있으면 갱신, 없으면 신규 (AI 상담 리드와 동일 규칙)
     const { data: existing } = await db
       .from('leads')
-      .select('id, status')
+      .select('id, status, channel')
       .eq('business_id', parsedInput.business_id)
       .eq('phone', phone)
-      .maybeSingle()
+      .maybeSingle() as unknown as { data: { id: string; status: string; channel: string | null } | null }
 
     if (existing) {
       // 보관(archived)·거절(rejected)됐던 리드가 다시 문의하면 '신규 문의'로 되살림 —
@@ -875,7 +900,9 @@ export const createConsultationRequestAction = publicAction
           // 법인 문의면 담당자명도 함께 갱신(개인 문의는 담당자 칸 건드리지 않음)
           ...(isBusinessCustomer ? { customer_type: 'company', contact_name: leadContactName } : {}),
           ...(isDormant ? { status: 'new' } : {}),
-        })
+          // 첫 유입 채널 유지(first-touch) — 이미 채널이 찍혀 있으면 덮어쓰지 않음
+          ...(channel && !existing.channel ? { channel } : {}),
+        } as never)
         .eq('id', existing.id)
     } else {
       await db.from('leads').insert({
@@ -886,7 +913,8 @@ export const createConsultationRequestAction = publicAction
         customer_type: customerType,
         status:        'new',
         notes,
-      })
+        channel,
+      } as never)
     }
 
     // 대표 폰 알림 — 실패해도 접수는 유지
