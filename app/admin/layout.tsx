@@ -28,8 +28,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link href="/admin/finance" className="text-sm text-muted-foreground hover:text-foreground">
               재무
             </Link>
-            <Link href="/admin/pre-registrations" className="text-sm text-muted-foreground hover:text-foreground">
-              사전신청
+            <Link href="/admin/bug-reports" className="text-sm text-muted-foreground hover:text-foreground">
+              오류 신고
             </Link>
             <Link href="/admin/academy-inquiries" className="text-sm text-muted-foreground hover:text-foreground">
               학원 제휴

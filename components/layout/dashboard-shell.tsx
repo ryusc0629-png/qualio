@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Sidebar } from './sidebar'
 import { BottomNav } from './bottom-nav'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
+import { BugReportButton } from '@/components/dashboard/bug-report-button'
 
 interface DashboardShellProps {
   businessName: string
@@ -47,6 +48,9 @@ export function DashboardShell({ businessName, isAdmin = false, children }: Dash
 
       {/* 모바일 하단 탭 (인쇄 시 숨김은 BottomNav 루트의 print:hidden 으로 처리) */}
       <BottomNav onMore={() => setSidebarOpen(true)} />
+
+      {/* 상시 오류 신고 버튼 — 베타 기간 어디서든 문제 신고 */}
+      <BugReportButton />
     </div>
   )
 }
