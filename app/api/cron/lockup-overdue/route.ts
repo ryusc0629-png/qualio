@@ -37,7 +37,15 @@ export async function GET(request: NextRequest) {
 
   const durationById = new Map(lockupContracts.map((c) => [c.id, c.expected_duration_minutes ?? DEFAULT_DURATION_MINUTES]))
 
-  // 2) 오픈은 했지만 마감 안 한 방문 중, 아직 알림을 안 보냈거나(null)
+  // 오늘(KST) 범위 — 재알림은 '오늘 예약'에만. 이렇게 하지 않으면 지난 날 마감을 안 한 방치 건이
+  // 영영 안 닫혀서 오늘도 5분마다 무한 알림이 온다(대표는 오늘 사진을 올렸는데도 계속 옴).
+  // 현황 페이지(getTodayLockupData)도 오늘 것만 보여주므로 알림 범위를 동일하게 맞춘다.
+  const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  const todayStr = kstNow.toISOString().slice(0, 10)
+  const dayStart = new Date(`${todayStr}T00:00:00+09:00`).toISOString()
+  const dayEnd = new Date(`${todayStr}T23:59:59+09:00`).toISOString()
+
+  // 2) 오늘 예약 중, 오픈은 했지만 마감 안 한 방문 → 아직 알림을 안 보냈거나(null)
   //    마지막 알림이 재알림 간격(5분)보다 오래된 것 → 마감할 때까지 반복 재알림
   const now = Date.now()
   const reAlertBefore = new Date(now - REALERT_INTERVAL_MINUTES * 60 * 1000).toISOString()
@@ -45,6 +53,8 @@ export async function GET(request: NextRequest) {
     .from('bookings')
     .select('id, business_id, worker_id, customer_name, service_address, checkin_at, contract_id')
     .in('contract_id', Array.from(durationById.keys()))
+    .gte('scheduled_at', dayStart)
+    .lte('scheduled_at', dayEnd)
     .not('checkin_at', 'is', null)
     .is('checkout_at', null)
     .or(`lockup_alert_sent_at.is.null,lockup_alert_sent_at.lte.${reAlertBefore}`)
