@@ -4,6 +4,8 @@ import { startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOfMonth, a
 import { ko } from 'date-fns/locale'
 import { ScheduleBoard } from '@/components/dashboard/schedule-board'
 import { AddClientForm } from '@/components/dashboard/add-client-form'
+import Link from 'next/link'
+import { Lock, ChevronRight } from 'lucide-react'
 
 interface PageProps {
   searchParams: Promise<{ week?: string; view?: string; date?: string; booking?: string }>
@@ -193,6 +195,15 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           <p className="text-sm text-muted-foreground mt-1">
             예약을 드래그해서 날짜와 담당자를 변경하세요
           </p>
+          {/* 문단속·출퇴근 현황 진입점 — 사이드바에서 내린 대신 여기서 상시 접근 */}
+          <Link
+            href="/dashboard/attendance"
+            className="mt-2 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors"
+          >
+            <Lock className="h-3.5 w-3.5" />
+            오늘 현장 문단속·출퇴근 현황
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
         {/* 신규 일정 추가 — 고객 추가와 동일한 폼(고객+첫 작업) 재사용 */}
         <AddClientForm services={services} triggerLabel="신규 일정 추가" refreshOnSuccess />

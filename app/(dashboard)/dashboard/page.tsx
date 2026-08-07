@@ -8,11 +8,12 @@ import { CallLink } from '@/components/dashboard/call-link'
 import { WeeklyChart } from '@/components/dashboard/weekly-chart'
 import { OnboardingChecklist } from '@/components/dashboard/onboarding-checklist'
 import { InstallPrompt } from '@/components/pwa/install-prompt'
+import { getTodayLockupData, summarizeLockup } from '@/lib/lockup/today'
 import {
   AlertCircle, Calendar, ChevronRight, RefreshCw,
   Wallet, ClipboardList, Star, Phone,
   Users, UserPlus, AlertTriangle, TrendingUp, CheckCircle2,
-  Handshake, PhoneCall, ShieldAlert, Film, ImageIcon, Send, FileText,
+  Handshake, PhoneCall, ShieldAlert, Film, ImageIcon, Send, FileText, Lock,
 } from 'lucide-react'
 
 const STATUS_LABEL: Record<string, { text: string; className: string }> = {
@@ -314,6 +315,10 @@ export default async function DashboardPage() {
     .eq('business_id', businessId)
     .eq('status', 'pending')
 
+  // 오늘 문단속 현장 현황 — 사이드바에서 내린 대신 홈 카드로 노출 (문제 있을 때만 눈에 띔)
+  const lockupData = await getTodayLockupData(db as unknown as SupabaseClient, businessId)
+  const lockup = summarizeLockup(lockupData.visits, lockupData.durationById, Date.now())
+
   // 알림 배너 여부
   const hasAlerts = (pendingQuoteCount ?? 0) > 0 || unreportedCount > 0 ||
     (unreviewedCount ?? 0) > 0 || (unassignedCount ?? 0) > 0 || todayFollowUpCount > 0 ||
@@ -533,6 +538,40 @@ export default async function DashboardPage() {
             </Link>
           )}
         </div>
+      )}
+
+      {/* 오늘 현장 현황 (문단속) — 오늘 문단속 현장이 있을 때만 노출, 미마감이 있으면 빨갛게 */}
+      {lockup.total > 0 && (
+        <Link href="/dashboard/attendance">
+          <div className={`rounded-xl border p-4 hover:shadow-sm transition-all ${lockup.overdue > 0 ? 'bg-red-50 border-red-200 hover:border-red-300' : 'bg-white border-border hover:border-primary/40'}`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Lock className={`h-4 w-4 ${lockup.overdue > 0 ? 'text-red-500' : 'text-primary'}`} />
+                <span className="text-sm font-semibold">오늘 현장 문단속</span>
+              </div>
+              <span className={`text-xs flex items-center gap-0.5 ${lockup.overdue > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+                현황 보기 <ChevronRight className="h-3 w-3" />
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="text-center">
+                <p className="text-2xl font-bold tabular-nums">{lockup.total}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">오늘 현장</p>
+              </div>
+              <div className="text-center">
+                <p className={`text-2xl font-bold tabular-nums ${lockup.done > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>{lockup.done}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">마감 완료</p>
+              </div>
+              <div className="text-center">
+                <p className={`text-2xl font-bold tabular-nums ${lockup.overdue > 0 ? 'text-red-600' : 'text-gray-400'}`}>{lockup.overdue}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">확인 필요</p>
+              </div>
+            </div>
+            {lockup.overdue > 0 && (
+              <p className="text-xs text-red-600 mt-3">마감이 안 된 현장이 있어요 — 눌러서 도착·마감 사진을 확인하세요</p>
+            )}
+          </div>
+        </Link>
       )}
 
       {/* KPI 카드 4개 */}

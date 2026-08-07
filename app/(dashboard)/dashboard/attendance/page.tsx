@@ -1,6 +1,11 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { DoorOpen, Lock, MapPin, Clock, ShieldAlert, CheckCircle2 } from 'lucide-react'
+import { DoorOpen, Lock, MapPin, ShieldAlert, CheckCircle2 } from 'lucide-react'
+import {
+  getTodayLockupData,
+  computeVisitStatus,
+  type LockupVisitStatus,
+} from '@/lib/lockup/today'
 
 // 대표용 출퇴근·문단속 현황 (오늘)
 // 문단속 필요 정기 현장에서 직원이 올린 도착(오픈)/마감(잠금) 사진과 시각을 한눈에 본다.
@@ -8,15 +13,10 @@ import { DoorOpen, Lock, MapPin, Clock, ShieldAlert, CheckCircle2 } from 'lucide
 
 export const dynamic = 'force-dynamic'
 
-const BUFFER_MINUTES = 30
-const DEFAULT_DURATION_MINUTES = 120
-
 function fmtTime(iso: string | null): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' })
 }
-
-type VisitStatus = 'not_arrived' | 'working' | 'overdue' | 'done'
 
 export default async function AttendancePage() {
   const authClient = await createClient()
@@ -32,44 +32,8 @@ export default async function AttendancePage() {
   if (!profile?.business_id) redirect('/onboarding')
   const businessId = profile.business_id
 
-  // 1) 문단속 필요 계약
-  const { data: contractsRaw } = await db
-    .from('contracts')
-    .select('id, expected_duration_minutes' as never)
-    .eq('business_id', businessId)
-    .eq('requires_lockup' as never, true) as unknown as {
-      data: { id: string; expected_duration_minutes: number | null }[] | null
-    }
-  const contracts = contractsRaw ?? []
-  const durationById = new Map(contracts.map((c) => [c.id, c.expected_duration_minutes ?? DEFAULT_DURATION_MINUTES]))
-
-  // 오늘(KST) 범위
-  const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000)
-  const todayStr = kstNow.toISOString().slice(0, 10)
-  const dayStart = new Date(`${todayStr}T00:00:00+09:00`).toISOString()
-  const dayEnd = new Date(`${todayStr}T23:59:59+09:00`).toISOString()
-
-  // 2) 오늘 문단속 현장 방문
-  type VisitRow = {
-    id: string; customer_name: string | null; service_address: string | null
-    scheduled_at: string; worker_id: string | null; contract_id: string | null
-    checkin_at: string | null; checkout_at: string | null
-    open_photo_urls: string[] | null; lockup_photo_urls: string[] | null
-  }
-  let visits: VisitRow[] = []
-  if (durationById.size > 0) {
-    const { data } = await db
-      .from('bookings')
-      .select('id, customer_name, service_address, scheduled_at, worker_id, contract_id, checkin_at, checkout_at, open_photo_urls, lockup_photo_urls' as never)
-      .eq('business_id', businessId)
-      .in('contract_id' as never, Array.from(durationById.keys()))
-      .gte('scheduled_at', dayStart)
-      .lte('scheduled_at', dayEnd)
-      .is('deleted_at' as never, null)
-      .not('status', 'in', '("cancelled","no_show")')
-      .order('scheduled_at', { ascending: true }) as unknown as { data: VisitRow[] | null }
-    visits = data ?? []
-  }
+  // 오늘 문단속 현장 데이터 (공용 로직 — 홈 카드와 동일한 계산)
+  const { hasContracts, visits, durationById } = await getTodayLockupData(db, businessId)
 
   // 담당자 이름 맵
   const { data: workers } = await db
@@ -78,20 +42,13 @@ export default async function AttendancePage() {
     .eq('business_id' as never, businessId) as unknown as { data: { id: string; name: string }[] | null }
   const workerName = new Map((workers ?? []).map((w) => [w.id, w.name]))
 
+  const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000)
   const now = Date.now()
-  const statusOf = (v: VisitRow): VisitStatus => {
-    if (v.checkout_at) return 'done'
-    if (!v.checkin_at) return 'not_arrived'
-    const dur = durationById.get(v.contract_id ?? '') ?? DEFAULT_DURATION_MINUTES
-    const deadline = new Date(v.checkin_at).getTime() + (dur + BUFFER_MINUTES) * 60 * 1000
-    return now >= deadline ? 'overdue' : 'working'
-  }
-
-  const withStatus = visits.map((v) => ({ v, s: statusOf(v) }))
+  const withStatus = visits.map((v) => ({ v, s: computeVisitStatus(v, durationById, now) }))
   const doneCount = withStatus.filter((x) => x.s === 'done').length
   const overdueCount = withStatus.filter((x) => x.s === 'overdue').length
 
-  const STATUS_META: Record<VisitStatus, { label: string; badge: string; card: string }> = {
+  const STATUS_META: Record<LockupVisitStatus, { label: string; badge: string; card: string }> = {
     not_arrived: { label: '미도착',    badge: 'bg-gray-100 text-gray-600',       card: 'border-l-4 border-l-gray-300' },
     working:     { label: '작업 중',   badge: 'bg-amber-100 text-amber-700',     card: 'border-l-4 border-l-amber-400 bg-amber-50/30' },
     overdue:     { label: '미마감 확인 필요', badge: 'bg-red-100 text-red-700',   card: 'border-l-4 border-l-red-400 bg-red-50/40' },
@@ -109,7 +66,7 @@ export default async function AttendancePage() {
         </p>
       </div>
 
-      {contracts.length === 0 ? (
+      {!hasContracts ? (
         <div className="rounded-lg border border-dashed p-12 text-center space-y-2">
           <Lock className="h-10 w-10 mx-auto text-muted-foreground/50" />
           <p className="text-sm text-muted-foreground">아직 문단속 현장이 없어요</p>

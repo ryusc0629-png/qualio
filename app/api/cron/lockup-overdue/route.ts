@@ -3,14 +3,16 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendPushToWorker, sendPushToBusiness } from '@/lib/push/web-push'
 
-// 문단속 미완료 감지 — Supabase pg_cron이 주기적으로(예: 20분마다) 호출.
+// 문단속 미완료 감지 — Supabase pg_cron이 5분마다 호출.
 // '문단속 필요' 정기 현장에서 도착(오픈) 사진은 올렸는데, 예상 소요 시간 + 여유가 지나도
-// 마감(잠금) 사진이 없으면 직원+대표에게 알림을 보낸다. 알림은 현장당 1회만.
+// 마감(잠금) 사진이 없으면 직원+대표에게 알림을 보낸다.
+// 확인(마감 사진)할 때까지 5분마다 계속 재알림해서 놓치지 않도록 한다 — 귀찮더라도 꼼꼼히 체크 유도.
 
 export const dynamic = 'force-dynamic'
 
 const BUFFER_MINUTES = 30 // 예상 소요 시간이 지난 뒤에도 이만큼 더 기다렸다가 알림
 const DEFAULT_DURATION_MINUTES = 120 // 계약에 예상 시간이 없으면 2시간으로 간주
+const REALERT_INTERVAL_MINUTES = 5 // 마감할 때까지 이 간격으로 반복 재알림
 
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -35,14 +37,17 @@ export async function GET(request: NextRequest) {
 
   const durationById = new Map(lockupContracts.map((c) => [c.id, c.expected_duration_minutes ?? DEFAULT_DURATION_MINUTES]))
 
-  // 2) 오픈은 했지만 마감 안 했고, 아직 알림 안 보낸 방문
+  // 2) 오픈은 했지만 마감 안 한 방문 중, 아직 알림을 안 보냈거나(null)
+  //    마지막 알림이 재알림 간격(5분)보다 오래된 것 → 마감할 때까지 반복 재알림
+  const now = Date.now()
+  const reAlertBefore = new Date(now - REALERT_INTERVAL_MINUTES * 60 * 1000).toISOString()
   const { data: bookings } = await db
     .from('bookings')
     .select('id, business_id, worker_id, customer_name, service_address, checkin_at, contract_id')
     .in('contract_id', Array.from(durationById.keys()))
     .not('checkin_at', 'is', null)
     .is('checkout_at', null)
-    .is('lockup_alert_sent_at', null)
+    .or(`lockup_alert_sent_at.is.null,lockup_alert_sent_at.lte.${reAlertBefore}`)
     .is('deleted_at', null)
     .not('status', 'in', '("cancelled","no_show")')
 
@@ -53,7 +58,6 @@ export async function GET(request: NextRequest) {
   }[]
 
   // 3) 예상 소요 시간 + 여유가 지난 것만 추림
-  const now = Date.now()
   const overdue = candidates.filter((b) => {
     const dur = durationById.get(b.contract_id) ?? DEFAULT_DURATION_MINUTES
     const deadline = new Date(b.checkin_at).getTime() + (dur + BUFFER_MINUTES) * 60 * 1000
