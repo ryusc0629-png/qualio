@@ -8,6 +8,7 @@ import { CallLink } from '@/components/dashboard/call-link'
 import { WeeklyChart } from '@/components/dashboard/weekly-chart'
 import { OnboardingChecklist } from '@/components/dashboard/onboarding-checklist'
 import { InstallPrompt } from '@/components/pwa/install-prompt'
+import { BetaWelcomeBanner } from '@/components/dashboard/beta-welcome-banner'
 import { getTodayLockupData, summarizeLockup } from '@/lib/lockup/today'
 import {
   AlertCircle, Calendar, ChevronRight, RefreshCw,
@@ -338,6 +339,9 @@ export default async function DashboardPage() {
         </div>
         <QuoteLinkShare url={quoteUrl} />
       </div>
+
+      {/* 베타 안내 배너 — 베타 기간·무료 사용 범위·오류 신고 방법 안내(베타 개방 기간에만·닫으면 기억) */}
+      <BetaWelcomeBanner />
 
       {/* 앱 설치 유도 배너 — 설치 완료/닫음 시 자동으로 사라짐 */}
       <InstallPrompt />
