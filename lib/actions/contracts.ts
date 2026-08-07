@@ -7,6 +7,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { action } from '@/lib/safe-action'
 import { generateVisitsForContract } from '@/lib/recurring/generate'
 import { sendPushToBusiness } from '@/lib/push/web-push'
+import { normalizeChannel } from '@/lib/utils/marketing-channels'
 
 // 정기방문 자동생성이 실패하면(예약이 안 깔림) 대표폰에 즉시 알림 — 조용히 넘어가면 방문 누락=매출 손실
 async function notifyVisitGenFailed(businessId: string) {
@@ -48,6 +49,8 @@ const createContractSchema = z.object({
   start_date: z.string().min(1, '시작일을 입력해주세요'),
   end_date: z.string().optional(),
   notes: z.string().optional(),
+  // 유입경로('어떻게 알고 오셨어요?') — 계약 매출을 채널에 귀속
+  channel: z.string().max(50).optional(),
 })
 
 export const createContractAction = action
@@ -74,7 +77,9 @@ export const createContractAction = action
       start_date: parsedInput.start_date,
       end_date: parsedInput.end_date || null,
       notes: parsedInput.notes || null,
-    }).select('id').single()
+      // 유입 채널 — 계약 매출을 채널에 귀속
+      channel: normalizeChannel(parsedInput.channel),
+    } as never).select('id').single()
 
     if (error || !contract) throw new Error('[APP] 계약 등록에 실패했습니다')
 

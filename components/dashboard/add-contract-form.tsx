@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createContractAction } from '@/lib/actions/contracts'
 import { FrequencyPicker } from '@/components/dashboard/frequency-picker'
+import { SourceChannelSelect } from '@/components/dashboard/source-channel-select'
 import { Plus, X } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import { useAutoFocusRef } from '@/lib/hooks/use-auto-focus'
@@ -23,6 +24,7 @@ const schema = z.object({
   start_date: z.string().min(1, '시작일을 입력해주세요'),
   end_date: z.string().optional(),
   notes: z.string().optional(),
+  channel: z.string().optional(),
 })
 
 type FormInput = z.infer<typeof schema>
@@ -163,6 +165,8 @@ export function AddContractForm({ customers, defaultCustomerId }: AddContractFor
               className="w-full min-h-[60px] rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none"
             />
           </div>
+
+          <SourceChannelSelect id="contract-channel" {...register('channel')} />
 
           <div className="flex gap-2 pt-1">
             <Button type="button" variant="outline" className="flex-1" onClick={() => setOpen(false)}>

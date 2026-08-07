@@ -327,7 +327,9 @@ export const createActiveCustomerAction = action
         frequency: parsedInput.frequency,
         contract_price: price,
         start_date: parsedInput.start_date,
-      })
+        // 유입 채널 — 계약 매출을 채널에 귀속 (수기 '어떻게 알고 오셨어요?' 값)
+        channel: normalizeChannel(parsedInput.channel),
+      } as never)
 
       if (contractError) {
         console.error('[Customers] 정기계약(contract) 등록 실패:', contractError)
@@ -412,6 +414,19 @@ export const createCustomerWithContractAction = action
       const price = parseInt(parsedInput.contract_price, 10)
       if (isNaN(price) || price < 1) throw new Error('[APP] 올바른 계약금액을 입력해주세요')
 
+      // 유입 채널 승계 — 리드에서 전환된 계약이면 리드가 처음 들어온 채널을 그대로 물려준다
+      // (전환 화면엔 유입경로를 다시 묻지 않음 — 리드 시절 값이 곧 그 계약의 출처)
+      let contractChannel: string | null = null
+      if (parsedInput.lead_id) {
+        const { data: lead } = await db
+          .from('leads')
+          .select('channel' as never)
+          .eq('id', parsedInput.lead_id)
+          .eq('business_id', businessId)
+          .maybeSingle() as unknown as { data: { channel: string | null } | null }
+        contractChannel = lead?.channel ?? null
+      }
+
       // 기존 계약 등록(createContractAction)과 동일한 필드로 저장
       const { data: contract, error: contractError } = await db.from('contracts').insert({
         business_id: businessId,
@@ -422,7 +437,8 @@ export const createCustomerWithContractAction = action
         start_date: parsedInput.start_date,
         end_date: parsedInput.end_date || null,
         notes: parsedInput.contract_notes || null,
-      }).select('id').single()
+        channel: contractChannel,
+      } as never).select('id').single()
 
       if (contractError || !contract) throw new Error('[APP] 계약 등록에 실패했습니다')
 

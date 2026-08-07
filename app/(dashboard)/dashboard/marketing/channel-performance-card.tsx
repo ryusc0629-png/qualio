@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { ALL_CHANNELS, channelLabel } from '@/lib/utils/marketing-channels'
+import { contractRevenueSince, type ContractLike } from '@/lib/utils/ltv'
 
 interface ChannelPerformanceCardProps {
   businessId: string
@@ -9,7 +10,9 @@ interface ChannelPerformanceCardProps {
 
 // 채널별 성과 — "채널 → 문의 → 예약 → 매출"을 한 표로.
 // 방문(page_views.channel)까지만 잡던 걸 오더까지 확장해, 어느 홍보 채널이 실제 매출을 만들었는지 보여준다.
-// 문의 = 견적(quotes) + 상담리드(leads), 예약·매출 = 견적에서 이어진 예약(booking.channel 승계).
+// 문의 = 견적(quotes) + 상담리드(leads).
+// 예약·매출 = 유효금액 예약(일회성·견적경유, final_price>0) + 정기계약(월정액×기간).
+//   └ 정기 방문 예약은 0원으로 저장되므로 계약 자체를 채널에 귀속해야 매출이 잡힌다.
 // 채널이 안 붙는 유입(전화·소개·직접 등록)은 '직접·기타'로 묶는다.
 
 const DIRECT_KEY = '' // 채널 미상 — 전화·소개·사장님 직접 등록 등
@@ -31,7 +34,7 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
   const now = new Date()
   const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1)).toISOString()
 
-  const [quotesResult, leadsResult, bookingsResult] = await Promise.all([
+  const [quotesResult, leadsResult, bookingsResult, contractsResult] = await Promise.all([
     // 견적 문의 — 테스트 견적 제외용 is_test, 채널 집계용 channel
     db
       .from('quotes')
@@ -59,11 +62,20 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
       .gte('created_at', periodStart) as unknown as Promise<{
         data: { final_price: number | null; status: string; channel: string | null; quote_id: string | null }[] | null
       }>,
+
+    // 정기계약 — 계약 매출을 채널에 귀속(방문 예약은 0원이라 계약 자체로 집계). 기간 겹치는 계약만 매출 발생.
+    db
+      .from('contracts')
+      .select('contract_price, start_date, end_date, status, channel' as never)
+      .eq('business_id', businessId) as unknown as Promise<{
+        data: { contract_price: number; start_date: string; end_date: string | null; status: string; channel: string | null }[] | null
+      }>,
   ])
 
   const quoteRows = quotesResult.data ?? []
   const leadRows = leadsResult.data ?? []
   const bookingRows = bookingsResult.data ?? []
+  const contractRows = contractsResult.data ?? []
 
   // 테스트/장난 견적은 통계에서 제외 — 사장님 본인 테스트가 채널 성과를 오염시키지 않게
   const testQuoteIds = new Set(quoteRows.filter((q) => q.is_test).map((q) => q.id))
@@ -87,11 +99,20 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
     bump(l.channel ?? DIRECT_KEY, { inquiries: 1 })
   }
 
-  // 예약·매출 = 매출 유효 상태 예약(테스트 견적 경유분 제외)
+  // 예약·매출(일회성) = 매출 유효 상태 + 금액 있는 예약(테스트 견적 경유분 제외).
+  // final_price>0 조건으로 0원 정기 방문 예약은 제외 — 정기 매출은 아래 계약에서 따로 집계(이중계상 방지).
   for (const b of bookingRows) {
     if (b.quote_id && testQuoteIds.has(b.quote_id)) continue
     if (!REVENUE_STATUSES.includes(b.status)) continue
+    if ((b.final_price ?? 0) <= 0) continue
     bump(b.channel ?? DIRECT_KEY, { bookings: 1, revenue: b.final_price ?? 0 })
+  }
+
+  // 정기계약 = 계약 1건을 예약 1로 세고, 이 기간에 발생한 월정액 매출(월×개월)을 채널에 귀속
+  for (const c of contractRows) {
+    const rev = contractRevenueSince([c as ContractLike], periodStart)
+    if (rev <= 0) continue // 이 기간에 매출이 없는(아직 시작 전·이미 종료된) 계약은 제외
+    bump(c.channel ?? DIRECT_KEY, { bookings: 1, revenue: rev })
   }
 
   // 활동 있는 채널만, 매출 → 문의 순으로 정렬
@@ -124,7 +145,7 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
           <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto] gap-3 px-3 pb-2 text-[11px] font-medium text-muted-foreground">
             <span>채널</span>
             <span className="w-14 text-right">문의</span>
-            <span className="w-14 text-right">예약</span>
+            <span className="w-16 text-right">예약·계약</span>
             <span className="w-24 text-right">매출</span>
           </div>
 
@@ -153,9 +174,9 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
                       <p className="text-sm font-bold tabular-nums">{a.inquiries}</p>
                       <p className="text-[10px] text-muted-foreground sm:hidden">문의</p>
                     </div>
-                    <div className="text-center sm:w-14 sm:text-right">
+                    <div className="text-center sm:w-16 sm:text-right">
                       <p className={`text-sm font-bold tabular-nums ${a.bookings > 0 ? 'text-primary' : 'text-muted-foreground'}`}>{a.bookings}</p>
-                      <p className="text-[10px] text-muted-foreground sm:hidden">예약</p>
+                      <p className="text-[10px] text-muted-foreground sm:hidden">예약·계약</p>
                     </div>
                     <div className="text-center sm:w-24 sm:text-right">
                       <p className="text-sm font-bold tabular-nums">
