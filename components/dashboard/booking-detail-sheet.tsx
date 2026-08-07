@@ -328,6 +328,13 @@ export function BookingDetailSheet({
     queueWorkersSave(booking.id, [])
   }
 
+  // 시트 닫기 — 편집 중이던 상태를 정리하고 부모에 알림 (헤더 닫기 버튼 · 바깥 클릭 공통)
+  const handleClose = () => {
+    setEditingTime(false)
+    setEditingDate(false)
+    onClose()
+  }
+
   const handleSaveTime = () => {
     if (!booking || !timeValue) return
     saveTime({
@@ -400,13 +407,13 @@ export function BookingDetailSheet({
 
   return (
     <>
-    <Sheet open={!!booking} onOpenChange={(isOpen: boolean) => { if (!isOpen) { setEditingTime(false); setEditingDate(false); onClose() } }}>
+    <Sheet open={!!booking} onOpenChange={(isOpen: boolean) => { if (!isOpen) handleClose() }}>
       <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0" showCloseButton={false}>
 
         {/* 헤더 */}
         <SheetHeader className="px-5 pt-5 pb-4 border-b border-border">
           <div className="flex items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <SheetTitle className="text-xl leading-tight">
                 {booking?.customer_name}
               </SheetTitle>
@@ -420,6 +427,15 @@ export function BookingDetailSheet({
                 )}
               </div>
             </div>
+            {/* 닫기(뒤로) 버튼 — 모바일은 시트가 전체 화면을 덮어 바깥 탭이 불가하므로 필수 */}
+            <button
+              type="button"
+              onClick={handleClose}
+              aria-label="닫기"
+              className="-mr-1 shrink-0 flex items-center justify-center h-11 w-11 rounded-full text-muted-foreground hover:bg-muted transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </SheetHeader>
 
