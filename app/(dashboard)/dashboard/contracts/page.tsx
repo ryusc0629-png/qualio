@@ -29,7 +29,7 @@ export default async function ContractsPage() {
   // 계약 목록 (고객 정보 조인)
   const { data: contracts } = await db
     .from('contracts')
-    .select('id, customer_id, service_type, frequency, contract_price, start_date, end_date, status, notes, requires_lockup, expected_duration_minutes, customers!contracts_customer_id_fkey(name, phone)' as never)
+    .select('id, customer_id, service_type, frequency, contract_price, start_date, end_date, status, notes, requires_lockup, expected_duration_minutes, checklist_items, customers!contracts_customer_id_fkey(name, phone)' as never)
     .eq('business_id', profile.business_id)
     .order('created_at', { ascending: false }) as unknown as {
       data: {
@@ -44,6 +44,7 @@ export default async function ContractsPage() {
         notes: string | null
         requires_lockup: boolean | null
         expected_duration_minutes: number | null
+        checklist_items: { id: string; label: string }[] | null
         customers: { name: string; phone: string | null } | { name: string; phone: string | null }[] | null
       }[] | null
     }
@@ -195,6 +196,7 @@ export default async function ContractsPage() {
                         contractId={contract.id}
                         requiresLockup={contract.requires_lockup ?? false}
                         expectedDurationMinutes={contract.expected_duration_minutes ?? null}
+                        checklistItems={contract.checklist_items ?? []}
                       />
                     </td>
                     <td className="px-4 py-3 text-center">

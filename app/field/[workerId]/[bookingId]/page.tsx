@@ -49,7 +49,7 @@ export default async function FieldBookingPage({ params }: Props) {
   // 예약 상세 조회 (메모 최종 저장자 포함)
   const { data: booking } = await db
     .from('bookings')
-    .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, customer_request, quote_id, memo_updated_by, memo_updated_at, on_my_way_sent_at, contract_id, checkin_at, checkout_at, open_photo_urls, lockup_photo_urls' as never)
+    .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, customer_request, quote_id, memo_updated_by, memo_updated_at, on_my_way_sent_at, contract_id, checkin_at, checkout_at, open_photo_urls, lockup_photo_urls, checklist_photos' as never)
     .eq('id', bookingId)
     .eq('business_id', worker.business_id)
     .maybeSingle() as { data: {
@@ -60,19 +60,22 @@ export default async function FieldBookingPage({ params }: Props) {
       on_my_way_sent_at: string | null
       contract_id: string | null; checkin_at: string | null; checkout_at: string | null
       open_photo_urls: string[] | null; lockup_photo_urls: string[] | null
+      checklist_photos: Record<string, string[]> | null
     } | null }
 
   if (!booking) notFound()
 
-  // 문단속 설정 — 이 방문이 '문단속 필요' 정기계약 소속인지 확인
+  // 문단속 설정 + 작업 체크리스트 — 이 방문이 소속된 정기계약에서 가져온다
   let requiresLockup = false
+  let checklistItems: { id: string; label: string }[] = []
   if (booking.contract_id) {
     const { data: contract } = await db
       .from('contracts')
-      .select('requires_lockup' as never)
+      .select('requires_lockup, checklist_items' as never)
       .eq('id', booking.contract_id)
-      .maybeSingle() as { data: { requires_lockup: boolean | null } | null }
+      .maybeSingle() as { data: { requires_lockup: boolean | null; checklist_items: { id: string; label: string }[] | null } | null }
     requiresLockup = contract?.requires_lockup === true
+    checklistItems = contract?.checklist_items ?? []
   }
 
   // 메모 최종 저장자 이름 조회
@@ -147,6 +150,8 @@ export default async function FieldBookingPage({ params }: Props) {
       existingLockupPhotoUrls={booking.lockup_photo_urls ?? []}
       checkinAt={booking.checkin_at}
       checkoutAt={booking.checkout_at}
+      checklistItems={checklistItems}
+      existingChecklistPhotos={booking.checklist_photos ?? {}}
       existingBeforeUrls={beforeUrls}
       existingCustomerRequest={(booking.customer_request as string) ?? ''}
       existingNextVisitNote={savedNextVisitNote}

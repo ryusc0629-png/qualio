@@ -70,6 +70,7 @@ type ContractRow = {
   end_date: string | null
   requires_lockup: boolean | null
   expected_duration_minutes: number | null
+  checklist_items: { id: string; label: string }[] | null
 }
 
 type B2bQuoteRow = {
@@ -167,7 +168,7 @@ export default async function ClientsPage({
       .eq('business_id', businessId),
 
     db.from('contracts')
-      .select('id, customer_id, service_type, frequency, contract_price, status, start_date, end_date, requires_lockup, expected_duration_minutes' as never)
+      .select('id, customer_id, service_type, frequency, contract_price, status, start_date, end_date, requires_lockup, expected_duration_minutes, checklist_items' as never)
       .eq('business_id', businessId),
 
     db.from('bookings')
@@ -572,6 +573,7 @@ export default async function ClientsPage({
                             contractId={activeContract.id}
                             requiresLockup={activeContract.requires_lockup ?? false}
                             expectedDurationMinutes={activeContract.expected_duration_minutes ?? null}
+                            checklistItems={activeContract.checklist_items ?? []}
                           />
                         </div>
                       )}
@@ -747,6 +749,7 @@ export default async function ClientsPage({
                                   contractId={activeContract.id}
                                   requiresLockup={activeContract.requires_lockup ?? false}
                                   expectedDurationMinutes={activeContract.expected_duration_minutes ?? null}
+                                  checklistItems={activeContract.checklist_items ?? []}
                                 />
                               </div>
                             </>

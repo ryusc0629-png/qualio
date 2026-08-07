@@ -11,6 +11,7 @@ import {
 } from '@/lib/kakao/alimtalk'
 import { sendOnMyWayForBooking } from '@/lib/kakao/on-my-way'
 import { generateAiReport } from '@/lib/ai/report-writer'
+import { geocodeAddress } from '@/lib/roadmap/geo'
 
 // workers 테이블 타입 (Supabase 타입 아직 미생성)
 interface WorkerRow {
@@ -265,6 +266,27 @@ export const fieldCompletePaymentAction = action
 
     if (booking.status !== 'in_progress') {
       throw new Error('[APP] 작업 중인 예약만 수금 완료할 수 있어요')
+    }
+
+    // 작업 매뉴얼(체크리스트)이 있으면 모든 항목에 사진 1장 이상 있어야 완료 가능
+    const { data: bChk } = await db
+      .from('bookings')
+      .select('contract_id, checklist_photos' as never)
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', worker.business_id)
+      .maybeSingle() as unknown as { data: { contract_id: string | null; checklist_photos: Record<string, string[]> | null } | null }
+    if (bChk?.contract_id) {
+      const { data: contract } = await db
+        .from('contracts')
+        .select('checklist_items' as never)
+        .eq('id', bChk.contract_id)
+        .maybeSingle() as unknown as { data: { checklist_items: { id: string; label: string }[] | null } | null }
+      const items = contract?.checklist_items ?? []
+      if (items.length > 0) {
+        const progress = bChk.checklist_photos ?? {}
+        const done = items.every((it) => (progress[it.id]?.length ?? 0) > 0)
+        if (!done) throw new Error('[APP] 작업 항목 사진을 모두 올려야 완료할 수 있어요')
+      }
     }
 
     // 상태 → completed
@@ -889,12 +911,20 @@ export const fieldDeleteBookingItemAction = action
 // 도착해서 문 열 때 오픈 사진, 다 끝내고 잠근 뒤 마감 사진을 올린다.
 // 오픈 사진 시각(checkin_at)이 알림 기준점이 되고, 마감 사진이 없으면 크론이 알림을 보낸다.
 
-// 도착·문 오픈 사진 저장 (checkin_at을 최초 1회만 기록 = 출근 기준점)
+// GPS 좌표(선택) — 직원이 사진 올릴 때의 현재 위치. 막지 않고 기록·표시만 한다.
+const geoSchema = {
+  lat: z.number().optional(),
+  lng: z.number().optional(),
+  acc: z.number().optional(),
+}
+
+// 도착·문 오픈 사진 저장 (checkin_at을 최초 1회만 기록 = 출근 기준점, + GPS 위치)
 export const fieldSaveOpenPhotosAction = action
   .schema(z.object({
     workerId:  z.string().uuid(),
     bookingId: z.string().uuid(),
     photoUrls: z.array(z.string().url()).max(5),
+    ...geoSchema,
   }))
   .action(async ({ parsedInput }) => {
     const { db, worker } = await verifyWorker(parsedInput.workerId)
@@ -903,14 +933,32 @@ export const fieldSaveOpenPhotosAction = action
     // 사진이 처음 올라올 때만 checkin_at 기록 (재업로드로 기준점이 밀리지 않게)
     const { data: cur } = await db
       .from('bookings')
-      .select('checkin_at' as never)
+      .select('checkin_at, site_lat, service_address' as never)
       .eq('id', parsedInput.bookingId)
       .eq('business_id', worker.business_id)
-      .maybeSingle() as unknown as { data: { checkin_at: string | null } | null }
+      .maybeSingle() as unknown as { data: { checkin_at: string | null; site_lat: number | null; service_address: string | null } | null }
 
     const patch: Record<string, unknown> = { open_photo_urls: parsedInput.photoUrls }
     if (parsedInput.photoUrls.length > 0 && !cur?.checkin_at) {
       patch.checkin_at = new Date().toISOString()
+    }
+    // 직원 도착 위치 기록 (좌표가 넘어온 경우만)
+    if (typeof parsedInput.lat === 'number' && typeof parsedInput.lng === 'number') {
+      patch.checkin_lat = parsedInput.lat
+      patch.checkin_lng = parsedInput.lng
+      patch.checkin_acc = parsedInput.acc ?? null
+    }
+    // 현장 좌표가 아직 없으면 주소를 1회 지오코딩해 캐시 (거리 계산용, 실패해도 무시)
+    if (!cur?.site_lat && cur?.service_address) {
+      try {
+        const site = await geocodeAddress(cur.service_address)
+        if (site) {
+          patch.site_lat = site.lat
+          patch.site_lng = site.lng
+        }
+      } catch (e) {
+        console.error('[Field] 현장 지오코딩 실패:', e)
+      }
     }
 
     const { error } = await db
@@ -923,12 +971,13 @@ export const fieldSaveOpenPhotosAction = action
     return { success: true, checkinAt: (patch.checkin_at as string) ?? cur?.checkin_at ?? null }
   })
 
-// 마감·문 잠금 사진 저장 (checkout_at 기록 = 문단속 완료)
+// 마감·문 잠금 사진 저장 (checkout_at 기록 = 문단속 완료, + GPS 위치)
 export const fieldSaveLockupPhotosAction = action
   .schema(z.object({
     workerId:  z.string().uuid(),
     bookingId: z.string().uuid(),
     photoUrls: z.array(z.string().url()).max(5),
+    ...geoSchema,
   }))
   .action(async ({ parsedInput }) => {
     const { db, worker } = await verifyWorker(parsedInput.workerId)
@@ -936,15 +985,54 @@ export const fieldSaveLockupPhotosAction = action
 
     // 사진이 하나라도 있으면 마감 완료로 보고 checkout_at 기록, 모두 지우면 해제
     const done = parsedInput.photoUrls.length > 0
+    const patch: Record<string, unknown> = {
+      lockup_photo_urls: parsedInput.photoUrls,
+      checkout_at: done ? new Date().toISOString() : null,
+    }
+    if (done && typeof parsedInput.lat === 'number' && typeof parsedInput.lng === 'number') {
+      patch.checkout_lat = parsedInput.lat
+      patch.checkout_lng = parsedInput.lng
+      patch.checkout_acc = parsedInput.acc ?? null
+    }
     const { error } = await db
       .from('bookings')
-      .update({
-        lockup_photo_urls: parsedInput.photoUrls,
-        checkout_at: done ? new Date().toISOString() : null,
-      } as never)
+      .update(patch as never)
       .eq('id', parsedInput.bookingId)
       .eq('business_id', worker.business_id)
     if (error) throw new Error('[APP] 사진 저장에 실패했어요. 다시 시도해주세요')
 
     return { success: true, done }
+  })
+
+// 작업 매뉴얼 체크리스트 — 항목별 사진 저장 (bookings.checklist_photos JSONB에 항목만 교체)
+export const fieldSaveChecklistPhotosAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+    itemId:    z.string().min(1).max(64),
+    photoUrls: z.array(z.string().url()).max(5),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    const { data: cur } = await db
+      .from('bookings')
+      .select('checklist_photos' as never)
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', worker.business_id)
+      .maybeSingle() as unknown as { data: { checklist_photos: Record<string, string[]> | null } | null }
+
+    const progress: Record<string, string[]> = { ...(cur?.checklist_photos ?? {}) }
+    if (parsedInput.photoUrls.length > 0) progress[parsedInput.itemId] = parsedInput.photoUrls
+    else delete progress[parsedInput.itemId]
+
+    const { error } = await db
+      .from('bookings')
+      .update({ checklist_photos: progress } as never)
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', worker.business_id)
+    if (error) throw new Error('[APP] 사진 저장에 실패했어요. 다시 시도해주세요')
+
+    return { success: true }
   })

@@ -183,6 +183,11 @@ const updateContractLockupSchema = z.object({
   requiresLockup: z.boolean(),
   // 문단속 필요일 때만 의미 있음. 30분~8시간 범위.
   expectedDurationMinutes: z.coerce.number().int().min(30).max(480).optional(),
+  // 작업 매뉴얼 체크리스트 항목 [{id,label}] — 직원이 항목마다 사진 올려야 완료
+  checklistItems: z
+    .array(z.object({ id: z.string().min(1).max(64), label: z.string().min(1).max(100) }))
+    .max(30)
+    .optional(),
 })
 
 export const updateContractLockupAction = action
@@ -197,6 +202,11 @@ export const updateContractLockupAction = action
         expected_duration_minutes: parsedInput.requiresLockup
           ? (parsedInput.expectedDurationMinutes ?? 120)
           : null,
+        // 항목이 있으면 저장, 없으면 null(체크리스트 없음)
+        checklist_items:
+          parsedInput.checklistItems && parsedInput.checklistItems.length > 0
+            ? parsedInput.checklistItems
+            : null,
       } as never)
       .eq('id', parsedInput.contractId)
       .eq('business_id', businessId)

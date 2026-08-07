@@ -17,6 +17,7 @@ import {
   fieldSendOnMyWayAction,
   fieldSaveOpenPhotosAction,
   fieldSaveLockupPhotosAction,
+  fieldSaveChecklistPhotosAction,
 } from '@/lib/actions/field'
 import { FieldBookingItemsEditor } from '@/components/field/field-booking-items-editor'
 import { ContactActions } from '@/components/dashboard/contact-actions'
@@ -38,6 +39,7 @@ import {
   Lock,
   DoorOpen,
   CheckCircle,
+  ListChecks,
 } from 'lucide-react'
 
 interface BookingData {
@@ -68,6 +70,8 @@ interface Props {
   existingLockupPhotoUrls: string[]
   checkinAt: string | null
   checkoutAt: string | null
+  checklistItems: { id: string; label: string }[]
+  existingChecklistPhotos: Record<string, string[]>
   existingBeforeUrls: string[]
   existingCustomerRequest: string
   existingNextVisitNote: string
@@ -84,7 +88,7 @@ function relativeTime(dateStr: string): string {
   return `${Math.floor(diff / 86400)}일 전`
 }
 
-export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, notifyOnMyWay, onMyWaySentAt, requiresLockup, isRecurring, existingOpenPhotoUrls, existingLockupPhotoUrls, checkinAt, checkoutAt, existingBeforeUrls, existingCustomerRequest, existingNextVisitNote, memoUpdatedById, memoUpdatedByName, memoUpdatedAt }: Props) {
+export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, notifyOnMyWay, onMyWaySentAt, requiresLockup, isRecurring, existingOpenPhotoUrls, existingLockupPhotoUrls, checkinAt, checkoutAt, checklistItems, existingChecklistPhotos, existingBeforeUrls, existingCustomerRequest, existingNextVisitNote, memoUpdatedById, memoUpdatedByName, memoUpdatedAt }: Props) {
   const [currentStatus, setCurrentStatus] = useState(booking.status)
   const [onMyWaySent, setOnMyWaySent] = useState(!!onMyWaySentAt)
   // 현장에서 항목을 조정하면 결제 금액도 실시간으로 따라간다
@@ -114,6 +118,39 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
   const [checkoutTime, setCheckoutTime] = useState<string | null>(checkoutAt)
   const openInputRef = useRef<HTMLInputElement>(null)
   const lockupInputRef = useRef<HTMLInputElement>(null)
+
+  // 작업 매뉴얼 체크리스트 — 항목별 사진 상태
+  const [checklistPhotos, setChecklistPhotos] = useState<Record<string, PhotoSlot[]>>(() => {
+    const init: Record<string, PhotoSlot[]> = {}
+    for (const it of checklistItems) {
+      init[it.id] = (existingChecklistPhotos[it.id] ?? []).map((url) => ({ url, uploading: false }))
+    }
+    return init
+  })
+  const checklistInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  // 현재 위치(GPS) 획득 — 거부·미지원·시간초과여도 빈 값으로 진행(막지 않음)
+  const captureGeo = (): Promise<{ lat?: number; lng?: number; acc?: number }> =>
+    new Promise((resolve) => {
+      if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve({})
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy }),
+        () => resolve({}),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+      )
+    })
+
+  // 도착/마감 사진 저장 — 업로드 시엔 위치 함께, 삭제 시엔 위치 없이
+  const saveOpenWithGeo = async (urls: string[]) => {
+    const g = await captureGeo()
+    saveOpenPhotos({ workerId, bookingId: booking.id, photoUrls: urls, ...g })
+  }
+  const saveOpenNoGeo = (urls: string[]) => saveOpenPhotos({ workerId, bookingId: booking.id, photoUrls: urls })
+  const saveLockupWithGeo = async (urls: string[]) => {
+    const g = await captureGeo()
+    saveLockupPhotos({ workerId, bookingId: booking.id, photoUrls: urls, ...g })
+  }
+  const saveLockupNoGeo = (urls: string[]) => saveLockupPhotos({ workerId, bookingId: booking.id, photoUrls: urls })
 
   const { execute: saveOpenPhotos } = useAction(fieldSaveOpenPhotosAction, {
     onSuccess: ({ data }) => {
@@ -196,6 +233,58 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
     onSuccess: () => toast.success('현장 사진이 저장됐어요!'),
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
+
+  // 작업 항목(체크리스트) 사진 저장
+  const { execute: saveChecklistPhotos } = useAction(fieldSaveChecklistPhotosAction, {
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 체크리스트 항목별 사진 업로드
+  const uploadChecklistPhoto = async (itemId: string, files: FileList) => {
+    const cur = checklistPhotos[itemId] ?? []
+    const remaining = 5 - cur.length
+    if (remaining <= 0) {
+      toast.error('사진은 최대 5장까지 올릴 수 있어요')
+      return
+    }
+    const toUpload = Array.from(files).slice(0, remaining)
+    setChecklistPhotos((prev) => ({
+      ...prev,
+      [itemId]: [...(prev[itemId] ?? []), ...toUpload.map(() => ({ url: '', uploading: true }))],
+    }))
+
+    const supabase = createClient()
+    const uploaded: string[] = []
+    for (const file of toUpload) {
+      const ext = file.name.split('.').pop() ?? 'jpg'
+      const path = `${businessId}/${booking.id}/checklist/${itemId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const { error } = await supabase.storage.from('report-photos').upload(path, file, { upsert: true })
+      if (error) {
+        toast.error('사진 업로드에 실패했어요')
+        continue
+      }
+      uploaded.push(supabase.storage.from('report-photos').getPublicUrl(path).data.publicUrl)
+    }
+
+    const finalUrls = [...cur.filter((p) => p.url).map((p) => p.url), ...uploaded]
+    setChecklistPhotos((prev) => ({ ...prev, [itemId]: finalUrls.map((url) => ({ url, uploading: false })) }))
+    saveChecklistPhotos({ workerId, bookingId: booking.id, itemId, photoUrls: finalUrls })
+  }
+
+  const removeChecklistPhoto = (itemId: string, url: string) => {
+    const updated = (checklistPhotos[itemId] ?? []).filter((p) => p.url !== url)
+    setChecklistPhotos((prev) => ({ ...prev, [itemId]: updated }))
+    saveChecklistPhotos({
+      workerId,
+      bookingId: booking.id,
+      itemId,
+      photoUrls: updated.filter((p) => p.url).map((p) => p.url),
+    })
+  }
+
+  // 체크리스트 완료 여부 — 모든 항목에 사진 1장 이상이면 작업 완료 가능
+  const checklistDoneCount = checklistItems.filter((it) => (checklistPhotos[it.id] ?? []).some((p) => p.url)).length
+  const checklistDone = checklistItems.length === 0 || checklistDoneCount === checklistItems.length
 
   // 사진 업로드
   const handleBeforePhotoUpload = async (files: FileList) => {
@@ -395,7 +484,7 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                           <img src={photo.url} alt="오픈 사진" className="w-full h-full object-cover" />
                           <button
                             type="button"
-                            onClick={() => removeLockupPhoto(photo.url, openPhotos, setOpenPhotos, (u) => saveOpenPhotos({ workerId, bookingId: booking.id, photoUrls: u }))}
+                            onClick={() => removeLockupPhoto(photo.url, openPhotos, setOpenPhotos, saveOpenNoGeo)}
                             className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
                           >
                             <X className="h-3 w-3 text-white" />
@@ -423,7 +512,7 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                   multiple
                   className="hidden"
                   onChange={(e) => {
-                    if (e.target.files?.length) uploadLockupPhotos(e.target.files, 'open', openPhotos, setOpenPhotos, (u) => saveOpenPhotos({ workerId, bookingId: booking.id, photoUrls: u }))
+                    if (e.target.files?.length) uploadLockupPhotos(e.target.files, 'open', openPhotos, setOpenPhotos, saveOpenWithGeo)
                     e.target.value = ''
                   }}
                 />
@@ -453,7 +542,7 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                           <img src={photo.url} alt="잠금 사진" className="w-full h-full object-cover" />
                           <button
                             type="button"
-                            onClick={() => removeLockupPhoto(photo.url, lockupPhotos, setLockupPhotos, (u) => saveLockupPhotos({ workerId, bookingId: booking.id, photoUrls: u }))}
+                            onClick={() => removeLockupPhoto(photo.url, lockupPhotos, setLockupPhotos, saveLockupNoGeo)}
                             className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
                           >
                             <X className="h-3 w-3 text-white" />
@@ -481,7 +570,7 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                   multiple
                   className="hidden"
                   onChange={(e) => {
-                    if (e.target.files?.length) uploadLockupPhotos(e.target.files, 'lockup', lockupPhotos, setLockupPhotos, (u) => saveLockupPhotos({ workerId, bookingId: booking.id, photoUrls: u }))
+                    if (e.target.files?.length) uploadLockupPhotos(e.target.files, 'lockup', lockupPhotos, setLockupPhotos, saveLockupWithGeo)
                     e.target.value = ''
                   }}
                 />
@@ -491,6 +580,85 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                   </p>
                 )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* 작업 항목(체크리스트) — 대표가 정한 항목마다 사진을 올려야 작업 완료 가능 */}
+        {checklistItems.length > 0 && (
+          <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50/50 overflow-hidden">
+            <div className="px-4 py-3 flex items-center gap-2 border-b border-emerald-200">
+              <ListChecks className="h-4 w-4 text-emerald-600" />
+              <p className="font-bold text-emerald-900">작업 항목</p>
+              <span className="ml-auto text-xs font-semibold text-emerald-700">
+                {checklistDoneCount}/{checklistItems.length} 완료
+              </span>
+            </div>
+            <div className="p-4 space-y-4">
+              <p className="text-xs text-emerald-800">
+                각 항목마다 사진을 <span className="font-semibold">1장 이상</span> 올려야 작업을 완료할 수 있어요.
+              </p>
+              {checklistItems.map((it, idx) => {
+                const photos = checklistPhotos[it.id] ?? []
+                const done = photos.some((p) => p.url)
+                return (
+                  <div key={it.id} className="space-y-2 border-t border-emerald-100 pt-3 first:border-t-0 first:pt-0">
+                    <div className="flex items-center gap-1.5 text-sm font-semibold text-emerald-900">
+                      {done ? (
+                        <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                      ) : (
+                        <span className="h-4 w-4 rounded-full border-2 border-emerald-300 inline-block shrink-0" />
+                      )}
+                      <span>{idx + 1}. {it.label}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {photos.map((photo) => (
+                        <div key={photo.url || 'up'} className="relative w-20 h-20 rounded-lg overflow-hidden border bg-white">
+                          {photo.uploading ? (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                            </div>
+                          ) : (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={photo.url} alt="작업 사진" className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => removeChecklistPhoto(it.id, photo.url)}
+                                className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
+                              >
+                                <X className="h-3 w-3 text-white" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                      {photos.length < 5 && (
+                        <button
+                          type="button"
+                          onClick={() => checklistInputRefs.current[it.id]?.click()}
+                          className="w-20 h-20 rounded-lg border-2 border-dashed border-emerald-400/60 flex flex-col items-center justify-center gap-1 bg-white/50"
+                        >
+                          <Camera className="h-5 w-5 text-emerald-600" />
+                          <span className="text-[10px] text-emerald-700">사진 추가</span>
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      ref={(el) => { checklistInputRefs.current[it.id] = el }}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files?.length) uploadChecklistPhoto(it.id, e.target.files)
+                        e.target.value = ''
+                      }}
+                    />
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
@@ -771,19 +939,26 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
 
           {/* 정기청소 — 월말 정산이라 결제 요청 없이 '작업 완료하기'만 */}
           {currentStatus === 'in_progress' && isRecurring && (
-            <Button
-              size="lg"
-              className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700"
-              disabled={isCompleting}
-              onClick={() => {
-                if (confirm('이 현장 작업을 완료할까요?')) {
-                  completePayment({ workerId, bookingId: booking.id, skipReview: true })
-                }
-              }}
-            >
-              <CheckCircle2 className="h-5 w-5" />
-              {isCompleting ? '처리 중...' : '작업 완료하기'}
-            </Button>
+            <div className="space-y-1.5">
+              {!checklistDone && (
+                <p className="text-xs text-center text-amber-600">
+                  작업 항목 사진을 모두 올려야 완료할 수 있어요 ({checklistDoneCount}/{checklistItems.length})
+                </p>
+              )}
+              <Button
+                size="lg"
+                className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700"
+                disabled={isCompleting || !checklistDone}
+                onClick={() => {
+                  if (confirm('이 현장 작업을 완료할까요?')) {
+                    completePayment({ workerId, bookingId: booking.id, skipReview: true })
+                  }
+                }}
+              >
+                <CheckCircle2 className="h-5 w-5" />
+                {isCompleting ? '처리 중...' : '작업 완료하기'}
+              </Button>
+            </div>
           )}
 
           {currentStatus === 'in_progress' && !isRecurring && !paymentRequested && (
