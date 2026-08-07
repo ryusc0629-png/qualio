@@ -26,16 +26,21 @@ export const PLANS = {
     tagline: null,
     price: 0,
     highlight: false,
-    description: '무료 베타 기간 — 모든 기능 제한 없이 사용',
+    description: '무료 베타 기간 — 최상위(확장) 플랜의 모든 기능을 제한 없이 사용',
     target: '초기 사용자',
-    autoPostLimit: 5,        // 월 자동 발행 한도
-    autoDailyPostLimit: 1,   // 일 자동 발행 한도
+    // 베타는 최상위(확장) 플랜과 동일한 한도·품질을 제공한다.
+    // 만족도를 최대로 끌어올려 유료 전환·이탈방지(편의성 락인)를 노리는 정책.
+    autoPostLimit: 24,       // 월 자동 발행 한도 = 확장과 동일
+    autoDailyPostLimit: 1,   // 일 자동 발행 한도 (전 플랜 공통, 스팸 방지)
     features: [
+      '모든 기능 제한 없이',
       '예약 관리',
       '고객 견적 폼',
       '3단계 견적 자동화',
       '카카오 알림톡',
-      '홍보 글 자동 발행 월 5건',
+      '전문가급 정성 글 자동 발행 월 24건',
+      'SNS 채널 원고 자동 생성 (네이버·당근·인스타)',
+      '릴스·시공 사례 영상 자동 생성',
     ],
   },
   starter: {
@@ -131,7 +136,8 @@ export function getAutoDailyPostLimit(planId: PlanId): number {
 // 플랜별 자동 발행 본문 생성 모델 — 상위 플랜(프로·스케일)은 더 깊이 있는 심층 글(Sonnet),
 // 하위 플랜은 기본 글(Haiku). "양"이 아닌 "질"로 업셀하는 핵심 노브.
 export function getPostModel(planId: PlanId): string {
-  return planId === 'pro' || planId === 'scale'
+  // 베타는 최상위(확장) 대우 — 심층 글(Sonnet) 제공
+  return planId === 'beta' || planId === 'pro' || planId === 'scale'
     ? 'claude-sonnet-4-6'
     : 'claude-haiku-4-5-20251001'
 }
