@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { DashboardShell } from '@/components/layout/dashboard-shell'
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register'
 import { SessionRefresher } from '@/components/pwa/session-refresher'
+import { UsageTracker } from '@/components/dashboard/usage-tracker'
 
 // 대시보드 레이아웃 — 서버 컴포넌트에서 인증 검증 후 업체명 전달
 export default async function DashboardLayout({
@@ -69,6 +70,7 @@ export default async function DashboardLayout({
     <DashboardShell businessName={businessName} isAdmin={isAdmin}>
       <ServiceWorkerRegister />
       <SessionRefresher />
+      <UsageTracker />
       {children}
     </DashboardShell>
   )

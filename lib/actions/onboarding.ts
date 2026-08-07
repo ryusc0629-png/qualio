@@ -3,12 +3,24 @@
 import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { sendPushToBusiness } from '@/lib/push/web-push'
+import { getAdminBusinessIds, isAdminEmail } from '@/lib/admin/auth'
 
 // 한국 전화번호 검증: 하이픈 제거 후 010/011/02/031... 형식 확인
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
 
 // 가입 경로(자가응답) 채널 코드 — z.enum 금지 규칙에 따라 refine 사용
 const ACQUISITION_SOURCES = ['youtube', 'search', 'referral', 'sns', 'community', 'etc']
+
+// 가입 경로 코드 → 한글 라벨 (본사 알림 표시용 · 지표 대시보드와 동일 기준)
+const ACQUISITION_LABELS: Record<string, string> = {
+  youtube: '유튜브',
+  search: '검색(네이버·구글)',
+  referral: '지인 소개',
+  sns: '인스타·SNS',
+  community: '블로그·카페',
+  etc: '기타',
+}
 
 // 업체 등록 입력값 검증 스키마
 const createBusinessSchema = z.object({
@@ -74,6 +86,8 @@ export const createBusinessAction = action
       .limit(1)
 
     let businessId = ownedBusinesses?.[0]?.id ?? null
+    // 이번 요청에서 '진짜 새로' 만든 경우만 true — 재시도로 기존 업체를 재사용하면 false(중복 알림 방지)
+    let isNewBusiness = false
 
     if (!businessId) {
       // 새 컬럼(acquisition_*)은 마이그레이션 후 database.ts 타입이 갱신되므로 그 전까지 단언 처리
@@ -95,6 +109,7 @@ export const createBusinessAction = action
 
       if (bizError || !business) throw new Error('[APP] 업체 생성에 실패했습니다')
       businessId = business.id
+      isNewBusiness = true
     }
 
     // 4. 프로필에 업체 ID 연결
@@ -133,6 +148,28 @@ export const createBusinessAction = action
         { business_id: businessId, tier: 'better', label: '추천',     price_multiplier: 1.2, highlight: true,  sort_order: 1 },
         { business_id: businessId, tier: 'best',   label: '프리미엄', price_multiplier: 1.5, highlight: false, sort_order: 2 },
       ])
+    }
+
+    // 7. 신규 업체가 실제로 생성된 경우에만 본사(관리자) 폰에 즉시 알림
+    //    — 재시도로 기존 업체를 재사용했거나, 관리자 본인이 만든 업체면 보내지 않는다.
+    //    알림 발송 실패가 가입 자체를 막지 않도록 try/catch로 감싼다(부가 기능).
+    if (isNewBusiness && !isAdminEmail(user.email)) {
+      try {
+        const sourceLabel = ACQUISITION_LABELS[parsedInput.acquisitionSource] ?? '경로 미상'
+        const adminBusinessIds = await getAdminBusinessIds()
+        await Promise.all(
+          adminBusinessIds.map((adminBusinessId) =>
+            sendPushToBusiness(adminBusinessId, {
+              title: '🎉 새 업체가 가입했어요',
+              body: `${parsedInput.name} · ${sourceLabel}`,
+              url: '/admin/businesses',
+              tag: 'new-signup',
+            }),
+          ),
+        )
+      } catch (e) {
+        console.error('[Onboarding] 신규 가입 관리자 알림 실패:', e)
+      }
     }
 
     return { success: true }
