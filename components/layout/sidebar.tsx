@@ -13,6 +13,7 @@ import {
   Megaphone,
   CalendarDays,
   Wallet,
+  BadgeDollarSign,
   ShieldCheck,
   X,
 } from 'lucide-react'
@@ -37,6 +38,7 @@ const navItems = [
   { href: '/dashboard/marketing',label: '마케팅',      desc: undefined,        icon: Megaphone },
   { href: '/dashboard/clients',  label: '고객 관리',   desc: '상담·견적·거래처', icon: Users },
   { href: '/dashboard/finance',  label: '매출·지출',   desc: '손익·본전 계산',   icon: Wallet },
+  { href: '/dashboard/payroll',  label: '급여',        desc: '근태 기반 급여·명세서', icon: BadgeDollarSign },
   // '영업 동선'(콜드 개척 방문 동선)은 제품에서 내림 — 퀄리오는 '리드가 들어온 순간부터'의
   // 인바운드 자동화에 집중. 페이지·액션·lib/roadmap 코드는 잠재워 둠(되살리려면 이 줄 복구).
   // { href: '/dashboard/roadmap',  label: '영업 동선',   desc: '방문 순서 최적화', icon: Route },
