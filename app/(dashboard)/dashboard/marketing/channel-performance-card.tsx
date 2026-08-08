@@ -122,6 +122,15 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
 
   const hasChannelData = rows.some(([key]) => key !== DIRECT_KEY)
 
+  // ── 북극성: 노출 볼륨이 아니라 계약률(전환)이 성과 ──
+  // 방문·문의가 적어도 '계약이 잘 되는' 채널을 맨 위에서 칭찬한다.
+  // ⚠️ 소표본 착시(문의 1→계약 1=100%) 방지: 최소 문의 MIN_INQ 이상인 채널만 후보.
+  const MIN_INQ = 3
+  const bestConverter = rows
+    .filter(([key, a]) => key !== DIRECT_KEY && a.inquiries >= MIN_INQ && a.bookings > 0)
+    .map(([key, a]) => ({ key, rate: a.bookings / a.inquiries, a }))
+    .sort((x, y) => y.rate - x.rate)[0]
+
   return (
     <div className="rounded-xl border bg-white p-5">
       <div className="mb-1 flex items-center justify-between gap-2">
@@ -129,8 +138,20 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
         <span className="text-xs text-muted-foreground">최근 {months}개월</span>
       </div>
       <p className="text-xs text-muted-foreground mb-4">
-        어느 홍보 채널에서 문의·예약·매출이 나왔는지 한눈에 보고, 힘쓸 곳을 정하세요
+        방문 수가 아니라 <b>계약으로 이어지는</b> 채널이 진짜 성과예요 — 여기에 힘을 몰아주세요
       </p>
+
+      {/* 계약률 스코어보드 — 방문 적어도 계약 잘 되는 채널을 맨 위에서 칭찬 */}
+      {bestConverter && (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <p className="text-[11px] font-medium text-emerald-700">가장 계약이 잘 되는 채널</p>
+          <p className="mt-0.5 text-sm text-emerald-900">
+            <span className="font-bold">{emojiOf(bestConverter.key)} {channelLabel(bestConverter.key)}</span>
+            {' — '}문의 {bestConverter.a.inquiries}명 중 <b>{bestConverter.a.bookings}명 계약</b>
+            {' '}<span className="font-bold">(전환 {Math.round(bestConverter.rate * 100)}%)</span>
+          </p>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center space-y-1">

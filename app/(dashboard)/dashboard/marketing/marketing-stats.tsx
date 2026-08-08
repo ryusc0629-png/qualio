@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { isAiSource } from '@/lib/utils/detect-view-source'
 import { contractRevenueSince, type ContractLike } from '@/lib/utils/ltv'
+import { ALL_CHANNELS, channelLabel } from '@/lib/utils/marketing-channels'
 
 interface MarketingStatsProps {
   businessId: string
@@ -52,9 +53,9 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
     // 공개 페이지 방문 (견적 페이지·브랜드 홈) — 유입 소스 + 추이용. page_views 타입 미반영이라 단언 사용
     db
       .from('page_views' as never)
-      .select('source, viewed_at' as never)
+      .select('source, channel, viewed_at' as never)
       .eq('business_id' as never, businessId)
-      .gte('viewed_at' as never, periodStart) as unknown as Promise<{ data: { source: string; viewed_at: string }[] | null }>,
+      .gte('viewed_at' as never, periodStart) as unknown as Promise<{ data: { source: string; channel: string | null; viewed_at: string }[] | null }>,
 
     // 견적 퍼널 이벤트 — 문의 폼 완주율(시작 → 제출) 품질 신호용. 타입 미반영이라 단언 사용
     db
@@ -116,6 +117,28 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
   const aiViews = allSources.filter((s) => isAiSource(s)).length
   const seoViews = allSources.filter((s) => ['google', 'naver', 'daum'].includes(s)).length
   const directOtherViews = totalViews - aiViews - seoViews
+
+  // ── 진단: '직접·기타' 안을 홍보 채널별로 분해(펼침용) ──
+  // 방문에 채널(?ch=)이 붙는 건 공개페이지(page_views)뿐 — 블로그(post_views)엔 채널이 없어 '그냥 직접'으로 든다.
+  // 검색·AI로 잡힌 방문은 빼고, 나머지(=직접·기타)만 채널로 쪼갠다. 매출 귀속은 아래 '채널별 성과' 카드가 담당(중복 금지).
+  const isSearchOrAi = (s: string) => isAiSource(s) || ['google', 'naver', 'daum'].includes(s)
+  const knownChannelKeys = new Set(ALL_CHANNELS.map((c) => c.key))
+  const channelEmoji = (key: string) => ALL_CHANNELS.find((c) => c.key === key)?.emoji ?? '🏷️'
+  const directByChannel = new Map<string, number>() // key '' = 채널 없는 '그냥 직접'
+  const bumpDirect = (key: string) => directByChannel.set(key, (directByChannel.get(key) ?? 0) + 1)
+  for (const p of pageViews) {
+    if (isSearchOrAi(p.source)) continue
+    bumpDirect(p.channel && knownChannelKeys.has(p.channel) ? p.channel : '')
+  }
+  for (const v of views) {
+    if (isSearchOrAi(v.source)) continue
+    bumpDirect('') // 블로그 방문은 채널이 없어 '그냥 직접'으로
+  }
+  const promoRows = Array.from(directByChannel.entries())
+    .filter(([key, n]) => key !== '' && n > 0)
+    .sort((a, b) => b[1] - a[1])
+  const pureDirectViews = directByChannel.get('') ?? 0
+  const promoTotalViews = promoRows.reduce((sum, [, n]) => sum + n, 0)
 
   // ── 진단: 검색·AI 유입 월별 추이(막대) + 그 달 발행 글 수 ──
   const monthlyPosts = monthlyPostsResult.data ?? []
@@ -253,10 +276,57 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
               </div>
               <div className="px-2 py-4 text-center">
                 <p className="text-xl font-bold text-slate-500">{directOtherViews.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground mt-1">직접·기타</p>
-                <p className="text-[10px] text-muted-foreground/70 mt-0.5">링크·SNS·즐겨찾기</p>
+                <p className="text-xs text-muted-foreground mt-1">홍보·직접</p>
+                <p className="text-[10px] text-muted-foreground/70 mt-0.5">소개서·SNS·즐겨찾기</p>
               </div>
             </div>
+
+            {/* '홍보·직접'을 채널별로 펼치기 — 눌러야 열림(기본 화면은 그대로). 매출 연결은 아래 '채널별 성과' 카드 */}
+            {directOtherViews > 0 && (
+              <details className="group/dt border-t">
+                <summary className="flex items-center justify-between gap-2 px-5 py-3 cursor-pointer list-none select-none hover:bg-slate-50">
+                  <span className="text-xs font-medium text-slate-600">
+                    {promoTotalViews > 0
+                      ? `'홍보·직접' 손님 자세히 보기 — 홍보로 ${promoTotalViews.toLocaleString()}명`
+                      : "'홍보·직접' 손님 자세히 보기"}
+                  </span>
+                  <span className="text-xs text-muted-foreground transition-transform group-open/dt:rotate-180" aria-hidden>▾</span>
+                </summary>
+                <div className="px-5 pb-4 pt-1 space-y-2">
+                  {promoRows.length > 0 ? (
+                    <>
+                      <div className="space-y-1.5">
+                        {promoRows.map(([key, n]) => (
+                          <div key={key} className="flex items-center justify-between gap-2 text-sm">
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              <span aria-hidden>{channelEmoji(key)}</span>
+                              <span className="truncate">{channelLabel(key)}</span>
+                            </span>
+                            <span className="tabular-nums font-medium">{n.toLocaleString()}명</span>
+                          </div>
+                        ))}
+                        {pureDirectViews > 0 && (
+                          <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              <span aria-hidden>🔖</span>
+                              <span className="truncate">그냥 직접 (주소 입력·즐겨찾기 등)</span>
+                            </span>
+                            <span className="tabular-nums">{pureDirectViews.toLocaleString()}명</span>
+                          </div>
+                        )}
+                      </div>
+                      <p className="border-t pt-2 text-[11px] leading-relaxed text-muted-foreground">
+                        이 손님들이 실제로 <b>계약·매출</b>까지 이어졌는지는 아래 <b>&lsquo;채널별 성과&rsquo;</b>에서 볼 수 있어요.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      아직 홍보 링크로 들어온 손님이 없어요. 위 <b>&lsquo;채널별 홍보 링크&rsquo;</b>를 소개서 QR·인스타·블로그에 붙이면, 여기서 어느 홍보로 왔는지 구분돼 쌓여요.
+                    </p>
+                  )}
+                </div>
+              </details>
+            )}
 
             {/* 월별 추이 — AI=초록·일반검색=파랑, 아래 숫자는 그 달 발행 글 수 */}
             {trendBuckets.length >= 2 && (
