@@ -130,9 +130,10 @@ export default async function DashboardPage() {
     db.from('quotes').select('id', { count: 'exact', head: true })
       .eq('business_id', businessId).eq('status', 'pending'),
 
-    // 완료 예약 ID (보고서 체크용)
+    // 완료 예약 ID (보고서 체크용) — 정기계약 방문(contract_id)은 매일 보고서 불필요라 제외
     db.from('bookings').select('id')
-      .eq('business_id', businessId).eq('status', 'completed').is('deleted_at', null),
+      .eq('business_id', businessId).eq('status', 'completed').is('deleted_at', null)
+      .is('contract_id' as never, null),
 
     // 보고서 발송 목록
     db.from('reports').select('booking_id').eq('business_id', businessId),
