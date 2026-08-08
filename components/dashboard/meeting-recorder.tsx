@@ -9,16 +9,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { createLeadActivityAction } from '@/lib/actions/crm'
+import { createClient } from '@/lib/supabase/client'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import { Mic, Square, Loader2, ChevronDown, ChevronUp, Camera, X, Trash2 } from 'lucide-react'
 
-const MAX_SECONDS = 15 * 60 // 15분 — 이보다 길면 파일이 서버 업로드 한도를 넘어 저장이 안 됨
+// 60분 — 오디오는 Storage로 직접 올려 받아쓰기하므로(모델 한도 25MB), 32kbps 기준 넉넉히 커버된다.
+const MAX_SECONDS = 60 * 60
 
 // 음성은 32kbps면 받아쓰기에 충분 — 브라우저 기본 비트레이트(수백 kbps)로 두면
-// 3분만 녹음해도 파일이 4.5MB를 넘어 Vercel이 요청을 거부한다(413). 낮게 고정해 용량을 줄인다.
+// 용량이 금세 커진다. 낮게 고정해 60분 녹음도 ~14MB로 유지한다.
 const AUDIO_BITS_PER_SECOND = 32000
-// 업로드 전 안전 상한 — Vercel 서버리스 요청 본문 한도(4.5MB)보다 여유 있게 잡는다
-const MAX_UPLOAD_BYTES = 4 * 1024 * 1024
+// 받아쓰기 모델 한도(25MB) 바로 아래 — 이보다 크면 잘라 안내(내용은 버리지 않음)
+const MAX_UPLOAD_BYTES = 24 * 1024 * 1024
 // 조각 저장 간격 — 이 간격마다 녹음 데이터를 메모리로 흘려두어, 도중에 끊겨도 여기까지는 보존한다.
 const TIMESLICE_MS = 1000
 
@@ -145,10 +147,10 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
       setSeconds(0)
       timerRef.current = setInterval(() => {
         setSeconds((prev) => {
-          // 15분 도달 시 자동 종료
+          // 60분 도달 시 자동 종료
           if (prev + 1 >= MAX_SECONDS) {
             stopRecording()
-            toast.info('15분이 넘어 녹음을 자동으로 마쳤어요')
+            toast.info('60분이 넘어 녹음을 자동으로 마쳤어요')
           }
           return prev + 1
         })
@@ -231,30 +233,41 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     const ext = mime.includes('mp4') ? 'mp4' : 'webm'
     const blob = new Blob(chunksRef.current, { type: mime })
 
-    // 녹음이 없거나(0바이트) 서버 한도를 넘으면 미리 걸러 명확히 안내
+    // 녹음이 아예 없을 때(0바이트)만 되돌린다 — 나머지 경우엔 내용을 절대 통째로 버리지 않는다.
     if (blob.size === 0) {
       toast.error('녹음된 소리가 없어요. 마이크를 확인하고 다시 녹음해주세요')
       setPhase('idle')
       return
     }
+    // 100분(24MB)을 넘는 아주 긴 녹음 — 자동 정리는 어렵지만 사진과 직접 메모는 살려 저장하게 한다.
     if (blob.size > MAX_UPLOAD_BYTES) {
-      toast.error('녹음이 너무 길어요. 15분 안쪽으로 나눠서 정리해주세요')
-      setPhase('idle')
+      toast.error('녹음이 너무 길어요. 아래에 직접 메모로 남겨 저장해주세요')
+      setSummary('')
+      setTranscript('')
+      setPhase('review')
       return
     }
 
-    const file = new File([blob], `meeting.${ext}`, { type: mime })
-
-    const form = new FormData()
-    form.append('file', file)
-
     try {
-      const res = await fetch('/api/meeting-transcribe', { method: 'POST', body: form })
+      // ① 오디오를 브라우저에서 Supabase Storage로 직접 업로드 — Vercel 4.5MB 요청 한도를 우회한다.
+      //    (이 방식 덕분에 15분 제한 없이 긴 미팅도 내용이 날아가지 않는다)
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      const path = `${user?.id ?? 'anon'}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('meeting-audio')
+        .upload(path, blob, { contentType: mime, upsert: false })
+      if (upErr) throw new Error('녹음 업로드에 실패했어요. 연결을 확인하고 다시 시도해주세요')
 
-      // 413(용량 초과)·504(시간 초과) 등은 JSON이 아닌 응답이 올 수 있어 안전하게 파싱
+      // ② 서버엔 경로만 넘겨 받아쓰기 + 요약 (서버가 내려받아 처리 후 오디오를 삭제)
+      const res = await fetch('/api/meeting-transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+
       const data = await res.json().catch(() => null)
       if (!res.ok || !data) {
-        if (res.status === 413) throw new Error('녹음이 너무 길어요. 15분 안쪽으로 나눠서 정리해주세요')
         throw new Error(data?.error ?? '정리하지 못했어요. 잠시 후 다시 시도해주세요')
       }
 
@@ -263,8 +276,14 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
       setPhase('review')
     } catch (error) {
       console.error('[MeetingRecorder] 처리 실패:', error)
-      toast.error(error instanceof Error ? error.message : '정리하지 못했어요. 다시 시도해주세요')
-      setPhase('idle')
+      // 자동 정리에 실패해도 내용을 통째로 버리지 않는다 — 사진과 직접 메모로 저장할 수 있게 검토 화면으로 이동
+      toast.error(
+        (error instanceof Error ? error.message : '정리하지 못했어요') +
+          ' · 아래에 직접 메모로 남겨 저장할 수 있어요',
+      )
+      setSummary('')
+      setTranscript('')
+      setPhase('review')
     }
   }
 
@@ -435,9 +454,9 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     return (
       <div className="bg-white rounded-xl border p-8 space-y-3 text-center">
         <Loader2 className="h-8 w-8 mx-auto animate-spin text-primary" />
-        <p className="text-sm font-medium">미팅 내용을 정리하고 있어요...</p>
+        <p className="text-sm font-medium">녹음을 올리고 정리하고 있어요...</p>
         <p className="text-xs text-muted-foreground">
-          녹음 길이에 따라 1~2분 걸릴 수 있어요. 잠시만 기다려주세요
+          녹음 길이에 따라 1~2분 걸릴 수 있어요. 이 화면을 벗어나지 말고 잠시만 기다려주세요
         </p>
       </div>
     )
@@ -458,10 +477,17 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
 
       <div>
         <Label className="text-xs">회의록 요약 (수정할 수 있어요)</Label>
+        {/* 자동 정리가 안 된 경우(너무 긴 녹음·처리 실패) — 사진은 그대로 살아 있고, 여기 직접 적어 저장하면 된다 */}
+        {!transcript && (
+          <p className="mt-1 text-xs text-amber-600 leading-relaxed">
+            자동 정리가 어려웠어요. 아래에 미팅 내용을 직접 적어 저장해주세요. (찍은 사진은 그대로 저장돼요)
+          </p>
+        )}
         <Textarea
           value={summary}
           onChange={(e) => setSummary(e.target.value)}
           rows={12}
+          placeholder="미팅에서 나눈 내용을 자유롭게 적어주세요 — 예: 요청 사항, 견적 관련 협의, 다음 약속"
           className="mt-1 resize-none text-sm leading-relaxed"
         />
       </div>
