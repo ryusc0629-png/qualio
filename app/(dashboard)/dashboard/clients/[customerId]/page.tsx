@@ -270,7 +270,9 @@ export default async function CustomerDetailPage({ params }: Props) {
   const contractTotal = contractAccruedRevenue((customerContracts ?? []) as ContractLike[])
   const totalLTV = oneOffTotal + contractTotal
 
-  const completedCount = bookingList.filter((b) => b.status === 'completed').length
+  // '완료 방문'은 일회성 서비스만 센다 — 정기계약 방문은 주기적으로 무한히 쌓여 이 숫자를 무의미하게 만들고,
+  // 정기 방문 완료 횟수는 아래 '정기계약' 카드에 계약별 '완료 N회'로 따로 표시된다.
+  const completedCount = bookingList.filter((b) => b.status === 'completed' && !b.contract_id).length
 
   // 계약별 방문 요약 (다음 예정 방문 · 완료·예정 횟수) — bookingList를 contract_id로 그룹
   const nowIso = new Date().toISOString()
@@ -388,7 +390,7 @@ export default async function CustomerDetailPage({ params }: Props) {
           )}
         </div>
         <div className="bg-white rounded-xl border border-border p-4">
-          <p className="text-xs text-muted-foreground">완료 방문</p>
+          <p className="text-xs text-muted-foreground">일회성 완료</p>
           <p className="text-2xl font-bold mt-1 tabular-nums">
             {completedCount}
             <span className="text-sm font-normal text-muted-foreground ml-0.5">회</span>
