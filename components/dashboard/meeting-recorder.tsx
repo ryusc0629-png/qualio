@@ -21,6 +21,9 @@ const MAX_SECONDS = 60 * 60
 const AUDIO_BITS_PER_SECOND = 32000
 // 받아쓰기 모델 한도(25MB) 바로 아래 — 이보다 크면 잘라 안내(내용은 버리지 않음)
 const MAX_UPLOAD_BYTES = 24 * 1024 * 1024
+// 카메라 해상도 — 미팅 내내 카메라를 켜두므로(음성 안정성 우선) 발열·배터리를 고려해 1080p로.
+// 기존 기본값(대개 480p)보다 훨씬 선명하면서도 상시 구동에 무리 없다.
+const HI_RES = { width: { ideal: 1920 }, height: { ideal: 1080 } }
 // 조각 저장 간격 — 이 간격마다 녹음 데이터를 메모리로 흘려두어, 도중에 끊겨도 여기까지는 보존한다.
 const TIMESLICE_MS = 1000
 
@@ -56,9 +59,13 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // 녹음 시작 때 마이크+카메라(1x)를 한 세션으로 함께 잡는다 — 이래야 iOS가 촬영 중 마이크를 안 끊는다.
+  // 녹음은 이 스트림의 '오디오 트랙만' 담고, 영상 트랙은 미리보기·촬영에 쓴다.
   const streamRef = useRef<MediaStream | null>(null)
-  // 카메라(영상) 스트림 — 녹음(오디오) 스트림과 별개로 관리해 마이크는 건드리지 않는다.
-  const cameraStreamRef = useRef<MediaStream | null>(null)
+  // 0.5x 초광각용 임시 영상 스트림(별도 렌즈라 그때만 취득). 기본(1x)은 streamRef의 영상 트랙을 재사용.
+  const ultraStreamRef = useRef<MediaStream | null>(null)
+  // 현재 미리보기에 연결할 스트림(1x=streamRef, 0.5x=ultraStreamRef)
+  const previewStreamRef = useRef<MediaStream | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   // 다른 화면(카메라 앱 등)으로 나가 자동 종료됐는지 표시 — 처리 후 안내 문구용
   const autoStoppedRef = useRef(false)
@@ -72,9 +79,23 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
+  // 카메라 오버레이 닫기 — 0.5x 임시 스트림만 정리하고 1x로 되돌린다.
+  // 기본 카메라(오디오와 한 세션)는 녹음이 끝날 때까지 계속 켜둔다(끄면 다시 켤 때 마이크가 끊길 위험).
   function stopCameraStream() {
-    cameraStreamRef.current?.getTracks().forEach((track) => track.stop())
-    cameraStreamRef.current = null
+    ultraStreamRef.current?.getTracks().forEach((track) => track.stop())
+    ultraStreamRef.current = null
+    previewStreamRef.current = streamRef.current
+    setActiveLensId(streamRef.current?.getVideoTracks()[0]?.getSettings().deviceId ?? null)
+    setCameraOpen(false)
+  }
+
+  // 녹음·카메라 세션 전체 정리(녹음 종료·언마운트) — 마이크·카메라 표시등을 끈다.
+  function teardownStreams() {
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
+    ultraStreamRef.current?.getTracks().forEach((t) => t.stop())
+    ultraStreamRef.current = null
+    previewStreamRef.current = null
     setCameraOpen(false)
   }
 
@@ -119,8 +140,8 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
 
   // 카메라 오버레이가 열리면 영상 스트림을 미리보기 <video>에 연결
   useEffect(() => {
-    if (cameraOpen && videoRef.current && cameraStreamRef.current) {
-      videoRef.current.srcObject = cameraStreamRef.current
+    if (cameraOpen && videoRef.current && previewStreamRef.current) {
+      videoRef.current.srcObject = previewStreamRef.current
       videoRef.current.play().catch(() => {})
     }
   }, [cameraOpen])
@@ -129,7 +150,7 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
   useEffect(() => {
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop())
-      cameraStreamRef.current?.getTracks().forEach((t) => t.stop())
+      ultraStreamRef.current?.getTracks().forEach((t) => t.stop())
       if (timerRef.current) clearInterval(timerRef.current)
     }
   }, [])
@@ -137,8 +158,30 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
   // 녹음 시작
   async function startRecording() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      // 마이크+카메라(1x)를 한 번의 getUserMedia로 함께 잡는다.
+      // → 녹음 도중 사진/1x 촬영에 새 카메라 요청이 없어 iOS가 마이크를 끊지 않는다(음성 유실 방지).
+      // 카메라 권한이 없으면 소리만이라도 녹음(사진은 이번 세션에서 비활성).
+      let stream: MediaStream
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: { facingMode: 'environment', ...HI_RES },
+        })
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      }
       streamRef.current = stream
+      previewStreamRef.current = stream
+
+      // 현재(1x) 렌즈 파악 + 초광각(0.5x) 감지 (영상 트랙이 있을 때만)
+      if (stream.getVideoTracks().length > 0) {
+        const curId = stream.getVideoTracks()[0]?.getSettings().deviceId ?? null
+        setActiveLensId(curId)
+        void detectLenses(curId)
+      } else {
+        setLenses([])
+        setActiveLensId(null)
+      }
 
       // 브라우저별 지원 포맷 선택 (iOS 사파리는 mp4)
       const mimeType = MediaRecorder.isTypeSupported('audio/webm')
@@ -147,7 +190,9 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
           ? 'audio/mp4'
           : ''
 
-      const recorder = new MediaRecorder(stream, {
+      // 녹음은 '오디오 트랙만' — 카메라를 켜둔 채여도 파일엔 소리만 담긴다(용량도 그대로 작다).
+      const audioStream = new MediaStream(stream.getAudioTracks())
+      const recorder = new MediaRecorder(audioStream, {
         ...(mimeType ? { mimeType } : {}),
         audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
       })
@@ -179,38 +224,25 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     }
   }
 
-  // 녹음 중지 → onstop 트리거
+  // 녹음 중지 → onstop 트리거. 녹음이 끝나면 마이크·카메라 세션을 모두 정리한다.
   function stopRecording() {
     if (timerRef.current) {
       clearInterval(timerRef.current)
       timerRef.current = null
     }
     mediaRecorderRef.current?.stop()
-    streamRef.current?.getTracks().forEach((track) => track.stop())
-    stopCameraStream()
+    teardownStreams()
   }
 
   // ── 페이지 안 카메라 ─────────────────────────────────────
-  // 녹음을 유지한 채(앱 전환 없이) 현장 사진을 찍는다.
-  // 화질을 위해 고해상도(가능한 최대)를 요청한다. 오디오 스트림(streamRef)은 건드리지 않아 녹음은 계속된다.
-  const HI_RES = { width: { ideal: 3840 }, height: { ideal: 2160 } }
-
+  // 카메라는 녹음 시작 때 마이크와 함께 이미 잡아둔다 → 여기선 미리보기만 연다(새 getUserMedia 없음 = 음성 안 끊김).
   async function openCamera() {
-    try {
-      if (!cameraStreamRef.current) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', ...HI_RES },
-        })
-        cameraStreamRef.current = stream
-        const curId = stream.getVideoTracks()[0]?.getSettings().deviceId ?? null
-        setActiveLensId(curId)
-        void detectLenses(curId)
-      }
-      setCameraOpen(true)
-    } catch (error) {
-      console.error('[MeetingRecorder] 카메라 접근 실패:', error)
-      toast.error('카메라를 쓸 수 없어요. 카메라 권한을 허용해주세요')
+    if (!streamRef.current?.getVideoTracks().length) {
+      toast.error('카메라를 쓸 수 없어요. 카메라 권한을 허용하고 다시 녹음을 시작해주세요')
+      return
     }
+    previewStreamRef.current = ultraStreamRef.current ?? streamRef.current
+    setCameraOpen(true)
   }
 
   // 후면 렌즈 감지 — 초광각(0.5x)이 있는 기기에서만 0.5x/1x 토글을 띄운다.
@@ -244,18 +276,28 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     }
   }
 
-  // 렌즈 전환 — 영상 트랙만 교체하고 오디오(녹음)는 그대로 둔다.
+  // 렌즈 전환. 오디오(녹음)는 항상 기본 스트림(streamRef)에 있어 어떤 경우에도 건드리지 않는다.
   async function switchLens(deviceId: string) {
     if (deviceId === activeLensId) return
+    const baseId = streamRef.current?.getVideoTracks()[0]?.getSettings().deviceId ?? null
     try {
-      cameraStreamRef.current?.getVideoTracks().forEach((t) => t.stop())
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { deviceId: { exact: deviceId }, ...HI_RES },
-      })
-      cameraStreamRef.current = stream
+      if (deviceId === baseId) {
+        // 1x로 복귀 — 이미 켜둔 기본(오디오와 한 세션) 카메라 재사용. 0.5x 임시 스트림만 정리(새 getUserMedia 없음).
+        ultraStreamRef.current?.getVideoTracks().forEach((t) => t.stop())
+        ultraStreamRef.current = null
+        previewStreamRef.current = streamRef.current
+      } else {
+        // 0.5x 초광각 — 별도 렌즈라 임시 스트림을 취득한다(오디오는 기본 세션 유지).
+        const ultra = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: deviceId }, ...HI_RES },
+        })
+        ultraStreamRef.current?.getVideoTracks().forEach((t) => t.stop())
+        ultraStreamRef.current = ultra
+        previewStreamRef.current = ultra
+      }
       setActiveLensId(deviceId)
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
+      if (videoRef.current && previewStreamRef.current) {
+        videoRef.current.srcObject = previewStreamRef.current
         videoRef.current.play().catch(() => {})
       }
     } catch (error) {
@@ -498,7 +540,9 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
 
           <div className="text-4xl font-bold tabular-nums">{formatTime(seconds)}</div>
           <p className="text-xs text-muted-foreground">
-            녹음하면서 아래 <b>사진 찍기</b>로 현장 사진을 담을 수 있어요 (녹음 안 끊겨요)
+            녹음하면서 아래 <b>사진 찍기</b>로 현장 사진을 담을 수 있어요.
+            <br />
+            녹음이 끊기지 않도록 카메라를 함께 켜둬요 (사진은 &lsquo;사진 찍기&rsquo;를 눌러야만 찍혀요)
           </p>
 
           {photos.length > 0 && (
