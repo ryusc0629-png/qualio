@@ -104,8 +104,8 @@ export default async function DashboardPage() {
       .is('deleted_at', null)
       .gte('scheduled_at', lastMonthStart).lt('scheduled_at', thisMonthStart),
 
-    // 활성 정기 계약 (매출 합산 + 방문 누락 감지용 날짜)
-    db.from('contracts').select('id, contract_price, start_date, end_date')
+    // 활성 정기 계약 (매출 합산 + 방문 누락 감지용 날짜 + 정기계약 거래처 수 집계용 customer_id)
+    db.from('contracts').select('id, customer_id, contract_price, start_date, end_date')
       .eq('business_id', businessId).eq('status', 'active'),
 
     // 오늘 예약
@@ -267,7 +267,13 @@ export default async function DashboardPage() {
   // B2B 거래처 지표 — 거래처(company)만, 보관(archived)·거절(rejected)은 제외
   const companyLeads      = (allLeads ?? []).filter((l) => l.customer_type === 'company')
   const activeLeads       = companyLeads.filter((l) => !['contracted', 'rejected', 'archived'].includes(l.status))
-  const contractedLeads   = companyLeads.filter((l) => l.status === 'contracted')
+  // 거래처 현황 '정기계약'은 '성사된 리드'가 아니라 실제 활성 정기계약이 있는 거래처 수로 센다.
+  // (일회성으로 성사된 업체 건은 정기 매출이 아니므로 이 숫자·월 예상에 잡히지 않게 함)
+  const contractCustomerCount = new Set(
+    ((activeContracts ?? []) as Array<{ customer_id: string | null }>)
+      .map((c) => c.customer_id)
+      .filter((v): v is string => Boolean(v)),
+  ).size
   // 거래처 현황 '월 예상'은 상담 단계의 추정 예산(leads.monthly_budget)이 아니라
   // 실제 체결된 정기 계약 매출(monthlyContractRevenue)을 그대로 사용해 KPI 카드와 값이 일치하도록 한다
   const todayFollowUpCount = (todayFollowUps ?? []).length
@@ -328,6 +334,41 @@ export default async function DashboardPage() {
     fieldPriceChangedCount > 0 || (openClaimCount ?? 0) > 0 || (needsReviewCount ?? 0) > 0 ||
     (pendingMonthlyReportCount ?? 0) > 0 || (pendingReengagementCount ?? 0) > 0 ||
     missingVisitContractCount > 0
+
+  // 오늘 현장 문단속 카드 — 미마감(확인 필요)이 있으면 상단(돈 지표 위)에 빨갛게 노출,
+  // 정상(확인 필요 0)이면 핵심 지표 아래로 내려 조용히 보여준다. (문제 있을 때만 위로)
+  const lockupCard = lockup.total > 0 ? (
+    <Link href="/dashboard/attendance">
+      <div className={`rounded-xl border p-4 hover:shadow-sm transition-all ${lockup.overdue > 0 ? 'bg-red-50 border-red-200 hover:border-red-300' : 'bg-white border-border hover:border-primary/40'}`}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Lock className={`h-4 w-4 ${lockup.overdue > 0 ? 'text-red-500' : 'text-primary'}`} />
+            <span className="text-sm font-semibold">오늘 현장 문단속</span>
+          </div>
+          <span className={`text-xs flex items-center gap-0.5 ${lockup.overdue > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
+            현황 보기 <ChevronRight className="h-3 w-3" />
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="text-center">
+            <p className="text-2xl font-bold tabular-nums">{lockup.total}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">오늘 현장</p>
+          </div>
+          <div className="text-center">
+            <p className={`text-2xl font-bold tabular-nums ${lockup.done > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>{lockup.done}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">마감 완료</p>
+          </div>
+          <div className="text-center">
+            <p className={`text-2xl font-bold tabular-nums ${lockup.overdue > 0 ? 'text-red-600' : 'text-gray-400'}`}>{lockup.overdue}</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">확인 필요</p>
+          </div>
+        </div>
+        {lockup.overdue > 0 && (
+          <p className="text-xs text-red-600 mt-3">마감이 안 된 현장이 있어요 — 눌러서 도착·마감 사진을 확인하세요</p>
+        )}
+      </div>
+    </Link>
+  ) : null
 
   return (
     <div className="max-w-5xl mx-auto space-y-5">
@@ -545,39 +586,8 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* 오늘 현장 현황 (문단속) — 오늘 문단속 현장이 있을 때만 노출, 미마감이 있으면 빨갛게 */}
-      {lockup.total > 0 && (
-        <Link href="/dashboard/attendance">
-          <div className={`rounded-xl border p-4 hover:shadow-sm transition-all ${lockup.overdue > 0 ? 'bg-red-50 border-red-200 hover:border-red-300' : 'bg-white border-border hover:border-primary/40'}`}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Lock className={`h-4 w-4 ${lockup.overdue > 0 ? 'text-red-500' : 'text-primary'}`} />
-                <span className="text-sm font-semibold">오늘 현장 문단속</span>
-              </div>
-              <span className={`text-xs flex items-center gap-0.5 ${lockup.overdue > 0 ? 'text-red-500' : 'text-muted-foreground'}`}>
-                현황 보기 <ChevronRight className="h-3 w-3" />
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center">
-                <p className="text-2xl font-bold tabular-nums">{lockup.total}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">오늘 현장</p>
-              </div>
-              <div className="text-center">
-                <p className={`text-2xl font-bold tabular-nums ${lockup.done > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>{lockup.done}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">마감 완료</p>
-              </div>
-              <div className="text-center">
-                <p className={`text-2xl font-bold tabular-nums ${lockup.overdue > 0 ? 'text-red-600' : 'text-gray-400'}`}>{lockup.overdue}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">확인 필요</p>
-              </div>
-            </div>
-            {lockup.overdue > 0 && (
-              <p className="text-xs text-red-600 mt-3">마감이 안 된 현장이 있어요 — 눌러서 도착·마감 사진을 확인하세요</p>
-            )}
-          </div>
-        </Link>
-      )}
+      {/* 오늘 현장 문단속 — 미마감(확인 필요)이 있을 때만 상단에 빨갛게 노출. 정상이면 핵심 지표 아래로 */}
+      {lockup.overdue > 0 && lockupCard}
 
       {/* KPI 카드 4개 */}
       <div>
@@ -699,6 +709,9 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
+      {/* 오늘 현장 문단속(정상) — 미마감이 없을 땐 여기(핵심 지표 아래)에서 조용히 상태만 */}
+      {lockup.overdue === 0 && lockupCard}
+
       {/* 운영 현황 — 2컬럼 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 
@@ -773,9 +786,9 @@ export default async function DashboardPage() {
                 <div className="rounded-lg bg-green-50 p-3 hover:bg-green-100 transition-colors">
                   <div className="flex items-center gap-1 mb-1">
                     <CheckCircle2 className="h-3 w-3 text-green-500" />
-                    <span className="text-[10px] text-green-600">계약</span>
+                    <span className="text-[10px] text-green-600">정기계약</span>
                   </div>
-                  <p className="text-lg font-bold text-green-700 tabular-nums">{contractedLeads.length}곳</p>
+                  <p className="text-lg font-bold text-green-700 tabular-nums">{contractCustomerCount}곳</p>
                 </div>
               </Link>
               <div className="rounded-lg bg-teal-50 p-3">
