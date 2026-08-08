@@ -91,6 +91,8 @@ function relativeTime(dateStr: string): string {
 export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, notifyOnMyWay, onMyWaySentAt, requiresLockup, isRecurring, existingOpenPhotoUrls, existingLockupPhotoUrls, checkinAt, checkoutAt, checklistItems, existingChecklistPhotos, existingBeforeUrls, existingCustomerRequest, existingNextVisitNote, memoUpdatedById, memoUpdatedByName, memoUpdatedAt }: Props) {
   const [currentStatus, setCurrentStatus] = useState(booking.status)
   const [onMyWaySent, setOnMyWaySent] = useState(!!onMyWaySentAt)
+  // 도착 사진 → 작업 자동 시작이 한 번만 실행되도록 (사진 여러 장 올려도 중복 시작 방지)
+  const autoStartedRef = useRef(false)
   // 현장에서 항목을 조정하면 결제 금액도 실시간으로 따라간다
   const [liveTotal, setLiveTotal] = useState(booking.finalPrice)
   const [siteMemo, setSiteMemo] = useState(booking.memo ?? '')
@@ -156,6 +158,11 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
     onSuccess: ({ data }) => {
       if (data?.checkinAt) setCheckinTime(data.checkinAt)
       toast.success('도착(문 오픈) 사진이 저장됐어요!')
+      // 문단속 현장에서 도착 사진을 올리면 작업이 자동으로 시작됨 (버튼 따로 안 눌러도 됨)
+      if (requiresLockup && currentStatus === 'confirmed' && !autoStartedRef.current) {
+        autoStartedRef.current = true
+        startWork({ workerId, bookingId: booking.id })
+      }
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -266,8 +273,14 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
       uploaded.push(supabase.storage.from('report-photos').getPublicUrl(path).data.publicUrl)
     }
 
-    const finalUrls = [...cur.filter((p) => p.url).map((p) => p.url), ...uploaded]
-    setChecklistPhotos((prev) => ({ ...prev, [itemId]: finalUrls.map((url) => ({ url, uploading: false })) }))
+    // 저장 목록은 낡은 cur이 아니라 최신 state(prev)에서 파생 — 빠르게 연달아 올려도 밀리지 않음
+    let finalUrls: string[] = []
+    setChecklistPhotos((prev) => {
+      const kept = (prev[itemId] ?? []).filter((p) => p.url && !p.uploading)
+      const next = [...kept, ...uploaded.map((url) => ({ url, uploading: false }))]
+      finalUrls = next.map((p) => p.url)
+      return { ...prev, [itemId]: next }
+    })
     saveChecklistPhotos({ workerId, bookingId: booking.id, itemId, photoUrls: finalUrls })
   }
 
@@ -312,17 +325,16 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
       uploaded.push(publicUrl)
     }
 
+    // 저장 목록은 낡은 beforePhotos가 아니라 최신 state(prev)에서 파생 — 빠르게 연달아 올려도 밀리지 않음
+    let allUrls: string[] = []
     setBeforePhotos((prev) => {
-      const result = [...prev.filter((p) => !p.uploading)]
-      uploaded.forEach((url) => result.push({ url, uploading: false }))
-      return result
+      const kept = prev.filter((p) => p.url && !p.uploading)
+      const next = [...kept, ...uploaded.map((url) => ({ url, uploading: false }))]
+      allUrls = next.map((p) => p.url)
+      return next
     })
 
     // 업로드 완료 후 자동 저장
-    const allUrls = [
-      ...beforePhotos.filter((p) => !p.uploading && p.url).map((p) => p.url),
-      ...uploaded,
-    ]
     if (allUrls.length > 0) {
       saveBeforePhotos({ workerId, bookingId: booking.id, beforePhotoUrls: allUrls })
     }
@@ -368,8 +380,14 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
       uploaded.push(supabase.storage.from('report-photos').getPublicUrl(path).data.publicUrl)
     }
 
-    const finalUrls = [...photos.filter((p) => !p.uploading && p.url).map((p) => p.url), ...uploaded]
-    setPhotos(finalUrls.map((url) => ({ url, uploading: false })))
+    // 저장 목록은 낡은 photos가 아니라 최신 state(prev)에서 파생 — 빠르게 연달아 올려도 밀리지 않음
+    let finalUrls: string[] = []
+    setPhotos((prev) => {
+      const kept = prev.filter((p) => p.url && !p.uploading)
+      const next = [...kept, ...uploaded.map((url) => ({ url, uploading: false }))]
+      finalUrls = next.map((p) => p.url)
+      return next
+    })
     save(finalUrls)
   }
 
@@ -413,6 +431,10 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
     completed:   'bg-emerald-100 text-emerald-700',
   }
 
+  // 문단속 현장인데 아직 도착 사진이 없으면 → 시작 버튼이 곧장 카메라를 열고, 사진 올리면 자동 시작
+  const hasArrivalPhoto = openPhotos.some((p) => p.url)
+  const startNeedsArrivalPhoto = requiresLockup && !hasArrivalPhoto
+
   return (
     <div className="min-h-dvh bg-gray-50 pb-32">
       {/* 헤더 */}
@@ -449,8 +471,22 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
           </div>
         </div>
 
-        {/* 문단속 인증 — '문단속 필요' 현장에서만. 도착(오픈) + 마감(잠금) 사진 */}
-        {requiresLockup && (
+        {/* 예정 상태 안내 — 지금 할 한 가지(작업 시작)만 남기고, 나머지는 시작 후 등장 */}
+        {currentStatus === 'confirmed' && (
+          <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 flex items-start gap-2.5 text-sm text-blue-800">
+            <Play className="h-4 w-4 mt-0.5 shrink-0" />
+            <p>
+              {requiresLockup
+                ? '도착하면 문 여는 사진을 먼저 찍고, 아래 파란 버튼을 눌러 작업을 시작하세요.'
+                : '현장에 도착하면 아래 파란 버튼을 눌러 작업을 시작하세요.'}
+              <br />
+              <span className="text-blue-600">작업 항목·메모는 시작한 뒤에 나타나요.</span>
+            </p>
+          </div>
+        )}
+
+        {/* 문단속 인증 — '문단속 필요' 현장에서만. 예정/작업중에만 노출 (완료 후엔 숨김) */}
+        {requiresLockup && (currentStatus === 'confirmed' || currentStatus === 'in_progress') && (
           <div className="rounded-xl border-2 border-amber-400 bg-amber-50 overflow-hidden">
             <div className="px-4 py-3 flex items-center gap-2 border-b border-amber-200">
               <Lock className="h-4 w-4 text-amber-600" />
@@ -518,7 +554,8 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                 />
               </div>
 
-              {/* ② 마감 · 문 잠금 */}
+              {/* ② 마감 · 문 잠금 — 작업 중일 때만 (도착 단계에선 숨김) */}
+              {currentStatus === 'in_progress' && (
               <div className="space-y-2 border-t border-amber-200 pt-3">
                 <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-900">
                   <Lock className="h-4 w-4" />
@@ -580,12 +617,13 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                   </p>
                 )}
               </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* 작업 항목(체크리스트) — 대표가 정한 항목마다 사진을 올려야 작업 완료 가능 */}
-        {checklistItems.length > 0 && (
+        {/* 작업 항목(체크리스트) — 작업 시작 후에만 노출. 대표가 정한 항목마다 사진을 올려야 완료 가능 */}
+        {checklistItems.length > 0 && (currentStatus === 'in_progress' || currentStatus === 'completed') && (
           <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50/50 overflow-hidden">
             <div className="px-4 py-3 flex items-center gap-2 border-b border-emerald-200">
               <ListChecks className="h-4 w-4 text-emerald-600" />
@@ -663,8 +701,8 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
           </div>
         )}
 
-        {/* 메모 섹션 — 작업 중이거나 완료 전 */}
-        {(currentStatus === 'in_progress' || currentStatus === 'confirmed') && (
+        {/* 메모 섹션 — 작업 시작 후에만 (예정 화면에선 숨김) */}
+        {currentStatus === 'in_progress' && (
           <div className="rounded-xl bg-white border overflow-hidden">
             <button
               type="button"
@@ -817,8 +855,8 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
           </div>
         )}
 
-        {/* 항목별 금액 조정 — 일회성 현장에서만 (정기청소는 월말 정산이라 현장 추가 항목 없음) */}
-        {!isRecurring && (currentStatus === 'in_progress' || currentStatus === 'confirmed') && (
+        {/* 항목별 금액 조정 — 일회성 현장, 작업 시작 후에만 (정기청소는 월말 정산이라 현장 추가 항목 없음) */}
+        {!isRecurring && currentStatus === 'in_progress' && (
           <FieldBookingItemsEditor
             workerId={workerId}
             bookingId={booking.id}
@@ -929,10 +967,17 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                 size="lg"
                 className="w-full h-14 text-base gap-2"
                 disabled={isStarting}
-                onClick={() => startWork({ workerId, bookingId: booking.id })}
+                onClick={() => {
+                  // 문단속 현장 + 도착 사진 없음 → 카메라부터 열기 (사진 올라오면 자동으로 작업 시작)
+                  if (startNeedsArrivalPhoto) {
+                    openInputRef.current?.click()
+                  } else {
+                    startWork({ workerId, bookingId: booking.id })
+                  }
+                }}
               >
-                <Play className="h-5 w-5" />
-                {isStarting ? '처리 중...' : '작업 시작하기'}
+                {startNeedsArrivalPhoto ? <Camera className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                {isStarting ? '처리 중...' : startNeedsArrivalPhoto ? '도착 사진 찍고 작업 시작' : '작업 시작하기'}
               </Button>
             </div>
           )}
