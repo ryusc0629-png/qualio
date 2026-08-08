@@ -47,6 +47,9 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
   const [photos, setPhotos] = useState<string[]>([])
   const [cameraOpen, setCameraOpen] = useState(false)
   const [capturing, setCapturing] = useState(false)
+  // 후면 렌즈 목록(초광각 0.5x가 있는 기기만) + 현재 선택된 렌즈
+  const [lenses, setLenses] = useState<{ id: string; label: '0.5x' | '1x' }[]>([])
+  const [activeLensId, setActiveLensId] = useState<string | null>(null)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -174,12 +177,19 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
 
   // ── 페이지 안 카메라 ─────────────────────────────────────
   // 녹음을 유지한 채(앱 전환 없이) 현장 사진을 찍는다.
+  // 화질을 위해 고해상도(가능한 최대)를 요청한다. 오디오 스트림(streamRef)은 건드리지 않아 녹음은 계속된다.
+  const HI_RES = { width: { ideal: 3840 }, height: { ideal: 2160 } }
+
   async function openCamera() {
     try {
       if (!cameraStreamRef.current) {
-        cameraStreamRef.current = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', ...HI_RES },
         })
+        cameraStreamRef.current = stream
+        const curId = stream.getVideoTracks()[0]?.getSettings().deviceId ?? null
+        setActiveLensId(curId)
+        void detectLenses(curId)
       }
       setCameraOpen(true)
     } catch (error) {
@@ -188,10 +198,91 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     }
   }
 
+  // 후면 렌즈 감지 — 초광각(0.5x)이 있는 기기에서만 0.5x/1x 토글을 띄운다.
+  // (권한 허용 후에야 라벨이 채워지므로 openCamera에서 스트림 확보 뒤 호출)
+  async function detectLenses(currentId: string | null) {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const backs = devices.filter(
+        (d) => d.kind === 'videoinput' && /back|rear|environment|후면/i.test(d.label),
+      )
+      const ultra = backs.find((d) => /ultra|초광각|울트라/i.test(d.label))
+      if (!ultra) {
+        setLenses([]) // 초광각 없는 기기 → 토글 숨김
+        return
+      }
+      // 1x = 현재 렌즈(초광각이 아니면) 우선, 아니면 초광각이 아닌 첫 후면 렌즈
+      const wideId =
+        currentId && currentId !== ultra.deviceId
+          ? currentId
+          : backs.find((d) => d.deviceId !== ultra.deviceId)?.deviceId ?? null
+      if (!wideId) {
+        setLenses([])
+        return
+      }
+      setLenses([
+        { id: ultra.deviceId, label: '0.5x' },
+        { id: wideId, label: '1x' },
+      ])
+    } catch {
+      setLenses([])
+    }
+  }
+
+  // 렌즈 전환 — 영상 트랙만 교체하고 오디오(녹음)는 그대로 둔다.
+  async function switchLens(deviceId: string) {
+    if (deviceId === activeLensId) return
+    try {
+      cameraStreamRef.current?.getVideoTracks().forEach((t) => t.stop())
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { deviceId: { exact: deviceId }, ...HI_RES },
+      })
+      cameraStreamRef.current = stream
+      setActiveLensId(deviceId)
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play().catch(() => {})
+      }
+    } catch (error) {
+      console.error('[MeetingRecorder] 렌즈 전환 실패:', error)
+      toast.error('다른 렌즈로 바꾸지 못했어요')
+    }
+  }
+
+  // 셔터음 '찰칵' — Web Audio로 짧은 두 번의 클릭 (촬영 즉시 재생, 사용자 조작이라 iOS 무음스위치와 무관)
+  function playShutter() {
+    try {
+      const AC =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!AC) return
+      const ctx = new AC()
+      const click = (start: number, freq: number) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.type = 'square'
+        osc.frequency.value = freq
+        gain.gain.setValueAtTime(0.0001, start)
+        gain.gain.exponentialRampToValueAtTime(0.25, start + 0.005)
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.05)
+        osc.connect(gain).connect(ctx.destination)
+        osc.start(start)
+        osc.stop(start + 0.06)
+      }
+      const now = ctx.currentTime
+      click(now, 1800)
+      click(now + 0.07, 1150)
+      setTimeout(() => ctx.close().catch(() => {}), 300)
+    } catch {
+      // 소리 재생 실패는 촬영에 영향 없음
+    }
+  }
+
   // 촬영 → post-images 버킷 업로드 → URL을 사진 목록에 추가
   async function capturePhoto() {
     const video = videoRef.current
     if (!video || !video.videoWidth) return
+    playShutter() // 탭 즉시 '찰칵' — 눌린 느낌을 준다
     setCapturing(true)
     try {
       const canvas = document.createElement('canvas')
@@ -201,7 +292,7 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
       if (!ctx) throw new Error('사진을 만들지 못했어요')
       ctx.drawImage(video, 0, 0)
       const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85),
+        canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.92),
       )
       if (!blob) throw new Error('사진을 만들지 못했어요')
 
@@ -425,6 +516,24 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
                 {photos.length > 0 && (
                   <div className="w-full overflow-x-auto overscroll-contain">
                     <PhotoStrip removable={false} />
+                  </div>
+                )}
+                {/* 렌즈 전환(0.5x 초광각 / 1x) — 초광각 있는 기기에서만 노출 */}
+                {lenses.length >= 2 && (
+                  <div className="flex items-center gap-1 rounded-full bg-white/15 p-1">
+                    {lenses.map((lens) => (
+                      <button
+                        key={lens.id}
+                        type="button"
+                        onClick={() => switchLens(lens.id)}
+                        className={[
+                          'px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors',
+                          activeLensId === lens.id ? 'bg-white text-black' : 'text-white',
+                        ].join(' ')}
+                      >
+                        {lens.label}
+                      </button>
+                    ))}
                   </div>
                 )}
                 <button
