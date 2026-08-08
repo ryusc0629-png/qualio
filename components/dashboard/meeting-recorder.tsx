@@ -50,6 +50,8 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
   // 후면 렌즈 목록(초광각 0.5x가 있는 기기만) + 현재 선택된 렌즈
   const [lenses, setLenses] = useState<{ id: string; label: '0.5x' | '1x' }[]>([])
   const [activeLensId, setActiveLensId] = useState<string | null>(null)
+  // 받아쓰기 실패 시 서버에 남겨둔 오디오 경로 — '다시 정리 시도'로 재시도 가능(일시적 오류로 미팅이 통째로 날아가지 않게)
+  const [pendingAudioPath, setPendingAudioPath] = useState<string | null>(null)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
@@ -77,6 +79,7 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
   }
 
   function reset() {
+    discardPendingAudio() // 재시도를 포기하고 나가면 서버에 남은 오디오를 정리
     setPhase('idle')
     setSeconds(0)
     setSummary('')
@@ -84,6 +87,18 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     setShowTranscript(false)
     setPhotos([])
     stopCameraStream()
+  }
+
+  // 재시도를 위해 남겨둔 실패 오디오를 서버에서 삭제(포기·저장 완료 시)
+  function discardPendingAudio() {
+    if (!pendingAudioPath) return
+    const p = pendingAudioPath
+    setPendingAudioPath(null)
+    void fetch('/api/meeting-transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ discard: p }),
+    }).catch(() => {})
   }
 
   // 녹음 중에 다른 앱(카메라·홈 등)으로 나가면 iOS가 백그라운드 탭의 마이크를 끊는다.
@@ -339,43 +354,80 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
       return
     }
 
+    // ① 오디오를 브라우저에서 Supabase Storage로 직접 업로드 — Vercel 4.5MB 요청 한도를 우회한다.
+    //    (이 방식 덕분에 15분 제한 없이 긴 미팅도 내용이 날아가지 않는다)
+    let path: string
     try {
-      // ① 오디오를 브라우저에서 Supabase Storage로 직접 업로드 — Vercel 4.5MB 요청 한도를 우회한다.
-      //    (이 방식 덕분에 15분 제한 없이 긴 미팅도 내용이 날아가지 않는다)
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      const path = `${user?.id ?? 'anon'}/${Date.now()}.${ext}`
+      path = `${user?.id ?? 'anon'}/${Date.now()}.${ext}`
       const { error: upErr } = await supabase.storage
         .from('meeting-audio')
         .upload(path, blob, { contentType: mime, upsert: false })
       if (upErr) throw new Error('녹음 업로드에 실패했어요. 연결을 확인하고 다시 시도해주세요')
-
-      // ② 서버엔 경로만 넘겨 받아쓰기 + 요약 (서버가 내려받아 처리 후 오디오를 삭제)
-      const res = await fetch('/api/meeting-transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
-      })
-
-      const data = await res.json().catch(() => null)
-      if (!res.ok || !data) {
-        throw new Error(data?.error ?? '정리하지 못했어요. 잠시 후 다시 시도해주세요')
-      }
-
-      setTranscript(data.transcript ?? '')
-      setSummary(data.summary ?? '')
-      setPhase('review')
     } catch (error) {
-      console.error('[MeetingRecorder] 처리 실패:', error)
-      // 자동 정리에 실패해도 내용을 통째로 버리지 않는다 — 사진과 직접 메모로 저장할 수 있게 검토 화면으로 이동
+      console.error('[MeetingRecorder] 업로드 실패:', error)
+      // 업로드조차 안 되면 사진·직접 메모로라도 저장하게 검토 화면으로(내용 통째 유실 방지)
       toast.error(
-        (error instanceof Error ? error.message : '정리하지 못했어요') +
+        (error instanceof Error ? error.message : '녹음 업로드에 실패했어요') +
           ' · 아래에 직접 메모로 남겨 저장할 수 있어요',
       )
       setSummary('')
       setTranscript('')
       setPhase('review')
+      return
     }
+
+    // ② 서버엔 경로만 넘겨 받아쓰기 + 요약 (실패해도 오디오는 서버에 남아 재시도 가능)
+    await runTranscribe(path)
+  }
+
+  // 업로드된 오디오를 서버에서 받아쓰기 + 요약. 실패해도 오디오를 남겨 '다시 정리 시도'가 가능하게 한다.
+  async function runTranscribe(path: string) {
+    setPhase('processing')
+    let res: Response
+    try {
+      res = await fetch('/api/meeting-transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+    } catch {
+      // 네트워크 오류 — 오디오는 서버에 남아 있으니 재시도 가능
+      setPendingAudioPath(path)
+      toast.error('연결이 불안정해요 · 아래 메모로 저장하거나 다시 정리를 시도할 수 있어요')
+      setSummary('')
+      setTranscript('')
+      setPhase('review')
+      return
+    }
+
+    const data = await res.json().catch(() => null)
+    if (res.ok && data && (data.summary || data.transcript)) {
+      setTranscript(data.transcript ?? '')
+      setSummary(data.summary ?? '')
+      setPendingAudioPath(null) // 성공 → 서버가 오디오를 삭제함
+      setPhase('review')
+      return
+    }
+
+    // 실패 — 413(너무 김)은 오디오가 서버에서 지워졌으니 재시도 불가, 그 외엔 재시도 가능
+    const retryable = res.status !== 413
+    setPendingAudioPath(retryable ? (data?.path ?? path) : null)
+    toast.error(
+      (data?.error ?? '정리하지 못했어요') +
+        (retryable
+          ? ' · 아래 메모로 저장하거나 다시 정리를 시도할 수 있어요'
+          : ' · 아래에 직접 메모로 남겨 저장해주세요'),
+    )
+    setSummary('')
+    setTranscript('')
+    setPhase('review')
+  }
+
+  // 남겨둔 오디오로 받아쓰기 재시도
+  async function retryTranscribe() {
+    if (pendingAudioPath) await runTranscribe(pendingAudioPath)
   }
 
   function handleSave() {
@@ -477,80 +529,81 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
         </div>
 
         {/* 페이지 안 카메라 오버레이 — 화면을 벗어나지 않아 녹음이 유지된다 */}
+        {/* 세로·가로 모두 대응: 영상은 화면 전체를 채우고, 조작 버튼은 위/아래에 겹쳐 띄운다(그라데이션 스크림으로 가독성 확보) */}
         {cameraOpen && (
-          <div className="fixed inset-0 bg-black z-50 flex flex-col">
+          <div
+            ref={(el) => el?.focus()}
+            tabIndex={-1}
+            className="fixed inset-0 bg-black z-50 outline-none"
+          >
             <ScrollLock />
-            <div
-              ref={(el) => el?.focus()}
-              tabIndex={-1}
-              className="flex-1 flex flex-col outline-none"
-            >
-              <div className="flex items-center justify-between p-4 text-white">
-                <span className="text-sm font-medium flex items-center gap-2">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping" />
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
-                  </span>
-                  녹음 계속되는 중 · {formatTime(seconds)}
+
+            {/* 영상 미리보기 — 전체 화면 채움(가로에서도 세로처럼 꽉 참) */}
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              className="absolute inset-0 h-full w-full object-contain"
+            />
+
+            {/* 상단 바 — 녹음 표시 + 닫기 */}
+            <div className="absolute top-0 inset-x-0 flex items-center justify-between p-4 pt-[max(1rem,env(safe-area-inset-top))] text-white bg-gradient-to-b from-black/70 to-transparent">
+              <span className="text-sm font-medium flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setCameraOpen(false)}
-                  className="h-9 w-9 rounded-full bg-white/15 text-white flex items-center justify-center"
-                  aria-label="카메라 닫기"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
+                녹음 계속되는 중 · {formatTime(seconds)}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCameraOpen(false)}
+                className="h-9 w-9 rounded-full bg-white/15 text-white flex items-center justify-center shrink-0"
+                aria-label="카메라 닫기"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
 
-              <div className="flex-1 relative overflow-hidden">
-                <video
-                  ref={videoRef}
-                  playsInline
-                  muted
-                  className="absolute inset-0 h-full w-full object-contain"
-                />
-              </div>
-
-              <div className="p-5 flex flex-col items-center gap-3">
-                {photos.length > 0 && (
-                  <div className="w-full overflow-x-auto overscroll-contain">
-                    <PhotoStrip removable={false} />
-                  </div>
+            {/* 하단 바 — 사진 썸네일 + 렌즈 전환 + 셔터 */}
+            <div className="absolute bottom-0 inset-x-0 px-5 pt-8 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex flex-col items-center gap-3 bg-gradient-to-t from-black/70 to-transparent">
+              {photos.length > 0 && (
+                <div className="w-full overflow-x-auto overscroll-contain">
+                  <PhotoStrip removable={false} />
+                </div>
+              )}
+              {/* 렌즈 전환(0.5x 초광각 / 1x) — 초광각 있는 기기에서만 노출 */}
+              {lenses.length >= 2 && (
+                <div className="flex items-center gap-1 rounded-full bg-white/15 p-1">
+                  {lenses.map((lens) => (
+                    <button
+                      key={lens.id}
+                      type="button"
+                      onClick={() => switchLens(lens.id)}
+                      className={[
+                        'px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors',
+                        activeLensId === lens.id ? 'bg-white text-black' : 'text-white',
+                      ].join(' ')}
+                    >
+                      {lens.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={capturePhoto}
+                disabled={capturing}
+                className="h-16 w-16 rounded-full bg-white ring-4 ring-white/40 flex items-center justify-center disabled:opacity-60"
+                aria-label="촬영"
+              >
+                {capturing ? (
+                  <Loader2 className="h-7 w-7 animate-spin text-black" />
+                ) : (
+                  <Camera className="h-7 w-7 text-black" />
                 )}
-                {/* 렌즈 전환(0.5x 초광각 / 1x) — 초광각 있는 기기에서만 노출 */}
-                {lenses.length >= 2 && (
-                  <div className="flex items-center gap-1 rounded-full bg-white/15 p-1">
-                    {lenses.map((lens) => (
-                      <button
-                        key={lens.id}
-                        type="button"
-                        onClick={() => switchLens(lens.id)}
-                        className={[
-                          'px-3.5 py-1.5 rounded-full text-xs font-bold transition-colors',
-                          activeLensId === lens.id ? 'bg-white text-black' : 'text-white',
-                        ].join(' ')}
-                      >
-                        {lens.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={capturePhoto}
-                  disabled={capturing}
-                  className="h-16 w-16 rounded-full bg-white ring-4 ring-white/40 flex items-center justify-center disabled:opacity-60"
-                  aria-label="촬영"
-                >
-                  {capturing ? (
-                    <Loader2 className="h-7 w-7 animate-spin text-black" />
-                  ) : (
-                    <Camera className="h-7 w-7 text-black" />
-                  )}
-                </button>
-                <p className="text-xs text-white/70">찍은 사진은 이 미팅 기록에 함께 저장돼요</p>
-              </div>
+              </button>
+              <p className="text-xs text-white/70">찍은 사진은 이 미팅 기록에 함께 저장돼요</p>
             </div>
           </div>
         )}
@@ -591,6 +644,20 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
           <p className="mt-1 text-xs text-amber-600 leading-relaxed">
             자동 정리가 어려웠어요. 아래에 미팅 내용을 직접 적어 저장해주세요. (찍은 사진은 그대로 저장돼요)
           </p>
+        )}
+        {/* 실패했지만 녹음은 서버에 남아 있음 → 한 번 더 자동 정리를 시도할 수 있게 */}
+        {pendingAudioPath && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-2 w-full h-10 gap-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+            onClick={retryTranscribe}
+            disabled={saving}
+          >
+            <Mic className="h-4 w-4" />
+            녹음으로 다시 정리 시도
+          </Button>
         )}
         <Textarea
           value={summary}
