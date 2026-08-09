@@ -1,5 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+// 성과판·업셀 노출 기준 — 이번 달 '만든 매출'이 이 금액을 넘는 사장님에게만 보여준다.
+// 데이터가 0이거나 소규모면 오히려 퀄리오가 불리하게 보이므로, 자랑할 만할 때만 노출한다.
+// (하나의 상수로 관리 — 기준 조정은 여기만 바꾸면 됨)
+export const IMPACT_MIN_REVENUE = 5_000_000
+
 export interface QualioImpact {
   completedCount: number // 이번 달 완료한 예약 수
   completedRevenue: number // 완료 매출 합(원) = 퀄리오가 만든 매출

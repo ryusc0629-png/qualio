@@ -1,5 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { getQualioImpact } from '@/lib/attribution/qualio-impact'
+import { getQualioImpact, IMPACT_MIN_REVENUE } from '@/lib/attribution/qualio-impact'
 import { Sparkles, TrendingUp } from 'lucide-react'
 
 // 이번 달(KST) 범위
@@ -19,8 +19,8 @@ export async function QualioImpactCard({ businessId }: { businessId: string }) {
   const { startIso, endIso, label } = kstMonthRange()
   const impact = await getQualioImpact(db, businessId, startIso, endIso)
 
-  // 완료 매출도 없고 예정도 없으면 카드 숨김(빈 성과판은 오히려 역효과)
-  if (impact.completedRevenue === 0 && impact.upcomingCount === 0) return null
+  // 이번 달 '만든 매출'이 기준(500만원)을 넘을 때만 노출 — 소규모·데이터0이면 오히려 역효과라 숨김
+  if (impact.completedRevenue < IMPACT_MIN_REVENUE) return null
 
   const won = (n: number) => n.toLocaleString('ko-KR')
 
