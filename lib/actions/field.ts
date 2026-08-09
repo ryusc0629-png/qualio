@@ -12,6 +12,7 @@ import {
 import { sendOnMyWayForBooking } from '@/lib/kakao/on-my-way'
 import { generateAiReport } from '@/lib/ai/report-writer'
 import { geocodeAddress } from '@/lib/roadmap/geo'
+import { postBookingRevenue } from '@/lib/finance/post-booking-revenue'
 
 // workers 테이블 타입 (Supabase 타입 아직 미생성)
 interface WorkerRow {
@@ -259,6 +260,8 @@ export const fieldCompletePaymentAction = action
     workerId:   z.string().uuid(),
     bookingId:  z.string().uuid(),
     skipReview: z.boolean().optional(),
+    // 실제 받은 금액 — 생략하면 전액(final_price) 받은 것으로 처리. 일부만 받으면 나머지는 미수금.
+    paidAmount: z.coerce.number().int().min(0).optional(),
   }))
   .action(async ({ parsedInput }) => {
     const { db, worker } = await verifyWorker(parsedInput.workerId)
@@ -296,6 +299,18 @@ export const fieldCompletePaymentAction = action
       .eq('id', parsedInput.bookingId)
 
     if (error) throw new Error('[APP] 상태 변경에 실패했어요')
+
+    // 수금액 기록 + 매출 장부 자동 반영 — 일회성 예약만(정기는 월말 정산이라 제외)
+    if (!bChk?.contract_id) {
+      const paid = parsedInput.paidAmount ?? Math.round(booking.final_price ?? 0)
+      await db
+        .from('bookings')
+        .update({ paid_amount: paid } as never)
+        .eq('id', parsedInput.bookingId)
+        .eq('business_id', worker.business_id)
+      // 완료된 일회성 매출을 장부에 자동 기록(멱등) → 사장님 이중 입력 제거
+      await postBookingRevenue(db, worker.business_id, parsedInput.bookingId)
+    }
 
     // 업체 정보 조회
     const { data: business } = await db

@@ -435,6 +435,26 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
   const hasArrivalPhoto = openPhotos.some((p) => p.url)
   const startNeedsArrivalPhoto = requiresLockup && !hasArrivalPhoto
 
+  // 일부만 받았을 때 — 받은 금액만 입력, 나머지는 미수금으로 남긴다
+  const completeWithPartial = (skipReview?: boolean) => {
+    const raw = window.prompt(
+      `실제로 받은 금액만 입력해주세요 (원)\n총 ${liveTotal.toLocaleString()}원 중 나머지는 미수금으로 남아요.`,
+      '',
+    )
+    if (raw === null) return
+    const amount = parseInt(raw.replace(/[^0-9]/g, ''), 10)
+    if (isNaN(amount) || amount < 0) {
+      toast.error('숫자로 입력해주세요 (예: 50000)')
+      return
+    }
+    // 전액 이상이면 미수금 없이 완료, 아니면 받은 만큼만 기록
+    completePayment(
+      amount >= liveTotal
+        ? { workerId, bookingId: booking.id, skipReview }
+        : { workerId, bookingId: booking.id, skipReview, paidAmount: amount },
+    )
+  }
+
   return (
     <div className="min-h-dvh bg-gray-50 pb-32">
       {/* 헤더 */}
@@ -1032,6 +1052,14 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
               >
                 현금 수금 등 직접 결제한 경우 →
               </button>
+              <button
+                type="button"
+                className="w-full text-xs text-amber-600 underline py-1"
+                disabled={isCompleting}
+                onClick={() => completeWithPartial()}
+              >
+                일부만 받았어요 (나머지 미수금으로 남기기) →
+              </button>
             </div>
           )}
 
@@ -1050,6 +1078,14 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                 <CheckCircle2 className="h-5 w-5" />
                 {isCompleting ? '처리 중...' : `수금 완료 · ${liveTotal.toLocaleString()}원`}
               </Button>
+              <button
+                type="button"
+                className="w-full text-xs text-amber-600 underline py-1"
+                disabled={isCompleting}
+                onClick={() => completeWithPartial()}
+              >
+                일부만 받았어요 (나머지 미수금으로 남기기) →
+              </button>
               <button
                 type="button"
                 className="w-full text-xs text-muted-foreground underline py-1"

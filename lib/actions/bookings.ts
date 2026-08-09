@@ -9,6 +9,7 @@ import { sendRescheduleAlimtalk } from '@/lib/kakao/alimtalk'
 import { sendOnMyWayForBooking } from '@/lib/kakao/on-my-way'
 import { findCustomerIdByPhone } from '@/lib/actions/_customer-lookup'
 import { inputToUtcIso } from '@/lib/format/datetime'
+import { postBookingRevenue } from '@/lib/finance/post-booking-revenue'
 
 // 한국 전화번호 검증
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
@@ -204,14 +205,14 @@ export const updateBookingStatusAction = action
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
     // 완료 처리 시 고객 정보 미리 조회 (upsert + customer_id 연결용)
-    let bookingForCustomer: { customer_id: string | null; customer_name: string; customer_phone: string | null; service_address: string | null } | null = null
+    let bookingForCustomer: { customer_id: string | null; customer_name: string; customer_phone: string | null; service_address: string | null; contract_id: string | null; final_price: number | null } | null = null
     if (parsedInput.status === 'completed') {
       const { data } = await db
         .from('bookings')
-        .select('customer_id, customer_name, customer_phone, service_address' as never)
+        .select('customer_id, customer_name, customer_phone, service_address, contract_id, final_price' as never)
         .eq('id', parsedInput.id)
         .eq('business_id', profile.business_id)
-        .maybeSingle() as unknown as { data: { customer_id: string | null; customer_name: string; customer_phone: string | null; service_address: string | null } | null }
+        .maybeSingle() as unknown as { data: { customer_id: string | null; customer_name: string; customer_phone: string | null; service_address: string | null; contract_id: string | null; final_price: number | null } | null }
       bookingForCustomer = data
     }
 
@@ -226,6 +227,17 @@ export const updateBookingStatusAction = action
       .eq('business_id', profile.business_id)
 
     if (error) throw new Error('[APP] 상태 변경에 실패했습니다')
+
+    // 완료 → 수금액 전액 처리 + 매출 장부 자동 반영 (일회성만; 정기는 월말 정산이라 제외)
+    // 대시보드에서 완료 처리하면 별도 수금 화면이 없어 '전액 받음'으로 간주(미수금 0).
+    if (parsedInput.status === 'completed' && bookingForCustomer && !bookingForCustomer.contract_id) {
+      await db
+        .from('bookings')
+        .update({ paid_amount: Math.round(bookingForCustomer.final_price ?? 0) } as never)
+        .eq('id', parsedInput.id)
+        .eq('business_id', profile.business_id)
+      await postBookingRevenue(db, profile.business_id, parsedInput.id)
+    }
 
     // 청소 완료 → 고객 DB 자동 upsert (전화번호 기준, 이미 있으면 스킵)
     // 숫자만으로 비교해 하이픈 형식 차이로 인한 중복 카드 생성을 막는다.
@@ -259,6 +271,46 @@ export const updateBookingStatusAction = action
     }
 
     revalidatePath('/dashboard/work')
+    revalidatePath('/dashboard/clients')
+    return { success: true }
+  })
+
+// 미수금 정산 — '못 받은 돈'을 받았다고 표시. paidAmount 생략 시 전액 받음 처리(미수금 0).
+export const settleBookingPaymentAction = action
+  .schema(z.object({
+    id: z.string().uuid(),
+    paidAmount: z.coerce.number().int().min(0).optional(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const { data: b } = await db
+      .from('bookings')
+      .select('final_price' as never)
+      .eq('id', parsedInput.id)
+      .eq('business_id', profile.business_id)
+      .maybeSingle() as unknown as { data: { final_price: number | null } | null }
+    if (!b) throw new Error('[APP] 예약을 찾을 수 없습니다')
+
+    const paid = parsedInput.paidAmount ?? Math.round(b.final_price ?? 0)
+    const { error } = await db
+      .from('bookings')
+      .update({ paid_amount: paid } as never)
+      .eq('id', parsedInput.id)
+      .eq('business_id', profile.business_id)
+    if (error) throw new Error('[APP] 처리에 실패했어요. 다시 시도해주세요')
+
+    revalidatePath('/dashboard/finance')
     revalidatePath('/dashboard/clients')
     return { success: true }
   })

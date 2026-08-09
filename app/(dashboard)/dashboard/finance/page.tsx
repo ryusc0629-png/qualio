@@ -12,6 +12,7 @@ import { EntryRow } from '@/components/dashboard/finance/entry-row'
 import { BreakEvenGauge } from '@/components/dashboard/finance/charts'
 import { DailyBarChart } from '@/components/dashboard/finance/daily-bar-chart'
 import { CategoryDonut } from '@/components/dashboard/finance/category-donut'
+import { ReceivablesCard } from '@/components/dashboard/finance/receivables-card'
 
 // 현재 KST 기준 'YYYY-MM'
 function currentMonthKST() {
@@ -106,6 +107,26 @@ export default async function FinancePage({ searchParams }: PageProps) {
   const rows = entries ?? []
   const fixedCosts: FixedCost[] = fixedCostsRaw ?? []
 
+  // 미수금(못 받은 돈) — 완료된 일회성 예약 중 아직 다 못 받은 건 (선택한 달과 무관하게 전체)
+  const { data: receivableRows } = await db
+    .from('bookings')
+    .select('id, customer_name, customer_phone, scheduled_at, final_price, paid_amount' as never)
+    .eq('business_id', businessId)
+    .eq('status', 'completed')
+    .is('contract_id', null)
+    .order('scheduled_at', { ascending: false }) as unknown as {
+      data: { id: string; customer_name: string; customer_phone: string | null; scheduled_at: string; final_price: number | null; paid_amount: number | null }[] | null
+    }
+  const receivables = (receivableRows ?? [])
+    .map((r) => ({
+      id: r.id,
+      customerName: r.customer_name,
+      customerPhone: r.customer_phone,
+      scheduledAt: r.scheduled_at,
+      outstanding: Math.round(r.final_price ?? 0) - (r.paid_amount ?? 0),
+    }))
+    .filter((r) => r.outstanding > 0)
+
   // 이번 달 집계
   const revenue = rows.filter((r) => r.type === 'revenue').reduce((s, r) => s + r.amount, 0)
   const variableExpense = rows.filter((r) => r.type === 'expense').reduce((s, r) => s + r.amount, 0)
@@ -187,6 +208,9 @@ export default async function FinancePage({ searchParams }: PageProps) {
           </Link>
         )}
       </div>
+
+      {/* 못 받은 돈(미수금) — 선택한 달과 무관하게 항상 상단 노출 */}
+      {receivables.length > 0 && <ReceivablesCard items={receivables} />}
 
       {!hasAnyData ? (
         /* 완전 빈 상태 — 온보딩 */
