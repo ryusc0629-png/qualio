@@ -9,6 +9,7 @@ import { WeeklyChart } from '@/components/dashboard/weekly-chart'
 import { OnboardingChecklist } from '@/components/dashboard/onboarding-checklist'
 import { InstallPrompt } from '@/components/pwa/install-prompt'
 import { BetaWelcomeBanner } from '@/components/dashboard/beta-welcome-banner'
+import { QualioImpactCard } from '@/components/dashboard/qualio-impact-card'
 import { getTodayLockupData, summarizeLockup } from '@/lib/lockup/today'
 import {
   AlertCircle, Calendar, ChevronRight, RefreshCw,
@@ -390,6 +391,9 @@ export default async function DashboardPage() {
 
       {/* 첫 이용 온보딩 체크리스트 — 셋업을 모두 마치면 자동으로 사라짐 */}
       <OnboardingChecklist businessId={businessId} />
+
+      {/* ROI 성과판 — 퀄리오가 데려온 예약·만든 매출·요금 대비 몇 배 (실데이터만) */}
+      <QualioImpactCard businessId={businessId} />
 
       {/* 액션 알림 */}
       {hasAlerts && (
