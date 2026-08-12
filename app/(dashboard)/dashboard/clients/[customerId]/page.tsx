@@ -1,7 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, Calendar, Receipt, ChevronRight, FileText, User, Star, ShieldAlert, AlertTriangle, CheckCircle2, ClipboardList, Repeat, PhoneCall, StickyNote, Mic } from 'lucide-react'
+import { ChevronLeft, Calendar, Receipt, ChevronRight, FileText, User, Star, ShieldAlert, AlertTriangle, CheckCircle2, ClipboardList, Repeat, PhoneCall, StickyNote, Mic, TrendingUp } from 'lucide-react'
 import { formatFrequency } from '@/lib/utils/frequency'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { CustomerSalesStageSelect } from '@/components/dashboard/customer-sales-stage-select'
@@ -15,7 +15,8 @@ import { ClaimAssignee } from '@/components/dashboard/claim-assignee'
 import { B2bQuoteList } from '@/components/dashboard/b2b-quote-list'
 import { DeleteActivityButton } from '@/components/dashboard/delete-activity-button'
 import { EditableActivityContent } from '@/components/dashboard/editable-activity-content'
-import { contractAccruedRevenue, type ContractLike } from '@/lib/utils/ltv'
+import { contractAccruedRevenue, contractPriceSegments, type ContractLike } from '@/lib/utils/ltv'
+import { EditContractForm } from '@/components/dashboard/edit-contract-form'
 import { getNextQuoteNumber } from '@/lib/utils/quote-number'
 import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
 
@@ -164,12 +165,23 @@ export default async function CustomerDetailPage({ params }: Props) {
   }
 
   // 이 고객의 계약 조회 — 카드 표시 + LTV 계약 누적 매출 계산
+  // price_history: 범위 추가로 월 금액이 바뀐 이력. 누적 매출을 구간별로 계산해 과거 소급을 막는다.
   const { data: customerContracts } = await db
     .from('contracts')
-    .select('id, service_type, frequency, contract_price, start_date, end_date, status')
+    .select('id, service_type, frequency, contract_price, start_date, end_date, status, notes, price_history' as never)
     .eq('business_id', profile.business_id)
     .eq('customer_id', customerId)
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: false }) as unknown as {
+      data: Array<
+        ContractLike & {
+          id: string
+          service_type: string | null
+          frequency: string
+          status: string
+          notes: string | null
+        }
+      > | null
+    }
 
   // 이 고객의 B2B 견적서/시방서 — 한 거래처에 여러 장 가능(재계약·추가 견적). 만든 순서로 전부 조회
   interface B2bQuoteExisting {
@@ -267,7 +279,7 @@ export default async function CustomerDetailPage({ params }: Props) {
     .reduce((sum, b) => sum + (b.final_price ?? 0), 0)
 
   // 통합 LTV = 일회성 완료 예약 합계 + 계약 누적(경과 개월 × 월계약금)
-  const contractTotal = contractAccruedRevenue((customerContracts ?? []) as ContractLike[])
+  const contractTotal = contractAccruedRevenue(customerContracts ?? [])
   const totalLTV = oneOffTotal + contractTotal
 
   // '완료 방문'은 일회성 서비스만 센다 — 정기계약 방문은 주기적으로 무한히 쌓여 이 숫자를 무의미하게 만들고,
@@ -287,9 +299,7 @@ export default async function CustomerDetailPage({ params }: Props) {
     }
     contractVisits.set(b.contract_id, cur)
   }
-  const contractList = (customerContracts ?? []) as Array<
-    ContractLike & { id: string; service_type: string | null; frequency: string; status: string }
-  >
+  const contractList = customerContracts ?? []
 
   // 서비스 이력에는 '정기계약 자동생성 예정 방문'을 숨긴다.
   // 정기 방문은 미래 날짜로 수십 건 쌓여 스크롤만 길어지고, 이미 위 '정기계약' 요약(다음 방문·예정 횟수)과
@@ -429,6 +439,10 @@ export default async function CustomerDetailPage({ params }: Props) {
             {contractList.map((contract) => {
               const meta = CONTRACT_STATUS[contract.status] ?? { label: contract.status, className: 'bg-gray-100 text-gray-500' }
               const visits = contractVisits.get(contract.id)
+              // 월 금액이 바뀐 적이 있으면 마지막 변경을 한 줄로 보여준다 (범위 추가 → 증액이 가장 흔함)
+              const segments = contractPriceSegments(contract)
+              const lastChange = segments.length > 1 ? segments[segments.length - 1] : null
+              const prevPrice = segments.length > 1 ? segments[segments.length - 2].price : null
               return (
                 <div key={contract.id} className="bg-white rounded-xl border border-emerald-100 p-4 space-y-2">
                   <div className="flex items-start justify-between gap-3">
@@ -439,10 +453,33 @@ export default async function CustomerDetailPage({ params }: Props) {
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">{formatFrequency(contract.frequency)}</p>
                     </div>
-                    <div className="shrink-0 text-right">
-                      <p className="font-bold tabular-nums text-emerald-700">{contract.contract_price.toLocaleString('ko-KR')}<span className="text-xs font-normal text-muted-foreground ml-0.5">원/월</span></p>
+                    <div className="shrink-0 flex items-start gap-1">
+                      <div className="text-right">
+                        <p className="font-bold tabular-nums text-emerald-700">{contract.contract_price.toLocaleString('ko-KR')}<span className="text-xs font-normal text-muted-foreground ml-0.5">원/월</span></p>
+                      </div>
+                      <EditContractForm
+                        contract={{
+                          id: contract.id,
+                          service_type: contract.service_type,
+                          frequency: contract.frequency,
+                          contract_price: contract.contract_price,
+                          start_date: contract.start_date,
+                          end_date: contract.end_date,
+                          notes: contract.notes,
+                        }}
+                      />
                     </div>
                   </div>
+
+                  {/* 금액 변경 이력 — 언제부터 얼마인지. 이전 기간 매출은 예전 금액 그대로 남는다 */}
+                  {lastChange && prevPrice !== null && (
+                    <p className="text-xs text-emerald-700 bg-emerald-50 rounded-md px-2 py-1.5 inline-flex items-center gap-1">
+                      <TrendingUp className="h-3 w-3 shrink-0" />
+                      {new Date(lastChange.from + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' })}부터{' '}
+                      {prevPrice.toLocaleString('ko-KR')}원 → {lastChange.price.toLocaleString('ko-KR')}원
+                      {lastChange.note ? ` · ${lastChange.note}` : ''}
+                    </p>
+                  )}
                   <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground border-t border-border pt-2">
                     <span className="inline-flex items-center gap-1">
                       <Calendar className="h-3 w-3 shrink-0" />

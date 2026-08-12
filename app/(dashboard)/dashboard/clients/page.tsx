@@ -11,7 +11,7 @@ import { CancelQuoteButton } from '@/components/dashboard/cancel-quote-button'
 import { ExcludeQuoteButton } from '@/components/dashboard/exclude-quote-button'
 import { CancelledQuotesSection, type CancelledQuote } from '@/components/dashboard/cancelled-quotes-section'
 import { formatFrequency } from '@/lib/utils/frequency'
-import { contractAccruedRevenue } from '@/lib/utils/ltv'
+import { contractAccruedRevenue, type ContractPriceSegment } from '@/lib/utils/ltv'
 import { isActiveSalesStage, salesStageMeta } from '@/lib/business/sales-stage'
 import { ClientSearchInput } from '@/components/dashboard/client-search-input'
 import { formatCompactKRW } from '@/lib/format/krw'
@@ -71,6 +71,8 @@ type ContractRow = {
   requires_lockup: boolean | null
   expected_duration_minutes: number | null
   checklist_items: { id: string; label: string }[] | null
+  // 월 금액 변경 이력 — 누적 매출을 구간별로 계산해 과거 소급을 막는다
+  price_history: ContractPriceSegment[] | null
 }
 
 type B2bQuoteRow = {
@@ -168,7 +170,7 @@ export default async function ClientsPage({
       .eq('business_id', businessId),
 
     db.from('contracts')
-      .select('id, customer_id, service_type, frequency, contract_price, status, start_date, end_date, requires_lockup, expected_duration_minutes, checklist_items' as never)
+      .select('id, customer_id, service_type, frequency, contract_price, status, start_date, end_date, requires_lockup, expected_duration_minutes, checklist_items, price_history' as never)
       .eq('business_id', businessId),
 
     db.from('bookings')

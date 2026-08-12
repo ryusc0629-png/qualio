@@ -66,9 +66,9 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
     // 정기계약 — 계약 매출을 채널에 귀속(방문 예약은 0원이라 계약 자체로 집계). 기간 겹치는 계약만 매출 발생.
     db
       .from('contracts')
-      .select('contract_price, start_date, end_date, status, channel' as never)
+      .select('contract_price, start_date, end_date, status, channel, price_history' as never)
       .eq('business_id', businessId) as unknown as Promise<{
-        data: { contract_price: number; start_date: string; end_date: string | null; status: string; channel: string | null }[] | null
+        data: (ContractLike & { channel: string | null })[] | null
       }>,
   ])
 

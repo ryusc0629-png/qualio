@@ -68,7 +68,7 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
     // 예약 합계에 안 잡히므로 계약을 따로 더해야 실제 '퀄리오로 만든 매출'이 된다.
     db
       .from('contracts')
-      .select('contract_price, start_date, end_date, status')
+      .select('contract_price, start_date, end_date, status, price_history' as never)
       .eq('business_id', businessId),
   ])
 
@@ -95,7 +95,7 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
   const upcomingRevenue = bookingRevenue - completedRevenue
 
   // 정기계약 매출(이 기간분) — 예약 매출과 별개 축. 합쳐야 '퀄리오로 만든 매출' 전체가 된다.
-  const contractRows = (contractsResult.data ?? []) as ContractLike[]
+  const contractRows = (contractsResult.data ?? []) as unknown as ContractLike[]
   const contractRevenue = contractRevenueSince(contractRows, periodStart)
   const totalRevenue = bookingRevenue + contractRevenue
 
