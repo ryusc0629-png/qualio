@@ -9,7 +9,7 @@
 //
 // 산출물: ~/Downloads/배포팩_EP<ep>/ 아래 채널별 .txt + 배포팩.md(노션 붙여넣기용)
 // ─────────────────────────────────────────────────────────────
-import { spawnSync } from 'node:child_process'
+import { spawnSync, spawn } from 'node:child_process'
 import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -34,6 +34,10 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--analytics') flags.analytics = true // 채널 성과 리포트(영상 불필요)
   else if (a === '--ep') flags.ep = argv[++i]
   else if (a === '--srt') flags.srt = argv[++i]
+  else if (a === '--at') flags.at = argv[++i] // 예약 시각(KST "YYYY-MM-DD HH:MM") — 전 클립 동일 시각 예약(--publish와 함께)
+  else if (a === '--n') flags.n = parseInt(argv[++i], 10) // 목표 클립 개수(물량 모드). 기본 8
+  else if (a === '--topic') flags.topic = argv[++i] // 영상 맥락 한 줄(예: "대구 에어컨 청소 업체 대표 인터뷰")
+  else if (a === '--no-publish-clips') flags.noPublishClips = true
   else positional.push(a)
 }
 const videoPath = positional[0] || null
@@ -75,8 +79,37 @@ function transcribe(video) {
 }
 
 // ── 3. SRT 파싱 → 타임스탬프 텍스트 ──────────────────────────
+// 음성인식(whisper)이 청소업 용어·고유명사를 자주 틀린다. 틀린 채로 재가공하면
+// 게시글·쇼츠 자막에 "컬리오", "전기 청소" 같은 말이 그대로 박히므로 파싱 단계에서 정정한다.
+// ★ 문맥 판단이 필요한 애매한 오인식은 여기 넣지 말 것(잘못 고치면 더 나쁨) — 프롬프트 규칙으로 처리.
+const TRANSCRIPT_FIXES = [
+  [/컬리오|콜리아|퀼리오|콜리오|컬리아/g, '퀄리오'],
+  [/어피에스/g, 'OPS'],
+  [/전기 청소/g, '정기 청소'],
+  [/정기청소/g, '정기 청소'],
+  [/(^|[\s,.!?])전기(는|를|가|도|의|에|와|랑|부터|만)/g, '$1정기$2'],
+  [/전기 (안|한|하고|하는|하시|해)/g, '정기 $1'],
+  [/선소/g, '청소'],
+  [/집간지성/g, '집단지성'],
+  [/자극복/g, '작업복'],
+  [/아우반들|아웃반들/g, '아웃바운드'],
+  [/카레터의 법칙|카레토의 법칙/g, '파레토의 법칙'],
+  [/기회복음/g, '기회비용'],
+  [/순찬|승선 씨|순천 씨/g, '승찬'],
+  [/도법사|도구텔|도급 복사|도급복사/g, '도급사'],
+  [/도그 업체|도구 업체/g, '도급 업체'],
+  [/줄누나|줄누만/g, '줄눈'],
+  [/방람회|방담회|입주방담/g, '박람회'],
+  [/광축망/g, '방충망'],
+]
+function fixTranscript(s) {
+  let out = s
+  for (const [re, to] of TRANSCRIPT_FIXES) out = out.replace(re, to)
+  return out
+}
+
 function parseSrt(srtPath) {
-  const raw = readFileSync(srtPath, 'utf8')
+  const raw = fixTranscript(readFileSync(srtPath, 'utf8'))
   const blocks = raw.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean)
   const lines = []
   let plain = ''
@@ -94,13 +127,16 @@ function parseSrt(srtPath) {
 }
 
 // ── 4. Claude 재가공 (JSON 강제) ─────────────────────────────
-const SYSTEM = `너는 '청소 창업 90일 챌린지' 유튜브 영상을 다채널로 재가공하는 한국어 카피라이터다. 규칙을 반드시 지켜라.
+const TOPIC_LINE = flags.topic ? `\n[이번 영상] ${flags.topic}\n- 인터뷰 영상이면 게스트(대표님)의 말을 주인공으로 세운다. 게스트 호칭·지역·업종은 자막에 나온 대로 써도 되지만, 우리 쪽 업체명·상업 링크는 넣지 않는다.\n` : ''
 
+const SYSTEM = `너는 청소업 유튜브 영상(챌린지 일지 또는 업계 대표 인터뷰)을 다채널로 재가공하는 한국어 카피라이터다. 규칙을 반드시 지켜라.
+${TOPIC_LINE}
 [공통]
 - 모든 글은 '입니다' 어체.
 - 사용자 노출 문구에 "AI" 단어 금지(우리 서비스를 가리킬 때). 대신 "전문가 데이터/자동" 톤. (ChatGPT 등 외부 AI검색 플랫폼 지칭은 예외로 허용)
 - 업체명·상업 링크 넣지 말 것. 유튜브 링크는 반드시 ${YT_LINK} 사용(문구는 "1일차부터 보기").
 - 자막에 없는 매출·성과·수치를 지어내지 말 것. 사실만.
+- ★ 자막은 자동 음성인식 결과라 오인식·비문이 많다. 문맥상 명백히 잘못 인식된 단어는 바로잡아 쓰고(예: '도급 복사'→'도급사'), 뜻이 불확실한 표현·숫자는 아예 인용하지 말고 확실히 이해되는 내용만 써라. 확실치 않은 고유명사는 빼라. 인용문은 자막을 그대로 붙여넣지 말고 뜻이 통하는 자연스러운 문장으로 다듬어라.
 - "광고 0원 / 광고비 0원 / 광고 없이" 같은 표현 금지 — 검색광고는 유지하므로 오해 소지. 대신 "퍼포먼스 광고 대신 영업으로" 식으로.
 
 [채널별 톤]
@@ -110,7 +146,7 @@ const SYSTEM = `너는 '청소 창업 90일 챌린지' 유튜브 영상을 다�
 - cafe.dongwoo(청소동우회): 고인물 견제 주의. "저는 청소 서비스가 메인이 아니라 청소업체용 운영 자동화 툴을 만드는 사람"이라는 포지션으로 결과·과정을 공유하며 자연 노출. 아직 매출 전이면 자랑 대신 '포지션 심기' 톤.
 - threads/x: build-in-public 짧은 텍스트. 대화 유도 질문으로 마무리.
 - shorts_caption(쇼츠·릴스·틱톡 공용): 첫 1초 훅 + 3~4줄. hashtags는 별도 필드에.
-- clips: 물량 전략. 독립적으로 이해되는(맥락 없이 봐도 되는) 훅 강한 구간 5~8개를 고른다. 각 15~45초, 자막 타임스탬프 기준. 정보전달보다 '스크롤 멈추게 하는' 순간(궁금증·숫자·반전·실수·감정) 우선. 훅 강한 순서로 정렬. 각 clip마다:
+- clips: 물량 전략. 독립적으로 이해되는(맥락 없이 봐도 되는) 훅 강한 구간을 요청받은 개수만큼 고른다. 각 15~50초, 자막 타임스탬프 기준. 정보전달보다 '스크롤 멈추게 하는' 순간(궁금증·숫자·반전·실수·감정) 우선. 각 clip마다:
   · title: 화면에 박을 초대형 훅 한 줄(짧게, 궁금증/숫자/반전)
   · caption: 게시글 본문 3~4줄
   · reason: 왜 이 구간이 반응 날지 한 줄(근거)
@@ -145,13 +181,26 @@ const OUTPUT_TOOL = {
       x: { type: 'string' },
       shorts_caption: { type: 'string' },
       hashtags: { type: 'string' },
-      clips: { type: 'array', items: CLIP_ITEM },
     },
     required: [
       'summary', 'blog_title', 'blog_body',
       'cafe_afup_title', 'cafe_afup_body', 'cafe_all_title', 'cafe_all_body', 'cafe_dongwoo_title', 'cafe_dongwoo_body',
-      'threads', 'x', 'shorts_caption', 'hashtags', 'clips',
+      'threads', 'x', 'shorts_caption', 'hashtags',
     ],
+  },
+}
+
+// 클립은 글과 분리해서 별도 호출로 뽑는다.
+// ★ 왜 분리하나: 한 번에 글+클립을 다 받으면 클립을 20개 넘게 요구하는 순간 max_tokens에 걸려
+//   뒤쪽(클립)이 통째로 잘린다. 또 긴 영상은 자막을 구간별로 쪼개 각각 호출해야
+//   앞부분만 훑고 끝나지 않고 영상 전체에서 골고루 뽑힌다.
+const CLIPS_TOOL = {
+  name: 'emit_clips',
+  description: '이 구간에서 뽑은 숏폼 클립 후보를 넘긴다.',
+  input_schema: {
+    type: 'object',
+    properties: { clips: { type: 'array', items: CLIP_ITEM } },
+    required: ['clips'],
   },
 }
 
@@ -203,7 +252,7 @@ async function generate(apiKey, stamped) {
     x: raw.x,
     shorts_caption: raw.shorts_caption,
     hashtags: raw.hashtags,
-    clips: raw.clips || [],
+    clips: [],
   }
   // ★ 필수 채널(네이버 블로그 + 카페 3곳) 누락 가드 — 커뮤니티 글이 빠진 채 진행되는 사고 재발 방지
   const missingRequired = CHANNEL_LABELS
@@ -214,6 +263,63 @@ async function generate(apiKey, stamped) {
     throw new Error(`필수 채널 글이 비어 있습니다: ${missingRequired.join(', ')}. 부분 결과는 저장하지 않고 중단합니다 — 다시 실행하세요.`)
   }
   return data
+}
+
+// ── 4-b. 클립 대량 추출 (자막을 구간별로 쪼개 병렬 호출) ──────
+function splitStamped(stamped, parts) {
+  const lines = stamped.split('\n').filter(Boolean)
+  const per = Math.ceil(lines.length / parts)
+  const out = []
+  for (let i = 0; i < lines.length; i += per) out.push(lines.slice(i, i + per).join('\n'))
+  return out
+}
+
+function clipSec(c) { return hms2sec(c.end) - hms2sec(c.start) }
+
+async function generateClips(apiKey, stamped, targetN) {
+  const client = new Anthropic({ apiKey })
+  // 구간당 6~8개가 품질 상한선 → 목표 개수에 맞춰 구간 수를 정한다(구간 1개당 최대 8개)
+  const parts = Math.max(1, Math.ceil(targetN / 7))
+  const chunks = splitStamped(stamped, parts)
+  const perChunk = Math.ceil(targetN / chunks.length)
+  console.log(`✂️  클립 후보 추출 중... (자막 ${chunks.length}구간 × 구간당 ${perChunk}개 목표)`)
+
+  const jobs = chunks.map(async (chunk, idx) => {
+    const stream = client.messages.stream({
+      model: MODEL,
+      max_tokens: 16000,
+      system: SYSTEM,
+      tools: [CLIPS_TOOL],
+      tool_choice: { type: 'tool', name: 'emit_clips' },
+      messages: [{
+        role: 'user',
+        content: `에피소드 번호: EP.${ep}\n이 자막은 전체 영상 중 ${idx + 1}/${chunks.length} 구간입니다.\n` +
+          `이 구간 안에서만 숏폼 클립을 ${perChunk}개 뽑아 emit_clips로 넘기세요.\n` +
+          `- start/end는 반드시 아래 자막에 실제로 존재하는 타임스탬프 범위 안에서 고를 것(구간 밖 금지)\n` +
+          `- 각 클립 길이 15~50초, 서로 겹치지 말 것\n` +
+          `- 맥락 없이 그것만 봐도 이해되는 구간만. 말이 중간에 끊기지 않게 문장 시작~끝으로 자를 것\n` +
+          `- 정보보다 '스크롤 멈추는 순간'(숫자·반전·실수·돈·감정·업계 뒷얘기) 우선\n\n` +
+          `[자막 (타임스탬프 포함)]\n${chunk}`,
+      }],
+    })
+    const msg = await stream.finalMessage()
+    const tool = msg.content.find(b => b.type === 'tool_use')
+    return tool ? (tool.input.clips || []) : []
+  })
+
+  const results = await Promise.all(jobs)
+  // 시간순 정렬 + 겹침/이상 길이 제거(구간 경계에서 중복이 생길 수 있음)
+  const all = results.flat()
+    .filter(c => c.start && c.end && clipSec(c) >= 10 && clipSec(c) <= 75)
+    .sort((a, b) => hms2sec(a.start) - hms2sec(b.start))
+  const kept = []
+  for (const c of all) {
+    const last = kept[kept.length - 1]
+    if (last && hms2sec(c.start) < hms2sec(last.end)) continue // 앞 클립과 겹치면 버림
+    kept.push(c)
+  }
+  console.log(`   → 클립 ${kept.length}개 확정 (후보 ${all.length}개 중 겹침 제거)`)
+  return kept
 }
 
 // ── 5. 파일 출력 ─────────────────────────────────────────────
@@ -235,7 +341,7 @@ function msToSrt(ms) {
   return `${p(h)}:${p(m)}:${p(s)},${p(ms % 1000, 3)}`
 }
 function srtEntries(srtPath) {
-  const blocks = readFileSync(srtPath, 'utf8').split(/\n\s*\n/).map(b => b.trim()).filter(Boolean)
+  const blocks = fixTranscript(readFileSync(srtPath, 'utf8')).split(/\n\s*\n/).map(b => b.trim()).filter(Boolean)
   const out = []
   for (const b of blocks) {
     const l = b.split('\n')
@@ -300,50 +406,77 @@ function writeOutputs(data, srtPath, video) {
   ].join('\n')
   w('배포팩.md', md)
 
-  // 하이라이트 클립 컷 (옵션) — 원본 비율 컷 + 구간 자막 .srt 동봉
-  // --burn: libass 있으면 자막 번인, 없으면 컷+.srt만(캡션은 CapCut 자동자막 권장)
-  if (flags.clips && video && existsSync(video)) {
-    const entries = srtEntries(srtPath)
-    const burn = flags.burn && ffHasSubtitles()
-    if (flags.burn && !burn) {
-      console.log('⚠️  이 ffmpeg엔 subtitles(libass) 필터가 없어 자막 번인은 건너뜁니다.')
-      console.log('    → 컷 + 클립별 .srt만 생성. 캡션은 CapCut 자동자막 또는 .srt import 권장.')
-    }
-    const mode = flags.vertical ? '9:16 세로 쇼츠 변환' : burn ? '클립 컷 + 자막 번인' : '하이라이트 클립 컷'
-    console.log(`✂️  ${mode} 중...`)
-    ;(data.clips || []).forEach((c, i) => {
-      const out = path.join(outDir, `clip_${i + 1}.mp4`)
-      const ss = hms2sec(c.start), to = hms2sec(c.end)
-      const clipSrt = buildClipSrt(entries, ss, to)
-      writeFileSync(path.join(outDir, `clip_${i + 1}.srt`), clipSrt, 'utf8') // 편집기용 동봉
-      const args = ['-y', '-ss', String(ss), '-to', String(to), '-i', video]
-      if (flags.vertical) {
-        // 상단 후킹 제목을 투명 PNG로 렌더(PIL) → 있으면 overlay로 얹음(CTR↑)
-        let titlePng = null
-        if (c.title) {
-          titlePng = `/tmp/_title_${ep}_${i + 1}.png`
-          const r = spawnSync('python3', [path.resolve('scripts/render_title.py'), c.title, titlePng], { stdio: 'ignore' })
-          if (r.status !== 0 || !existsSync(titlePng)) titlePng = null
-        }
-        // 가로 원본을 9:16 캔버스 가운데 배치 + 블러 배경(화면녹화라 크롭 대신 여백채움)
-        const vbase =
-          '[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,gblur=sigma=20[bg];' +
-          '[0:v]scale=1080:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2'
-        if (titlePng) {
-          args.push('-i', titlePng, '-filter_complex', `${vbase}[base];[base][1:v]overlay=(W-w)/2:300[v]`, '-map', '[v]', '-map', '0:a?')
-        } else {
-          args.push('-filter_complex', vbase)
-        }
-      } else if (burn) {
-        const tmp = `/tmp/_clip_${ep}_${i + 1}.srt` // 한글 경로 회피(필터 파싱 안전)
-        writeFileSync(tmp, clipSrt, 'utf8')
-        args.push('-vf', `subtitles=${tmp}:force_style='FontName=Apple SD Gothic Neo,FontSize=16,Outline=1,Shadow=0,MarginV=40'`)
-      }
-      args.push('-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'aac', out)
-      spawnSync('ffmpeg', args, { stdio: 'ignore' })
-    })
-  }
   return outDir
+}
+
+// ── 5-b. 클립 컷 (병렬) ──────────────────────────────────────
+// --burn: libass 있으면 자막 번인, 없으면 컷+.srt만(캡션은 CapCut 자동자막 권장)
+function ffmpegAsync(args) {
+  return new Promise((resolve) => {
+    const p = spawn('ffmpeg', args, { stdio: 'ignore' })
+    p.on('close', (code) => resolve(code))
+  })
+}
+
+async function cutClips(data, outDir, srtPath, video) {
+  if (!flags.clips || !video || !existsSync(video)) return
+  const entries = srtEntries(srtPath)
+  const burn = flags.burn && ffHasSubtitles()
+  if (flags.burn && !burn) {
+    console.log('⚠️  이 ffmpeg엔 subtitles(libass) 필터가 없어 자막 번인은 건너뜁니다.')
+    console.log('    → 컷 + 클립별 .srt만 생성. 캡션은 CapCut 자동자막 또는 .srt import 권장.')
+  }
+  const mode = flags.vertical ? '9:16 세로 쇼츠 변환' : burn ? '클립 컷 + 자막 번인' : '하이라이트 클립 컷'
+  const clips = data.clips || []
+  console.log(`🎬 ${mode} 중... (${clips.length}개, 4개씩 병렬)`)
+
+  const buildArgs = (c, i) => {
+    const out = path.join(outDir, `clip_${i + 1}.mp4`)
+    const ss = hms2sec(c.start), to = hms2sec(c.end)
+    const clipSrt = buildClipSrt(entries, ss, to)
+    writeFileSync(path.join(outDir, `clip_${i + 1}.srt`), clipSrt, 'utf8') // 편집기용 동봉
+    const args = ['-y', '-ss', String(ss), '-to', String(to), '-i', video]
+    if (flags.vertical) {
+      // 상단 후킹 제목을 투명 PNG로 렌더(PIL) → 있으면 overlay로 얹음(CTR↑)
+      let titlePng = null
+      if (c.title) {
+        titlePng = `/tmp/_title_${ep}_${i + 1}.png`
+        const r = spawnSync('python3', [path.resolve('scripts/render_title.py'), c.title, titlePng], { stdio: 'ignore' })
+        if (r.status !== 0 || !existsSync(titlePng)) titlePng = null
+      }
+      // 가로 원본을 9:16 캔버스 가운데 배치 + 블러 배경(크롭 대신 여백채움)
+      // ★ 배경 블러는 1/4 해상도에서 처리한 뒤 확대한다 — 어차피 흐린 배경이라 결과는 같은데
+      //   1080x1920 원본에 gblur를 직접 걸면 클립당 수 분씩 걸려 물량 배포가 불가능해진다.
+      const vbase =
+        '[0:v]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,gblur=sigma=6,scale=1080:1920[bg];' +
+        '[0:v]scale=1080:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2'
+      if (titlePng) {
+        args.push('-i', titlePng, '-filter_complex', `${vbase}[base];[base][1:v]overlay=(W-w)/2:300[v]`, '-map', '[v]', '-map', '0:a?')
+      } else {
+        args.push('-filter_complex', vbase)
+      }
+    } else if (burn) {
+      const tmp = `/tmp/_clip_${ep}_${i + 1}.srt` // 한글 경로 회피(필터 파싱 안전)
+      writeFileSync(tmp, clipSrt, 'utf8')
+      args.push('-vf', `subtitles=${tmp}:force_style='FontName=Apple SD Gothic Neo,FontSize=16,Outline=1,Shadow=0,MarginV=40'`)
+    }
+    // crf 26: Ayrshare 미디어 업로드 30MB 제한 방어(50초 세로 클립도 10MB 안쪽)
+    args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-c:a', 'aac', '-b:a', '128k', out)
+    return args
+  }
+
+  let done = 0
+  const queue = clips.map((c, i) => ({ c, i }))
+  const worker = async () => {
+    for (;;) {
+      const job = queue.shift()
+      if (!job) return
+      await ffmpegAsync(buildArgs(job.c, job.i))
+      done++
+      if (done % 5 === 0 || done === clips.length) console.log(`   ${done}/${clips.length} 완료`)
+    }
+  }
+  await Promise.all(Array.from({ length: 4 }, worker))
 }
 
 // ── 6. Ayrshare 자동 게시·예약 (--publish) ───────────────────
@@ -361,8 +494,15 @@ function capHashtags(raw, extra = '', max = 10) {
   return uniq.slice(0, max).join(' ')
 }
 
-// 내일부터 하루 1개씩, 19:00 KST(=10:00 UTC)에 분산 예약
+// --at 지정 시: 전 클립을 그 KST 시각에 동일 예약. 미지정 시: 내일부터 하루 1개씩 19:00 KST 분산
 function scheduleUtc(i) {
+  if (flags.at) {
+    const m = flags.at.match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/)
+    if (!m) throw new Error(`--at 형식 오류: "${flags.at}" (예: "2026-08-08 10:00")`)
+    const [, Y, Mo, D, H, Mi] = m
+    const utcMs = Date.UTC(+Y, +Mo - 1, +D, +H - 9, +Mi, 0) // KST → UTC(-9h)
+    return new Date(utcMs).toISOString().replace(/\.\d{3}Z$/, 'Z')
+  }
   const d = new Date()
   d.setUTCDate(d.getUTCDate() + 1 + i)
   d.setUTCHours(10, 0, 0, 0)
@@ -522,7 +662,9 @@ async function pushToNotion(outDir, data) {
     const { stamped } = parseSrt(srtPath)
     if (!stamped) throw new Error('자막이 비어 있습니다')
     const data = await generate(apiKey, stamped)
+    data.clips = await generateClips(apiKey, stamped, flags.n || 8)
     const outDir = writeOutputs(data, srtPath, videoPath)
+    await cutClips(data, outDir, srtPath, videoPath)
     console.log(`\n✅ 완료 → ${outDir}`)
     console.log('   채널별 .txt + 배포팩.md(노션 붙여넣기용) 생성됨')
     console.log(`   숏폼 클립 컷: ${flags.clips ? '생성됨' : '건너뜀(--clips 로 켜기)'}`)
@@ -532,7 +674,7 @@ async function pushToNotion(outDir, data) {
     console.log(`\n📋 생성된 채널(${produced.length}/${CHANNEL_LABELS.length}): ${produced.join(', ')}`)
     if (missing.length) console.log(`⚠️  누락된 채널: ${missing.join(', ')} — 필요하면 다시 실행하세요`)
     await pushToNotion(outDir, data) // 네이버 초안 → 노션(토큰 있을 때)
-    if (flags.publish) await publishClips(data, outDir)
+    if (flags.publish && !flags.noPublishClips) await publishClips(data, outDir)
   } catch (e) {
     console.error(`\n❌ ${e.message}`)
     process.exit(1)
