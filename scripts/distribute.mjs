@@ -14,6 +14,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, copyFileSync } from
 import { homedir } from 'node:os'
 import path from 'node:path'
 import Anthropic from '@anthropic-ai/sdk'
+import { fixTranscript, parseSrt } from './lib/transcript.mjs'
 
 const YT_LINK = 'https://youtu.be/xa9yOE0ERr0' // 1일차부터 보기(시리즈 시작점)
 const NOTION_DRAFTS_PARENT = '3a8a926a-bb65-818d-9adb-f35a4fca0d4b' // 노션 "📝 네이버 초안(자동 생성)" 페이지
@@ -78,53 +79,7 @@ function transcribe(video) {
   return srt
 }
 
-// ── 3. SRT 파싱 → 타임스탬프 텍스트 ──────────────────────────
-// 음성인식(whisper)이 청소업 용어·고유명사를 자주 틀린다. 틀린 채로 재가공하면
-// 게시글·쇼츠 자막에 "컬리오", "전기 청소" 같은 말이 그대로 박히므로 파싱 단계에서 정정한다.
-// ★ 문맥 판단이 필요한 애매한 오인식은 여기 넣지 말 것(잘못 고치면 더 나쁨) — 프롬프트 규칙으로 처리.
-const TRANSCRIPT_FIXES = [
-  [/컬리오|콜리아|퀼리오|콜리오|컬리아/g, '퀄리오'],
-  [/어피에스/g, 'OPS'],
-  [/전기 청소/g, '정기 청소'],
-  [/정기청소/g, '정기 청소'],
-  [/(^|[\s,.!?])전기(는|를|가|도|의|에|와|랑|부터|만)/g, '$1정기$2'],
-  [/전기 (안|한|하고|하는|하시|해)/g, '정기 $1'],
-  [/선소/g, '청소'],
-  [/집간지성/g, '집단지성'],
-  [/자극복/g, '작업복'],
-  [/아우반들|아웃반들/g, '아웃바운드'],
-  [/카레터의 법칙|카레토의 법칙/g, '파레토의 법칙'],
-  [/기회복음/g, '기회비용'],
-  [/순찬|승선 씨|순천 씨/g, '승찬'],
-  [/도법사|도구텔|도급 복사|도급복사/g, '도급사'],
-  [/도그 업체|도구 업체/g, '도급 업체'],
-  [/줄누나|줄누만/g, '줄눈'],
-  [/방람회|방담회|입주방담/g, '박람회'],
-  [/광축망/g, '방충망'],
-]
-function fixTranscript(s) {
-  let out = s
-  for (const [re, to] of TRANSCRIPT_FIXES) out = out.replace(re, to)
-  return out
-}
-
-function parseSrt(srtPath) {
-  const raw = fixTranscript(readFileSync(srtPath, 'utf8'))
-  const blocks = raw.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean)
-  const lines = []
-  let plain = ''
-  for (const b of blocks) {
-    const l = b.split('\n')
-    const time = l.find(x => x.includes('-->'))
-    if (!time) continue
-    const start = time.split('-->')[0].trim().slice(0, 8) // HH:MM:SS
-    const text = l.slice(l.indexOf(time) + 1).join(' ').trim()
-    if (!text) continue
-    lines.push(`[${start}] ${text}`)
-    plain += text + '\n'
-  }
-  return { stamped: lines.join('\n'), plain }
-}
+// ── 3. 자막 파싱·정정은 scripts/lib/transcript.mjs 공용 모듈 사용 ──
 
 // ── 4. Claude 재가공 (JSON 강제) ─────────────────────────────
 const TOPIC_LINE = flags.topic ? `\n[이번 영상] ${flags.topic}\n- 인터뷰 영상이면 게스트(대표님)의 말을 주인공으로 세운다. 게스트 호칭·지역·업종은 자막에 나온 대로 써도 되지만, 우리 쪽 업체명·상업 링크는 넣지 않는다.\n` : ''
