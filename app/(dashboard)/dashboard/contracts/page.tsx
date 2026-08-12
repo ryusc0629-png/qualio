@@ -209,6 +209,7 @@ export default async function ContractsPage() {
                     </td>
                     <td className="px-4 py-3 text-center">
                       <EditContractForm
+                        iconOnly
                         contract={{
                           id: contract.id,
                           service_type: contract.service_type,

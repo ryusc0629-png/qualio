@@ -453,10 +453,8 @@ export default async function CustomerDetailPage({ params }: Props) {
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">{formatFrequency(contract.frequency)}</p>
                     </div>
-                    <div className="shrink-0 flex items-start gap-1">
-                      <div className="text-right">
-                        <p className="font-bold tabular-nums text-emerald-700">{contract.contract_price.toLocaleString('ko-KR')}<span className="text-xs font-normal text-muted-foreground ml-0.5">원/월</span></p>
-                      </div>
+                    <div className="shrink-0 flex flex-col items-end gap-1.5">
+                      <p className="font-bold tabular-nums text-emerald-700">{contract.contract_price.toLocaleString('ko-KR')}<span className="text-xs font-normal text-muted-foreground ml-0.5">원/월</span></p>
                       <EditContractForm
                         contract={{
                           id: contract.id,

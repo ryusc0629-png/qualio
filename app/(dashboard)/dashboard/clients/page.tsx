@@ -12,6 +12,7 @@ import { ExcludeQuoteButton } from '@/components/dashboard/exclude-quote-button'
 import { CancelledQuotesSection, type CancelledQuote } from '@/components/dashboard/cancelled-quotes-section'
 import { formatFrequency } from '@/lib/utils/frequency'
 import { contractAccruedRevenue, type ContractPriceSegment } from '@/lib/utils/ltv'
+import { EditContractForm } from '@/components/dashboard/edit-contract-form'
 import { isActiveSalesStage, salesStageMeta } from '@/lib/business/sales-stage'
 import { ClientSearchInput } from '@/components/dashboard/client-search-input'
 import { formatCompactKRW } from '@/lib/format/krw'
@@ -73,6 +74,20 @@ type ContractRow = {
   checklist_items: { id: string; label: string }[] | null
   // 월 금액 변경 이력 — 누적 매출을 구간별로 계산해 과거 소급을 막는다
   price_history: ContractPriceSegment[] | null
+  notes: string | null
+}
+
+// 계약 수정 모달에 넘길 값만 추림 (메모까지 넘겨야 저장 시 기존 메모가 지워지지 않는다)
+function contractToEdit(c: ContractRow) {
+  return {
+    id: c.id,
+    service_type: c.service_type,
+    frequency: c.frequency,
+    contract_price: c.contract_price,
+    start_date: c.start_date,
+    end_date: c.end_date,
+    notes: c.notes,
+  }
 }
 
 type B2bQuoteRow = {
@@ -170,7 +185,7 @@ export default async function ClientsPage({
       .eq('business_id', businessId),
 
     db.from('contracts')
-      .select('id, customer_id, service_type, frequency, contract_price, status, start_date, end_date, requires_lockup, expected_duration_minutes, checklist_items, price_history' as never)
+      .select('id, customer_id, service_type, frequency, contract_price, status, start_date, end_date, requires_lockup, expected_duration_minutes, checklist_items, price_history, notes' as never)
       .eq('business_id', businessId),
 
     db.from('bookings')
@@ -595,6 +610,10 @@ export default async function ClientsPage({
                         )}
                         {ltv === 0 && !activeContract && <p className="text-xs text-muted-foreground">실적 없음</p>}
                       </div>
+                      {/* 범위가 늘어 금액이 바뀌는 일이 잦아, 상세로 들어가지 않고 여기서 바로 고칠 수 있게 둔다 */}
+                      {activeContract && (
+                        <EditContractForm contract={contractToEdit(activeContract)} />
+                      )}
                       <div className="flex items-center gap-1">
                         <Link href={`/dashboard/clients/${customer.id}`} className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:border-primary/30">
                           이력<ChevronRight className="h-3 w-3" />
@@ -772,6 +791,10 @@ export default async function ClientsPage({
                             </p>
                           )}
                         </div>
+                        {/* 범위가 늘어 금액이 바뀌는 일이 잦아, 상세로 들어가지 않고 여기서 바로 고칠 수 있게 둔다 */}
+                        {activeContract && (
+                          <EditContractForm contract={contractToEdit(activeContract)} />
+                        )}
                         <div className="flex items-center gap-1">
                           {/* 견적서·시방서·계약서·서비스 이력이 모두 이 상세 페이지에 있어 버튼 하나로 통합 */}
                           <Link href={`/dashboard/clients/${customer.id}`} className="inline-flex items-center gap-0.5 text-xs text-primary hover:text-primary/80 px-2 py-1 rounded border border-primary/30 hover:border-primary/50">

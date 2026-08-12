@@ -40,6 +40,9 @@ export interface EditContractTarget {
 
 interface EditContractFormProps {
   contract: EditContractTarget
+  // 아이콘만 쓰는 자리(표 안 등)에서는 iconOnly. 목록·카드에서는 글자를 함께 보여
+  // 고객 정보 수정 연필과 헷갈리지 않게 한다.
+  iconOnly?: boolean
   triggerClassName?: string
 }
 
@@ -47,7 +50,7 @@ function todayKst(): string {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
 }
 
-export function EditContractForm({ contract, triggerClassName }: EditContractFormProps) {
+export function EditContractForm({ contract, iconOnly, triggerClassName }: EditContractFormProps) {
   const [open, setOpen] = useState(false)
   const focusRef = useAutoFocusRef<HTMLDivElement>()
 
@@ -82,14 +85,26 @@ export function EditContractForm({ contract, triggerClassName }: EditContractFor
   const diff = nextPrice - contract.contract_price
 
   if (!open) {
+    if (iconOnly) {
+      return (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="계약 수정"
+          className={triggerClassName ?? 'inline-flex items-center justify-center h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors'}
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+      )
+    }
     return (
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="계약 수정"
-        className={triggerClassName ?? 'inline-flex items-center justify-center h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors'}
+        className={triggerClassName ?? 'inline-flex items-center gap-1 shrink-0 text-xs font-medium text-emerald-700 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 rounded-md px-2 py-1 transition-colors'}
       >
-        <Pencil className="h-4 w-4" />
+        <Pencil className="h-3 w-3 shrink-0" />
+        계약 수정
       </button>
     )
   }
