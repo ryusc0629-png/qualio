@@ -1,9 +1,10 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { notFound } from 'next/navigation'
+import { notFound, permanentRedirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft, ArrowRight, BookOpen, Phone, Wrench } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { isDomainIdentifier, bizBaseUrl, hasLiveCustomDomain } from '@/lib/domains/resolve'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -14,19 +15,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params
   const db = createServiceClient()
 
+  // [slug] 자리에는 slug가 올 수도, 고객사 도메인이 올 수도 있다(proxy가 rewrite)
+  const column = isDomainIdentifier(slug) ? 'custom_domain' : 'slug'
   const { data: business } = await db
     .from('businesses')
-    .select('name, seo_description')
-    .eq('slug', slug)
-    .maybeSingle()
+    .select('name, seo_description, slug, custom_domain, custom_domain_status' as never)
+    .eq(column as never, slug as never)
+    .maybeSingle() as unknown as { data: {
+      name: string; seo_description: string | null
+      slug: string | null; custom_domain: string | null; custom_domain_status: string | null
+    } | null }
 
   if (!business) return { title: '업체를 찾을 수 없습니다' }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
   return {
     title: `청소 정보 & 시공 사례 | ${business.name}`,
     description: `${business.name}의 청소 전문 정보와 시공 사례를 확인하세요.`,
-    alternates: { canonical: `${appUrl}/biz/${slug}/posts` },
+    alternates: { canonical: `${bizBaseUrl(business)}/posts` },
   }
 }
 
@@ -41,13 +46,27 @@ export default async function BizPostsPage({ params, searchParams }: Props) {
   const { type } = await searchParams
   const db = createServiceClient()
 
+  const viaCustomDomain = isDomainIdentifier(slug)
+  const column = viaCustomDomain ? 'custom_domain' : 'slug'
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, phone')
-    .eq('slug', slug)
-    .maybeSingle()
+    .select('id, name, phone, slug, custom_domain, custom_domain_status' as never)
+    .eq(column as never, slug as never)
+    .maybeSingle() as unknown as { data: {
+      id: string; name: string; phone: string | null
+      slug: string | null; custom_domain: string | null; custom_domain_status: string | null
+    } | null }
 
   if (!business) notFound()
+
+  // 자체 도메인이 살아 있는 업체를 퀄리오 주소로 열면 자체 도메인으로 영구 이동(중복 색인 방지)
+  if (!viaCustomDomain && hasLiveCustomDomain(business)) {
+    permanentRedirect(`https://${business.custom_domain}/posts`)
+  }
+
+  // 페이지 안 링크의 앞부분 — 자체 도메인에서는 루트 기준이어야 한다
+  const linkBase = viaCustomDomain ? '' : `/biz/${slug}`
+  const homeHref = linkBase || '/'
 
   let query = db
     .from('biz_posts')
@@ -76,7 +95,7 @@ export default async function BizPostsPage({ params, searchParams }: Props) {
       <header className="border-b bg-white/95 backdrop-blur sticky top-0 z-20">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <Link
-            href={`/biz/${slug}`}
+            href={homeHref}
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
@@ -114,7 +133,7 @@ export default async function BizPostsPage({ params, searchParams }: Props) {
           {/* ── 카테고리 탭 ── */}
           <div className="flex gap-2 mt-5">
             {TABS.map((tab) => {
-              const href = tab.key ? `/biz/${slug}/posts?type=${tab.key}` : `/biz/${slug}/posts`
+              const href = tab.key ? `${linkBase}/posts?type=${tab.key}` : `${linkBase}/posts`
               const isActive = activeType === tab.key
               const Icon = tab.icon
               return (
@@ -146,7 +165,7 @@ export default async function BizPostsPage({ params, searchParams }: Props) {
               {activeType === 'portfolio' && '아직 등록된 시공 사례가 없어요'}
               {activeType === '' && '아직 등록된 콘텐츠가 없어요'}
             </p>
-            <Link href={`/biz/${slug}`}>
+            <Link href={homeHref}>
               <Button variant="outline" className="mt-2">업체 홈으로 돌아가기</Button>
             </Link>
           </div>
@@ -159,7 +178,7 @@ export default async function BizPostsPage({ params, searchParams }: Props) {
               return (
                 <Link
                   key={post.slug}
-                  href={`/biz/${slug}/posts/${post.slug}`}
+                  href={`${linkBase}/posts/${post.slug}`}
                   className="group block rounded-2xl border-2 bg-white overflow-hidden hover:shadow-lg hover:border-primary/40 transition-all"
                 >
                   {/* 포트폴리오 썸네일 */}

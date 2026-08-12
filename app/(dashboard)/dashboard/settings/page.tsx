@@ -7,6 +7,7 @@ import { GeoPanel } from '@/components/dashboard/geo-panel'
 import { CopyLinkButton } from '@/components/dashboard/copy-link-button'
 import { PushNotificationToggle } from '@/components/dashboard/push-notification-toggle'
 import { CollapsibleSection } from './collapsible-section'
+import { CustomDomainSection } from '@/components/dashboard/custom-domain-section'
 import type { PlanId } from '@/lib/config/plans'
 import Link from 'next/link'
 import { Layers, ChevronRight } from 'lucide-react'
@@ -33,7 +34,7 @@ export default async function SettingsPage() {
   const [businessResult, subscriptionResult, serviceCountResult, publicReportResult] = await Promise.all([
     db
       .from('businesses')
-      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, legal_name, payment_account, certifications, portfolio, target_customer' as never)
+      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, legal_name, payment_account, certifications, portfolio, target_customer, custom_domain, custom_domain_status' as never)
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
@@ -169,6 +170,17 @@ export default async function SettingsPage() {
         seoGeneratedAt={business.seo_generated_at ?? null}
       />
       </div>
+      </CollapsibleSection>
+
+      {/* 내 주소(도메인) 연결 — 홈페이지를 사장님 소유 주소로 띄운다 */}
+      <CollapsibleSection
+        title="내 인터넷 주소 연결"
+        description="가지고 계신 주소가 있으면 홈페이지를 그 주소로 열 수 있어요."
+      >
+        <CustomDomainSection
+          domain={(business as { custom_domain?: string | null }).custom_domain ?? null}
+          status={(business as { custom_domain_status?: string | null }).custom_domain_status ?? null}
+        />
       </CollapsibleSection>
 
       {/* 업체 정보 */}

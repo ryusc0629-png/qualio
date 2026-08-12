@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound, permanentRedirect } from 'next/navigation'
+import { isDomainIdentifier, bizBaseUrl, hasLiveCustomDomain } from '@/lib/domains/resolve'
 import { headers } from 'next/headers'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -137,11 +138,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const postSlug = rawPostSlug.normalize('NFC')
   const db = createServiceClient()
 
+  // [slug] 자리에는 slug가 올 수도, 고객사 도메인이 올 수도 있다(proxy가 rewrite)
+  const column = isDomainIdentifier(slug) ? 'custom_domain' : 'slug'
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, seo_description, seo_keywords, address')
-    .eq('slug', slug)
-    .maybeSingle()
+    .select('id, name, seo_description, seo_keywords, address, slug, custom_domain, custom_domain_status' as never)
+    .eq(column as never, slug as never)
+    .maybeSingle() as unknown as { data: {
+      id: string; name: string; seo_description: string | null
+      seo_keywords: string | null; address: string | null
+      slug: string | null; custom_domain: string | null; custom_domain_status: string | null
+    } | null }
 
   if (!business) return { title: '포스트를 찾을 수 없습니다' }
 
@@ -155,9 +162,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   if (!post) return { title: '포스트를 찾을 수 없습니다' }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
   const description = post.summary ?? business.seo_description ?? ''
-  const canonicalUrl = `${appUrl}/biz/${slug}/posts/${postSlug}`
+  // 자체 도메인이 살아 있으면 그쪽이 정식 주소
+  const canonicalUrl = `${bizBaseUrl(business)}/posts/${postSlug}`
   // 포스트 제목에서 키워드 추출 + 업체 키워드 병합
   const titleKeywords = post.title.replace(/[?!~·]/g, '').split(/[\s,]+/).filter(Boolean).slice(0, 5).join(', ')
   const keywords = [titleKeywords, business.seo_keywords].filter(Boolean).join(', ')
@@ -186,11 +193,16 @@ export default async function PostPage({ params }: Props) {
   const postSlug = rawPostSlug.normalize('NFC')
   const db = createServiceClient()
 
+  const viaCustomDomain = isDomainIdentifier(slug)
+  const bizColumn = viaCustomDomain ? 'custom_domain' : 'slug'
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, phone, address, slug')
-    .eq('slug', slug)
-    .maybeSingle()
+    .select('id, name, phone, address, slug, custom_domain, custom_domain_status' as never)
+    .eq(bizColumn as never, slug as never)
+    .maybeSingle() as unknown as { data: {
+      id: string; name: string; phone: string | null; address: string | null
+      slug: string | null; custom_domain: string | null; custom_domain_status: string | null
+    } | null }
 
   if (!business) {
     // 옛 업체 주소로 들어왔으면 현재 주소로 영구 이동(301) — 기존 링크 보존
@@ -202,6 +214,15 @@ export default async function PostPage({ params }: Props) {
     if (moved?.slug) permanentRedirect(`/biz/${moved.slug}/posts/${postSlug}`)
     notFound()
   }
+
+  // 자체 도메인이 살아 있는 업체를 퀄리오 주소로 열면 자체 도메인으로 영구 이동(중복 색인 방지)
+  if (!viaCustomDomain && hasLiveCustomDomain(business)) {
+    permanentRedirect(`https://${business.custom_domain}/posts/${postSlug}`)
+  }
+
+  // 페이지 안 링크의 앞부분 — 자체 도메인에서는 루트 기준이어야 한다
+  const linkBase = viaCustomDomain ? '' : `/biz/${slug}`
+  const homeHref = linkBase || '/'
 
   const { data: post } = await db
     .from('biz_posts')
@@ -237,6 +258,9 @@ export default async function PostPage({ params }: Props) {
     .limit(3)
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+  // 이 글의 정식 주소 계열 — 자체 도메인이 살아 있으면 그쪽 기준
+  const bizUrl = bizBaseUrl(business)
+  const postUrl = `${bizUrl}/posts/${postSlug}`
 
   // JSON 메타 블록 파싱 (keyPoints, faqs)
   let keyPoints: string[] = []
@@ -264,11 +288,18 @@ export default async function PostPage({ params }: Props) {
     '@graph': [
       {
         '@type': 'BreadcrumbList',
-        itemListElement: [
-          { '@type': 'ListItem', position: 1, name: '홈', item: appUrl },
-          { '@type': 'ListItem', position: 2, name: business.name, item: `${appUrl}/biz/${slug}` },
-          { '@type': 'ListItem', position: 3, name: post.title, item: `${appUrl}/biz/${slug}/posts/${postSlug}` },
-        ],
+        // 자체 도메인에서는 그 도메인이 곧 사이트라 '퀄리오 홈' 단계가 없다
+        itemListElement: (hasLiveCustomDomain(business)
+          ? [
+              { name: business.name, item: bizUrl },
+              { name: post.title, item: postUrl },
+            ]
+          : [
+              { name: '홈', item: appUrl },
+              { name: business.name, item: bizUrl },
+              { name: post.title, item: postUrl },
+            ]
+        ).map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.item })),
       },
       {
         '@type': 'Article',
@@ -276,9 +307,9 @@ export default async function PostPage({ params }: Props) {
         description: post.summary ?? '',
         datePublished: post.published_at,
         dateModified: post.published_at,  // 최신성 신호 — AI 검색엔진 우선순위에 영향
-        author: { '@type': 'Organization', name: business.name, url: `${appUrl}/biz/${slug}` },
-        publisher: { '@type': 'Organization', name: business.name, url: `${appUrl}/biz/${slug}` },
-        mainEntityOfPage: { '@type': 'WebPage', '@id': `${appUrl}/biz/${slug}/posts/${postSlug}` },
+        author: { '@type': 'Organization', name: business.name, url: bizUrl },
+        publisher: { '@type': 'Organization', name: business.name, url: bizUrl },
+        mainEntityOfPage: { '@type': 'WebPage', '@id': postUrl },
         ...(post.image_url ? { image: post.image_url } : {}),
       },
       ...(inlineFaqs.length > 0
@@ -306,7 +337,7 @@ export default async function PostPage({ params }: Props) {
         <header className="border-b bg-white/80 backdrop-blur sticky top-0 z-10">
           <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
             <Link
-              href={`/biz/${slug}`}
+              href={homeHref}
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
@@ -336,7 +367,7 @@ export default async function PostPage({ params }: Props) {
 
               {/* 브레드크럼 */}
               <nav className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
-                <Link href={`/biz/${slug}`} className="hover:text-foreground transition-colors">
+                <Link href={homeHref} className="hover:text-foreground transition-colors">
                   {business.name}
                 </Link>
                 <span>/</span>
@@ -467,7 +498,7 @@ export default async function PostPage({ params }: Props) {
                     {relatedPosts.map((rp) => (
                       <Link
                         key={rp.slug}
-                        href={`/biz/${slug}/posts/${rp.slug}`}
+                        href={`${linkBase}/posts/${rp.slug}`}
                         className="block rounded-lg border bg-card p-4 hover:bg-accent transition-colors group"
                       >
                         <p className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2">

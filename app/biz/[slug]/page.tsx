@@ -26,6 +26,7 @@ import { HeroLeadForm, type HeroFormService } from './hero-lead-form'
 import { buildBrandStyle, toBrandSettings } from '@/lib/brand'
 import { trackPageView } from '@/lib/utils/track-page-view'
 import { buildAreaServed } from '@/lib/address/parse-region'
+import { isDomainIdentifier, bizBaseUrl, hasLiveCustomDomain } from '@/lib/domains/resolve'
 import { getReviewSummary } from '@/lib/reviews/get-reviews'
 import { DEFAULT_STRENGTHS, getStrengthIcon } from '@/lib/business/strengths'
 
@@ -44,18 +45,25 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const slug = rawSlug.normalize('NFC') // 한글 주소 NFC/NFD 불일치로 인한 매칭 실패 방지
   const db = createServiceClient()
 
+  // [slug] 자리에는 slug가 올 수도, 고객사 도메인이 올 수도 있다(proxy가 rewrite)
+  const column = isDomainIdentifier(slug) ? 'custom_domain' : 'slug'
   const { data: business } = await db
     .from('businesses')
-    .select('name, seo_title, seo_description, seo_keywords, address')
-    .eq('slug', slug)
-    .maybeSingle()
+    .select('name, seo_title, seo_description, seo_keywords, address, slug, custom_domain, custom_domain_status' as never)
+    .eq(column as never, slug as never)
+    .maybeSingle() as unknown as { data: {
+      name: string; seo_title: string | null; seo_description: string | null
+      seo_keywords: string | null; address: string | null
+      slug: string | null; custom_domain: string | null; custom_domain_status: string | null
+    } | null }
 
   if (!business) return { title: '업체를 찾을 수 없습니다' }
 
   const title = business.seo_title ?? `${business.name} | 청소 전문업체`
   const description = business.seo_description ?? `${business.name}에서 제공하는 청소 서비스입니다.`
   const keywords = business.seo_keywords ?? ''
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+  // 자체 도메인이 살아 있으면 그쪽이 정식 주소 — 같은 글이 두 주소로 색인되는 걸 막는다
+  const base = bizBaseUrl(business)
 
   return {
     title,
@@ -65,11 +73,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title,
       description,
       type: 'website',
-      url: `${appUrl}/biz/${slug}`,
+      url: base,
       siteName: '퀄리오',
     },
     twitter: { card: 'summary', title, description },
-    alternates: { canonical: `${appUrl}/biz/${slug}` },
+    alternates: { canonical: base },
   }
 }
 
@@ -80,10 +88,13 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
   const slug = rawSlug.normalize('NFC') // 한글 주소 NFC/NFD 불일치로 인한 매칭 실패 방지
   const db = createServiceClient()
 
+  // [slug] 자리에는 slug가 올 수도, 고객사 도메인이 올 수도 있다(proxy가 rewrite)
+  const viaCustomDomain = isDomainIdentifier(slug)
+  const column = viaCustomDomain ? 'custom_domain' : 'slug'
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, instagram_url, youtube_url, service_areas, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, certifications, portfolio, target_customer' as never)
-    .eq('slug', slug)
+    .select('id, name, phone, address, description, seo_title, seo_description, seo_keywords, seo_faqs, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, instagram_url, youtube_url, service_areas, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, certifications, portfolio, target_customer, slug, custom_domain, custom_domain_status' as never)
+    .eq(column as never, slug as never)
     .maybeSingle() as { data: {
       id: string; name: string; phone: string | null; address: string | null
       description: string | null; seo_title: string | null; seo_description: string | null
@@ -101,6 +112,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
       certifications: string[] | null
       portfolio: { before: string; after: string }[] | null
       target_customer: string | null
+      slug: string | null; custom_domain: string | null; custom_domain_status: string | null
     } | null }
 
   if (!business) {
@@ -112,6 +124,12 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
       .maybeSingle() as unknown as { data: { slug: string | null } | null }
     if (moved?.slug) permanentRedirect(`/biz/${moved.slug}`)
     notFound()
+  }
+
+  // 자체 도메인이 살아 있는 업체를 퀄리오 주소로 열면 자체 도메인으로 영구 이동한다.
+  // 같은 페이지가 두 주소로 열리면 검색엔진이 둘을 따로 세어 순위가 갈린다.
+  if (!viaCustomDomain && hasLiveCustomDomain(business)) {
+    permanentRedirect(`https://${business.custom_domain}`)
   }
 
   // ── 브랜드 테마 ── (CSS 변수 주입, AI 토큰과 무관)
@@ -203,6 +221,11 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
     .order('created_at') as unknown as { data: HeroFormService[] | null }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+  // 이 홈페이지의 정식 주소 — 자체 도메인이 살아 있으면 'https://내도메인', 아니면 'qualio.co.kr/biz/{slug}'
+  const bizUrl = bizBaseUrl(business)
+  // 페이지 안 링크의 앞부분. 자체 도메인으로 보고 있으면 '/posts'처럼 루트 기준이어야 한다
+  // (여기서 '/biz/...'로 링크하면 자체 도메인에서 퀄리오 도메인으로 튕겨 나간다)
+  const linkBase = viaCustomDomain ? '' : `/biz/${slug}`
   const faqs = (business.seo_faqs as unknown as FaqItem[]) ?? []
 
   // 견적폼 링크에 유입 채널(ch) 전달 — 광고 유입이 견적 단계까지 추적되도록
@@ -306,7 +329,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
     '@graph': [
       {
         '@type': 'LocalBusiness',
-        '@id': `${appUrl}/biz/${slug}#business`,
+        '@id': `${bizUrl}#business`,
         name: business.name,
         description: business.seo_description ?? business.description ?? '',
         telephone: business.phone ?? undefined,
@@ -317,7 +340,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
           ? areaServed.map((name) => ({ '@type': 'AdministrativeArea', name }))
           : undefined,
         sameAs: sameAs.length > 0 ? sameAs : undefined,
-        url: `${appUrl}/biz/${slug}`,
+        url: bizUrl,
         image: `${appUrl}/og-image.png`,
         priceRange: minPrice ? `${minPrice.toLocaleString()}원~` : undefined,
         hasOfferCatalog: services && services.length > 0
@@ -335,11 +358,12 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
       },
       {
         '@type': 'WebPage',
-        '@id': `${appUrl}/biz/${slug}`,
-        url: `${appUrl}/biz/${slug}`,
+        '@id': bizUrl,
+        url: bizUrl,
         name: business.seo_title ?? business.name,
         description: business.seo_description ?? business.description ?? '',
-        isPartOf: { '@id': appUrl },
+        // 자체 도메인이면 그 도메인 자체가 사이트, 아니면 퀄리오가 사이트
+        isPartOf: { '@id': hasLiveCustomDomain(business) ? bizUrl : appUrl },
       },
       ...(faqs.length > 0
         ? [{
@@ -444,7 +468,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
               <a href="#faq" className="hover:text-foreground transition-colors">자주 묻는 질문</a>
               {recentPosts && recentPosts.length > 0 && (
                 <Link
-                  href={`/biz/${slug}/posts`}
+                  href={`${linkBase}/posts`}
                   className="flex items-center gap-1 hover:text-foreground transition-colors"
                 >
                   <BookOpen className="h-3.5 w-3.5" />
@@ -1015,7 +1039,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
                   <p className="text-muted-foreground mt-2">전문가가 알려주는 청소 꿀팁</p>
                 </div>
                 <Link
-                  href={`/biz/${slug}/posts`}
+                  href={`${linkBase}/posts`}
                   className="text-sm text-primary hover:underline flex items-center gap-1 font-medium"
                 >
                   전체 보기 <ArrowRight className="h-3.5 w-3.5" />
@@ -1026,7 +1050,7 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
                 {recentPosts.map((post) => (
                   <Link
                     key={post.slug}
-                    href={`/biz/${slug}/posts/${post.slug}`}
+                    href={`${linkBase}/posts/${post.slug}`}
                     className="group block rounded-2xl bg-white p-6 hover:shadow-md transition-all"
                   >
                     <div className="h-1 w-8 bg-primary rounded-full mb-5 group-hover:w-14 transition-all duration-300" />

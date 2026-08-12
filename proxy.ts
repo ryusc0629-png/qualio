@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { isPlatformHost, stripWww, getAppHost } from '@/lib/domains/host'
 
 // 인증이 필요한 경로 (미로그인 시 /login으로 리디렉션)
 const protectedRoutes = ['/dashboard', '/onboarding']
@@ -7,7 +8,51 @@ const protectedRoutes = ['/dashboard', '/onboarding']
 // 이미 로그인된 사용자가 접근하면 /dashboard로 리디렉션할 경로
 const authRoutes = ['/login', '/signup']
 
+// 고객사 자체 도메인에서는 '그 업체의 홈페이지'만 보여준다.
+// 대시보드·로그인 등 퀄리오 서비스 화면은 항상 퀄리오 도메인으로 돌려보낸다.
+// (세션 쿠키가 퀄리오 도메인에 묶여 있어 고객사 도메인에서는 로그인 자체가 성립하지 않는다)
+const platformOnlyPrefixes = [
+  '/dashboard', '/onboarding', '/login', '/signup',
+  '/admin', '/upgrade', '/pricing', '/academy', '/ops',
+  '/biz', // 고객사 도메인에서 /biz/... 직접 접근 = 같은 내용이 두 주소로 열림 → 한쪽으로 모은다
+]
+
+// 고객사 도메인에서 그대로 통과시킬 경로 (rewrite도 리디렉트도 하지 않음)
+const passThroughPrefixes = ['/api', '/q', '/quote', '/review', '/_next', '/monitoring']
+
+/**
+ * 고객사 자체 도메인 요청 처리.
+ * bkclean.co.kr/posts/xxx → 내부적으로 /biz/bkclean.co.kr/posts/xxx 를 렌더한다.
+ * (호스트로 업체를 찾는 일은 페이지에서 하고, 여기서는 DB를 보지 않는다 — 모든 요청이 지나는 길목이라 느려지면 안 된다)
+ */
+function handleCustomDomain(request: NextRequest, host: string): NextResponse {
+  const { pathname, search } = request.nextUrl
+  const appOrigin = `https://${getAppHost()}`
+
+  if (passThroughPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    return NextResponse.next()
+  }
+
+  if (platformOnlyPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
+    return NextResponse.redirect(`${appOrigin}${pathname}${search}`, 308)
+  }
+
+  // sitemap.xml / robots.txt 는 아래 matcher에서 제외돼 여기까지 오지 않는다.
+  // 두 라우트가 각자 요청 호스트를 보고 분기한다(app/sitemap.ts, app/robots.ts).
+
+  const domainKey = stripWww(host)
+  const url = request.nextUrl.clone()
+  url.pathname = `/biz/${domainKey}${pathname === '/' ? '' : pathname}`
+  return NextResponse.rewrite(url)
+}
+
 export async function proxy(request: NextRequest) {
+  // ── 고객사 자체 도메인 ── 인증 검사(Supabase 왕복) 전에 갈라진다. 공개 페이지라 세션이 필요 없다.
+  const host = request.headers.get('host')
+  if (!isPlatformHost(host)) {
+    return handleCustomDomain(request, host!.toLowerCase().split(':')[0])
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(

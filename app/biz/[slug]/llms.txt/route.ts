@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { buildAreaServed } from '@/lib/address/parse-region'
+import { isDomainIdentifier, bizBaseUrl } from '@/lib/domains/resolve'
 
 // 업체별 llms.txt — AI 크롤러가 이 업체의 핵심 정보를 가장 정확하게 긁어가도록
 // 깔끔한 마크다운 요약을 제공한다 (llmstxt.org 관례).
@@ -19,21 +20,27 @@ export async function GET(
   const db = createServiceClient()
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
+  // [slug] 자리에는 slug가 올 수도, 고객사 도메인이 올 수도 있다(proxy가 rewrite)
+  const column = isDomainIdentifier(slug) ? 'custom_domain' : 'slug'
   const { data: business } = await db
     .from('businesses')
-    .select('id, name, phone, address, description, seo_title, seo_description, seo_faqs, service_areas, naver_place_url, google_place_url, kakao_place_url, danggeun_review_url' as never)
-    .eq('slug', slug)
+    .select('id, name, phone, address, description, seo_title, seo_description, seo_faqs, service_areas, naver_place_url, google_place_url, kakao_place_url, danggeun_review_url, slug, custom_domain, custom_domain_status' as never)
+    .eq(column as never, slug as never)
     .maybeSingle() as unknown as { data: {
       id: string; name: string; phone: string | null; address: string | null
       description: string | null; seo_title: string | null; seo_description: string | null
       seo_faqs: FaqItem[] | null; service_areas: string[] | null
       naver_place_url: string | null; google_place_url: string | null
       kakao_place_url: string | null; danggeun_review_url: string | null
+      slug: string | null; custom_domain: string | null; custom_domain_status: string | null
     } | null }
 
   if (!business) {
     return new Response('Not found', { status: 404 })
   }
+
+  // 자체 도메인이 살아 있으면 그쪽이 이 업체의 정식 주소
+  const bizUrl = bizBaseUrl(business)
 
   const [{ data: services }, { data: posts }] = await Promise.all([
     db
@@ -66,7 +73,7 @@ export async function GET(
   if (areaServed.length) lines.push(`- 서비스 지역: ${areaServed.join(', ')}`)
   if (business.address) lines.push(`- 주소: ${business.address}`)
   if (business.phone) lines.push(`- 전화: ${business.phone}`)
-  lines.push(`- 홈페이지: ${appUrl}/biz/${slug}`)
+  lines.push(`- 홈페이지: ${bizUrl}`)
   lines.push(`- 견적 신청: ${appUrl}/q/${business.id}`)
   lines.push('')
 
@@ -108,7 +115,7 @@ export async function GET(
     lines.push('## 청소 정보 글')
     for (const p of posts) {
       const desc = p.summary ? ` — ${p.summary}` : ''
-      lines.push(`- [${p.title}](${appUrl}/biz/${slug}/posts/${p.slug})${desc}`)
+      lines.push(`- [${p.title}](${bizUrl}/posts/${p.slug})${desc}`)
     }
     lines.push('')
   }
