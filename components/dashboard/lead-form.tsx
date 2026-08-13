@@ -1,9 +1,7 @@
 'use client'
 
-import { useCallback } from 'react'
-import { openAddressSearch } from '@/lib/address/postcode'
+import { AddressField } from '@/components/ui/address-field'
 import { formatPhone } from '@/lib/format/phone'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -82,10 +80,6 @@ export function LeadForm({
   onChange: (key: keyof LeadFormValues, value: string) => void
   liveStatus?: LiveStatus
 }) {
-  const handleAddressSearch = useCallback(() => {
-    openAddressSearch((address) => onChange('address', address))
-  }, [onChange])
-
   const displayBudget = form.monthly_budget
     ? Number(form.monthly_budget).toLocaleString('ko-KR')
     : ''
@@ -210,22 +204,11 @@ export function LeadForm({
         </div>
       )}
 
-      <div>
-        <Label>주소</Label>
-        <div className="flex gap-2 mt-1">
-          <Input
-            value={form.address}
-            onChange={(e) => onChange('address', e.target.value)}
-            placeholder="주소 찾기 버튼을 눌러주세요"
-            readOnly
-            className="flex-1 bg-muted/40 cursor-pointer"
-            onClick={handleAddressSearch}
-          />
-          <Button type="button" variant="outline" size="sm" className="shrink-0 h-10" onClick={handleAddressSearch}>
-            주소 찾기
-          </Button>
-        </div>
-      </div>
+      <AddressField
+        value={form.address}
+        onChange={(next) => onChange('address', next)}
+        className="space-y-1.5"
+      />
 
       <div>
         <Label>예상 월 금액 (원)</Label>

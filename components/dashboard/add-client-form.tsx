@@ -14,10 +14,10 @@ import { DateTimePicker } from '@/components/ui/date-time-picker'
 import { createLeadAction } from '@/lib/actions/crm'
 import { createActiveCustomerAction } from '@/lib/actions/customers'
 import { SourceChannelSelect } from '@/components/dashboard/source-channel-select'
-import { Plus, X, Search, Trash2 } from 'lucide-react'
+import { Plus, X, Trash2 } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import { formatPhone } from '@/lib/format/phone'
-import { openAddressSearch } from '@/lib/address/postcode'
+import { AddressField } from '@/components/ui/address-field'
 
 // 숫자 입력 쉼표 처리 헬퍼
 const digitsOnly = (v: string) => v.replace(/[^0-9]/g, '')
@@ -339,21 +339,11 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
               )}
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="lead-address">주소</Label>
-              <div className="flex gap-2">
-                <Input id="lead-address" placeholder="주소 검색을 눌러주세요" autoComplete="off" {...leadForm.register('address')} />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="shrink-0 px-3"
-                  onClick={() => openAddressSearch((addr) => leadForm.setValue('address', addr))}
-                >
-                  <Search className="h-4 w-4 mr-1" />
-                  검색
-                </Button>
-              </div>
-            </div>
+            <AddressField
+              id="lead-address"
+              value={leadForm.watch('address') ?? ''}
+              onChange={(next) => leadForm.setValue('address', next)}
+            />
 
             <div className="space-y-1">
               <Label htmlFor="lead-followup">다음 연락 예정일</Label>
@@ -476,21 +466,11 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
               )}
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="cust-address">주소</Label>
-              <div className="flex gap-2">
-                <Input id="cust-address" placeholder="주소 검색을 눌러주세요" autoComplete="off" {...customerForm.register('address')} />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="shrink-0 px-3"
-                  onClick={() => openAddressSearch((addr) => customerForm.setValue('address', addr))}
-                >
-                  <Search className="h-4 w-4 mr-1" />
-                  검색
-                </Button>
-              </div>
-            </div>
+            <AddressField
+              id="cust-address"
+              value={customerForm.watch('address') ?? ''}
+              onChange={(next) => customerForm.setValue('address', next)}
+            />
 
             <div className="space-y-1">
               <Label htmlFor="cust-notes">메모</Label>

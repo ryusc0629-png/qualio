@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
-import { openAddressSearch } from '@/lib/address/postcode'
+import { AddressField } from '@/components/ui/address-field'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -63,11 +63,6 @@ export function ConvertToCustomerButton({ lead, quote, alreadyConverted }: Props
       toast.error(error.serverError ?? '다시 시도해주세요')
     },
   })
-
-  // 카카오 주소 검색
-  const handleAddressSearch = useCallback(() => {
-    openAddressSearch((address) => setAddress(address))
-  }, [])
 
   const handleSubmit = () => {
     execute({
@@ -131,27 +126,7 @@ export function ConvertToCustomerButton({ lead, quote, alreadyConverted }: Props
             />
           </div>
 
-          <div>
-            <Label>주소</Label>
-            <div className="flex gap-2 mt-1">
-              <Input
-                value={address}
-                onClick={handleAddressSearch}
-                placeholder="주소 찾기 버튼을 눌러주세요"
-                readOnly
-                className="flex-1 bg-muted/40 cursor-pointer"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0 h-10"
-                onClick={handleAddressSearch}
-              >
-                주소 찾기
-              </Button>
-            </div>
-          </div>
+          <AddressField value={address} onChange={setAddress} />
 
           {/* 정기계약 등록 여부 */}
           <div className="rounded-lg border p-4 space-y-3">

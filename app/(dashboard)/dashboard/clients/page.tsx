@@ -12,7 +12,6 @@ import { ExcludeQuoteButton } from '@/components/dashboard/exclude-quote-button'
 import { CancelledQuotesSection, type CancelledQuote } from '@/components/dashboard/cancelled-quotes-section'
 import { formatFrequency } from '@/lib/utils/frequency'
 import { contractAccruedRevenue, type ContractPriceSegment } from '@/lib/utils/ltv'
-import { EditContractForm } from '@/components/dashboard/edit-contract-form'
 import { isActiveSalesStage, salesStageMeta } from '@/lib/business/sales-stage'
 import { ClientSearchInput } from '@/components/dashboard/client-search-input'
 import { formatCompactKRW } from '@/lib/format/krw'
@@ -610,15 +609,17 @@ export default async function ClientsPage({
                         )}
                         {ltv === 0 && !activeContract && <p className="text-xs text-muted-foreground">실적 없음</p>}
                       </div>
-                      {/* 범위가 늘어 금액이 바뀌는 일이 잦아, 상세로 들어가지 않고 여기서 바로 고칠 수 있게 둔다 */}
-                      {activeContract && (
-                        <EditContractForm contract={contractToEdit(activeContract)} />
-                      )}
                       <div className="flex items-center gap-1">
                         <Link href={`/dashboard/clients/${customer.id}`} className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border hover:border-primary/30">
                           이력<ChevronRight className="h-3 w-3" />
                         </Link>
-                        {customer.phone && <EditCustomerButton customer={{ ...customer, phone: customer.phone }} />}
+                        {/* 수정은 연필 하나로 통합 — 고객 정보와 계약 내용을 같은 창에서 고친다 */}
+                        {customer.phone && (
+                          <EditCustomerButton
+                            customer={{ ...customer, phone: customer.phone }}
+                            contract={activeContract ? contractToEdit(activeContract) : null}
+                          />
+                        )}
                         <DeleteCustomerButton customerId={customer.id} customerName={customer.name} hasContract={hasAnyContract} />
                       </div>
                     </div>
@@ -791,16 +792,18 @@ export default async function ClientsPage({
                             </p>
                           )}
                         </div>
-                        {/* 범위가 늘어 금액이 바뀌는 일이 잦아, 상세로 들어가지 않고 여기서 바로 고칠 수 있게 둔다 */}
-                        {activeContract && (
-                          <EditContractForm contract={contractToEdit(activeContract)} />
-                        )}
                         <div className="flex items-center gap-1">
                           {/* 견적서·시방서·계약서·서비스 이력이 모두 이 상세 페이지에 있어 버튼 하나로 통합 */}
                           <Link href={`/dashboard/clients/${customer.id}`} className="inline-flex items-center gap-0.5 text-xs text-primary hover:text-primary/80 px-2 py-1 rounded border border-primary/30 hover:border-primary/50">
                             <FileText className="h-3 w-3" />견적서·이력
                           </Link>
-                          {customer.phone && <EditCustomerButton customer={{ ...customer, phone: customer.phone }} />}
+                          {/* 수정은 연필 하나로 통합 — 고객 정보와 계약 내용(금액·주기)을 같은 창에서 고친다 */}
+                          {customer.phone && (
+                            <EditCustomerButton
+                              customer={{ ...customer, phone: customer.phone }}
+                              contract={activeContract ? contractToEdit(activeContract) : null}
+                            />
+                          )}
                           <DeleteCustomerButton customerId={customer.id} customerName={customer.name} hasContract={hasAnyContract} />
                         </div>
                       </div>

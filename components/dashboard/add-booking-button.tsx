@@ -11,10 +11,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { addBookingAction } from '@/lib/actions/bookings'
-import { Plus, X, Check, Search, CalendarPlus } from 'lucide-react'
+import { Plus, X, Check, CalendarPlus } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import { useAutoFocusRef } from '@/lib/hooks/use-auto-focus'
-import { openAddressSearch } from '@/lib/address/postcode'
+import { AddressField } from '@/components/ui/address-field'
 
 const schema = z.object({
   cleaning_type: z.string().min(1, '서비스명을 입력해주세요'),
@@ -172,19 +172,12 @@ export function AddBookingButton({
 
           {/* 주소 */}
           <div className="space-y-1">
-            <Label htmlFor="service_address">작업 주소 (필수)</Label>
-            <div className="flex gap-2">
-              <Input id="service_address" placeholder="서울시 강남구 역삼동" {...register('service_address')} />
-              <Button
-                type="button"
-                variant="outline"
-                className="shrink-0"
-                onClick={() => openAddressSearch((addr) => setValue('service_address', addr, { shouldValidate: true }))}
-              >
-                <Search className="h-4 w-4 mr-1" />
-                검색
-              </Button>
-            </div>
+            <AddressField
+              id="service_address"
+              label="작업 주소 (필수)"
+              value={watch('service_address') ?? ''}
+              onChange={(next) => setValue('service_address', next, { shouldValidate: true })}
+            />
             {errors.service_address && <p className="text-xs text-destructive">{errors.service_address.message}</p>}
           </div>
 
