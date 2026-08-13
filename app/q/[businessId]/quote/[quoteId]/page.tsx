@@ -8,6 +8,7 @@ import { FALLBACK_PITCH } from '@/lib/ai/quote-pitch'
 import type { Json } from '@/lib/types/database'
 import { Phone, ShieldCheck, Star, ChevronRight } from 'lucide-react'
 import { PortfolioCaseCard } from '@/components/quote/portfolio-case-card'
+import { PhoneCallLink } from '@/components/biz/phone-call-link'
 
 interface PageProps {
   params: Promise<{ businessId: string; quoteId: string }>
@@ -155,13 +156,15 @@ export default async function QuoteLandingPage({ params }: PageProps) {
             </div>
           </div>
           {business.phone && (
-            <a
-              href={`tel:${business.phone}`}
+            <PhoneCallLink
+              businessId={businessId}
+              phone={business.phone}
+              placement="quote"
               className="flex items-center gap-1.5 text-primary text-sm font-semibold"
             >
               <Phone className="h-3.5 w-3.5" />
               {business.phone}
-            </a>
+            </PhoneCallLink>
           )}
         </div>
       </header>
@@ -309,7 +312,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
         <div className="text-center text-xs text-zinc-400 space-y-1 pb-4">
           <p>{business.name}이 직접 준비한 견적서입니다</p>
           {business.phone && (
-            <p>문의 <a href={`tel:${business.phone}`} className="text-primary underline">{business.phone}</a></p>
+            <p>문의 <PhoneCallLink businessId={businessId} phone={business.phone} placement="quote" className="text-primary underline">{business.phone}</PhoneCallLink></p>
           )}
           <p className="pt-1">Powered by 퀄리오</p>
         </div>

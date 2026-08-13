@@ -42,6 +42,7 @@ interface Props {
   clientName: string
   // 고객(계약 중) 화면일 때만 넘어옴 — 있으면 견적서로 바로 일정(예약)을 잡을 수 있음
   customerPhone?: string | null
+  // 등록된 주소(리드·거래처 공통) — 새 견적서의 '현장 주소'를 자동으로 채우는 데 쓴다
   customerAddress?: string | null
   // 우리 업체명(을) — 계약서 첫 문장에 자동 반영
   businessName?: string
@@ -133,6 +134,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
           leadId={leadId}
           customerId={customerId}
           clientName={clientName}
+          clientAddress={customerAddress}
           businessName={businessName}
           existingQuote={null}
           suggestedQuoteNumber={suggestedQuoteNumber}
@@ -216,6 +218,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
                     leadId={leadId}
                     customerId={customerId}
                     clientName={clientName}
+                    clientAddress={customerAddress}
                     businessName={businessName}
                     existingQuote={quote}
                     hasMeeting={hasMeeting}

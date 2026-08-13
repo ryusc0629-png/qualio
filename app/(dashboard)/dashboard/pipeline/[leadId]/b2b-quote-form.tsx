@@ -11,8 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { toast } from 'sonner'
 import { saveB2bQuoteAction, generateSpecAction, extractQuoteFromMeetingAction } from '@/lib/actions/b2b-quotes'
 import type { ExtractedQuoteFields } from '@/lib/ai/extract-quote-from-meeting'
-import { FileText, Plus, Trash2, Sparkles, MapPin, Loader2, Mic, AlertTriangle, GripVertical, FileSignature } from 'lucide-react'
-import { openAddressSearch } from '@/lib/address/postcode'
+import { FileText, Plus, Trash2, Sparkles, Loader2, Mic, AlertTriangle, GripVertical, FileSignature } from 'lucide-react'
+import { AddressField } from '@/components/ui/address-field'
 import { buildStandardContractText } from '@/lib/contract/standard-contract'
 import {
   DndContext,
@@ -74,6 +74,8 @@ interface Props {
   leadId?: string
   customerId?: string
   clientName: string
+  // 고객(리드·거래처)에 등록된 주소 — 새 견적서의 '현장 주소'를 자동으로 채운다
+  clientAddress?: string | null
   // 우리 업체명(을) — 계약서 첫 문장 '수급자 OOO'에 자동 반영
   businessName?: string
   existingQuote: ExistingQuote | null
@@ -232,7 +234,7 @@ function SortableQuoteItem({
   )
 }
 
-export function B2bQuoteForm({ leadId, customerId, clientName, businessName, existingQuote, suggestedQuoteNumber, hasMeeting, meetingLeadId, trigger }: Props) {
+export function B2bQuoteForm({ leadId, customerId, clientName, clientAddress, businessName, existingQuote, suggestedQuoteNumber, hasMeeting, meetingLeadId, trigger }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [, startTransition] = useTransition()
@@ -282,8 +284,10 @@ export function B2bQuoteForm({ leadId, customerId, clientName, businessName, exi
   )
   const [discountValue, setDiscountValue] = useState<number>(existingQuote?.discount_value ?? 0)
   const [conditions, setConditions] = useState(existingQuote?.conditions ?? '')
-  const [siteName, setSiteName] = useState(existingQuote?.site_name ?? '')
-  const [siteAddress, setSiteAddress] = useState(existingQuote?.site_address ?? '')
+  // 현장 정보는 이미 등록해 둔 고객 정보(업체명·주소)로 미리 채운다 — 같은 내용을 또 적지 않게.
+  // 저장된 견적서에 현장 정보가 있으면 그 값이 우선(현장이 본사와 다를 수 있어 언제든 고칠 수 있음).
+  const [siteName, setSiteName] = useState(existingQuote?.site_name || clientName || '')
+  const [siteAddress, setSiteAddress] = useState(existingQuote?.site_address || clientAddress || '')
   const initialArea = parseArea(existingQuote?.site_area)
   const [areaValue, setAreaValue] = useState(initialArea.value)
   const [areaUnit, setAreaUnit] = useState<AreaUnit>(initialArea.unit)
@@ -366,8 +370,12 @@ export function B2bQuoteForm({ leadId, customerId, clientName, businessName, exi
       filled += f.serviceItems.length
     }
 
-    if (!siteName && f.siteName) { setSiteName(f.siteName); filled++ }
-    if (!siteAddress && f.siteAddress) { setSiteAddress(f.siteAddress); filled++ }
+    // 현장명·주소는 고객 정보로 자동으로 채워둔 상태 → 아직 손대지 않았으면 미팅에서 나온
+    // 더 구체적인 현장(예: '강남사옥')으로 바꿔준다. 직접 고쳐둔 값은 그대로 둔다.
+    const siteNameUntouched = !siteName || siteName === clientName
+    const siteAddressUntouched = !siteAddress || siteAddress === (clientAddress ?? '')
+    if (siteNameUntouched && f.siteName && f.siteName !== siteName) { setSiteName(f.siteName); filled++ }
+    if (siteAddressUntouched && f.siteAddress && f.siteAddress !== siteAddress) { setSiteAddress(f.siteAddress); filled++ }
     if (!frequency && f.frequency) { setFrequency(f.frequency); filled++ }
     if (!workerCount && f.workerCount) { setWorkerCount(String(f.workerCount)); filled++ }
     if (!conditions && f.conditions) { setConditions(f.conditions); filled++ }
@@ -726,19 +734,13 @@ export function B2bQuoteForm({ leadId, customerId, clientName, businessName, exi
             </div>
             <div>
               <Label className="text-xs">현장 주소</Label>
-              <div className="mt-1 flex gap-2">
-                <Input value={siteAddress} onChange={(e) => setSiteAddress(e.target.value)} placeholder="주소 찾기를 누르거나 직접 입력" className="flex-1 h-9" />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 h-9"
-                  onClick={() => openAddressSearch((addr) => setSiteAddress(addr))}
-                >
-                  <MapPin className="h-3.5 w-3.5 mr-1" />
-                  주소 찾기
-                </Button>
-              </div>
+              <AddressField
+                value={siteAddress}
+                onChange={setSiteAddress}
+                hideLabel
+                className="mt-1 space-y-2"
+                inputClassName="flex-1 h-9"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               {!isOneOff && (

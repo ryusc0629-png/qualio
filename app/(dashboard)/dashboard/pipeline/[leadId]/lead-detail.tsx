@@ -389,6 +389,7 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
           quotes={quotes}
           leadId={lead.id}
           clientName={lead.company_name}
+          customerAddress={lead.address}
           businessName={businessName}
           suggestedQuoteNumber={suggestedQuoteNumber}
           hasMeeting={activities.some((a) => ['meeting', 'visit', 'note', 'call'].includes(a.type))}
