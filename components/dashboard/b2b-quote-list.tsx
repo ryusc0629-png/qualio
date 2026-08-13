@@ -1,6 +1,7 @@
 'use client'
 
 import { useTransition } from 'react'
+import { quoteSupplyAmount } from '@/lib/quote/amount'
 import { useRouter } from 'next/navigation'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
@@ -51,29 +52,6 @@ interface Props {
   hasMeeting?: boolean
   // 상담 기록을 불러올 리드 id(자동채우기 소스) — 거래처 허브에서 전환 전 리드(customer.lead_id) 전달용
   meetingLeadId?: string
-}
-
-// 견적서의 '부가세 미포함(공급가액)' 금액 — 견적서 저장 로직(b2b-quote-form)의 taxable과 동일하게
-// 소계(항목 합계)에서 할인을 뺀 값. total_amount는 부가세 포함일 수 있어(tax_included) 그대로 쓰면
-// 매출이 부풀려짐 → 예약(매출)엔 공급가액만 넣는다.
-function supplyAmount(quote: B2bQuote): number {
-  const isOneOff = quote.job_type === 'one_off'
-  const subtotal = quote.items.reduce(
-    (s, it) => s + (isOneOff ? it.qty * it.unit_price : it.unit_price),
-    0,
-  )
-  // 항목이 없는 예외 상황: 총액에서 역산(부가세 포함이면 1.1로 나눠 공급가액 추정)
-  if (subtotal <= 0) {
-    return quote.tax_included ? Math.round(quote.total_amount / 1.1) : quote.total_amount
-  }
-  const discountValue = quote.discount_value ?? 0
-  const discount =
-    quote.discount_type === 'rate'
-      ? Math.min(subtotal, Math.floor(subtotal * (discountValue / 100)))
-      : quote.discount_type === 'amount'
-        ? Math.min(subtotal, discountValue)
-        : 0
-  return subtotal - discount
 }
 
 // 한 거래처에 여러 장의 견적서를 만들고 각각 수정·미리보기·삭제할 수 있는 목록
@@ -206,7 +184,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
                   {canSchedule && (
                     <AddBookingButton
                       customer={{ name: clientName, phone: customerPhone ?? null, address: customerAddress ?? null }}
-                      prefill={{ cleaning_type: title, final_price: supplyAmount(quote), vatRemoved: quote.tax_included }}
+                      prefill={{ cleaning_type: title, final_price: quoteSupplyAmount(quote), vatRemoved: quote.tax_included }}
                       triggerLabel="일정 잡기"
                       triggerVariant="outline"
                       triggerIcon="calendar"
