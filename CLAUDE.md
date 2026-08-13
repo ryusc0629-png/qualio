@@ -27,6 +27,7 @@
 ❌ 하드코딩된 businessId 또는 userId 사용 금지
 ❌ createClient()로 DB 쓰기 작업 금지
 ❌ 클라이언트 컴포넌트에서 createServiceClient() 사용 금지
+❌ RLS 없이 public 테이블 생성 금지 (create table에 enable row level security 필수)
 ```
 
 ---
@@ -126,6 +127,30 @@ new window.daum.Postcode({ oncomplete }).open()
 ```
 
 **왜 이렇게 쓰는가:** 다음(카카오) `Postcode.open()` 팝업 방식은 주소를 고른 뒤에도 검색 레이어가 화면에 남아 "주소는 입력됐는데 창이 안 닫히네?" 하고 헷갈리게 만든다. `lib/address/postcode.ts`의 `openAddressSearch`는 `.open()` 대신 우리가 만든 오버레이에 `.embed()`로 띄우고, 선택(oncomplete)·✕·배경 클릭·ESC 시 레이어를 직접 제거하므로 **항상 확실히 닫힌다**. 스크립트도 1회만 로드(중복 삽입 방지)하고 배경 스크롤도 잠근다. 새 주소 입력란을 만들 때 이 함수만 호출하면 닫힘 버그가 재발하지 않는다.
+
+---
+
+## 새 테이블은 반드시 RLS 켤 것 (마이그레이션 필수 짝)
+
+`create table`을 쓴 마이그레이션에는 **같은 파일 안에** RLS 활성화 구문을 반드시 함께 넣는다.
+
+```sql
+-- ✅ 테이블 생성과 RLS 잠금은 항상 한 세트
+create table public.new_table (
+  id uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade
+);
+alter table public.new_table enable row level security;
+
+-- ❌ RLS 없이 생성만 하면 anon 키로 외부에서 읽기·수정·삭제 가능
+create table public.new_table (...);
+```
+
+**정책(policy)은 만들지 않는다.** 이 앱의 모든 DB 접근은 서버에서 `createServiceClient()`(service_role)로 이뤄지고 service_role은 RLS를 우회한다. 즉 잠그기만 하면 앱은 정상 동작하고 외부 접근만 차단된다. 브라우저 supabase 클라이언트는 Storage 업로드 전용이라 테이블을 직접 읽지 않는다.
+
+**왜 이렇게 쓰는가:** public 스키마 테이블은 PostgREST(`/rest/v1/<table>`)로 자동 노출되고, anon 키는 브라우저 번들에 그대로 실려 누구나 꺼내 쓸 수 있다. RLS를 안 켜면 그 테이블은 사실상 공개 API가 된다. 2026-08-12에 실제로 7개 테이블(onboarding_reports·bug_reports 등)이 이 상태로 열려 있었고 Supabase 보안 경고 메일로 뒤늦게 발견됐다(마이그레이션 `20260812001646_enable_rls_public_tables.sql`).
+
+**마이그레이션을 만들거나 `apply_migration`을 쓴 직후에는 반드시 `npm run check:rls`를 실행해 통과를 확인한다.** 이 검사는 `prebuild`에도 걸려 있어 빠뜨리면 배포가 실패한다. 대시보드나 MCP로 테이블을 직접 만든 경우에도 마이그레이션 파일에 `enable row level security` 한 줄을 남겨 파일과 실제 DB 상태를 일치시킬 것.
 
 ---
 
