@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "check:rls": "node scripts/check-rls.mjs",
+    "check:keys": "node scripts/check-keys.mjs",
     "prebuild": "node scripts/check-rls.mjs",
     "build": "next build",
     "start": "next start",

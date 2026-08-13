@@ -53,8 +53,12 @@ export default async function PricingPage() {
               베타 {BETA_SEATS}팀 · 평생 {BETA_LIFETIME_DISCOUNT_RATE}% 할인 — {remainingSeats}자리 남았어요
             </p>
             <p className="text-sm text-muted-foreground mt-1.5">
-              지금 가입하시면 베타 기간은 전 기능 무료로 쓰시고, 유료로 바뀐 뒤에도 아래 금액의 절반만 내시면 됩니다.
+              지금 가입하시면 베타 기간은 전 기능 무료로 쓰시고, 유료로 바뀐 뒤에도 아래 정가의 절반만 내시면 됩니다.
               한 번 받은 할인은 플랜을 올려도 계속 유지돼요.
+            </p>
+            {/* 할인 조건을 처음부터 밝힌다 — 나중에 말이 달라지면 그게 분쟁이 된다 */}
+            <p className="text-xs text-muted-foreground mt-2">
+              가입 순서대로 자동 적용 · 해지 후 다시 가입하거나 업체를 넘기면 할인은 이어지지 않아요
             </p>
           </div>
         )}
@@ -91,18 +95,17 @@ export default async function PricingPage() {
               <div className="mb-6">
                 {plan.tagline && <p className="text-xs text-muted-foreground mb-1">{plan.tagline}</p>}
                 <h2 className="text-2xl font-bold mb-1">{plan.label}</h2>
-                {remainingSeats > 0 ? (
-                  <div className="mb-2">
-                    <div className="text-base text-muted-foreground line-through">{formatPrice(plan.price)}</div>
-                    <div className="text-3xl font-bold">
-                      {formatPrice(applyLifetimeDiscount(plan.price, BETA_LIFETIME_DISCOUNT_RATE))}
-                    </div>
-                    <p className="text-xs text-primary font-medium mt-0.5">베타 {BETA_SEATS}팀 평생 할인가</p>
-                  </div>
-                ) : (
-                  <div className="text-3xl font-bold mb-2">
-                    {formatPrice(plan.price)}
-                  </div>
+                {/* 주 가격은 항상 정가 — 결제창에 실제로 청구되는 금액(정가 또는 베타 할인가)과
+                    이 화면의 큰 숫자가 어긋나면 결제망 심사에서 '가격 고지 불일치'로 걸린다.
+                    베타 할인은 아래 한 줄 안내로만 알린다(결제 화면에서 정가 취소선 + 할인가로 다시 보여줌). */}
+                <div className="text-3xl font-bold mb-2">
+                  {formatPrice(plan.price)}
+                </div>
+                {remainingSeats > 0 && (
+                  <p className="text-xs text-primary font-medium mb-1">
+                    베타 {BETA_SEATS}팀은 결제 시 {BETA_LIFETIME_DISCOUNT_RATE}% 할인 —{' '}
+                    {formatPrice(applyLifetimeDiscount(plan.price, BETA_LIFETIME_DISCOUNT_RATE))}
+                  </p>
                 )}
                 {/* 결제 방식 — 실제 동작(lib/config/billing.ts)과 항상 같은 문구 */}
                 <p className="text-xs text-muted-foreground mb-1">{BILLING_COPY.short}</p>

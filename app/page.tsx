@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { PAID_PLANS, formatPrice } from '@/lib/config/plans'
 import { BILLING_COPY } from '@/lib/config/billing'
+import { BETA_SEATS, BETA_LIFETIME_DISCOUNT_RATE, applyLifetimeDiscount } from '@/lib/config/beta'
+import { getRemainingBetaSeats } from '@/lib/payments/pricing'
 import {
   Check,
   Star,
@@ -34,6 +36,9 @@ export default async function RootPage() {
     redirect(profile?.business_id ? '/dashboard' : '/onboarding')
   }
 
+  // 베타 100팀 모집 — 남은 자리를 실제 가입 수로 보여준다(지어낸 숫자를 쓰지 않는다)
+  const remainingSeats = await getRemainingBetaSeats()
+
   // 비로그인 사용자에게 랜딩 페이지 표시
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -62,9 +67,11 @@ export default async function RootPage() {
         {/* 히어로 — 결과 중심 헤드라인 + 무료 오퍼를 주 CTA로 */}
         <section className="max-w-6xl mx-auto px-6 pt-20 pb-16 md:pt-28 md:pb-20 text-center">
           {/* 대상 명시 뱃지 */}
-          <div className="inline-flex items-center gap-1.5 rounded-full border bg-muted/50 px-3 py-1 text-xs font-medium text-muted-foreground mb-6">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
-            청소·홈케어 업체 전용 · 지금 무료 베타
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-xs font-medium text-primary mb-6">
+            <Sparkles className="h-3.5 w-3.5" />
+            {remainingSeats > 0
+              ? `청소·홈케어 업체 전용 · 베타 ${BETA_SEATS}팀 모집 중 (${remainingSeats}자리 남음)`
+              : '청소·홈케어 업체 전용 · 베타 모집 마감'}
           </div>
 
           <h1 className="text-4xl md:text-6xl font-bold leading-[1.15] mb-6 break-keep text-balance">
@@ -95,6 +102,11 @@ export default async function RootPage() {
           <p className="mt-5 text-sm text-muted-foreground">
             카드 등록 없이 · 1분이면 시작 · 지금은 모든 기능 무료
           </p>
+          {remainingSeats > 0 && (
+            <p className="mt-2 text-sm font-medium text-primary">
+              먼저 오신 {BETA_SEATS}팀은 유료로 바뀐 뒤에도 평생 {BETA_LIFETIME_DISCOUNT_RATE}% 할인
+            </p>
+          )}
         </section>
 
         {/* 공감(Pain) — "어, 내 얘기네" 후크 */}
@@ -273,9 +285,24 @@ export default async function RootPage() {
             베타 기간에는 모든 기능을 제한 없이 무료로 써보세요. 마음에 들면 그때 플랜을 고르시면 됩니다.
           </p>
           {/* 결제 조건 명시 — /pricing 과 일관 (전자상거래법·정기결제 심사 요건) */}
-          <p className="text-xs text-muted-foreground text-center mb-10">
+          <p className="text-xs text-muted-foreground text-center mb-6">
             유료 전환 시: {BILLING_COPY.period} · 결제 후 7일 이내 미사용 시 전액 환불
           </p>
+
+          {/* 베타 혜택 — 조건까지 함께 밝힌다(나중에 말이 달라지면 그게 분쟁이 된다) */}
+          {remainingSeats > 0 && (
+            <div className="max-w-2xl mx-auto mb-10 rounded-xl border border-primary/30 bg-primary/5 px-6 py-5 text-center">
+              <p className="text-sm font-semibold text-primary">
+                베타 {BETA_SEATS}팀은 유료 전환 후에도 평생 {BETA_LIFETIME_DISCOUNT_RATE}% 할인 — {remainingSeats}자리 남았어요
+              </p>
+              <p className="mt-1.5 text-sm text-muted-foreground break-keep text-pretty">
+                가입 순서대로 자동 적용돼요. 성장 플랜이면 매달 {formatPrice(applyLifetimeDiscount(290_000, BETA_LIFETIME_DISCOUNT_RATE))} · 플랜을 올려도 할인은 그대로 유지됩니다.
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                해지 후 다시 가입하거나 업체를 넘기면 할인은 이어지지 않아요
+              </p>
+            </div>
+          )}
 
           <div className="grid md:grid-cols-3 gap-5 mb-8">
             {PAID_PLANS.map((plan) => (
