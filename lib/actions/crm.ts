@@ -71,10 +71,14 @@ const deleteActivitySchema = z.object({
   activityId: z.string().uuid(),
 })
 
-// 상담 기록 수정 스키마 — 미팅 내용(정리/메모)을 나중에 고칠 수 있게
+// 상담 기록 수정 스키마 — 미팅 내용(정리/메모)·사진·날짜를 나중에 고칠 수 있게
+// (미팅 녹음 화면은 이 액션으로 자동 저장하므로 사진·날짜도 함께 받는다)
 const updateActivitySchema = z.object({
   activityId: z.string().uuid(),
-  content: z.string().min(1, '내용을 입력해주세요'),
+  content: z.string(),
+  transcript: z.string().optional(),
+  photos: z.array(z.string()).optional(),
+  activity_at: z.string().optional(),
 })
 
 // 견적 → 잠재고객 전환 스키마
@@ -235,19 +239,24 @@ export const createLeadActivityAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getAuthenticatedBusinessId()
 
-    const { error } = await db.from('lead_activities').insert({
-      lead_id:     parsedInput.leadId,
-      business_id: businessId,
-      type:        parsedInput.type,
-      content:     parsedInput.content,
-      transcript:  parsedInput.transcript ?? null,
-      photos:      (parsedInput.photos ?? []) as never, // database.ts 타입 미반영 → 단언
-      activity_at: parsedInput.activity_at ?? new Date().toISOString(),
-    })
+    // 저장된 기록의 id를 돌려준다 — 미팅 녹음 화면이 이 id로 이어서 자동 저장(수정)한다
+    const { data, error } = await db
+      .from('lead_activities')
+      .insert({
+        lead_id:     parsedInput.leadId,
+        business_id: businessId,
+        type:        parsedInput.type,
+        content:     parsedInput.content,
+        transcript:  parsedInput.transcript ?? null,
+        photos:      (parsedInput.photos ?? []) as never, // database.ts 타입 미반영 → 단언
+        activity_at: parsedInput.activity_at ?? new Date().toISOString(),
+      })
+      .select('id')
+      .single()
 
-    if (error) throw new Error('[APP] 상담 기록 저장에 실패했습니다')
+    if (error || !data) throw new Error('[APP] 상담 기록 저장에 실패했습니다')
     revalidatePath('/dashboard/pipeline')
-    return { success: true }
+    return { success: true, activityId: data.id }
   })
 
 // 상담 기록 삭제 — 잘못 추가했거나 녹음 정리가 틀렸을 때 지운다(내 업체 것만)
@@ -273,9 +282,15 @@ export const updateLeadActivityAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getAuthenticatedBusinessId()
 
+    // 넘어온 항목만 갱신 — 내용만 고치는 화면에서 사진·날짜가 지워지지 않게
+    const patch: Record<string, unknown> = { content: parsedInput.content }
+    if (parsedInput.transcript !== undefined) patch.transcript = parsedInput.transcript
+    if (parsedInput.photos !== undefined) patch.photos = parsedInput.photos
+    if (parsedInput.activity_at !== undefined) patch.activity_at = parsedInput.activity_at
+
     const { error } = await db
       .from('lead_activities')
-      .update({ content: parsedInput.content })
+      .update(patch as never)
       .eq('id', parsedInput.activityId)
       .eq('business_id', businessId)
 

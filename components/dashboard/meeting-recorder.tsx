@@ -1,17 +1,20 @@
 'use client'
 
-import { useState, useRef, useTransition, useEffect } from 'react'
+import { useState, useRef, useTransition, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAction } from 'next-safe-action/hooks'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
-import { createLeadActivityAction } from '@/lib/actions/crm'
+import {
+  createLeadActivityAction,
+  updateLeadActivityAction,
+  deleteLeadActivityAction,
+} from '@/lib/actions/crm'
 import { createClient } from '@/lib/supabase/client'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
-import { Mic, Square, Loader2, ChevronDown, ChevronUp, Camera, X, Trash2 } from 'lucide-react'
+import { Mic, Square, Loader2, ChevronDown, ChevronUp, Camera, X, Trash2, Check } from 'lucide-react'
 
 // 60분 — 오디오는 Storage로 직접 올려 받아쓰기하므로(모델 한도 25MB), 32kbps 기준 넉넉히 커버된다.
 const MAX_SECONDS = 60 * 60
@@ -26,8 +29,14 @@ const MAX_UPLOAD_BYTES = 24 * 1024 * 1024
 const HI_RES = { width: { ideal: 1920 }, height: { ideal: 1080 } }
 // 조각 저장 간격 — 이 간격마다 녹음 데이터를 메모리로 흘려두어, 도중에 끊겨도 여기까지는 보존한다.
 const TIMESLICE_MS = 1000
+// 자동 저장 대기 시간 — 타자를 멈추면 이만큼 뒤에 저장한다(글자마다 저장하지 않게)
+const AUTOSAVE_DELAY_MS = 800
+// 정리 내용이 아직 없을 때(사진만 있는 경우) 임시로 들어가는 문구
+const PHOTO_ONLY_CONTENT = '사진만 먼저 저장했어요. 미팅 내용을 적어주세요'
 
 type Phase = 'idle' | 'recording' | 'processing' | 'review'
+// 자동 저장 상태 — 사장님이 저장 버튼을 누르지 않아도 기록이 날아가지 않게 한다
+type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 // 초 → mm:ss 표시
 function formatTime(sec: number): string {
@@ -56,6 +65,13 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
   // 받아쓰기 실패 시 서버에 남겨둔 오디오 경로 — '다시 정리 시도'로 재시도 가능(일시적 오류로 미팅이 통째로 날아가지 않게)
   const [pendingAudioPath, setPendingAudioPath] = useState<string | null>(null)
 
+  // 자동 저장 — 정리가 끝나면 버튼 없이 바로 저장되고, 고칠 때마다 같은 기록에 덮어쓴다
+  const [activityId, setActivityId] = useState<string | null>(null)
+  const [saveState, setSaveState] = useState<SaveState>('idle')
+  // 고친 뒤 아직 저장되지 않은 상태 — 화면 안내와 창 닫기 경고에 쓴다
+  const [dirty, setDirty] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -70,14 +86,14 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
   // 다른 화면(카메라 앱 등)으로 나가 자동 종료됐는지 표시 — 처리 후 안내 문구용
   const autoStoppedRef = useRef(false)
 
-  const { execute: save, isPending: saving } = useAction(createLeadActivityAction, {
-    onSuccess: () => {
-      toast.success('미팅 기록을 저장했어요!')
-      reset()
-      startTransition(() => router.refresh())
-    },
-    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
-  })
+  // 자동 저장용 참조 — 타이머 안에서 항상 최신 값을 쓰기 위해 상태를 ref에도 담아둔다
+  const activityIdRef = useRef<string | null>(null)
+  const savingRef = useRef(false)
+  const dirtyRef = useRef(false)
+  const latestRef = useRef({ summary: '', transcript: '', photos: [] as string[], activityDate: '' })
+  useEffect(() => {
+    latestRef.current = { summary, transcript, photos, activityDate }
+  }, [summary, transcript, photos, activityDate])
 
   // 카메라 오버레이 닫기 — 0.5x 임시 스트림만 정리하고 1x로 되돌린다.
   // 기본 카메라(오디오와 한 세션)는 녹음이 끝날 때까지 계속 켜둔다(끄면 다시 켤 때 마이크가 끊길 위험).
@@ -107,6 +123,12 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     setTranscript('')
     setShowTranscript(false)
     setPhotos([])
+    activityIdRef.current = null
+    dirtyRef.current = false
+    setActivityId(null)
+    setSaveState('idle')
+    setDirty(false)
+    setActivityDate(new Date().toISOString().slice(0, 10))
     stopCameraStream()
   }
 
@@ -121,6 +143,83 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
       body: JSON.stringify({ discard: p }),
     }).catch(() => {})
   }
+
+  // 자동 저장 — 처음이면 새 기록으로 저장하고, 이후엔 같은 기록을 덮어쓴다.
+  // 저장 버튼을 누르지 않아 미팅 내용이 통째로 날아가는 일을 막기 위한 핵심 동작.
+  const persist = useCallback(async (): Promise<boolean> => {
+    const { summary: s, transcript: t, photos: p, activityDate: d } = latestRef.current
+    const content = s.trim()
+    // 아직 저장할 내용이 없으면 대기. 이미 저장된 기록이면 내용을 지운 것도 그대로 반영한다.
+    if (!content && p.length === 0 && !activityIdRef.current) return false
+    if (savingRef.current) {
+      dirtyRef.current = true // 저장 중이면 끝난 뒤 한 번 더
+      return false
+    }
+
+    savingRef.current = true
+    setSaveState('saving')
+    try {
+      if (!activityIdRef.current) {
+        const res = await createLeadActivityAction({
+          leadId,
+          type: 'meeting',
+          content: content || PHOTO_ONLY_CONTENT,
+          transcript: t,
+          photos: p,
+          activity_at: new Date(d).toISOString(),
+        })
+        const newId = res?.data?.activityId
+        if (!newId) throw new Error(res?.serverError ?? '저장하지 못했어요')
+        activityIdRef.current = newId
+        setActivityId(newId)
+        toast.success('미팅 기록을 저장했어요. 고치면 자동으로 저장돼요')
+      } else {
+        const res = await updateLeadActivityAction({
+          activityId: activityIdRef.current,
+          content: content || (p.length > 0 ? PHOTO_ONLY_CONTENT : ''),
+          transcript: t,
+          photos: p,
+          activity_at: new Date(d).toISOString(),
+        })
+        if (!res?.data?.success) throw new Error(res?.serverError ?? '저장하지 못했어요')
+      }
+      setSaveState('saved')
+      savingRef.current = false
+      // 저장 중에 또 고쳤으면 최신 내용으로 한 번 더
+      if (dirtyRef.current) {
+        dirtyRef.current = false
+        return await persist()
+      }
+      setDirty(false)
+      return true
+    } catch (error) {
+      console.error('[MeetingRecorder] 자동 저장 실패:', error)
+      setSaveState('error')
+      savingRef.current = false
+      return false
+    }
+  }, [leadId])
+
+  // 검토 화면에 들어오면 곧바로 저장하고, 이후 내용을 고칠 때마다 잠깐 기다렸다 다시 저장한다
+  useEffect(() => {
+    if (phase !== 'review') return
+    const timer = setTimeout(() => void persist(), AUTOSAVE_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [phase, summary, transcript, photos, activityDate, persist])
+
+  // 아직 저장 안 된 내용이 있는데 창을 닫으려 하면 한 번 물어본다(마지막 안전장치)
+  useEffect(() => {
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      const unsaved =
+        phase === 'recording' ||
+        (phase === 'review' &&
+          (dirty || saveState !== 'saved') &&
+          (summary.trim().length > 0 || photos.length > 0))
+      if (unsaved) e.preventDefault()
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [phase, saveState, dirty, summary, photos])
 
   // 녹음 중에 다른 앱(카메라·홈 등)으로 나가면 iOS가 백그라운드 탭의 마이크를 끊는다.
   // 페이지가 숨겨지는 순간(=진짜 앱 전환)을 감지해 자동으로 녹음을 마치고, 조각 저장분까지 정리한다.
@@ -389,7 +488,7 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     }
     // 100분(24MB)을 넘는 아주 긴 녹음 — 자동 정리는 어렵지만 사진과 직접 메모는 살려 저장하게 한다.
     if (blob.size > MAX_UPLOAD_BYTES) {
-      toast.error('녹음이 너무 길어요. 아래에 직접 메모로 남겨 저장해주세요')
+      toast.error('녹음이 너무 길어요. 아래에 미팅 내용을 직접 적어주세요 (적으면 자동 저장돼요)')
       setSummary('')
       setTranscript('')
       setPhase('review')
@@ -412,7 +511,7 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
       // 업로드조차 안 되면 사진·직접 메모로라도 저장하게 검토 화면으로(내용 통째 유실 방지)
       toast.error(
         (error instanceof Error ? error.message : '녹음 업로드에 실패했어요') +
-          ' · 아래에 직접 메모로 남겨 저장할 수 있어요',
+          ' · 아래에 직접 적으면 자동으로 저장돼요',
       )
       setSummary('')
       setTranscript('')
@@ -437,7 +536,7 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     } catch {
       // 네트워크 오류 — 오디오는 서버에 남아 있으니 재시도 가능
       setPendingAudioPath(path)
-      toast.error('연결이 불안정해요 · 아래 메모로 저장하거나 다시 정리를 시도할 수 있어요')
+      toast.error('연결이 불안정해요 · 아래에 직접 적거나(자동 저장) 다시 정리를 시도할 수 있어요')
       setSummary('')
       setTranscript('')
       setPhase('review')
@@ -459,8 +558,8 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     toast.error(
       (data?.error ?? '정리하지 못했어요') +
         (retryable
-          ? ' · 아래 메모로 저장하거나 다시 정리를 시도할 수 있어요'
-          : ' · 아래에 직접 메모로 남겨 저장해주세요'),
+          ? ' · 아래에 직접 적거나(자동 저장) 다시 정리를 시도할 수 있어요'
+          : ' · 아래에 미팅 내용을 직접 적어주세요 (적으면 자동 저장돼요)'),
     )
     setSummary('')
     setTranscript('')
@@ -472,15 +571,40 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     if (pendingAudioPath) await runTranscribe(pendingAudioPath)
   }
 
-  function handleSave() {
-    save({
-      leadId,
-      type: 'meeting',
-      content: summary,
-      transcript,
-      photos,
-      activity_at: new Date(activityDate).toISOString(),
-    })
+  // 정리를 마치고 화면 닫기 — 저장이 아직이면 한 번 더 저장하고, 그래도 실패하면 화면을 닫지 않는다(내용 유실 방지)
+  async function handleDone() {
+    const hasContent = summary.trim().length > 0 || photos.length > 0
+    if (hasContent && (dirty || saveState !== 'saved')) {
+      const ok = await persist()
+      if (!ok) {
+        toast.error('아직 저장하지 못했어요. 잠시 뒤 다시 눌러주세요')
+        return
+      }
+    }
+    reset()
+    startTransition(() => router.refresh())
+  }
+
+  // 이미 저장된 기록 지우기 — 잘못 녹음했을 때(되돌릴 수 없어 확인 후 진행)
+  async function handleDelete() {
+    if (!activityId) {
+      reset()
+      return
+    }
+    if (!window.confirm('이 미팅 기록을 지울까요? 되돌릴 수 없어요')) return
+    setDeleting(true)
+    try {
+      const res = await deleteLeadActivityAction({ activityId })
+      if (!res?.data?.success) throw new Error(res?.serverError ?? '지우지 못했어요')
+      toast.success('미팅 기록을 지웠어요')
+      reset()
+      startTransition(() => router.refresh())
+    } catch (error) {
+      console.error('[MeetingRecorder] 기록 삭제 실패:', error)
+      toast.error('지우지 못했어요. 다시 눌러주세요')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   // 사진 썸네일 목록(녹음 중·검토 단계 공용)
@@ -495,7 +619,10 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
             {removable && (
               <button
                 type="button"
-                onClick={() => setPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                onClick={() => {
+                  setPhotos((prev) => prev.filter((_, i) => i !== idx))
+                  setDirty(true)
+                }}
                 className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-black/60 text-white flex items-center justify-center"
                 aria-label="사진 삭제"
               >
@@ -668,25 +795,53 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
     )
   }
 
-  // 검토 & 저장
+  // 검토 (자동 저장) — 버튼을 누르지 않아도 저장돼 있고, 고치면 자동으로 덮어쓴다
   return (
     <div className="bg-white rounded-xl border p-4 space-y-4">
+      {/* 저장 상태 — 사장님이 '저장됐나?' 불안하지 않도록 항상 보여준다 */}
+      <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+        {saveState === 'saving' || (dirty && saveState !== 'error') ? (
+          <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            저장 중...
+          </span>
+        ) : saveState === 'error' ? (
+          <>
+            <span className="text-xs text-red-600">저장 못 했어요. 다시 눌러주세요</span>
+            <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => void persist()}>
+              다시 저장
+            </Button>
+          </>
+        ) : saveState === 'saved' ? (
+          <span className="text-xs text-emerald-700 flex items-center gap-1.5">
+            <Check className="h-3.5 w-3.5" />
+            저장됐어요 · 고치면 자동으로 저장돼요
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">내용을 적으면 자동으로 저장돼요</span>
+        )}
+      </div>
+
       <div>
         <Label className="text-xs">미팅 날짜</Label>
         <Input
           type="date"
           value={activityDate}
-          onChange={(e) => setActivityDate(e.target.value)}
+          onChange={(e) => {
+            setActivityDate(e.target.value)
+            setDirty(true)
+          }}
           className="mt-1 h-9"
         />
       </div>
 
       <div>
-        <Label className="text-xs">회의록 요약 (수정할 수 있어요)</Label>
+        <Label className="text-xs">회의록 요약 (고치면 자동으로 저장돼요)</Label>
         {/* 자동 정리가 안 된 경우(너무 긴 녹음·처리 실패) — 사진은 그대로 살아 있고, 여기 직접 적어 저장하면 된다 */}
         {!transcript && (
           <p className="mt-1 text-xs text-amber-600 leading-relaxed">
-            자동 정리가 어려웠어요. 아래에 미팅 내용을 직접 적어 저장해주세요. (찍은 사진은 그대로 저장돼요)
+            자동 정리가 어려웠어요. 아래에 미팅 내용을 직접 적어주세요 — 적으면 자동으로 저장돼요.
+            {photos.length > 0 && ' (찍은 사진은 이미 저장돼 있어요)'}
           </p>
         )}
         {/* 실패했지만 녹음은 서버에 남아 있음 → 한 번 더 자동 정리를 시도할 수 있게 */}
@@ -697,7 +852,7 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
             size="sm"
             className="mt-2 w-full h-10 gap-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
             onClick={retryTranscribe}
-            disabled={saving}
+            disabled={saveState === 'saving' || deleting}
           >
             <Mic className="h-4 w-4" />
             녹음으로 다시 정리 시도
@@ -705,7 +860,10 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
         )}
         <Textarea
           value={summary}
-          onChange={(e) => setSummary(e.target.value)}
+          onChange={(e) => {
+            setSummary(e.target.value)
+            setDirty(true)
+          }}
           rows={12}
           placeholder="미팅에서 나눈 내용을 자유롭게 적어주세요 — 예: 요청 사항, 견적 관련 협의, 다음 약속"
           className="mt-1 resize-none text-sm leading-relaxed"
@@ -742,16 +900,22 @@ export function MeetingRecorder({ leadId }: { leadId: string }) {
       )}
 
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" className="flex-1" onClick={reset} disabled={saving}>
-          취소
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex-1 h-12 text-red-600 hover:text-red-700 hover:bg-red-50"
+          onClick={handleDelete}
+          disabled={deleting || saveState === 'saving'}
+        >
+          {deleting ? '지우는 중...' : activityId ? '이 기록 지우기' : '닫기'}
         </Button>
         <Button
           size="sm"
-          className="flex-1 h-10"
-          onClick={handleSave}
-          disabled={saving || !summary.trim()}
+          className="flex-1 h-12"
+          onClick={handleDone}
+          disabled={deleting || saveState === 'saving'}
         >
-          {saving ? '저장 중...' : '상담 기록으로 저장'}
+          정리 끝내기
         </Button>
       </div>
     </div>
