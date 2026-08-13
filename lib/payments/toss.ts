@@ -1,6 +1,7 @@
-import { getPlanPrice, PLANS } from '@/lib/config/plans'
+import { PLANS } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { parsePaymentId } from './provider'
+import { getChargeAmount } from './pricing'
 
 type ConfirmResult =
   | { ok: true; businessId: string; planId: PlanId; amount: number; paymentKey: string }
@@ -21,7 +22,8 @@ export async function confirmTossPayment(params: {
 
   const planId = parsed.planId as PlanId
   if (!PLANS[planId]) return { ok: false, error: '유효하지 않은 플랜입니다' }
-  const expected = getPlanPrice(planId)
+  // 결제 시작과 동일한 계산(평생 할인 포함) — 정가로 대조하면 할인 받은 업체의 정상 결제가 막힌다
+  const { amount: expected } = await getChargeAmount(parsed.businessId, planId)
 
   // 리다이렉트로 넘어온 금액이 플랜 금액과 다르면 승인 자체를 막는다.
   if (amount !== expected) {

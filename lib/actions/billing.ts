@@ -7,7 +7,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { registerPayment } from '@/lib/payments/kcp'
-import { getPlanPrice, PLANS } from '@/lib/config/plans'
+import { PLANS } from '@/lib/config/plans'
+import { getChargeAmount } from '@/lib/payments/pricing'
 import type { PlanId } from '@/lib/config/plans'
 
 const PAID_PLAN_IDS = ['starter', 'pro', 'scale']
@@ -37,7 +38,8 @@ export const registerBillingAction = action
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
     const businessId = profile.business_id
-    const amount = getPlanPrice(planId as PlanId)
+    // 베타 100팀 평생 할인 적용 — 검증(verify) 쪽과 반드시 같은 함수를 써야 금액 불일치가 안 난다
+    const { amount } = await getChargeAmount(businessId, planId as PlanId)
     const planLabel = PLANS[planId as PlanId]?.label ?? planId
 
     // 빌키 발급용 주문 (일반결제와 같은 테이블 재사용 — 리턴 URL이 흐름을 구분)

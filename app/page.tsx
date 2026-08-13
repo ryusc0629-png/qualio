@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { PAID_PLANS, formatPrice } from '@/lib/config/plans'
+import { BILLING_COPY } from '@/lib/config/billing'
 import {
   Check,
   Star,
@@ -273,7 +274,7 @@ export default async function RootPage() {
           </p>
           {/* 결제 조건 명시 — /pricing 과 일관 (전자상거래법·정기결제 심사 요건) */}
           <p className="text-xs text-muted-foreground text-center mb-10">
-            유료 전환 시: 등록한 카드로 매월 자동 결제되는 정기 구독 · 언제든지 해지 가능 · 해지 시 다음 결제부터 청구되지 않습니다
+            유료 전환 시: {BILLING_COPY.period} · 결제 후 7일 이내 미사용 시 전액 환불
           </p>
 
           <div className="grid md:grid-cols-3 gap-5 mb-8">
@@ -295,7 +296,7 @@ export default async function RootPage() {
                 <div className="mb-4">
                   <p className="text-sm font-medium">{plan.label}</p>
                   <p className="text-2xl font-bold mt-1">{formatPrice(plan.price)}</p>
-                  <p className="text-xs text-muted-foreground mt-1">매월 자동 결제 · 언제든 해지</p>
+                  <p className="text-xs text-muted-foreground mt-1">{BILLING_COPY.short}</p>
                   <p className="text-xs text-muted-foreground mt-1">{plan.target}</p>
                 </div>
                 <ul className="space-y-1.5">

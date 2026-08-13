@@ -2,7 +2,8 @@ import crypto from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/server'
 import { chargeWithBillingKey } from './kcp-billing'
-import { getPlanPrice, PLANS } from '@/lib/config/plans'
+import { PLANS } from '@/lib/config/plans'
+import { getChargeAmount } from './pricing'
 import type { PlanId } from '@/lib/config/plans'
 
 // 정기결제 자동청구 — 이용기간이 만료된 활성 구독을 저장된 빌키(billing_key)로 재청구한다.
@@ -46,8 +47,8 @@ export async function chargeDueSubscriptions(): Promise<ChargeSummary> {
 
   for (const sub of due) {
     if (!sub.billing_key) continue
-    // beta(무료) 등 유료 아님 → 스킵
-    const amount = getPlanPrice(sub.plan as PlanId)
+    // beta(무료) 등 유료 아님 → 스킵. 금액은 평생 할인까지 반영된 실제 청구액
+    const { amount } = await getChargeAmount(sub.business_id, sub.plan as PlanId)
     if (!amount || amount <= 0) continue
 
     const planLabel = PLANS[sub.plan as PlanId]?.label ?? sub.plan

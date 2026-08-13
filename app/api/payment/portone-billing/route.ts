@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
       paymentId: orderId,
       billingKey,
       planId,
+      amount: order.amount,
       orderName: `퀄리오 ${PLANS[planId]?.label ?? planId} 플랜 1개월`,
       customer: {
         id: profile.business_id,

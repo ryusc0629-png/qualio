@@ -5,6 +5,8 @@ import { useAction } from 'next-safe-action/hooks'
 import { Check, Star, Loader2, ArrowUp, ArrowDown, CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PAID_PLANS, PLANS, formatPrice } from '@/lib/config/plans'
+import { applyLifetimeDiscount, betaBadgeLabel } from '@/lib/config/beta'
+import { BILLING_COPY, IS_RECURRING_BILLING } from '@/lib/config/billing'
 import type { PlanId } from '@/lib/config/plans'
 import { schedulePlanChangeAction } from '@/lib/actions/subscription'
 import { createBillingOrderAction } from '@/lib/actions/portone-billing'
@@ -21,23 +23,29 @@ interface UpgradeFormProps {
   needsPayment?: boolean
   // 결제 PG (기본 포트원 / ?pg=toss 이면 토스). 페이지에서 결정해 내려준다.
   provider: PaymentProvider
+  // 베타 100팀 평생 할인 — 번호가 있으면 카드에 정가 취소선 + 할인가를 함께 보여준다
+  betaNumber?: number | null
+  discountRate?: number
 }
 
 // 플랜 순서 (업그레이드/다운그레이드 판별용)
 const PLAN_ORDER: Record<string, number> = { beta: 0, starter: 1, pro: 2, scale: 3 }
 
-// 정기결제(빌키) 사용 여부.
-// true = 카드 등록(빌키 발급) 창 — 정기결제 MID(merchantes10, 비인증). 슬라이드 8(정기 카드등록) 캡처용.
-// false = 인증 단건 결제창 — 일반결제 MID(merchanttest6, 인증). 카드사 선택+하나카드 인증창이 떠서 슬라이드 9 캡처용.
-// ⚠️ 심사 캡처가 끝나면 true로 되돌려 실제 정기결제로 운영.
-const USE_BILLING_KEY = false
+// 정기결제(빌키) 사용 여부 — 결제 방식은 lib/config/billing.ts 한 곳에서만 정한다.
+// true = 카드 등록(빌키 발급) 창 — 정기결제 MID(merchantes10, 비인증).
+// false = 인증 단건 결제창 — 일반결제 MID(merchanttest6, 인증).
+// 화면 문구(BILLING_COPY)도 같은 값을 따라가므로, 여기만 바꾸면 문구와 동작이 함께 움직인다.
+const USE_BILLING_KEY = IS_RECURRING_BILLING
 
 // 결제창 카드사 강제 지정. null이면 KPN 결제창에서 카드사(하나카드 등)를 직접 선택하는 화면이 노출된다.
 // 심사자료 슬라이드 9는 '카드사 선택 화면 + 하나카드 결제창'을 요구하므로 심사 중에는 null(선택 화면 노출).
 const FORCE_CARD_COMPANY: 'HANA_CARD' | null = null
 
 // 결제 위젯 클라이언트 컴포넌트
-export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, currentPeriodEnd, needsPayment = false, provider }: UpgradeFormProps) {
+export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, currentPeriodEnd, needsPayment = false, provider, betaNumber = null, discountRate = 0 }: UpgradeFormProps) {
+  // 실제로 청구되는 금액 (서버 lib/payments/pricing.ts와 같은 계산 — 화면과 청구가 어긋나면 안 됨)
+  const chargeOf = (listPrice: number) => applyLifetimeDiscount(listPrice, discountRate)
+  const hasDiscount = discountRate > 0
   const [selectedPlanId, setSelectedPlanId] = useState<PlanId | null>(
     nextPlan ? (nextPlan as PlanId) : null
   )
@@ -225,7 +233,7 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
     const payment = tossPayments.payment({ customerKey: businessId })
     await payment.requestPayment({
       method: 'CARD',
-      amount: { currency: 'KRW', value: plan.price },
+      amount: { currency: 'KRW', value: chargeOf(plan.price) },
       orderId,
       orderName: `퀄리오 ${plan.label} 플랜 1개월`,
       successUrl: `${window.location.origin}/api/payment/toss-return`,
@@ -304,6 +312,16 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
         </div>
       )}
 
+      {/* 베타 참여 업체 — 평생 할인 안내 (약속을 화면에서도 계속 확인시켜 신뢰를 유지) */}
+      {hasDiscount && betaNumber && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <p className="text-sm font-semibold text-emerald-800">{betaBadgeLabel(betaNumber, discountRate)}</p>
+          <p className="text-xs text-emerald-800/80 mt-0.5">
+            베타에 함께해주신 {betaNumber}번째 업체라, 아래 금액은 계속 이 가격으로 유지돼요. 플랜을 올려도 그대로 적용됩니다.
+          </p>
+        </div>
+      )}
+
       {/* 플랜 선택 */}
       <div className="grid md:grid-cols-3 gap-4">
         {PAID_PLANS.map((plan) => {
@@ -375,7 +393,14 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
               <div className="mb-3">
                 {plan.tagline && <p className="text-xs text-muted-foreground">{plan.tagline}</p>}
                 <h3 className="font-bold text-lg">{plan.label}</h3>
-                <p className="text-xl font-bold text-primary mt-1">{formatPrice(plan.price)}</p>
+                {hasDiscount ? (
+                  <div className="mt-1">
+                    <p className="text-xs text-muted-foreground line-through">{formatPrice(plan.price)}</p>
+                    <p className="text-xl font-bold text-primary">{formatPrice(chargeOf(plan.price))}</p>
+                  </div>
+                ) : (
+                  <p className="text-xl font-bold text-primary mt-1">{formatPrice(plan.price)}</p>
+                )}
               </div>
 
               <p className="text-xs text-muted-foreground mb-3">{plan.target}</p>
@@ -445,11 +470,7 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
         <p className="text-xs text-muted-foreground text-center">
           {showPaymentFlow ? (
             <>
-              {provider !== 'toss' && !USE_BILLING_KEY ? (
-                <>선택한 플랜을 <strong>1개월</strong> 이용하는 결제예요. 만료 전 다시 결제하시면 이어서 이용할 수 있어요.<br /></>
-              ) : (
-                <>등록한 카드로 <strong>매월 자동 결제</strong>되는 정기 구독이에요. 언제든지 해지할 수 있어요.<br /></>
-              )}
+              {BILLING_COPY.notice}<br />
               {provider === 'toss' ? '토스페이먼츠' : '포트원(PortOne)'}을 통해 카드로 안전하게 결제되며,
               결제 후 7일 이내 미사용 시 전액 환불 가능합니다.
             </>

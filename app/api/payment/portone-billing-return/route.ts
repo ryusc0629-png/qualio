@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
       paymentId: orderId,
       billingKey,
       planId,
+      amount: order.amount,
       orderName: `퀄리오 ${PLANS[planId]?.label ?? planId} 플랜 1개월`,
     })
     if (!charged.ok) return fail(charged.error)

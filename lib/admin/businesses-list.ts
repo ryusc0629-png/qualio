@@ -50,6 +50,8 @@ export interface CsBusinessRow {
   bookingCount: number
   leadCount: number
   lastActivityAt: string | null // 예약·리드 중 가장 최근 활동 시각
+  betaNumber: number | null // 베타 순번 (평생 할인 대상 100팀)
+  lifetimeDiscountRate: number // 평생 할인율 (%)
 }
 
 /**
@@ -61,7 +63,7 @@ export async function getBusinessesForCs(): Promise<CsBusinessRow[]> {
   const db = createServiceClient()
 
   const [businessesRes, profilesRes, subsRes, bookingsRes, leadsRes, usersRes] = await Promise.all([
-    db.from('businesses').select('id, name, phone, address, created_at, owner_id, acquisition_source' as never),
+    db.from('businesses').select('id, name, phone, address, created_at, owner_id, acquisition_source, beta_number, lifetime_discount_rate' as never),
     db.from('profiles').select('id, full_name'),
     db.from('subscriptions').select('business_id, plan, status'),
     db.from('bookings').select('business_id, created_at'),
@@ -77,6 +79,8 @@ export async function getBusinessesForCs(): Promise<CsBusinessRow[]> {
     created_at: string
     owner_id: string
     acquisition_source: string | null
+    beta_number: number | null
+    lifetime_discount_rate: number | null
   }[]
 
   // 대표자 이름: profiles.id === business.owner_id
@@ -128,6 +132,8 @@ export async function getBusinessesForCs(): Promise<CsBusinessRow[]> {
       bookingCount: bookingCount.get(b.id) ?? 0,
       leadCount: leadCount.get(b.id) ?? 0,
       lastActivityAt: lastActivity.get(b.id) ?? null,
+      betaNumber: b.beta_number,
+      lifetimeDiscountRate: b.lifetime_discount_rate ?? 0,
     }
   })
 

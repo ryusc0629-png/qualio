@@ -1,6 +1,7 @@
-import { getPlanPrice, PLANS } from '@/lib/config/plans'
+import { PLANS } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { parsePaymentId } from './provider'
+import { getChargeAmount } from './pricing'
 
 type VerifyResult =
   | { ok: true; businessId: string; planId: PlanId; amount: number; paymentKey: string }
@@ -14,7 +15,8 @@ export async function verifyPortOnePayment(paymentId: string): Promise<VerifyRes
 
   const planId = parsed.planId as PlanId
   if (!PLANS[planId]) return { ok: false, error: '유효하지 않은 플랜입니다' }
-  const expected = getPlanPrice(planId)
+  // 결제 시작(주문 생성)과 같은 계산을 써야 한다 — 한쪽만 평생 할인을 반영하면 정상 결제가 금액 불일치로 튕긴다
+  const { amount: expected } = await getChargeAmount(parsed.businessId, planId)
 
   const apiSecret = process.env.PORTONE_V2_API_SECRET
   if (!apiSecret) {
@@ -94,12 +96,15 @@ export async function chargeBillingKey(params: {
   paymentId: string // 짧은 주문번호 (KCP paymentId ≤40자·영숫자)
   billingKey: string
   planId: PlanId
+  /** 청구 금액 — 주문(kcp_payment_orders)에 저장된 금액을 그대로 넘긴다.
+   *  여기서 정가를 다시 계산하면 평생 할인이 빠져 주문 금액과 어긋난다. */
+  amount: number
   orderName: string
   customer?: { id?: string; phoneNumber?: string; email?: string }
 }): Promise<ChargeResult> {
-  const { paymentId, billingKey, planId, orderName, customer } = params
+  const { paymentId, billingKey, planId, amount, orderName, customer } = params
   if (!PLANS[planId]) return { ok: false, error: '유효하지 않은 플랜입니다' }
-  const amount = getPlanPrice(planId)
+  if (!amount || amount <= 0) return { ok: false, error: '결제 금액이 올바르지 않습니다' }
 
   const apiSecret = process.env.PORTONE_V2_API_SECRET
   if (!apiSecret) {

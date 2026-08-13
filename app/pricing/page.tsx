@@ -2,16 +2,24 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Check, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { PLANS, PAID_PLANS, formatPrice } from '@/lib/config/plans'
+import { PAID_PLANS, formatPrice } from '@/lib/config/plans'
 import { SiteFooter } from '@/components/site-footer'
+import { BETA_SEATS, BETA_LIFETIME_DISCOUNT_RATE, applyLifetimeDiscount } from '@/lib/config/beta'
+import { getRemainingBetaSeats } from '@/lib/payments/pricing'
+import { BILLING_COPY } from '@/lib/config/billing'
 
 export const metadata: Metadata = {
   title: '요금제 | 퀄리오',
   description: '퀄리오 구독 요금제 안내 — 시작·성장·확장',
 }
 
+// 남은 자리 수는 5분마다 갱신 — 가입이 몰려도 DB를 매 요청 때리지 않게
+export const revalidate = 300
+
 // 공개 가격 안내 페이지 — 포트원(PortOne) 결제 심사 필수
-export default function PricingPage() {
+export default async function PricingPage() {
+  // 베타 100팀 평생 할인 — 광고에서 약속한 내용을 요금제 화면에서도 그대로 보여준다
+  const remainingSeats = await getRemainingBetaSeats()
   return (
     <div className="min-h-screen bg-background">
       {/* 헤더 */}
@@ -38,10 +46,23 @@ export default function PricingPage() {
           </p>
         </div>
 
+        {/* 베타 100팀 평생 할인 — 자리가 남아 있을 때만 노출 (마감되면 조용히 사라짐) */}
+        {remainingSeats > 0 && (
+          <div className="max-w-2xl mx-auto mb-6 rounded-xl border border-primary/30 bg-primary/5 px-6 py-5 text-center">
+            <p className="text-sm font-semibold text-primary">
+              베타 {BETA_SEATS}팀 · 평생 {BETA_LIFETIME_DISCOUNT_RATE}% 할인 — {remainingSeats}자리 남았어요
+            </p>
+            <p className="text-sm text-muted-foreground mt-1.5">
+              지금 가입하시면 베타 기간은 전 기능 무료로 쓰시고, 유료로 바뀐 뒤에도 아래 금액의 절반만 내시면 됩니다.
+              한 번 받은 할인은 플랜을 올려도 계속 유지돼요.
+            </p>
+          </div>
+        )}
+
         {/* 서비스 제공기간 안내 — 결제망 심사 필수 고지 (결제 방식은 하단 FAQ·플랜 카드에서 반복 안내) */}
         <div className="max-w-2xl mx-auto mb-10 rounded-lg border border-border bg-muted/40 px-6 py-4 text-sm text-muted-foreground text-center">
           <p>
-            <span className="font-semibold text-foreground">서비스 제공기간:</span> 결제일로부터 <span className="font-semibold text-foreground">1개월(30일)</span> 이용 후 자동 갱신 · <span className="font-semibold text-foreground">매월 동일한 날짜</span>에 자동 결제
+            <span className="font-semibold text-foreground">서비스 제공기간:</span> {BILLING_COPY.period}
           </p>
         </div>
 
@@ -70,11 +91,21 @@ export default function PricingPage() {
               <div className="mb-6">
                 {plan.tagline && <p className="text-xs text-muted-foreground mb-1">{plan.tagline}</p>}
                 <h2 className="text-2xl font-bold mb-1">{plan.label}</h2>
-                <div className="text-3xl font-bold mb-2">
-                  {formatPrice(plan.price)}
-                </div>
-                {/* 매월 자동 결제(정기결제) 명시 */}
-                <p className="text-xs text-muted-foreground mb-1">매월 자동 결제 · 언제든 해지</p>
+                {remainingSeats > 0 ? (
+                  <div className="mb-2">
+                    <div className="text-base text-muted-foreground line-through">{formatPrice(plan.price)}</div>
+                    <div className="text-3xl font-bold">
+                      {formatPrice(applyLifetimeDiscount(plan.price, BETA_LIFETIME_DISCOUNT_RATE))}
+                    </div>
+                    <p className="text-xs text-primary font-medium mt-0.5">베타 {BETA_SEATS}팀 평생 할인가</p>
+                  </div>
+                ) : (
+                  <div className="text-3xl font-bold mb-2">
+                    {formatPrice(plan.price)}
+                  </div>
+                )}
+                {/* 결제 방식 — 실제 동작(lib/config/billing.ts)과 항상 같은 문구 */}
+                <p className="text-xs text-muted-foreground mb-1">{BILLING_COPY.short}</p>
                 <p className="text-sm text-muted-foreground">{plan.target}</p>
                 <p className="text-sm font-medium mt-2 text-foreground">{plan.description}</p>
               </div>
@@ -109,7 +140,7 @@ export default function PricingPage() {
             {[
               {
                 q: '요금은 어떻게 청구되나요?',
-                a: '등록하신 카드로 매월 결제일에 자동으로 결제되는 정기 구독(자동결제) 서비스입니다. 첫 결제일을 기준으로 매월 같은 날 자동 결제되며, 해지하시기 전까지 매월 갱신됩니다.',
+                a: BILLING_COPY.faqHow,
               },
               {
                 q: '플랜은 언제든지 변경할 수 있나요?',
@@ -117,15 +148,15 @@ export default function PricingPage() {
               },
               {
                 q: '해지는 어떻게 하나요?',
-                a: '대시보드 설정에서 언제든지 해지할 수 있습니다. 해지하면 다음 결제일부터 자동 결제가 중단되며, 이미 결제하신 이용 기간은 만료일까지 그대로 이용하실 수 있습니다. 위약금은 없습니다.',
+                a: BILLING_COPY.faqCancel,
               },
               {
                 q: '환불은 어떻게 되나요?',
-                a: '결제 후 7일 이내 서비스를 이용하지 않으셨다면 전액 환불이 가능합니다. 이용 내역이 있는 경우 남은 기간을 일할 계산하여 환불합니다. 해지하시면 다음 결제분부터는 자동으로 청구가 중단됩니다.',
+                a: '결제 후 7일 이내 서비스를 이용하지 않으셨다면 전액 환불이 가능합니다. 이용 내역이 있는 경우 남은 기간을 일할 계산하여 환불합니다.',
               },
               {
                 q: '결제 수단은 무엇을 지원하나요?',
-                a: '신용카드, 체크카드 자동결제(정기결제)를 지원합니다. 등록하신 카드로 매월 자동 결제되며, 결제대행사 포트원(코리아포트원)을 통해 안전하게 처리됩니다.',
+                a: BILLING_COPY.faqMethod,
               },
             ].map((item) => (
               <div key={item.q} className="border-b pb-6">

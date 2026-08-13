@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import type { CsBusinessRow } from '@/lib/admin/businesses-list'
 import { formatDate } from '@/lib/format/datetime'
 
@@ -57,7 +58,17 @@ export function BusinessesList({ rows }: { rows: CsBusinessRow[] }) {
               <div key={r.businessId} className="rounded-lg border bg-background p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="font-semibold">{r.name}</p>
+                    <p className="font-semibold">
+                      <Link href={`/admin/businesses/${r.businessId}`} className="hover:text-primary hover:underline">
+                        {r.name}
+                      </Link>
+                      {/* 베타 순번 — 평생 할인 약속 대상인지 한눈에 */}
+                      {r.betaNumber && (
+                        <span className="ml-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary align-middle">
+                          베타 {r.betaNumber}번{r.lifetimeDiscountRate > 0 ? ` · ${r.lifetimeDiscountRate}%` : ''}
+                        </span>
+                      )}
+                    </p>
                     <p className="text-xs text-muted-foreground">{r.ownerName ?? '대표자명 없음'}</p>
                   </div>
                   <span
@@ -122,7 +133,16 @@ export function BusinessesList({ rows }: { rows: CsBusinessRow[] }) {
                 {filtered.map((r) => (
                   <tr key={r.businessId} className="border-b last:border-0 align-top">
                     <td className="px-3 py-2.5">
-                      <p className="font-medium">{r.name}</p>
+                      <p className="font-medium">
+                        <Link href={`/admin/businesses/${r.businessId}`} className="hover:text-primary hover:underline">
+                          {r.name}
+                        </Link>
+                        {r.betaNumber && (
+                          <span className="ml-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary align-middle">
+                            베타 {r.betaNumber}번{r.lifetimeDiscountRate > 0 ? ` · ${r.lifetimeDiscountRate}%` : ''}
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-muted-foreground">{r.ownerName ?? '—'}</p>
                     </td>
                     <td className="px-3 py-2.5">

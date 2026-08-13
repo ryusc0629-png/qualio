@@ -5,7 +5,8 @@ import crypto from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { getPlanPrice, PLANS } from '@/lib/config/plans'
+import { PLANS } from '@/lib/config/plans'
+import { getChargeAmount } from '@/lib/payments/pricing'
 import type { PlanId } from '@/lib/config/plans'
 
 const PAID_PLAN_IDS = ['starter', 'pro', 'scale']
@@ -39,7 +40,8 @@ export const createBillingOrderAction = action
 
     const businessId = profile.business_id
     const biz = profile.businesses as { name: string; phone: string | null } | null
-    const amount = getPlanPrice(planId as PlanId)
+    // 베타 100팀 평생 할인 적용 — 검증(verify) 쪽과 반드시 같은 함수를 써야 금액 불일치가 안 난다
+    const { amount } = await getChargeAmount(businessId, planId as PlanId)
     const planLabel = PLANS[planId as PlanId]?.label ?? planId
 
     // 짧은 주문번호 (예: Q + base36 타임스탬프 + 6 hex) — KCP paymentId 길이·문자 제약 대응

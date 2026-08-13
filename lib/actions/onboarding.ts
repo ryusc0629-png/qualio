@@ -5,6 +5,7 @@ import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendPushToBusiness } from '@/lib/push/web-push'
 import { getAdminBusinessIds, isAdminEmail } from '@/lib/admin/auth'
+import { BETA_SEATS, BETA_LIFETIME_DISCOUNT_RATE } from '@/lib/config/beta'
 
 // 한국 전화번호 검증: 하이픈 제거 후 010/011/02/031... 형식 확인
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
@@ -112,6 +113,21 @@ export const createBusinessAction = action
       isNewBusiness = true
     }
 
+    // 3-1. 베타 순번·평생 할인 부여 — 선착순 100팀 약속의 근거를 가입 시점에 확정한다.
+    //      (정원이 차면 null이 돌아오고 할인 없이 그대로 진행 — 가입 자체를 막지 않는다)
+    //      실패해도 가입은 계속돼야 하므로 try/catch로 감싼다.
+    let betaNumber: number | null = null
+    try {
+      const { data: assigned } = await db.rpc('assign_beta_number' as never, {
+        p_business_id: businessId,
+        p_cap: BETA_SEATS,
+        p_rate: BETA_LIFETIME_DISCOUNT_RATE,
+      } as never)
+      betaNumber = typeof assigned === 'number' ? assigned : null
+    } catch (e) {
+      console.error('[Onboarding] 베타 번호 부여 실패:', e)
+    }
+
     // 4. 프로필에 업체 ID 연결
     const { error: profileError } = await db
       .from('profiles')
@@ -156,12 +172,14 @@ export const createBusinessAction = action
     if (isNewBusiness && !isAdminEmail(user.email)) {
       try {
         const sourceLabel = ACQUISITION_LABELS[parsedInput.acquisitionSource] ?? '경로 미상'
+        // 베타 순번을 함께 보여주면 남은 자리를 따로 확인하지 않아도 진행 상황이 보인다
+        const betaLabel = betaNumber ? ` · 베타 ${betaNumber}/${BETA_SEATS}번` : ''
         const adminBusinessIds = await getAdminBusinessIds()
         await Promise.all(
           adminBusinessIds.map((adminBusinessId) =>
             sendPushToBusiness(adminBusinessId, {
               title: '🎉 새 업체가 가입했어요',
-              body: `${parsedInput.name} · ${sourceLabel}`,
+              body: `${parsedInput.name} · ${sourceLabel}${betaLabel}`,
               url: '/admin/businesses',
               tag: 'new-signup',
             }),

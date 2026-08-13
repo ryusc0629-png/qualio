@@ -24,13 +24,21 @@ export default async function UpgradePage({
 
   const { data: profile } = await db
     .from('profiles')
-    .select('business_id, businesses!business_id(name)')
+    .select('business_id, businesses!business_id(name, beta_number, lifetime_discount_rate)' as never)
     .eq('id', user.id)
-    .maybeSingle()
+    .maybeSingle() as {
+      data: {
+        business_id: string | null
+        businesses: { name: string; beta_number: number | null; lifetime_discount_rate: number | null } | null
+      } | null
+    }
 
   if (!profile?.business_id) redirect('/onboarding')
 
-  const businessName = (profile.businesses as { name: string } | null)?.name ?? '내 업체'
+  const businessName = profile.businesses?.name ?? '내 업체'
+  // 베타 100팀 평생 할인 — 카드에 정가 취소선 + 할인가를 보여주고, 실제 청구도 이 금액으로 나간다
+  const betaNumber = profile.businesses?.beta_number ?? null
+  const discountRate = profile.businesses?.lifetime_discount_rate ?? 0
 
   const { data: subscription } = await db
     .from('subscriptions')
@@ -89,6 +97,8 @@ export default async function UpgradePage({
           currentPeriodEnd={subscription?.current_period_end ?? null}
           needsPayment={needsPayment}
           provider={provider}
+          betaNumber={betaNumber}
+          discountRate={discountRate}
         />
       </main>
     </div>
