@@ -38,6 +38,7 @@ interface BookingInfo {
 interface ExistingReport {
   id: string
   notes: string | null
+  preventiveNote: string | null
   sentAt: string | null
   beforeUrls: string[]
   afterUrls: string[]
@@ -70,6 +71,8 @@ interface Props {
 
 export function FieldReportClient({ workerId, businessId, booking, existingReport, serviceItems }: Props) {
   const [notes, setNotes] = useState(existingReport?.notes ?? '')
+  // 현장 특이사항 — 오늘 눈에 띈 것. 월말에 거래처 보고서로 자동으로 모인다.
+  const [preventiveNote, setPreventiveNote] = useState(existingReport?.preventiveNote ?? '')
   const [before, setBefore] = useState<PhotoSlot[]>(
     existingReport?.beforeUrls.map((url) => ({ url, uploading: false })) ?? []
   )
@@ -346,6 +349,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       workerId,
       bookingId: booking.id,
       notes: notes.trim() || undefined,
+      preventiveNote: preventiveNote.trim(), // 빈 문자열도 보냄 — 지웠을 때 반영되게
       beforePhotoUrls: before.filter((p) => !p.uploading && p.url).map((p) => p.url),
       afterPhotoUrls: after.filter((p) => !p.uploading && p.url).map((p) => p.url),
       aiReportData: aiReport ? {
@@ -819,6 +823,23 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             setSlots={setAfter}
             inputRef={afterInputRef}
             type="after"
+          />
+        </div>
+
+        {/* 현장 특이사항 — 오늘 눈에 띈 것 한 줄. 월말에 거래처 보고서로 자동으로 모인다. */}
+        <div className="rounded-xl bg-emerald-50/60 border border-emerald-100 p-4 space-y-2">
+          <div>
+            <Label className="text-sm font-medium text-emerald-800">오늘 현장 특이사항</Label>
+            <p className="text-xs text-emerald-700 leading-relaxed">
+              눈에 띈 것, 미리 챙긴 것, 다음에 볼 것을 한 줄만 적어두세요.
+              월말에 거래처 보고서로 자동으로 정리됩니다. (선택)
+            </p>
+          </div>
+          <Textarea
+            placeholder="예: 3층 탕비실 배수구 물 빠짐이 느려져 미리 뚫어뒀어요. 창고 형광등 하나 나가 다음에 볼게요."
+            value={preventiveNote}
+            onChange={(e) => setPreventiveNote(e.target.value)}
+            rows={3}
           />
         </div>
 

@@ -419,6 +419,7 @@ export const fieldSaveReportAction = action
     workerId:        z.string().uuid(),
     bookingId:       z.string().uuid(),
     notes:           z.string().max(5000).optional(),
+    preventiveNote:  z.string().max(2000).optional(), // 현장 특이사항 — 월말 거래처 보고서에 자동으로 모임
     beforePhotoUrls: z.array(z.string().min(1)).max(5),
     afterPhotoUrls:  z.array(z.string().min(1)).max(5),
     aiReportData:    z.object({
@@ -438,6 +439,10 @@ export const fieldSaveReportAction = action
       business_id: worker.business_id,
       booking_id:  parsedInput.bookingId,
       notes:       parsedInput.notes ?? null,
+    }
+    // 특이사항은 값이 넘어온 경우에만 반영 — 보고서 자동 정리 중간저장이 기존 메모를 지우지 않게
+    if (parsedInput.preventiveNote !== undefined) {
+      upsertData.preventive_note = parsedInput.preventiveNote.trim() || null
     }
     if (parsedInput.aiReportData) {
       upsertData.ai_report_data = parsedInput.aiReportData

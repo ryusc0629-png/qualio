@@ -41,10 +41,10 @@ export default async function FieldReportPage({ params }: Props) {
   // 기존 보고서 + 사진 + 릴스 정보 조회
   const { data: report } = await db
     .from('reports')
-    .select('id, notes, kakao_sent_at, ai_report_data, work_clip_urls, reel_status, reel_url, report_photos(url, type, sort_order)' as never)
+    .select('id, notes, preventive_note, kakao_sent_at, ai_report_data, work_clip_urls, reel_status, reel_url, report_photos(url, type, sort_order)' as never)
     .eq('booking_id', bookingId)
     .maybeSingle() as { data: {
-      id: string; notes: string | null; kakao_sent_at: string | null
+      id: string; notes: string | null; preventive_note: string | null; kakao_sent_at: string | null
       ai_report_data: { beforeStatus: string; workDetails: string; afterResult: string; additionalNotes: string; recommendedServices: string[] } | null
       work_clip_urls: string[] | null
       reel_status: string | null
@@ -87,6 +87,7 @@ export default async function FieldReportPage({ params }: Props) {
       existingReport={report ? {
         id: report.id,
         notes: report.notes,
+        preventiveNote: report.preventive_note,
         sentAt: report.kakao_sent_at,
         beforeUrls: existingBefore,
         afterUrls: existingAfter,
