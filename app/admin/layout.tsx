@@ -22,6 +22,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link href="/admin/businesses" className="text-sm text-muted-foreground hover:text-foreground">
               회원
             </Link>
+            <Link href="/admin/onboarding-gaps" className="text-sm text-muted-foreground hover:text-foreground">
+              연락 대상
+            </Link>
             <Link href="/admin/activity" className="text-sm text-muted-foreground hover:text-foreground">
               사용 현황
             </Link>

@@ -12,6 +12,8 @@ type BugReport = {
   message: string
   page_url: string | null
   user_agent: string | null
+  viewport: string | null
+  app_version: string | null
   media_urls: string[] | null
   status: string
   created_at: string
@@ -20,6 +22,31 @@ type BugReport = {
 // 확장자로 영상 여부 판단 (첨부 렌더링용)
 function isVideoUrl(url: string): boolean {
   return /\.(mp4|mov|webm|m4v|avi|ogg)(\?|$)/i.test(url)
+}
+
+// 기기 정보를 사람이 읽는 한 줄로 — 원문 UA는 길고 알아보기 어렵다
+function describeDevice(ua: string | null): string {
+  if (!ua) return '기기 정보 없음'
+  const os = /iPhone|iPad|iPod/i.test(ua)
+    ? 'iPhone·iPad'
+    : /Android/i.test(ua)
+      ? '안드로이드'
+      : /Macintosh|Mac OS X/i.test(ua)
+        ? '맥'
+        : /Windows/i.test(ua)
+          ? '윈도우'
+          : '기타'
+  const browser = /CriOS|Chrome/i.test(ua)
+    ? '크롬'
+    : /FxiOS|Firefox/i.test(ua)
+      ? '파이어폭스'
+      : /Safari/i.test(ua)
+        ? '사파리'
+        : /KAKAOTALK/i.test(ua)
+          ? '카카오톡 브라우저'
+          : '기타 브라우저'
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(ua)
+  return `${os} · ${browser} · ${isMobile ? '폰·태블릿' : 'PC'}`
 }
 
 // 처리 상태 라벨/색상
@@ -34,7 +61,7 @@ export default async function BugReportsPage() {
   const looseDb = createServiceClient() as unknown as SupabaseClient
   const { data } = (await looseDb
     .from('bug_reports')
-    .select('id, business_id, reporter_name, message, page_url, user_agent, media_urls, status, created_at')
+    .select('id, business_id, reporter_name, message, page_url, user_agent, viewport, app_version, media_urls, status, created_at')
     .order('created_at', { ascending: false })) as unknown as { data: BugReport[] | null }
 
   const rows = data ?? []
@@ -125,11 +152,17 @@ export default async function BugReportsPage() {
                     )}
                   </div>
                 )}
-                {r.page_url && (
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    화면: <span className="font-mono">{r.page_url}</span>
+                {/* 재현에 필요한 상황 — 어느 화면·어떤 기기·어느 배포에서 났는지 */}
+                <div className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
+                  {r.page_url && (
+                    <p>화면: <span className="font-mono">{r.page_url}</span></p>
+                  )}
+                  <p>
+                    {describeDevice(r.user_agent)}
+                    {r.viewport ? ` · ${r.viewport}` : ''}
+                    {r.app_version ? ` · 배포 ${r.app_version}` : ''}
                   </p>
-                )}
+                </div>
               </li>
             )
           })}

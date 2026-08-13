@@ -78,8 +78,16 @@ export function BugReportButton() {
     execute({
       message,
       // 어느 화면에서 신고했는지 + 기기 정보 자동 첨부 (재현에 사용)
-      pageUrl: typeof window !== 'undefined' ? window.location.pathname : undefined,
+      // pathname만 담으면 어떤 예약·고객 화면이었는지 알 수 없어 물음표(?) 뒤까지 함께 담는다
+      pageUrl:
+        typeof window !== 'undefined'
+          ? `${window.location.pathname}${window.location.search}`.slice(0, 500)
+          : undefined,
       userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+      viewport:
+        typeof window !== 'undefined'
+          ? `${window.innerWidth}x${window.innerHeight} (dpr ${window.devicePixelRatio})`
+          : undefined,
       mediaUrls: attachments.length > 0 ? attachments.map((a) => a.url) : undefined,
     })
   }
