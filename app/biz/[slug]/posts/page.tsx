@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, ArrowRight, BookOpen, Phone, Wrench } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { isDomainIdentifier, bizBaseUrl, hasLiveCustomDomain } from '@/lib/domains/resolve'
+import { PhoneCallLink } from '@/components/biz/phone-call-link'
 
 interface Props {
   params: Promise<{ slug: string }>
@@ -103,13 +104,15 @@ export default async function BizPostsPage({ params, searchParams }: Props) {
           </Link>
           <div className="flex items-center gap-2">
             {business.phone && (
-              <a
-                href={`tel:${business.phone}`}
+              <PhoneCallLink
+                businessId={business.id}
+                phone={business.phone}
+                placement="header"
                 className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Phone className="h-3.5 w-3.5" />
                 {business.phone}
-              </a>
+              </PhoneCallLink>
             )}
             <Link href={`/q/${business.id}`}>
               <Button size="sm">무료 견적 받기</Button>

@@ -9,6 +9,7 @@ const CHANNEL_KEY = 'qualio_funnel_ch'
 // 잠재 고객의 전체 여정 이벤트
 // 견적 폼: form_started / step_completed / quote_submitted
 // 견적서: quote_viewed / plan_selected / address_entered / booking_submitted
+// 전화:   phone_click (홈페이지·블로그·견적서의 전화 버튼을 누른 순간)
 export type FunnelEvent =
   | 'form_started'
   | 'step_completed'
@@ -17,6 +18,7 @@ export type FunnelEvent =
   | 'plan_selected'
   | 'address_entered'
   | 'booking_submitted'
+  | 'phone_click'
 
 // 익명 세션 ID — 한 방문자의 여정을 묶는 키(개인정보 아님, 랜덤 UUID)
 function getSessionId(): string {

@@ -23,6 +23,7 @@ const emojiOf = (key: string): string =>
   key === DIRECT_KEY ? '🏷️' : ALL_CHANNELS.find((c) => c.key === key)?.emoji ?? '🏷️'
 
 interface Agg {
+  phoneClicks: number // 전화 버튼 누름 (사람 수 기준 — 같은 사람이 여러 번 눌러도 1)
   inquiries: number // 문의 건수 (견적 + 상담리드)
   bookings: number // 예약 건수 (매출 유효 상태)
   revenue: number // 매출 합계
@@ -34,7 +35,7 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
   const now = new Date()
   const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1)).toISOString()
 
-  const [quotesResult, leadsResult, bookingsResult, contractsResult] = await Promise.all([
+  const [quotesResult, leadsResult, bookingsResult, contractsResult, phoneClicksResult] = await Promise.all([
     // 견적 문의 — 테스트 견적 제외용 is_test, 채널 집계용 channel
     db
       .from('quotes')
@@ -70,6 +71,17 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
       .eq('business_id', businessId) as unknown as Promise<{
         data: (ContractLike & { channel: string | null })[] | null
       }>,
+
+    // 전화 버튼 누름 — 홈페이지·블로그·견적서의 전화 버튼 클릭(익명 세션 기준).
+    // 폼을 안 채우고 바로 전화하는 손님이 어느 채널에서 오는지 보여준다.
+    db
+      .from('quote_funnel_events' as never)
+      .select('session_id, channel' as never)
+      .eq('business_id' as never, businessId)
+      .eq('event_type' as never, 'phone_click')
+      .gte('created_at' as never, periodStart) as unknown as Promise<{
+        data: { session_id: string; channel: string | null }[] | null
+      }>,
   ])
 
   const quoteRows = quotesResult.data ?? []
@@ -82,13 +94,25 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
 
   const byChannel = new Map<string, Agg>()
   const bump = (key: string, patch: Partial<Agg>) => {
-    const cur = byChannel.get(key) ?? { inquiries: 0, bookings: 0, revenue: 0 }
+    const cur = byChannel.get(key) ?? { phoneClicks: 0, inquiries: 0, bookings: 0, revenue: 0 }
     byChannel.set(key, {
+      phoneClicks: cur.phoneClicks + (patch.phoneClicks ?? 0),
       inquiries: cur.inquiries + (patch.inquiries ?? 0),
       bookings: cur.bookings + (patch.bookings ?? 0),
       revenue: cur.revenue + (patch.revenue ?? 0),
     })
   }
+
+  // 전화 버튼 누름 — 같은 사람이 여러 번 눌러도 1명으로 센다(연타로 부풀지 않게)
+  const phoneSessionsByChannel = new Map<string, Set<string>>()
+  for (const e of phoneClicksResult.data ?? []) {
+    const key = e.channel ?? DIRECT_KEY
+    const set = phoneSessionsByChannel.get(key) ?? new Set<string>()
+    set.add(e.session_id)
+    phoneSessionsByChannel.set(key, set)
+  }
+  for (const [key, set] of phoneSessionsByChannel) bump(key, { phoneClicks: set.size })
+  const totalPhoneClicks = Array.from(phoneSessionsByChannel.values()).reduce((s, set) => s + set.size, 0)
 
   // 문의 = 견적(테스트 제외) + 상담 리드
   for (const q of quoteRows) {
@@ -117,7 +141,7 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
 
   // 활동 있는 채널만, 매출 → 문의 순으로 정렬
   const rows = Array.from(byChannel.entries())
-    .filter(([, a]) => a.inquiries > 0 || a.bookings > 0)
+    .filter(([, a]) => a.inquiries > 0 || a.bookings > 0 || a.phoneClicks > 0)
     .sort((x, y) => y[1].revenue - x[1].revenue || y[1].inquiries - x[1].inquiries)
 
   const hasChannelData = rows.some(([key]) => key !== DIRECT_KEY)
@@ -141,6 +165,19 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
         방문 수가 아니라 <b>계약으로 이어지는</b> 채널이 진짜 성과예요 — 여기에 힘을 몰아주세요
       </p>
 
+      {/* 전화 문의 — 폼을 안 채우고 바로 전화하는 손님. 예전엔 아예 안 잡히던 숫자다. */}
+      {totalPhoneClicks > 0 && (
+        <div className="mb-4 rounded-lg border bg-muted/30 px-4 py-3">
+          <p className="text-sm">
+            📞 이 기간에 <b>{totalPhoneClicks}명</b>이 홈페이지·견적서에서 <b>전화 버튼</b>을 눌렀어요
+          </p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            버튼을 누른 숫자예요 — 실제로 통화까지 됐는지는 알 수 없어요. 전화를 받으시면 고객 등록 때
+            &lsquo;어떻게 알고 오셨어요?&rsquo;를 골라주셔야 매출까지 이어집니다
+          </p>
+        </div>
+      )}
+
       {/* 계약률 스코어보드 — 방문 적어도 계약 잘 되는 채널을 맨 위에서 칭찬 */}
       {bestConverter && (
         <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
@@ -163,8 +200,9 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
       ) : (
         <>
           {/* 헤더 */}
-          <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto] gap-3 px-3 pb-2 text-[11px] font-medium text-muted-foreground">
+          <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 px-3 pb-2 text-[11px] font-medium text-muted-foreground">
             <span>채널</span>
+            <span className="w-14 text-right">전화</span>
             <span className="w-14 text-right">문의</span>
             <span className="w-16 text-right">예약·계약</span>
             <span className="w-24 text-right">매출</span>
@@ -176,7 +214,7 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
               return (
                 <div
                   key={key || 'direct'}
-                  className="rounded-lg border bg-muted/20 px-3 py-2.5 sm:grid sm:grid-cols-[1fr_auto_auto_auto] sm:items-center sm:gap-3"
+                  className="rounded-lg border bg-muted/20 px-3 py-2.5 sm:grid sm:grid-cols-[1fr_auto_auto_auto_auto] sm:items-center sm:gap-3"
                 >
                   {/* 채널명 */}
                   <div className="flex items-center gap-2 min-w-0">
@@ -189,8 +227,14 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
                     )}
                   </div>
 
-                  {/* 모바일: 3개 지표를 한 줄로 / 데스크탑: 각 칼럼 */}
-                  <div className="mt-2 grid grid-cols-3 gap-2 sm:mt-0 sm:contents">
+                  {/* 모바일: 4개 지표를 한 줄로 / 데스크탑: 각 칼럼 */}
+                  <div className="mt-2 grid grid-cols-4 gap-2 sm:mt-0 sm:contents">
+                    <div className="text-center sm:w-14 sm:text-right">
+                      <p className={`text-sm font-bold tabular-nums ${a.phoneClicks > 0 ? '' : 'text-muted-foreground'}`}>
+                        {a.phoneClicks > 0 ? a.phoneClicks : '—'}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground sm:hidden">전화</p>
+                    </div>
                     <div className="text-center sm:w-14 sm:text-right">
                       <p className="text-sm font-bold tabular-nums">{a.inquiries}</p>
                       <p className="text-[10px] text-muted-foreground sm:hidden">문의</p>

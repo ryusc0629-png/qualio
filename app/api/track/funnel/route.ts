@@ -15,6 +15,7 @@ const ALLOWED_EVENTS = [
   'plan_selected',
   'address_entered',
   'booking_submitted',
+  'phone_click',
 ]
 
 interface FunnelBody {

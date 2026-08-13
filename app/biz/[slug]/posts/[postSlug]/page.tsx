@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { BeforeAfterSlider } from '@/components/ui/before-after-slider'
 import { detectViewSource } from '@/lib/utils/detect-view-source'
 import { isBusinessInsiderViewing } from '@/lib/utils/track-page-view'
+import { PhoneCallLink } from '@/components/biz/phone-call-link'
 
 interface Props {
   params: Promise<{ slug: string; postSlug: string }>
@@ -474,12 +475,12 @@ export default async function PostPage({ params }: Props) {
                     <Button className="w-full">온라인 견적 받기 →</Button>
                   </Link>
                   {business.phone && (
-                    <a href={`tel:${business.phone}`} className="flex-1">
+                    <PhoneCallLink businessId={business.id} phone={business.phone} placement="post" className="flex-1">
                       <Button variant="outline" className="w-full gap-2">
                         <Phone className="h-4 w-4" />
                         {business.phone}
                       </Button>
-                    </a>
+                    </PhoneCallLink>
                   )}
                 </div>
                 {business.address && (

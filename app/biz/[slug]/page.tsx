@@ -25,6 +25,7 @@ import { ServiceList } from './service-list'
 import { HeroLeadForm, type HeroFormService } from './hero-lead-form'
 import { buildBrandStyle, toBrandSettings } from '@/lib/brand'
 import { trackPageView } from '@/lib/utils/track-page-view'
+import { PhoneCallLink } from '@/components/biz/phone-call-link'
 import { buildAreaServed } from '@/lib/address/parse-region'
 import { isDomainIdentifier, bizBaseUrl, hasLiveCustomDomain } from '@/lib/domains/resolve'
 import { getReviewSummary } from '@/lib/reviews/get-reviews'
@@ -479,13 +480,15 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
 
             <div className="flex items-center gap-2">
               {business.phone && (
-                <a
-                  href={`tel:${business.phone}`}
+                <PhoneCallLink
+                  businessId={business.id}
+                  phone={business.phone}
+                  placement="header"
                   className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <Phone className="h-3.5 w-3.5" />
                   {business.phone}
-                </a>
+                </PhoneCallLink>
               )}
               <a href={primaryCta}>
                 <Button size="sm" className="gap-1.5">
@@ -564,10 +567,15 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
                   </span>
                 )}
                 {business.phone && (
-                  <a href={`tel:${business.phone}`} className={`flex items-center gap-1.5 text-sm transition-colors ${hero.muted} ${hero.mutedHover}`}>
+                  <PhoneCallLink
+                    businessId={business.id}
+                    phone={business.phone}
+                    placement="hero_text"
+                    className={`flex items-center gap-1.5 text-sm transition-colors ${hero.muted} ${hero.mutedHover}`}
+                  >
                     <Phone className="h-3.5 w-3.5 text-primary" />
                     {business.phone}
-                  </a>
+                  </PhoneCallLink>
                 )}
               </div>
             )}
@@ -587,12 +595,12 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
             {/* 보조 CTA — 전화·네이버 플레이스 */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mt-4">
               {business.phone && (
-                <a href={`tel:${business.phone}`} className="w-full sm:w-auto">
+                <PhoneCallLink businessId={business.id} phone={business.phone} placement="hero" className="w-full sm:w-auto">
                   <Button size="lg" variant="outline" className={`w-full sm:w-auto h-12 px-6 text-sm bg-transparent gap-2 rounded-2xl ${hero.outlineBtn}`}>
                     <Phone className="h-4 w-4" />
                     전화 문의
                   </Button>
-                </a>
+                </PhoneCallLink>
               )}
               {business.naver_place_url && (
                 <a href={business.naver_place_url} target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto">
@@ -1121,12 +1129,12 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
                   </Button>
                 </a>
                 {business.phone && (
-                  <a href={`tel:${business.phone}`}>
+                  <PhoneCallLink businessId={business.id} phone={business.phone} placement="bottom_cta">
                     <Button size="lg" variant="outline" className="h-12 px-8 text-base bg-transparent border-white/50 text-white hover:bg-white/10 hover:text-white gap-2">
                       <Phone className="h-4 w-4" />
                       {business.phone}
                     </Button>
-                  </a>
+                  </PhoneCallLink>
                 )}
               </div>
             )}
@@ -1167,13 +1175,15 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
       {/* ── 모바일 하단 고정 CTA 바 ── */}
       <div className="sm:hidden fixed bottom-0 inset-x-0 z-30 bg-white border-t shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-4 py-3 flex items-center gap-3">
         {business.phone && (
-          <a
-            href={`tel:${business.phone}`}
+          <PhoneCallLink
+            businessId={business.id}
+            phone={business.phone}
+            placement="mobile_bar"
             className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl border border-input text-sm font-semibold text-foreground"
           >
             <Phone className="h-4 w-4" />
             전화 문의
-          </a>
+          </PhoneCallLink>
         )}
         <a href={primaryCta} className={business.phone ? 'flex-1' : 'w-full'}>
           <Button className="w-full h-12 text-sm font-bold gap-2">
