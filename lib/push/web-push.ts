@@ -7,10 +7,17 @@ import { createServiceClient } from '@/lib/supabase/server'
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY
 
+// 값이 있어도 형식이 깨져 있으면 여기서 예외가 난다. 그대로 두면 이 모듈을 불러오는 화면·API가
+// 통째로 죽어서 사이트 전체가 안 뜬다(빌드도 실패). 알림은 부가 기능이므로, 설정 실패는
+// 기록만 남기고 발송만 건너뛴다 — 알림 하나 때문에 서비스가 멈추면 안 된다.
 let vapidReady = false
 if (VAPID_PUBLIC && VAPID_PRIVATE) {
-  webpush.setVapidDetails('mailto:ryusc0629@gmail.com', VAPID_PUBLIC, VAPID_PRIVATE)
-  vapidReady = true
+  try {
+    webpush.setVapidDetails('mailto:ryusc0629@gmail.com', VAPID_PUBLIC, VAPID_PRIVATE)
+    vapidReady = true
+  } catch (e) {
+    console.error('[Push] VAPID 키 형식이 올바르지 않아 알림 발송을 끕니다:', e)
+  }
 }
 
 export interface PushPayload {
