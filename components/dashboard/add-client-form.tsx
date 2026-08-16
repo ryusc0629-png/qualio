@@ -114,6 +114,10 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
   // 첫 작업 견적 — 기본은 항목별(서비스 선택), 체크 시 수기 단일 금액
   // amount(합산 금액)도 직접 수정 가능 — 수량×단가와 연동
   const [useJobItems, setUseJobItems] = useState(true)
+  // 금액 입력 방식 — 'itemized'(평수·수량 × 단가) vs 'lump'(총액만)
+  // 평당 계산이 필요 없는 작업(정액·출장 등)은 총액 한 칸만 채우면 되게 한다
+  const [amountMode, setAmountMode] = useState<'itemized' | 'lump'>('itemized')
+  const isLump = amountMode === 'lump'
   const [jobItems, setJobItems] = useState<{ name: string; qty: string; unitPrice: string; amount: string; unit: string }[]>([
     { name: '', qty: '1', unitPrice: '', amount: '', unit: '개' },
   ])
@@ -132,9 +136,11 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
     setJobItems((prev) => prev.map((it, i) => i === idx
       ? { ...it, unitPrice: v, amount: String((parseInt(it.qty, 10) || 0) * (parseInt(v, 10) || 0)) } : it))
   // 합산 금액 직접 수정 → 단가는 합산÷수량으로 역산
+  // 총액만 입력 모드에선 수량이 항상 1이라 총액이 곧 단가
   const setJobAmount = (idx: number, v: string) =>
     setJobItems((prev) => prev.map((it, i) => {
       if (i !== idx) return it
+      if (isLump) return { ...it, qty: '1', amount: v, unitPrice: v }
       const qty = parseInt(it.qty, 10) || 1
       const amount = parseInt(v, 10) || 0
       return { ...it, amount: v, unitPrice: qty > 0 ? String(Math.round(amount / qty)) : v }
@@ -145,9 +151,22 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
     const unit = unitForService(name)
     setJobItems((prev) => prev.map((it, i) => {
       if (i !== idx) return it
+      // 총액만 입력 모드 — 평당 단가는 총액이 아니라 곱해야 하는 값이라 자동으로 넣지 않는다.
+      // 정액·개당처럼 그 자체가 1건 금액인 서비스만 총액 칸을 미리 채워 준다.
+      if (isLump) {
+        const prefill = unit !== '평당' && price > 0 && !it.amount ? String(price) : it.amount
+        return { ...it, name, unit, qty: '1', amount: prefill, unitPrice: prefill }
+      }
       const unitPrice = price > 0 ? String(price) : it.unitPrice
       return { ...it, name, unit, unitPrice, amount: String((parseInt(it.qty, 10) || 0) * (parseInt(unitPrice, 10) || 0)) }
     }))
+  }
+  // 입력 방식 전환 — 총액만으로 바꾸면 수량은 1로 정리해 '1 × 총액'이 되게 맞춘다
+  const switchAmountMode = (mode: 'itemized' | 'lump') => {
+    setAmountMode(mode)
+    if (mode === 'lump') {
+      setJobItems((prev) => prev.map((it) => ({ ...it, qty: '1', unitPrice: it.amount })))
+    }
   }
 
   const leadForm = useForm<LeadInput>({
@@ -175,6 +194,7 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
       setJobDate('')
       setJobTime('')
       setUseJobItems(true)
+      setAmountMode('itemized')
       setJobItems([{ ...emptyJobItem }])
       setOpen(false)
       // 일정 보드는 로컬 state라 새 예약을 즉시 못 받음 → 새로고침으로 캘린더에 바로 반영
@@ -201,6 +221,7 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
     setJobDate('')
     setJobTime('')
     setUseJobItems(true)
+    setAmountMode('itemized')
     setJobItems([{ ...emptyJobItem }])
     setClientType('lead')
   }
@@ -385,10 +406,11 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
                   return valid.length > 0
                     ? valid.map((it) => ({
                         name: it.name.trim() || '작업',
-                        quantity: parseInt(it.qty, 10) || 1,
-                        unitPrice: parseInt(it.unitPrice, 10) || 0,
+                        // 총액만 입력한 건 '1회 정액'으로 저장 — 나중에 예약 화면에서 봐도 헷갈리지 않게
+                        quantity: isLump ? 1 : parseInt(it.qty, 10) || 1,
+                        unitPrice: isLump ? parseInt(it.amount, 10) || 0 : parseInt(it.unitPrice, 10) || 0,
                         amount: parseInt(it.amount, 10) || 0,
-                        unit: useJobItems ? it.unit : '개',
+                        unit: isLump ? '정액' : useJobItems ? it.unit : '개',
                       }))
                     : undefined
                 })(),
@@ -492,7 +514,7 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
                     onChange={(e) => customerForm.setValue('scheduleJob', e.target.checked ? 'true' : '')}
                     className="accent-primary h-4 w-4"
                   />
-                  <span className="text-sm font-medium">첫 작업 일정도 같이 잡기</span>
+                  <span className="text-sm font-medium">일정 잡기</span>
                 </label>
                 <p className="text-xs text-muted-foreground -mt-1.5">
                   날짜·금액을 넣으면 예약으로 등록돼 캘린더에 바로 나타나요
@@ -513,6 +535,26 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
                           />
                           수기로 견적 작성하기
                         </label>
+                      </div>
+
+                      {/* 금액 입력 방식 — 평수·수량 × 단가로 계산할지, 총액 한 칸만 적을지 */}
+                      <div className="flex gap-1 rounded-lg bg-muted/50 p-1">
+                        {([
+                          ['itemized', '평수·수량으로 계산', '평 × 평당 단가'],
+                          ['lump', '총액만 입력', '금액 한 칸만'],
+                        ] as ['itemized' | 'lump', string, string][]).map(([mode, label, desc]) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            onClick={() => switchAmountMode(mode)}
+                            className={`flex-1 rounded-md px-2 py-1.5 text-center text-xs transition-colors ${
+                              amountMode === mode ? 'bg-white shadow-sm font-semibold' : 'text-muted-foreground'
+                            }`}
+                          >
+                            {label}
+                            <span className="block text-[10px] text-muted-foreground/70">{desc}</span>
+                          </button>
+                        ))}
                       </div>
 
                       <div className="space-y-2">
@@ -547,32 +589,35 @@ export function AddClientForm({ services = [], triggerLabel = '추가하기', re
                                   </button>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  inputMode="numeric"
-                                  value={it.qty}
-                                  onChange={(e) => setJobQty(idx, digitsOnly(e.target.value))}
-                                  className="w-12 h-9 rounded-lg border border-border px-2 text-sm text-center shrink-0"
-                                />
-                                <span className="text-xs text-muted-foreground shrink-0">
-                                  {useJobItems ? `${qtyUnitOf(it.unit)} × ${perLabelOf(it.unit)}` : '×'}
-                                </span>
-                                <input
-                                  inputMode="numeric"
-                                  value={formatThousands(it.unitPrice)}
-                                  onChange={(e) => setJobUnit(idx, digitsOnly(e.target.value))}
-                                  placeholder={useJobItems ? `${perLabelOf(it.unit)} 단가` : '단가'}
-                                  className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
-                                />
-                                <span className="text-xs text-muted-foreground shrink-0">원</span>
-                              </div>
-                              <div className="flex items-center gap-2 border-t border-dashed border-border pt-1.5">
+                              {/* 총액만 입력 모드에선 수량·단가 줄을 감추고 금액 한 칸만 남긴다 */}
+                              {!isLump && (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    inputMode="numeric"
+                                    value={it.qty}
+                                    onChange={(e) => setJobQty(idx, digitsOnly(e.target.value))}
+                                    className="w-12 h-9 rounded-lg border border-border px-2 text-sm text-center shrink-0"
+                                  />
+                                  <span className="text-xs text-muted-foreground shrink-0">
+                                    {useJobItems ? `${qtyUnitOf(it.unit)} × ${perLabelOf(it.unit)}` : '×'}
+                                  </span>
+                                  <input
+                                    inputMode="numeric"
+                                    value={formatThousands(it.unitPrice)}
+                                    onChange={(e) => setJobUnit(idx, digitsOnly(e.target.value))}
+                                    placeholder={useJobItems ? `${perLabelOf(it.unit)} 단가` : '단가'}
+                                    className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2.5 text-sm text-right"
+                                  />
+                                  <span className="text-xs text-muted-foreground shrink-0">원</span>
+                                </div>
+                              )}
+                              <div className={`flex items-center gap-2 ${isLump ? '' : 'border-t border-dashed border-border pt-1.5'}`}>
                                 <span className="text-xs text-muted-foreground shrink-0">금액</span>
                                 <input
                                   inputMode="numeric"
                                   value={formatThousands(it.amount)}
                                   onChange={(e) => setJobAmount(idx, digitsOnly(e.target.value))}
-                                  placeholder="합산 금액"
+                                  placeholder={isLump ? '예: 150,000' : '합산 금액'}
                                   className="flex-1 min-w-0 h-9 rounded-lg border border-border px-2.5 text-sm text-right font-semibold"
                                 />
                                 <span className="text-xs text-muted-foreground shrink-0">원</span>
