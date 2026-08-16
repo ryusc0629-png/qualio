@@ -229,7 +229,7 @@ export const sendReviewRequestAction = action
     // 보고서 + 예약 + 업체 정보 조회
     const { data: report } = await db
       .from('reports' as never)
-      .select('id, booking_id, bookings!booking_id(customer_name, customer_phone, worker_id, workers!worker_id(name), quotes!quote_id(cleaning_type)), businesses!business_id(name, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)' as never)
+      .select('id, booking_id, bookings!booking_id(status, customer_name, customer_phone, worker_id, workers!worker_id(name), quotes!quote_id(cleaning_type)), businesses!business_id(name, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)' as never)
       .eq('id' as never, parsedInput.reportId)
       .eq('business_id' as never, profile.business_id)
       .single() as unknown as { data: { id: string; booking_id: string | null; bookings: unknown; businesses: unknown } | null }
@@ -237,6 +237,13 @@ export const sendReviewRequestAction = action
     if (!report) throw new Error('[APP] 보고서 정보를 찾을 수 없습니다')
 
     const booking = Array.isArray(report.bookings) ? report.bookings[0] : report.bookings
+
+    // 작업이 끝나지 않은 예약에는 후기를 부탁하지 않는다.
+    // 목록에서 걸러도 링크를 직접 열거나 예전 화면이 남아 있으면 발송될 수 있어 여기서도 막는다.
+    const bookingStatus = (booking as { status?: string | null } | null)?.status
+    if (bookingStatus !== 'completed') {
+      throw new Error('[APP] 아직 작업이 끝나지 않은 일정이에요. 완료 처리한 뒤에 후기를 요청해주세요')
+    }
     const biz     = Array.isArray(report.businesses) ? report.businesses[0] : report.businesses
     const bizInfo = biz as { name: string; naver_place_url: string | null; google_place_url: string | null; danggeun_review_url: string | null; kakao_place_url: string | null; active_review_platform: string; review_reward_type: string; review_reward_description: string | null } | null
     const bookingInfo = booking as { customer_name: string | null; customer_phone: string | null; worker_id: string | null; workers: { name: string | null } | { name: string | null }[] | null; quotes: { cleaning_type: string | null } | { cleaning_type: string | null }[] | null } | null

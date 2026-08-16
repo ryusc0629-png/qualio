@@ -45,12 +45,15 @@ export default async function AlimtalkTodoPage() {
       .eq('business_id', businessId)
       .not('kakao_sent_at', 'is', null),
 
-    // 리뷰 요청 미발송 보고서
+    // 리뷰 요청 미발송 보고서 — 작업이 '완료' 처리된 예약만.
+    // 예약 상태를 안 보면 아직 하지도 않은 내일 일정에까지 '리뷰 요청' 버튼이 떴다.
+    // 청소를 받지도 않은 고객에게 후기를 부탁하면 신뢰를 잃는다.
     db.from('reports')
-      .select('id, booking_id')
+      .select('id, booking_id, bookings!booking_id!inner(status)' as never)
       .eq('business_id', businessId)
       .not('kakao_sent_at', 'is', null)
-      .is('review_request_sent_at', null),
+      .is('review_request_sent_at', null)
+      .eq('bookings.status' as never, 'completed' as never),
 
     // 업체 소속 직원·도급사
     db.from('workers' as never)
@@ -122,7 +125,7 @@ export default async function AlimtalkTodoPage() {
 
   // 리뷰 미요청 목록 — 예약에서 고객명 + worker_id 조회
   type PendingReview = { id: string; booking_id: string }
-  const pendingReviews = (pendingReviewRaw ?? []) as PendingReview[]
+  const pendingReviews = (pendingReviewRaw ?? []) as unknown as PendingReview[]
   const reviewBookingIds = pendingReviews.map((r) => r.booking_id)
 
   type ReviewBookingRow = {

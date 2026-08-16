@@ -149,10 +149,14 @@ export default async function DashboardPage() {
     // 보고서 발송 목록
     db.from('reports').select('booking_id').eq('business_id', businessId),
 
-    // 리뷰 미요청 수
-    db.from('reports').select('id', { count: 'exact', head: true })
+    // 리뷰 미요청 수 — 작업이 '완료' 처리된 예약만 센다.
+    // 예약 상태를 안 보면 아직 하지도 않은 내일 일정에까지 "후기 요청" 할 일이 뜬다.
+    // 청소를 받지도 않은 고객에게 후기를 부탁하는 건 신뢰를 깎는 일이라 목록·버튼·이 카운트가
+    // 모두 같은 기준(완료된 예약)이어야 한다.
+    db.from('reports').select('id, bookings!booking_id!inner(status)' as never, { count: 'exact', head: true })
       .eq('business_id', businessId)
-      .not('kakao_sent_at', 'is', null).is('review_request_sent_at', null),
+      .not('kakao_sent_at', 'is', null).is('review_request_sent_at', null)
+      .eq('bookings.status' as never, 'completed' as never),
 
     // 지난 7일 완료 예약 (주간 차트용)
     db.from('bookings').select('final_price, scheduled_at')
