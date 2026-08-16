@@ -126,6 +126,42 @@ describe('정기계약 누적 매출 — 금액 변경 이력', () => {
     expect(contractAccruedRevenue([contract])).toBe(3_000_000)
   })
 
+  it('이번 달에 올린 금액이 곧바로 매출에 반영된다', () => {
+    // 실제 사례(닥터홍): 7/31 시작 100만 → 8/10 진료센터 추가로 190만.
+    // 월 경계만 세면 8/10~오늘이 0개월이라 인상분이 통째로 사라졌다.
+    const now = new Date()
+    const monthStart = (offset: number) =>
+      new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1)).toISOString().slice(0, 10)
+    const raiseDay = `${monthStart(0).slice(0, 8)}10` // 이번 달 10일
+
+    const contract = {
+      contract_price: 1_900_000,
+      start_date: monthStart(-1), // 지난 달 1일 시작
+      end_date: null,
+      status: 'active',
+      price_history: [
+        { from: monthStart(-1), price: 1_000_000 },
+        { from: raiseDay, price: 1_900_000, note: '진료센터 범위 추가' },
+      ],
+    }
+
+    // 지난 달 100만 + 이번 달 190만 = 290만
+    expect(contractAccruedRevenue([contract])).toBe(2_900_000)
+  })
+
+  it('아직 시작 전인 계약은 매출로 세지 않는다', () => {
+    const now = new Date()
+    const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 15)).toISOString().slice(0, 10)
+    const contract = {
+      contract_price: 500_000,
+      start_date: nextMonth,
+      end_date: null,
+      status: 'active',
+      price_history: null,
+    }
+    expect(contractAccruedRevenue([contract])).toBe(0)
+  })
+
   it('활성 계약은 종료일이 적혀 있어도 오늘까지 누적한다 (해지해야 멈춘다)', () => {
     const dates = { contract_price: 1_000_000, start_date: '2026-01-01', end_date: '2026-04-01', price_history: null }
     const active = contractAccruedRevenue([{ ...dates, status: 'active' }])

@@ -41,6 +41,15 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+// 진행 중인 계약의 누적 종료점 = '다음 달 1일'(배타적 경계).
+// 오늘을 종료점으로 쓰면 이번 달분이 월 경계를 못 넘어 0개월로 세어진다.
+// 정기청소는 이미 이번 달 진행 중이고 월 단위로 청구하므로 이번 달도 한 달로 센다.
+function currentPeriodEnd(): string {
+  const now = new Date()
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+  return next.toISOString().slice(0, 10)
+}
+
 // 계약의 금액 구간 목록. 이력이 없으면 "시작일부터 현재 금액" 한 구간으로 본다.
 export function contractPriceSegments(c: ContractLike): ContractPriceSegment[] {
   const raw = Array.isArray(c.price_history) ? c.price_history : []
@@ -70,12 +79,16 @@ function priceAt(segs: ContractPriceSegment[], dateStr: string): number {
 // 계약 하나가 [windowStart, 종료 or 현재] 동안 발생시킨 매출.
 // windowStart가 null이면 계약 시작일부터(= 전체 누적).
 function accrueOne(c: ContractLike, windowStart: string | null): number {
+  // 아직 시작 전인 계약은 매출 0 — 이번 달분을 미리 세지 않게 막는다.
+  if (c.start_date > todayStr()) return 0
+
   const endpoint = c.status === 'terminated' ? c.end_date : null
-  const endStr = endpoint ?? todayStr()
+  const endStr = endpoint ?? currentPeriodEnd()
   const startBound = windowStart && windowStart > c.start_date ? windowStart : c.start_date
   if (endStr < startBound) return 0 // 창 시작 전에 끝난 계약
 
-  const segs = contractPriceSegments(c)
+  // 아직 오지 않은 인상 구간은 매출로 세지 않는다(누적 종료점이 다음 달 1일이므로 필요한 방어).
+  const segs = contractPriceSegments(c).filter((s) => s.from <= todayStr())
   let total = 0
   let months = 0
   for (let i = 0; i < segs.length; i++) {
@@ -88,7 +101,7 @@ function accrueOne(c: ContractLike, windowStart: string | null): number {
     total += m * (segs[i].price ?? 0)
   }
   // 이미 시작했지만 아직 한 달이 안 된 계약은 1개월치로 센다(기존 동작 유지).
-  if (months === 0) return priceAt(segs, endStr)
+  if (months === 0) return priceAt(segs, todayStr())
   return total
 }
 
