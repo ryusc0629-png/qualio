@@ -190,6 +190,16 @@ export async function sendReminderAlimtalk(params: ReminderParams): Promise<void
 // 후기 인증 페이지 주소 — 알림톡 템플릿의 버튼 링크(https://qualio.co.kr/review/#{리뷰토큰})와 반드시 일치해야 한다
 const REVIEW_LINK_BASE = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'}/review`
 
+
+// 템플릿에 등록된 버튼 링크가 `https://qualio.co.kr/q/#{링크}` 형태라,
+// 코드는 도메인과 /q/ 를 뺀 나머지 경로만 `#{링크}` 변수로 보내야 한다.
+// 완성된 전체 주소를 linkMo로 실어도 소용없다 — 템플릿에 박힌 링크가 우선한다.
+// (2026-08-17: 예약확정 버튼이 /q/reschedule 로 가서 404 났던 것과 같은 원인)
+function qPathVar(fullUrl: string): string {
+  const i = fullUrl.indexOf('/q/')
+  return i >= 0 ? fullUrl.slice(i + 3) : fullUrl
+}
+
 // 리뷰 요청 알림톡 파라미터
 export interface ReviewRequestParams {
   customerPhone: string
@@ -292,7 +302,7 @@ export async function sendWorkCompleteAlimtalk(params: WorkCompleteParams): Prom
         '#{서비스명}':   params.cleaningType,
         '#{작업일시}':   formatKoreanDate(params.scheduledAt),
         '#{업체연락처}': params.businessPhone ?? '업체에 문의해 주세요',
-        '#{보고서링크}': params.reportUrl,
+        '#{링크}':       qPathVar(params.reportUrl),
       },
       buttons: [
         {
@@ -347,7 +357,7 @@ export async function sendReceiptAlimtalk(params: ReceiptParams): Promise<void> 
         '#{작업일시}':   formatKoreanDate(params.completedAt),
         '#{결제금액}':   params.paidAmount.toLocaleString('ko-KR'),
         '#{업체연락처}': params.businessPhone ?? '업체에 문의해 주세요',
-        '#{영수증링크}': params.receiptUrl,
+        '#{링크}':       qPathVar(params.receiptUrl),
       },
       buttons: [
         {
@@ -668,6 +678,7 @@ export async function sendMonthlyReportAlimtalk(params: MonthlyReportParams): Pr
         '#{업체명}':   params.businessName,
         '#{기간}':     params.period,
         '#{완료횟수}': String(params.visitCount),
+        '#{링크}':     qPathVar(params.reportUrl),
       },
       buttons: [
         {
@@ -715,6 +726,7 @@ export async function sendOnboardingReportAlimtalk(params: OnboardingReportParam
         '#{고객명}': params.customerName,
         '#{업체명}': params.businessName,
         '#{작업일}': params.workDate,
+        '#{링크}':   qPathVar(params.reportUrl),
       },
       buttons: [
         {
