@@ -4,7 +4,7 @@ import { Check, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PAID_PLANS, formatPrice } from '@/lib/config/plans'
 import { SiteFooter } from '@/components/site-footer'
-import { BETA_SEATS, BETA_LIFETIME_DISCOUNT_RATE, applyLifetimeDiscount } from '@/lib/config/beta'
+import { BETA_SEATS, BETA_LIFETIME_DISCOUNT_RATE, applyLifetimeDiscount, LAUNCH_DATE_LABEL, isBeforeLaunch } from '@/lib/config/beta'
 import { getRemainingBetaSeats } from '@/lib/payments/pricing'
 import { BILLING_COPY } from '@/lib/config/billing'
 
@@ -20,6 +20,7 @@ export const revalidate = 300
 export default async function PricingPage() {
   // 베타 100팀 평생 할인 — 광고에서 약속한 내용을 요금제 화면에서도 그대로 보여준다
   const remainingSeats = await getRemainingBetaSeats()
+  const beforeLaunch = isBeforeLaunch()
   return (
     <div className="min-h-screen bg-background">
       {/* 헤더 */}
@@ -43,6 +44,13 @@ export default async function PricingPage() {
           <h1 className="text-4xl font-bold mb-4">합리적인 요금제</h1>
           <p className="text-lg text-muted-foreground">
             업체 규모에 맞는 플랜을 선택하세요. 언제든지 변경 가능합니다.
+          </p>
+          {/* 정식 런칭일 — 언제부터 이 요금이 청구되는지 요금표 맨 위에서 밝힌다 */}
+          <p className="mt-3 text-sm">
+            <span className="font-semibold">{LAUNCH_DATE_LABEL} 정식 런칭</span>
+            {beforeLaunch && (
+              <span className="text-muted-foreground"> — 그때까지는 모든 기능 무료, 요금은 런칭 후부터 청구돼요</span>
+            )}
           </p>
         </div>
 
@@ -141,6 +149,10 @@ export default async function PricingPage() {
           <h2 className="text-xl font-bold text-center mb-8">자주 묻는 질문</h2>
           <div className="space-y-6">
             {[
+              {
+                q: '지금 가입하면 언제부터 요금이 나가나요?',
+                a: `퀄리오 정식 런칭은 ${LAUNCH_DATE_LABEL}입니다. 그전까지는 모든 기능을 무료로 쓰시고, 요금은 런칭 이후 플랜을 고르신 다음부터 청구됩니다. 먼저 오신 ${BETA_SEATS}팀은 유료로 바뀐 뒤에도 평생 ${BETA_LIFETIME_DISCOUNT_RATE}% 할인을 받습니다.`,
+              },
               {
                 q: '요금은 어떻게 청구되나요?',
                 a: BILLING_COPY.faqHow,

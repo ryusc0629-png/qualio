@@ -5,7 +5,7 @@ import { useAction } from 'next-safe-action/hooks'
 import { Check, Star, Loader2, ArrowUp, ArrowDown, CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PAID_PLANS, PLANS, formatPrice } from '@/lib/config/plans'
-import { applyLifetimeDiscount, betaBadgeLabel } from '@/lib/config/beta'
+import { applyLifetimeDiscount, betaBadgeLabel, LAUNCH_DATE_LABEL, isBeforeLaunch } from '@/lib/config/beta'
 import { BILLING_COPY, IS_RECURRING_BILLING } from '@/lib/config/billing'
 import type { PlanId } from '@/lib/config/plans'
 import { schedulePlanChangeAction } from '@/lib/actions/subscription'
@@ -319,6 +319,12 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
           <p className="text-xs text-emerald-800/80 mt-0.5">
             베타에 함께해주신 {betaNumber}번째 업체라, 아래 금액은 계속 이 가격으로 유지돼요. 플랜을 올려도 그대로 적용됩니다.
           </p>
+          {/* 언제부터 이 금액이 나가는지 — 결제 화면에서 한 번 더 밝힌다 */}
+          {isBeforeLaunch() && (
+            <p className="text-xs text-emerald-800/80 mt-0.5">
+              정식 런칭은 {LAUNCH_DATE_LABEL}이고, 그때까지는 요금이 청구되지 않아요.
+            </p>
+          )}
         </div>
       )}
 

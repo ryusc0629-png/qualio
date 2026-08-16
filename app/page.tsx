@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { PAID_PLANS, formatPrice } from '@/lib/config/plans'
 import { BILLING_COPY } from '@/lib/config/billing'
-import { BETA_SEATS, BETA_LIFETIME_DISCOUNT_RATE, applyLifetimeDiscount } from '@/lib/config/beta'
+import { BETA_SEATS, BETA_LIFETIME_DISCOUNT_RATE, applyLifetimeDiscount, LAUNCH_DATE_LABEL, isBeforeLaunch } from '@/lib/config/beta'
 import { getRemainingBetaSeats } from '@/lib/payments/pricing'
 import {
   Check,
@@ -38,6 +38,7 @@ export default async function RootPage() {
 
   // 베타 100팀 모집 — 남은 자리를 실제 가입 수로 보여준다(지어낸 숫자를 쓰지 않는다)
   const remainingSeats = await getRemainingBetaSeats()
+  const beforeLaunch = isBeforeLaunch()
 
   // 비로그인 사용자에게 랜딩 페이지 표시
   return (
@@ -101,6 +102,11 @@ export default async function RootPage() {
           {/* 리스크 제거 — 가입 문턱 낮추기 */}
           <p className="mt-5 text-sm text-muted-foreground">
             카드 등록 없이 · 1분이면 시작 · 지금은 모든 기능 무료
+          </p>
+          {/* 정식 런칭일 — 언제 유료로 바뀌는지 처음부터 밝힌다(나중에 알리면 그게 분쟁이 된다) */}
+          <p className="mt-2 text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">{LAUNCH_DATE_LABEL} 정식 런칭</span>
+            {beforeLaunch && ' — 그때까지는 무료로 써보세요'}
           </p>
           {remainingSeats > 0 && (
             <p className="mt-2 text-sm font-medium text-primary">
@@ -282,7 +288,9 @@ export default async function RootPage() {
             지금은 무료, 요금은 나중에 골라도 됩니다
           </h2>
           <p className="text-muted-foreground text-center mb-4 break-keep text-pretty">
-            베타 기간에는 모든 기능을 제한 없이 무료로 써보세요. 마음에 들면 그때 플랜을 고르시면 됩니다.
+            {beforeLaunch
+              ? `${LAUNCH_DATE_LABEL} 정식 런칭 전까지는 모든 기능을 제한 없이 무료로 써보세요. 마음에 들면 그때 플랜을 고르시면 됩니다.`
+              : '먼저 무료로 써보시고, 마음에 들면 그때 플랜을 고르시면 됩니다.'}
           </p>
           {/* 결제 조건 명시 — /pricing 과 일관 (전자상거래법·정기결제 심사 요건) */}
           <p className="text-xs text-muted-foreground text-center mb-6">

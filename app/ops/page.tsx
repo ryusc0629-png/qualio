@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getPublishedLessons } from '@/lib/ops/lessons'
 import { Lock, PlayCircle, GraduationCap } from 'lucide-react'
+import { LAUNCH_DATE_LABEL, isBeforeLaunch } from '@/lib/config/beta'
 
 // OPS 영상 교육 배움터 (공개) — 무료 강의는 누구나, 나머지는 로그인(=퀄리오 계정) 필요
 // 항상 최신 강의 목록을 보여준다(관리자가 추가하면 바로 반영)
@@ -83,6 +84,8 @@ export default async function OpsLandingPage() {
           <p className="text-sm font-semibold">전체 강의를 무료로 이어보시겠어요?</p>
           <p className="mt-1 text-xs text-muted-foreground">
             퀄리오 계정을 만들면 나머지 강의까지 모두 보실 수 있어요.
+            {' '}<span className="font-semibold text-foreground">{LAUNCH_DATE_LABEL} 정식 런칭</span>
+            {isBeforeLaunch() && '이라, 그때까지는 모든 기능이 무료예요.'}
           </p>
           <Link
             href="/signup"

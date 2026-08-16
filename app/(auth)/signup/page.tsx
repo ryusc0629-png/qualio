@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { signupAction } from '@/lib/actions/auth'
+import { LAUNCH_DATE_LABEL, isBeforeLaunch } from '@/lib/config/beta'
 
 const signupSchema = z.object({
   fullName: z.string().min(2, '이름은 2자 이상이어야 합니다'),
@@ -23,6 +24,7 @@ type SignupInput = z.infer<typeof signupSchema>
 
 export default function SignupPage() {
   const [emailSent, setEmailSent] = useState(false)
+  const beforeLaunch = isBeforeLaunch()
 
   const {
     register,
@@ -77,6 +79,11 @@ export default function SignupPage() {
       <CardHeader className="text-center">
         <CardTitle className="text-2xl">퀄리오 시작하기</CardTitle>
         <CardDescription>청소 업체 매출, 자동으로 올려드려요</CardDescription>
+        {/* 정식 런칭일 고지 — 가입하는 순간 '언제까지 무료인지'를 알고 시작해야 나중에 말이 안 달라진다 */}
+        <p className="mt-2 rounded-lg bg-muted/60 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+          <span className="font-semibold text-foreground">{LAUNCH_DATE_LABEL} 정식 런칭</span>
+          {beforeLaunch && ' — 그때까지는 모든 기능을 무료로 쓰실 수 있어요'}
+        </p>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

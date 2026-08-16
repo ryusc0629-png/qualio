@@ -12,6 +12,26 @@
 /** 평생 할인을 받는 베타 정원 */
 export const BETA_SEATS = 100
 
+/**
+ * 정식 런칭일 — 베타 기간의 끝이자 유료 전환이 시작되는 날.
+ *
+ * 화면에 "10월 1일"을 직접 적지 말고 반드시 이 값을 쓸 것.
+ * 날짜가 밀리면 여기 한 줄만 고치면 랜딩·요금제·가입·대시보드가 함께 따라온다.
+ * (여러 곳에 날짜를 흩어 적으면 하나를 빠뜨려 사이트가 서로 다른 날을 말하게 된다)
+ */
+export const LAUNCH_DATE = '2026-10-01'
+export const LAUNCH_DATE_LABEL = '2026년 10월 1일'
+/** 문장 안에 짧게 넣을 때 — "10월 1일 정식 런칭" */
+export const LAUNCH_DATE_SHORT = '10월 1일'
+
+/**
+ * 아직 런칭 전인가 — "그전까지 무료" 같은 예고 문구를 런칭 후에 자동으로 거두기 위함.
+ * 서버는 UTC로 도니 KST 자정 기준으로 판단한다.
+ */
+export function isBeforeLaunch(now: Date = new Date()): boolean {
+  return now.getTime() < new Date(`${LAUNCH_DATE}T00:00:00+09:00`).getTime()
+}
+
 /** 베타 참여 업체가 받는 평생 할인율 (%) */
 export const BETA_LIFETIME_DISCOUNT_RATE = 50
 

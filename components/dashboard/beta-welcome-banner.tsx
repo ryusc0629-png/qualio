@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { X, Sparkles, Bug } from 'lucide-react'
 import { PLANS } from '@/lib/config/plans'
 import { formatMoney } from '@/lib/format/money'
+import { LAUNCH_DATE_LABEL, isBeforeLaunch } from '@/lib/config/beta'
 
 // 한 번 닫으면 다시 안 뜨게 기억하는 키
 const DISMISS_KEY = 'qualio-beta-welcome-dismissed'
@@ -27,6 +28,7 @@ export function BetaWelcomeBanner() {
 
   // 실제 최상위(확장) 플랜 가격을 그대로 표시 — 가격이 바뀌어도 자동 반영
   const scalePrice = formatMoney(PLANS.scale.price)
+  const beforeLaunch = isBeforeLaunch()
 
   const dismiss = () => {
     localStorage.setItem(DISMISS_KEY, '1')
@@ -54,6 +56,11 @@ export function BetaWelcomeBanner() {
             지금은 가장 높은{' '}
             <span className="font-semibold">‘확장’ 요금제(월 {scalePrice})</span>의 모든 기능을
             <span className="font-semibold"> 무료로</span> 쓰고 계세요. 마음껏 사용해보세요.
+          </p>
+          {/* 언제까지 무료인지 — 사장님이 갑자기 결제 안내를 받는 일이 없게 미리 알린다 */}
+          <p className="text-sm leading-relaxed text-emerald-800">
+            정식 런칭은 <span className="font-semibold">{LAUNCH_DATE_LABEL}</span>이에요.
+            {beforeLaunch && ' 그때까지는 요금이 청구되지 않아요.'}
           </p>
           <p className="flex items-start gap-1.5 text-sm leading-relaxed text-emerald-800">
             <Bug className="mt-0.5 h-4 w-4 shrink-0" />
