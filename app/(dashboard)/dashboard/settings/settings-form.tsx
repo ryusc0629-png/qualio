@@ -58,6 +58,7 @@ interface Business {
   review_reward_type: string
   review_reward_description: string | null
   logo_url: string | null
+  favicon_url: string | null
   hero_image_url: string | null
   brand_color: string | null
   brand_color_secondary: string | null
@@ -109,6 +110,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
     business.hero_style === 'light' ? 'light' : 'dark',
   )
   const [logoUrl, setLogoUrl] = useState(business.logo_url ?? '')
+  const [faviconUrl, setFaviconUrl] = useState(business.favicon_url ?? '')
   const [heroImageUrl, setHeroImageUrl] = useState(business.hero_image_url ?? '')
   const [heroTitle, setHeroTitle] = useState(business.hero_title ?? '')
   const [heroSubtitle, setHeroSubtitle] = useState(business.hero_subtitle ?? '')
@@ -284,6 +286,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
       brand_color_secondary:     normalizeHex(brandSecondary) ?? '',
       hero_style:                heroStyle,
       logo_url:                  logoUrl.trim(),
+      favicon_url:               faviconUrl.trim(),
       hero_image_url:            heroImageUrl.trim(),
       hero_title:                heroTitle.trim(),
       hero_subtitle:             heroSubtitle.trim(),
@@ -435,6 +438,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
         brandSecondary={brandSecondary}
         heroStyle={heroStyle}
         logoUrl={logoUrl}
+        faviconUrl={faviconUrl}
         heroImageUrl={heroImageUrl}
         heroTitle={heroTitle}
         heroSubtitle={heroSubtitle}
@@ -443,6 +447,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
           if (next.brandSecondary !== undefined) setBrandSecondary(next.brandSecondary)
           if (next.heroStyle !== undefined) setHeroStyle(next.heroStyle)
           if (next.logoUrl !== undefined) setLogoUrl(next.logoUrl)
+          if (next.faviconUrl !== undefined) setFaviconUrl(next.faviconUrl)
           if (next.heroImageUrl !== undefined) setHeroImageUrl(next.heroImageUrl)
           if (next.heroTitle !== undefined) setHeroTitle(next.heroTitle)
           if (next.heroSubtitle !== undefined) setHeroSubtitle(next.heroSubtitle)

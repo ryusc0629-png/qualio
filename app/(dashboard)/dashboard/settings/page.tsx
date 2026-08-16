@@ -34,7 +34,7 @@ export default async function SettingsPage() {
   const [businessResult, subscriptionResult, serviceCountResult, publicReportResult] = await Promise.all([
     db
       .from('businesses')
-      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, legal_name, payment_account, certifications, portfolio, target_customer, custom_domain, custom_domain_status' as never)
+      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, favicon_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, legal_name, payment_account, certifications, portfolio, target_customer, custom_domain, custom_domain_status' as never)
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
@@ -70,7 +70,8 @@ export default async function SettingsPage() {
     review_reward_type: string; review_reward_description: string | null
     slug: string | null; seo_title: string | null; seo_description: string | null
     seo_keywords: string | null; seo_faqs: unknown; seo_generated_at: string | null
-    logo_url: string | null; hero_image_url: string | null; brand_color: string | null
+    logo_url: string | null; favicon_url: string | null
+    hero_image_url: string | null; brand_color: string | null
     brand_color_secondary: string | null; hero_style: string | null
     hero_title: string | null; hero_subtitle: string | null
     strengths: { key: string; title: string; desc: string }[] | null

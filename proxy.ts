@@ -33,6 +33,14 @@ function handleCustomDomain(request: NextRequest, host: string): NextResponse {
     return NextResponse.next()
   }
 
+  // 브라우저·검색엔진이 자동으로 찾는 /favicon.ico → 그 업체 아이콘으로.
+  // (이 처리가 없으면 고객사 도메인에서도 퀄리오 아이콘이 그대로 나간다)
+  if (pathname === '/favicon.ico') {
+    const url = request.nextUrl.clone()
+    url.pathname = `/biz/${stripWww(host)}/favicon`
+    return NextResponse.rewrite(url)
+  }
+
   if (platformOnlyPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return NextResponse.redirect(`${appOrigin}${pathname}${search}`, 308)
   }
@@ -52,6 +60,10 @@ export async function proxy(request: NextRequest) {
   if (!isPlatformHost(host)) {
     return handleCustomDomain(request, host!.toLowerCase().split(':')[0])
   }
+
+  // 퀄리오 도메인의 파비콘은 정적 파일(app/favicon.ico) 그대로 —
+  // 아이콘 요청까지 세션 확인(Supabase 왕복)을 하지 않도록 여기서 끝낸다.
+  if (request.nextUrl.pathname === '/favicon.ico') return NextResponse.next()
 
   let supabaseResponse = NextResponse.next({ request })
 
@@ -113,8 +125,11 @@ export const config = {
      * 아래 경로를 제외한 모든 요청에 프록시 적용:
      * - _next/static (정적 파일)
      * - _next/image (이미지 최적화)
-     * - favicon.ico, sitemap.xml, robots.txt
+     * - sitemap.xml, robots.txt
+     *
+     * favicon.ico는 제외하지 않는다 — 고객사 도메인에서 그 업체 아이콘으로 넘겨야 하기 때문.
+     * (퀄리오 도메인 요청은 proxy 앞부분에서 곧바로 통과시킨다)
      */
-    '/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

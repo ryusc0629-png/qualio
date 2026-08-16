@@ -32,6 +32,7 @@ interface Props {
   brandSecondary: string
   heroStyle: HeroStyle
   logoUrl: string
+  faviconUrl: string
   heroImageUrl: string
   heroTitle: string
   heroSubtitle: string
@@ -40,6 +41,7 @@ interface Props {
     brandSecondary?: string
     heroStyle?: HeroStyle
     logoUrl?: string
+    faviconUrl?: string
     heroImageUrl?: string
     heroTitle?: string
     heroSubtitle?: string
@@ -58,6 +60,7 @@ export function BrandDesignSection({
   brandSecondary,
   heroStyle,
   logoUrl,
+  faviconUrl,
   heroImageUrl,
   heroTitle,
   heroSubtitle,
@@ -67,8 +70,10 @@ export function BrandDesignSection({
   const secondary = normalizeHex(brandSecondary) ?? DEFAULT_BRAND_SECONDARY
   const isDark = heroStyle === 'dark'
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const faviconInputRef = useRef<HTMLInputElement>(null)
   const heroImageInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [isUploadingFavicon, setIsUploadingFavicon] = useState(false)
   const [isUploadingHero, setIsUploadingHero] = useState(false)
   const [showHeroGuide, setShowHeroGuide] = useState(false)
 
@@ -93,6 +98,26 @@ export function BrandDesignSection({
     } finally {
       setIsUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleFaviconUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploadingFavicon(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch('/api/upload-logo', { method: 'POST', body: form })
+      const json = await res.json() as { url?: string; error?: string }
+      if (!res.ok || !json.url) throw new Error(json.error ?? '업로드 실패')
+      onChange({ faviconUrl: json.url })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '업로드에 실패했어요. 다시 시도해주세요')
+    } finally {
+      setIsUploadingFavicon(false)
+      if (faviconInputRef.current) faviconInputRef.current.value = ''
     }
   }
 
@@ -452,6 +477,64 @@ export function BrandDesignSection({
         />
         <p className="text-[11px] text-muted-foreground">
           비워두면 업체명이 글자로 표시돼요. 로고를 올리면 페이지 상단에 표시됩니다. (JPG, PNG 5MB 이하)
+        </p>
+      </div>
+
+      {/* ── 작은 아이콘(파비콘) 업로드 ── 네이버 검색 결과·브라우저 탭에 보이는 그 아이콘 */}
+      <div className="space-y-2">
+        <Label className="text-xs">작은 아이콘 (선택)</Label>
+
+        {faviconUrl ? (
+          <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={faviconUrl}
+              alt="작은 아이콘 미리보기"
+              className="h-8 w-8 object-contain rounded border bg-white"
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-muted-foreground truncate">{faviconUrl.split('/').pop()}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onChange({ faviconUrl: '' })}
+              className="shrink-0 rounded-full p-1 hover:bg-muted text-muted-foreground"
+              aria-label="작은 아이콘 삭제"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => faviconInputRef.current?.click()}
+            disabled={isUploadingFavicon}
+            className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/30 py-5 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors disabled:opacity-50"
+          >
+            {isUploadingFavicon ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                올리는 중...
+              </>
+            ) : (
+              <>
+                <Upload className="h-4 w-4" />
+                작은 아이콘 올리기
+              </>
+            )}
+          </button>
+        )}
+
+        <input
+          ref={faviconInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFaviconUpload}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          네이버 검색 결과와 브라우저 탭에 보이는 작은 아이콘이에요. 정사각형 그림이 가장 잘 보여요.
+          {faviconUrl ? '' : logoUrl ? ' 비워두면 위 로고를 그대로 써요.' : ' 비워두면 업체명 첫 글자로 만들어 드려요.'}
         </p>
       </div>
 
