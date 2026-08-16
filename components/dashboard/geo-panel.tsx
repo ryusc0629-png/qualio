@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { generateGeoContentAction, updateSlugAction, updateGeoKeywordsAction } from '@/lib/actions/geo'
-import { Sparkles, Copy, ExternalLink, RefreshCw, ListPlus, Check } from 'lucide-react'
+import { Sparkles, Copy, ExternalLink, RefreshCw, ListPlus, Check, Pencil, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 
 interface FaqItem {
@@ -22,6 +22,7 @@ interface Props {
   serviceCount: number   // 등록된 활성 서비스 수 — 0개면 AI 생성을 막아 추측성 글 방지
   hasAddress: boolean    // 업체 지역(주소) 입력 여부 — 지역 GEO 최적화에 필수
   slug: string | null
+  slugChosen: boolean     // 사장님이 주소를 직접 정한 적이 있는지 — 임시 주소 안내 노출 판단
   seoTitle: string | null
   seoDescription: string | null
   seoKeywords: string | null
@@ -50,6 +51,7 @@ export function GeoPanel({
   serviceCount,
   hasAddress,
   slug: initialSlug,
+  slugChosen,
   seoTitle: initialTitle,
   seoDescription: initialDescription,
   seoKeywords: initialKeywords,
@@ -75,6 +77,13 @@ export function GeoPanel({
   const [draftKeywords, setDraftKeywords]     = useState(initialKeywords ?? '')
 
   const publicUrl = slug ? `${appUrl}/biz/${slug}` : null
+
+  // 가입할 때 자동으로 붙는 임시 주소인지 판단.
+  // 업체명이 한글뿐이면 영문으로 옮길 게 없어 무작위 5글자(예: 8x1xo)만 남는다.
+  // 사장님이 한 번이라도 직접 정했으면(slugChosen) 그건 고른 주소이므로 안내하지 않는다.
+  const [slugChosenNow, setSlugChosenNow] = useState(slugChosen)
+  const looksTemporary =
+    !slugChosenNow && !!slug && (/^[a-z0-9]{5}$/.test(slug) || /-[a-z0-9]{5}$/.test(slug))
 
   // 실제로 홍보 페이지 내용을 만든 적이 있는지 — slug 유무가 아니라 생성 기록/제목으로 판단
   // (slug는 저장 시 자동 생성돼 있을 수 있어, slug로 판단하면 생성 전인데 '재생성'으로 잘못 뜸)
@@ -116,10 +125,11 @@ export function GeoPanel({
   const { execute: updateSlug, isPending: isUpdatingSlug } = useAction(updateSlugAction, {
     onSuccess: () => {
       setSlug(newSlug)
+      setSlugChosenNow(true)
       setEditingSlug(false)
-      toast.success('페이지 주소가 변경되었습니다')
+      toast.success('홈페이지 주소를 바꿨어요')
     },
-    onError: ({ error }) => toast.error(error.serverError ?? '주소 변경에 실패했습니다'),
+    onError: ({ error }) => toast.error(error.serverError ?? '주소를 못 바꿨어요. 다시 눌러주세요'),
   })
 
   const copyUrl = () => {
@@ -155,7 +165,34 @@ export function GeoPanel({
       {/* 공개 페이지 URL */}
       {slug && (
         <div className="space-y-2">
-          <Label>공개 페이지 주소</Label>
+          <Label>내 홈페이지 주소</Label>
+
+          {/* 임시 주소 안내 — 뜻 없는 글자를 받은 사장님이 그냥 지나치지 않도록 */}
+          {looksTemporary && !editingSlug && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-2.5">
+              <div className="flex gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-amber-900">
+                    지금 주소는 임시로 만든 거예요
+                  </p>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    업체 이름이 한글이라 주소를 자동으로 만들지 못하고 <span className="font-semibold">{slug}</span> 같은
+                    임시 글자를 넣어뒀어요. 손님이 기억하기 어렵고 명함에 적기도 어려우니, 영어 이름으로 바꿔주세요.
+                    (예: dartclean)
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                className="w-full h-12 text-base font-semibold"
+                onClick={() => setEditingSlug(true)}
+              >
+                내 주소 정하기
+              </Button>
+            </div>
+          )}
+
           {editingSlug ? (
             <div className="space-y-2.5">
               {/* 주소 입력 — 한 줄 전체 */}
@@ -203,34 +240,40 @@ export function GeoPanel({
               </div>
             </div>
           ) : (
-            <div className="flex gap-2">
-              <Input
-                value={publicUrl ?? ''}
-                readOnly
-                className="flex-1 min-w-0 text-sm bg-muted cursor-default"
-              />
-              <Button type="button" size="icon" variant="outline" onClick={copyUrl}>
-                <Copy className="h-4 w-4" />
-              </Button>
-              <a href={publicUrl ?? '#'} target="_blank" rel="noopener noreferrer">
-                <Button type="button" size="icon" variant="outline">
-                  <ExternalLink className="h-4 w-4" />
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  value={publicUrl ?? ''}
+                  readOnly
+                  className="flex-1 min-w-0 text-sm bg-muted cursor-default"
+                />
+                <Button type="button" size="icon" variant="outline" onClick={copyUrl} title="주소 복사">
+                  <Copy className="h-4 w-4" />
                 </Button>
-              </a>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setEditingSlug(true)}
-              >
-                변경
-              </Button>
+                <a href={publicUrl ?? '#'} target="_blank" rel="noopener noreferrer">
+                  <Button type="button" size="icon" variant="outline" title="새 창으로 열어보기">
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                </a>
+              </div>
+              {/* 임시 주소일 땐 위 안내에 큰 버튼이 이미 있으므로 중복 노출하지 않는다 */}
+              {!looksTemporary && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-12 gap-2 text-base"
+                  onClick={() => setEditingSlug(true)}
+                >
+                  <Pencil className="h-4 w-4" />
+                  주소 바꾸기
+                </Button>
+              )}
             </div>
           )}
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground leading-relaxed">
             {editingSlug
-              ? '영어 소문자·숫자·하이픈만 쓸 수 있어요 (예: dartclean). 한글은 공유할 때 깨질 수 있어 막아뒀어요. 주소를 바꿔도 예전 주소로 들어오면 새 주소로 자동 연결돼 기존 링크는 안 깨져요.'
-              : '이 링크를 카카오톡·블로그·SNS에 공유하면 AI 검색엔진이 업체를 인식합니다'}
+              ? '영어 소문자·숫자·하이픈(-)만 됩니다. 한글은 공유할 때 글자가 깨져서 막아뒀어요 (예: dartclean). 주소를 바꿔도 예전 주소로 들어온 손님은 새 주소로 자동 연결되니, 명함·블로그에 뿌려둔 링크는 안 깨져요.'
+              : '이게 사장님 홈페이지 주소예요. 명함·카카오톡·블로그에 그대로 쓰시면 됩니다.'}
           </p>
         </div>
       )}

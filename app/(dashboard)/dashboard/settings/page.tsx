@@ -34,7 +34,7 @@ export default async function SettingsPage() {
   const [businessResult, subscriptionResult, serviceCountResult, publicReportResult] = await Promise.all([
     db
       .from('businesses')
-      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, favicon_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, legal_name, payment_account, certifications, portfolio, target_customer, custom_domain, custom_domain_status' as never)
+      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, previous_slugs, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, favicon_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, legal_name, payment_account, certifications, portfolio, target_customer, custom_domain, custom_domain_status' as never)
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
@@ -68,7 +68,8 @@ export default async function SettingsPage() {
     kakao_place_url: string | null; active_review_platform: string; youtube_url: string | null
     instagram_url: string | null; naver_blog_id: string | null; danggeun_business_url: string | null; service_areas: string[] | null
     review_reward_type: string; review_reward_description: string | null
-    slug: string | null; seo_title: string | null; seo_description: string | null
+    slug: string | null; previous_slugs: string[] | null
+    seo_title: string | null; seo_description: string | null
     seo_keywords: string | null; seo_faqs: unknown; seo_generated_at: string | null
     logo_url: string | null; favicon_url: string | null
     hero_image_url: string | null; brand_color: string | null
@@ -93,6 +94,13 @@ export default async function SettingsPage() {
 
   // 지역 GEO 최적화엔 주소가 필수 — 비어 있으면 생성 게이트로 막는다
   const hasAddress = !!business.address?.trim()
+
+  // 가입 시 자동으로 붙는 임시 주소(무작위 5글자)인지 — 한글 상호는 영문으로 옮길 게 없어 이렇게 된다.
+  // 사장님이 한 번이라도 직접 정했으면 previous_slugs에 옛 주소가 남으므로 임시가 아니다.
+  const slugChosen = (business.previous_slugs?.length ?? 0) > 0
+  const slugIsTemporary =
+    !slugChosen && !!business.slug &&
+    (/^[a-z0-9]{5}$/.test(business.slug) || /-[a-z0-9]{5}$/.test(business.slug))
 
   const baseUrl  = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   // 읽기 좋은 주소(slug)가 있으면 그걸로, 없으면 옛 UUID로 — 둘 다 /q 라우트가 받음
@@ -153,9 +161,12 @@ export default async function SettingsPage() {
       )}
 
       {/* 홍보 페이지 내용(GEO) — 미리보기 체크리스트에서 여기로 이동시키기 위해 id 부여 */}
+      {/* 제목에 '홈페이지 주소'를 넣은 이유: 주소 바꾸는 곳이 여기라는 걸 접힌 상태에서도 알 수 있게. */}
+      {/* 임시 주소(자동 생성)인 사장님에겐 처음부터 펼쳐 보여준다. */}
       <CollapsibleSection
-        title="홍보 페이지 내용"
-        description="검색·AI(ChatGPT·Gemini)에 노출되는 업체 소개·FAQ를 자동으로 만들어요."
+        title="홈페이지 주소 · 홍보 내용"
+        description="손님에게 보여줄 내 홈페이지 주소를 정하고, 검색·AI(ChatGPT·Gemini)에 노출되는 업체 소개·FAQ를 자동으로 만들어요."
+        defaultOpen={slugIsTemporary}
       >
       <div id="field-geo">
       <GeoPanel
@@ -164,6 +175,7 @@ export default async function SettingsPage() {
         serviceCount={serviceCount}
         hasAddress={hasAddress}
         slug={business.slug ?? null}
+        slugChosen={slugChosen}
         seoTitle={business.seo_title ?? null}
         seoDescription={business.seo_description ?? null}
         seoKeywords={business.seo_keywords ?? null}
