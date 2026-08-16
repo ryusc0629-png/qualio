@@ -146,7 +146,10 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
   const { execute: executeDelete, isPending: deleting } = useAction(deleteLeadAction, {
     onSuccess: () => {
       toast.success('삭제했어요')
-      window.location.replace('/dashboard/pipeline')
+      // 보관해 둔 거래처를 지웠으면 보관 목록이 있는 고객 관리로, 아니면 영업 목록으로
+      window.location.replace(
+        lead.status === 'archived' ? '/dashboard/clients?type=company' : '/dashboard/pipeline'
+      )
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -159,7 +162,9 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
     }
 
     const extra = activities.length > 0 ? `\n상담 기록 ${activities.length}개도 함께 지워져요.` : ''
-    if (confirm(`"${lead.company_name}"을(를) 완전히 삭제할까요?${extra}\n\n되돌릴 수 없어요. 나중에 다시 볼 수도 있다면 '보관하기'를 쓰세요.`)) {
+    // 이미 보관된 거래처엔 '보관하기를 쓰세요' 권유가 맞지 않는다
+    const hint = lead.status === 'archived' ? '' : " 나중에 다시 볼 수도 있다면 '보관하기'를 쓰세요."
+    if (confirm(`"${lead.company_name}"을(를) 완전히 삭제할까요?${extra}\n\n되돌릴 수 없어요.${hint}`)) {
       executeDelete({ leadId: lead.id })
     }
   }
@@ -226,13 +231,24 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
           뒤로
         </button>
         {lead.status === 'archived' ? (
-          <button
-            onClick={() => executeUnarchive({ leadId: lead.id, status: 'new' })}
-            disabled={unarchiving}
-            className="text-xs text-primary font-medium hover:underline disabled:opacity-50"
-          >
-            {unarchiving ? '처리 중...' : '보관 해제'}
-          </button>
+          // 보관된 거래처도 완전 삭제할 수 있어야 한다 — 보관 해제 없이 바로 지우는 길
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => executeUnarchive({ leadId: lead.id, status: 'new' })}
+              disabled={unarchiving}
+              className="text-xs text-primary font-medium hover:underline disabled:opacity-50"
+            >
+              {unarchiving ? '처리 중...' : '보관 해제'}
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-red-600 disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {deleting ? '삭제 중...' : '삭제'}
+            </button>
+          </div>
         ) : (
           <div className="flex items-center gap-3">
             <button

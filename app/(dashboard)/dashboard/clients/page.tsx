@@ -10,6 +10,7 @@ import { ConfirmBookingButton } from '@/components/dashboard/confirm-booking-but
 import { CancelQuoteButton } from '@/components/dashboard/cancel-quote-button'
 import { ExcludeQuoteButton } from '@/components/dashboard/exclude-quote-button'
 import { CancelledQuotesSection, type CancelledQuote } from '@/components/dashboard/cancelled-quotes-section'
+import { DeleteLeadButton } from '@/components/dashboard/delete-lead-button'
 import { formatFrequency } from '@/lib/utils/frequency'
 import { contractAccruedRevenue, type ContractPriceSegment } from '@/lib/utils/ltv'
 import { isActiveSalesStage, salesStageMeta } from '@/lib/business/sales-stage'
@@ -324,6 +325,19 @@ export default async function ClientsPage({
     (leads ?? []).filter(l => l.customer_type === 'company' && l.status !== 'archived' && !registeredLeadIds.has(l.id) && matchesSearch(l.company_name))
   )
   const archivedLeads = (leads ?? []).filter(l => l.customer_type === 'company' && l.status === 'archived' && matchesSearch(l.company_name))
+
+  // 보관 목록을 펼쳤을 때만 — 삭제 확인창에 "상담 기록 N개도 함께 지워져요"를 정확히 띄우기 위한 개수
+  const archivedActivityCount: Record<string, number> = {}
+  if (showArchived && archivedLeads.length > 0) {
+    const { data: archivedActivities } = await db
+      .from('lead_activities')
+      .select('lead_id')
+      .eq('business_id', businessId)
+      .in('lead_id', archivedLeads.map(l => l.id))
+    for (const a of archivedActivities ?? []) {
+      if (a.lead_id) archivedActivityCount[a.lead_id] = (archivedActivityCount[a.lead_id] ?? 0) + 1
+    }
+  }
 
   // 개인 상담 리드 (leads의 individual, 아직 고객 미전환) — AI 상담·현장견적 문의로 들어온 개인
   const individualCustomerPhones = new Set((customers ?? []).map(c => normalizePhone(c.phone)).filter(Boolean))
@@ -853,9 +867,18 @@ export default async function ClientsPage({
                             {lead.notes && <p className="text-xs text-muted-foreground line-clamp-1 mt-1">{lead.notes}</p>}
                           </div>
                         </div>
-                        <Link href={`/dashboard/pipeline/${lead.id}`} className="text-xs text-primary hover:underline shrink-0 whitespace-nowrap">
-                          다시 영업하기 →
-                        </Link>
+                        <div className="shrink-0 flex items-center gap-1">
+                          <Link href={`/dashboard/pipeline/${lead.id}`} className="text-xs text-primary hover:underline whitespace-nowrap">
+                            다시 영업하기 →
+                          </Link>
+                          {/* 보관해 둔 거래처를 목록에서 아예 없앨 때 — 되돌릴 수 없어 확인창을 거친다 */}
+                          <DeleteLeadButton
+                            leadId={lead.id}
+                            leadName={lead.company_name}
+                            quoteCount={b2bQuoteCountMap[lead.id] ?? 0}
+                            activityCount={archivedActivityCount[lead.id] ?? 0}
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}

@@ -327,5 +327,6 @@ export const deleteLeadAction = action
 
     if (error) throw new Error('[APP] 삭제에 실패했습니다')
     revalidatePath('/dashboard/pipeline')
+    revalidatePath('/dashboard/clients') // 보관 목록에서 지운 경우 바로 사라지도록
     return { success: true }
   })
