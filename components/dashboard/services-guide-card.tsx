@@ -11,6 +11,9 @@ interface Props {
 
 // 비테크 사장님용 단계별 안내 카드 — '이렇게 하면 끝나요' + 클릭 유도.
 // 두 단계가 모두 끝나면 기본 접힘(완료 표시), 아니면 펼침.
+// ⚠️ 여기에 '저장하기' 같은 단계를 다시 만들지 말 것.
+//    이 화면엔 따로 저장 버튼이 없고, 서비스를 추가·수정하면 그 자리에서 저장된다.
+//    예전에 '3. 저장하면 끝!'이 있었는데 완료될 수가 없어 영원히 미완으로 남았다.
 export function ServicesGuideCard({ serviceCount, hasBundles }: Props) {
   const step1Done = serviceCount > 0
   const step2Done = hasBundles
@@ -27,7 +30,7 @@ export function ServicesGuideCard({ serviceCount, hasBundles }: Props) {
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-primary" />
           <span className="font-semibold text-sm">
-            {allDone ? '서비스 설정을 마쳤어요 🎉' : '서비스 설정, 3단계면 끝나요'}
+            {allDone ? '서비스 설정을 마쳤어요 🎉' : '서비스 설정, 2단계면 끝나요'}
           </span>
         </div>
         {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
@@ -62,16 +65,11 @@ export function ServicesGuideCard({ serviceCount, hasBundles }: Props) {
             </div>
           </div>
 
-          {/* 3단계 */}
-          <div className="flex gap-3">
-            <StepBadge n={3} done={false} />
-            <div className="flex-1">
-              <p className="text-sm font-medium">저장하면 끝!</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                저장한 내용은 고객 견적서에 자동으로 반영돼요.
-              </p>
-            </div>
-          </div>
+          {/* 따로 저장할 게 없다는 안내 — 단계가 아니라 마무리 한 줄 */}
+          <p className="text-xs text-muted-foreground bg-white/60 rounded-lg px-3 py-2 leading-relaxed">
+            따로 저장 버튼은 없어요. 여기서 추가·수정하면 바로 저장되고,
+            고객 견적 폼과 홈페이지에 자동으로 반영돼요.
+          </p>
         </div>
       )}
     </div>
