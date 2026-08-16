@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
 import { Phone, MapPin, Calendar, CreditCard, Receipt } from 'lucide-react'
+import { BusinessAvatar } from '@/components/biz/business-avatar'
 
 interface PageProps {
   params: Promise<{ businessId: string; bookingId: string }>
@@ -32,11 +33,14 @@ export default async function ReceiptPage({ params }: PageProps) {
       .eq('id', bookingId)
       .eq('business_id', businessId)
       .maybeSingle(),
+    // favicon_url은 database.ts 타입에 아직 없어 단언으로 받는다 (CLAUDE.md 새 컬럼 패턴)
     db
       .from('businesses')
-      .select('name, phone')
+      .select('name, phone, logo_url, favicon_url' as never)
       .eq('id', businessId)
-      .maybeSingle(),
+      .maybeSingle() as unknown as PromiseLike<{ data: {
+        name: string; phone: string | null; logo_url: string | null; favicon_url: string | null
+      } | null }>,
   ])
 
   // 완료된 예약만 영수증 발행 가능
@@ -65,9 +69,7 @@ export default async function ReceiptPage({ params }: PageProps) {
       <header className="bg-white sticky top-0 z-10 border-b border-border">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
-              {business.name.slice(0, 1)}
-            </div>
+            <BusinessAvatar name={business.name} logoUrl={business.logo_url} faviconUrl={business.favicon_url} />
             <div>
               <p className="font-bold text-sm leading-tight">{business.name}</p>
               <p className="text-[11px] text-zinc-400">영수증</p>

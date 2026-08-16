@@ -24,9 +24,13 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
 
   // UUID면 id로, 아니면 slug로 조회
   const { data: business } = await (UUID_RE.test(idOrSlug)
-    ? db.from('businesses').select('id, name, description, slug').eq('id', idOrSlug)
-    : db.from('businesses').select('id, name, description, slug').eq('slug', idOrSlug)
-  ).maybeSingle()
+    ? db.from('businesses').select('id, name, description, slug, logo_url, favicon_url' as never).eq('id', idOrSlug)
+    : db.from('businesses').select('id, name, description, slug, logo_url, favicon_url' as never).eq('slug', idOrSlug)
+  // favicon_url은 database.ts 타입에 아직 없어 단언으로 받는다 (CLAUDE.md 새 컬럼 패턴)
+  ).maybeSingle() as unknown as { data: {
+    id: string; name: string; description: string | null; slug: string | null
+    logo_url: string | null; favicon_url: string | null
+  } | null }
 
   if (!business) {
     // 옛 주소(slug)로 들어왔으면 현재 주소로 영구 이동(301) — 공유/색인된 링크 보존
@@ -94,6 +98,7 @@ export default async function PublicQuotePage({ params, searchParams }: Props) {
       <QuoteForm
         businessId={business.id}
         businessName={business.name}
+        businessLogoUrl={business.favicon_url || business.logo_url}
         services={typedServices}
         reviewSummary={reviewSummary}
         // 견적서 알림톡 템플릿이 실제 설정된 경우에만 "카톡으로 보내드릴게요" 안내 (미승인 시 거짓 약속 방지)

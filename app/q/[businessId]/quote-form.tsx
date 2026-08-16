@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { ChevronRight, ChevronLeft, Star, MessageCircle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { QuoteChatWidget } from '@/components/quote/quote-chat-widget'
+import { BusinessAvatar } from '@/components/biz/business-avatar'
 import { calculateAndCreateQuoteAction, createConsultationRequestAction } from '@/lib/actions/quotes'
 import { getApplianceTypes, getAppliancePreset, isApplianceService, type ApplianceType } from '@/lib/utils'
 import { trackFunnel } from '@/lib/utils/track-funnel'
@@ -44,6 +45,8 @@ interface ServiceItem {
 interface QuoteFormProps {
   businessId: string
   businessName: string
+  // 업체 파비콘(없으면 로고) — 헤더 아이콘. 둘 다 없으면 업체명 첫 글자로 대체된다
+  businessLogoUrl?: string | null
   services: ServiceItem[]
   // 견적서 알림톡이 실제 발송 가능한 상태(템플릿 설정됨)인지 — 문구를 정직하게 노출하기 위함
   quoteAlimtalkEnabled?: boolean
@@ -396,12 +399,10 @@ function InlineCalendar({ onSelect }: { onSelect: (label: string, value: string)
   )
 }
 
-function BotBubble({ text, initial }: { text: string; initial: string }) {
+function BotBubble({ text, avatar }: { text: string; avatar: React.ReactNode }) {
   return (
     <div className="flex items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0 mb-0.5">
-        {initial}
-      </div>
+      {avatar}
       <div className="max-w-[78%] bg-white rounded-3xl rounded-bl-lg px-4 py-3 shadow-sm">
         <p className="text-sm text-[#1A1A1A] font-medium leading-relaxed break-keep whitespace-pre-line">{text}</p>
       </div>
@@ -419,12 +420,10 @@ function UserBubble({ text }: { text: string }) {
   )
 }
 
-function TypingBubble({ initial }: { initial: string }) {
+function TypingBubble({ avatar }: { avatar: React.ReactNode }) {
   return (
     <div className="flex items-end gap-2 animate-in fade-in duration-200">
-      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0 mb-0.5">
-        {initial}
-      </div>
+      {avatar}
       <div className="bg-white rounded-3xl rounded-bl-lg px-4 py-3.5 shadow-sm">
         <div className="flex items-center gap-1">
           <span className="w-1.5 h-1.5 rounded-full bg-[#C0B8B0] animate-bounce [animation-delay:0ms]" />
@@ -439,7 +438,7 @@ function TypingBubble({ initial }: { initial: string }) {
 // 견적 계산 중 — '열심히 만드는 중' 느낌을 주는 생생한 로딩 카드.
 // 상태 메시지를 순차로 넘기고(펄스 스파클·통통 튀는 점·차오르는 진행바), 실제 계산이
 // 끝나면 상위에서 언마운트된다. 정적 문구가 멈춘 듯 보이던 문제 해결.
-function QuoteCalculatingBubble({ initial, steps }: { initial: string; steps: string[] }) {
+function QuoteCalculatingBubble({ avatar, steps }: { avatar: React.ReactNode; steps: string[] }) {
   const [idx, setIdx] = useState(0)
   useEffect(() => {
     if (idx >= steps.length - 1) return // 마지막 메시지에서 멈춰 대기
@@ -451,9 +450,7 @@ function QuoteCalculatingBubble({ initial, steps }: { initial: string; steps: st
 
   return (
     <div className="flex items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0 mb-0.5">
-        {initial}
-      </div>
+      {avatar}
       <div className="max-w-[85%] w-full bg-white rounded-3xl rounded-bl-lg px-4 py-4 shadow-sm space-y-3">
         {/* 헤더 — 펄스 스파클 + 제목 */}
         <div className="flex items-center gap-2">
@@ -488,7 +485,7 @@ function QuoteCalculatingBubble({ initial, steps }: { initial: string; steps: st
   )
 }
 
-export function QuoteForm({ businessId, businessName, services, reviewSummary, quoteAlimtalkEnabled = false }: QuoteFormProps) {
+export function QuoteForm({ businessId, businessName, businessLogoUrl, services, reviewSummary, quoteAlimtalkEnabled = false }: QuoteFormProps) {
   const [currentStep, setCurrentStep] = useState<Step>('service')
   const [completedSteps, setCompletedSteps] = useState<Step[]>([])
   const [isTyping, setIsTyping] = useState(false)
@@ -578,7 +575,8 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
     onError: ({ error }) => toast.error(error.serverError ?? '접수에 실패했어요. 다시 시도해주세요'),
   })
 
-  const initial = businessName.slice(0, 1)
+  // 말풍선 프로필 아이콘 — 카톡 대화처럼 보이는 화면이라 업체 로고가 있으면 그걸 쓴다
+  const avatar = <BusinessAvatar name={businessName} logoUrl={businessLogoUrl} className="w-8 h-8 mb-0.5" />
   const progressPct = (completedSteps.length / stepSequence.length) * 100
 
   const getQuestion = (step: Step): string => {
@@ -775,9 +773,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
       <header className="bg-white border-b border-border sticky top-0 z-10">
         <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
-              {initial}
-            </div>
+            <BusinessAvatar name={businessName} logoUrl={businessLogoUrl} />
             <div className="min-w-0">
               <p className="font-bold text-sm text-[#1A1A1A] leading-tight truncate">{businessName}</p>
               <p className="text-[11px] text-[#8D8D8D]">견적 문의</p>
@@ -835,7 +831,7 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
 
           {completedSteps.map((step) => (
             <div key={step} className="space-y-2">
-              <BotBubble text={getQuestion(step)} initial={initial} />
+              <BotBubble text={getQuestion(step)} avatar={avatar} />
               <UserBubble text={getAnswerDisplay(step)} />
             </div>
           ))}
@@ -843,10 +839,10 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
           {/* 제출 중 — 연락처 답변 + 생생한 계산 애니메이션 */}
           {calculating && (
             <div className="space-y-2">
-              <BotBubble text={getQuestion('phone')} initial={initial} />
+              <BotBubble text={getQuestion('phone')} avatar={avatar} />
               <UserBubble text={customerPhone} />
               <QuoteCalculatingBubble
-                initial={initial}
+                avatar={avatar}
                 steps={[
                   '입력하신 내용을 확인하고 있어요',
                   spaceSize
@@ -862,8 +858,8 @@ export function QuoteForm({ businessId, businessName, services, reviewSummary, q
           {/* 타이핑 중 또는 현재 질문 */}
           {!calculating && (
             isTyping
-              ? <TypingBubble initial={initial} />
-              : <BotBubble text={getQuestion(currentStep)} initial={initial} />
+              ? <TypingBubble avatar={avatar} />
+              : <BotBubble text={getQuestion(currentStep)} avatar={avatar} />
           )}
 
           <div className="h-1" />
