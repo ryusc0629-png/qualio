@@ -309,6 +309,26 @@ export default async function CustomerDetailPage({ params }: Props) {
   const historyBookings = bookingList.filter((b) => !isUpcomingRecurringVisit(b))
   const hiddenRecurringCount = bookingList.length - historyBookings.length
 
+  // 남은 이력도 둘로 나눈다.
+  // 일회성 예약은 건마다 내용이 달라 카드로 펼쳐 보여주고,
+  // 정기 방문은 '매주 같은 일정'이 수십 건 반복될 뿐이라 카드로 깔면 스크롤만 길어진다 → 접힌 한 줄 목록으로.
+  const oneOffHistory = historyBookings.filter((b) => !b.contract_id)
+  const recurringHistory = historyBookings.filter((b) => Boolean(b.contract_id))
+  const recurringDoneCount = recurringHistory.filter((b) => b.status === 'completed').length
+
+  // 정기 방문을 '2026년 8월' 단위로 묶는다 (조회 순서가 최신순이라 그룹도 최신순 유지)
+  const recurringByMonth: Array<[string, BookingWithWorker[]]> = []
+  for (const b of recurringHistory) {
+    const monthLabel = new Date(b.scheduled_at).toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      timeZone: 'Asia/Seoul',
+    })
+    const last = recurringByMonth[recurringByMonth.length - 1]
+    if (last && last[0] === monthLabel) last[1].push(b)
+    else recurringByMonth.push([monthLabel, [b]])
+  }
+
   // 거래 형태(일회성/정기)는 '누구(개인/거래처)'와 독립된 축.
   // 활성 정기계약이 있을 때만 '정기계약중'. 거래처라도 계약 전이면 '일회성'(계약 전 대청소 등).
   // (customer.type==='recurring'은 '거래처' 신원 플래그일 뿐 거래형태가 아님 — 목록 페이지와 동일 규칙)
@@ -344,16 +364,17 @@ export default async function CustomerDetailPage({ params }: Props) {
 
       {/* 고객 기본 정보 */}
       <div className="bg-white rounded-xl border border-border p-5 space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-bold">{customer.name}</h1>
+        {/* 모바일에선 이름 아래로 배지를 내린다 — 한 줄에 욱여넣으면 이름 칸이 한 글자 폭까지 눌려 세로로 쪼개짐 */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold break-keep">{customer.name}</h1>
             {customer.category && (
               <span className="mt-1 inline-block text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
                 {customer.category}
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          <div className="flex items-center gap-2 flex-wrap sm:shrink-0 sm:justify-end">
             {/* 누구(개인/거래처) — 신원 축 */}
             <span className={`text-xs px-2 py-1 rounded-full font-medium ${
               isCompany ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'
@@ -403,9 +424,9 @@ export default async function CustomerDetailPage({ params }: Props) {
         )}
       </div>
 
-      {/* 실적 요약 */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white rounded-xl border border-border p-4">
+      {/* 실적 요약 — 모바일에선 '누적 매출'만 한 줄 전체를 써서 금액이 잘리지 않게 한다 */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="col-span-2 bg-white rounded-xl border border-border p-4 sm:col-span-1">
           <p className="text-xs text-muted-foreground">누적 매출</p>
           <p className="text-2xl font-bold mt-1 tabular-nums">
             {totalLTV > 0 ? totalLTV.toLocaleString('ko-KR') : '—'}
@@ -654,7 +675,74 @@ export default async function CustomerDetailPage({ params }: Props) {
           </div>
         ) : (
           <div className="space-y-2">
-            {historyBookings.map((booking) => {
+            {/* 정기 방문 기록 — 반복되는 같은 일정이라 기본은 접어두고, 필요할 때만 펼쳐 한 줄씩 본다 */}
+            {recurringHistory.length > 0 && (
+              <details className="group bg-white rounded-xl border border-border">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 [&::-webkit-details-marker]:hidden">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Repeat className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">정기 방문 기록 {recurringHistory.length}건</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        완료 {recurringDoneCount}회 · 눌러서 펼쳐보기
+                      </span>
+                    </span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
+                </summary>
+                <div className="max-h-96 overflow-y-auto overscroll-contain border-t border-border px-4 py-1">
+                  {recurringByMonth.map(([monthLabel, visits]) => (
+                    <div key={monthLabel} className="py-2">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {monthLabel} <span className="font-normal text-muted-foreground/70">{visits.length}회</span>
+                      </p>
+                      <ul className="mt-1 divide-y divide-border/60">
+                        {visits.map((visit) => {
+                          const meta = STATUS_META[visit.status] ?? { label: visit.status, className: 'bg-gray-100 text-gray-600' }
+                          const reportId = reportMap.get(visit.id)
+                          const dayLabel = new Date(visit.scheduled_at).toLocaleDateString('ko-KR', {
+                            month: 'long',
+                            day: 'numeric',
+                            weekday: 'short',
+                            timeZone: 'Asia/Seoul',
+                          })
+                          const rowInner = (
+                            <>
+                              <span className="tabular-nums">{dayLabel}</span>
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${meta.className}`}>
+                                {meta.label}
+                              </span>
+                              {reportId && (
+                                <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-xs text-primary">
+                                  보고서
+                                  <ChevronRight className="h-3 w-3" />
+                                </span>
+                              )}
+                            </>
+                          )
+                          return (
+                            <li key={visit.id}>
+                              {reportId ? (
+                                <Link
+                                  href={`/dashboard/bookings/${visit.id}/report`}
+                                  className="flex h-11 items-center gap-2 text-sm hover:text-primary"
+                                >
+                                  {rowInner}
+                                </Link>
+                              ) : (
+                                <div className="flex h-11 items-center gap-2 text-sm">{rowInner}</div>
+                              )}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+
+            {oneOffHistory.map((booking) => {
               const quote = booking.quotes as { cleaning_type: string | null; space_size: number | null } | null
               const serviceName = quote?.cleaning_type ?? booking.service_label ?? booking.memo ?? '직접 예약'
               const spaceLabel = quote?.space_size ? ` · ${quote.space_size}평` : ''

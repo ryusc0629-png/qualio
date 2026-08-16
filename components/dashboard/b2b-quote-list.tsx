@@ -146,7 +146,9 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
               '견적서'
             const isOneOff = quote.job_type === 'one_off'
             return (
-              <div key={`${quote.id}-${quote.total_amount}`} className="rounded-lg border p-3 flex items-center gap-3">
+              // 모바일에선 버튼 줄을 아래로 내린다 — 한 줄에 같이 두면 버튼(6개)이 자리를 다 먹어
+              // 제목·금액 칸이 한 글자 폭까지 눌리면서 글자가 세로로 쪼개짐
+              <div key={`${quote.id}-${quote.total_amount}`} className="rounded-lg border p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span
@@ -156,7 +158,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
                     >
                       {isOneOff ? '일회성' : '정기'}
                     </span>
-                    <p className="font-medium text-sm truncate">{title}</p>
+                    <p className="min-w-0 flex-1 font-medium text-sm truncate">{title}</p>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {quote.quote_number ? `${quote.quote_number} · ` : ''}
@@ -179,7 +181,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
                   )}
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1 flex-wrap justify-end border-t pt-2 sm:border-t-0 sm:pt-0 sm:shrink-0 sm:flex-nowrap">
                   {/* 일정 잡기 — 이 견적서 작업을 달력(예약)에 바로 올림. 서비스명·금액 자동 채움, 날짜만 선택 */}
                   {canSchedule && (
                     <AddBookingButton
@@ -204,7 +206,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
                     trigger={
                       <button
                         type="button"
-                        className="p-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted"
+                        className="flex h-10 w-10 items-center justify-center sm:h-9 sm:w-9 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted"
                         aria-label="견적서 수정"
                         title="수정"
                       >
@@ -217,7 +219,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
                     type="button"
                     onClick={() => executeDuplicate({ quoteId: quote.id, leadId, customerId })}
                     disabled={duplicating}
-                    className="p-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted disabled:opacity-40"
+                    className="flex h-10 w-10 items-center justify-center sm:h-9 sm:w-9 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted disabled:opacity-40"
                     aria-label="견적서 복제"
                     title="견적서 복제 (복사본 만들기)"
                   >
@@ -228,7 +230,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
                     <button
                       type="button"
                       onClick={() => copyCustomerLink(quote.public_token!)}
-                      className="p-2 text-muted-foreground hover:text-primary rounded-md hover:bg-muted"
+                      className="flex h-10 w-10 items-center justify-center sm:h-9 sm:w-9 text-muted-foreground hover:text-primary rounded-md hover:bg-muted"
                       aria-label="고객 링크 복사"
                       title="고객 링크 복사"
                     >
@@ -241,7 +243,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
                   {quote.public_token && (
                     <a
                       href={`/quote/${quote.public_token}?preview=1`}
-                      className="p-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted"
+                      className="flex h-10 w-10 items-center justify-center sm:h-9 sm:w-9 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted"
                       aria-label="견적서 미리보기"
                       title="미리보기 (PDF 저장)"
                     >
@@ -253,7 +255,7 @@ export function B2bQuoteList({ quotes, leadId, customerId, clientName, customerP
                     type="button"
                     onClick={() => handleDelete(quote)}
                     disabled={deleting}
-                    className="p-2 text-muted-foreground hover:text-destructive rounded-md hover:bg-muted disabled:opacity-40"
+                    className="flex h-10 w-10 items-center justify-center sm:h-9 sm:w-9 text-muted-foreground hover:text-destructive rounded-md hover:bg-muted disabled:opacity-40"
                     aria-label="견적서 삭제"
                     title="삭제"
                   >

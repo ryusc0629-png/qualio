@@ -283,10 +283,16 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
             {items.map((item, idx) => (
               <div key={idx} className="flex items-start justify-between gap-3 p-3">
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold break-keep">{item.name}</p>
+                  {/* 표의 No. 열과 같은 번호 — 폰에서도 몇 번째 항목인지 웹과 똑같이 셀 수 있게 */}
+                  <p className="font-semibold break-keep">
+                    <span className="mr-1 font-normal text-gray-400">{idx + 1}.</span>
+                    {item.name}
+                  </p>
+                  {/* 표의 열 제목(단위·횟수·단가)이 없는 화면이라 값 앞에 이름을 붙인다.
+                      그냥 '주'만 있으면 숫자가 빠진 것처럼 보임 */}
                   <p className="mt-0.5 text-xs text-gray-500">
                     {[
-                      item.unit,
+                      item.unit ? `단위 ${item.unit}` : null,
                       showCountCol ? `${countLabel} ${item.qty}` : null,
                       showUnitPriceCol ? `단가 ${item.unit_price.toLocaleString()}원` : null,
                     ].filter(Boolean).join(' · ')}
