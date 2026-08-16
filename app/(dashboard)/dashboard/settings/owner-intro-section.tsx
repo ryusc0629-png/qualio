@@ -148,7 +148,7 @@ export function OwnerIntroSection({ photoUrl, name, greeting, videoUrl, onChange
           placeholder="https://www.youtube.com/watch?v=..."
         />
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          휴대폰으로 인사말을 짧게 찍어 유튜브에 올린 뒤 주소를 붙여넣으면, 홍보 페이지에서 바로 재생돼요.
+          휴대폰으로 인사말을 짧게 찍어 유튜브에 올린 뒤 주소를 붙여넣으면, 홈페이지에서 바로 재생돼요.
           유튜브에서 <span className="font-medium text-foreground">‘공개’ 또는 ‘일부공개’</span>로 올려야 재생돼요(‘비공개’는 안 돼요).
           가로로 찍으면 화면에 꽉 차게 보여요. 지금 없으면 나중에 추가해도 돼요.
         </p>

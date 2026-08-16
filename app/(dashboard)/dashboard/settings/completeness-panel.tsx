@@ -28,7 +28,7 @@ export function CompletenessPanel({ items, onJump }: Props) {
   // 완성도 구간별 응원 문구
   const message =
     percent >= 100
-      ? '완벽해요! 홍보 페이지가 꽉 찼어요 👏'
+      ? '완벽해요! 홈페이지가 꽉 찼어요 👏'
       : percent >= 70
         ? '거의 다 됐어요. 조금만 더 채우면 완성이에요'
         : percent >= 40

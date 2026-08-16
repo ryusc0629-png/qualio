@@ -24,7 +24,7 @@ export async function OnboardingChecklist({ businessId }: { businessId: string }
     db.from('bookings').select('id', { count: 'exact', head: true }).eq('business_id', businessId).is('deleted_at', null),
     db.from('bookings').select('id', { count: 'exact', head: true })
       .eq('business_id', businessId).eq('status', 'completed').is('deleted_at', null),
-    // AI 홍보 페이지 생성 여부(seo_generated_at) + 리뷰 받을 곳 연결 여부(네이버/구글 URL)
+    // AI 홈페이지 생성 여부(seo_generated_at) + 리뷰 받을 곳 연결 여부(네이버/구글 URL)
     db.from('businesses').select('seo_generated_at, naver_place_url, google_place_url' as never).eq('id', businessId)
       .maybeSingle() as unknown as Promise<{ data: { seo_generated_at: string | null; naver_place_url: string | null; google_place_url: string | null } | null }>,
   ])

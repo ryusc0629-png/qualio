@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import { Loader2, Save, ImagePlus, X, GripVertical, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { RichTextEditor } from './rich-text-editor'
+import { buildUploadPath } from '@/lib/storage/upload-path'
 
 interface PostEditorProps {
   businessId: string
@@ -126,8 +127,7 @@ export function PostEditor({ businessId, post, onClose, onSaved }: PostEditorPro
         continue
       }
 
-      const ext = file.name.split('.').pop() ?? 'jpg'
-      const path = `${businessId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const path = buildUploadPath(businessId, file.name)
 
       const { error } = await supabase.storage.from('post-images').upload(path, file, { upsert: true })
       if (error) {
@@ -170,8 +170,7 @@ export function PostEditor({ businessId, post, onClose, onSaved }: PostEditorPro
     const uploaded: string[] = []
     for (const file of toUpload) {
       if (file.size > 5 * 1024 * 1024) { toast.error(`${file.name}은 5MB를 초과해서 건너뛰었어요`); continue }
-      const ext = file.name.split('.').pop() ?? 'jpg'
-      const path = `${businessId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const path = buildUploadPath(businessId, file.name)
       const { error } = await supabase.storage.from('post-images').upload(path, file, { upsert: true })
       if (error) { console.error('[PostEditor] 업로드 오류:', error); toast.error('업로드에 실패했어요'); continue }
       const { data: { publicUrl } } = supabase.storage.from('post-images').getPublicUrl(path)
@@ -271,7 +270,7 @@ export function PostEditor({ businessId, post, onClose, onSaved }: PostEditorPro
           <Label className="text-xs text-muted-foreground mb-1 block">본문</Label>
           <RichTextEditor value={content} onChange={setContent} disabled={isPending} />
           <p className="text-xs text-muted-foreground mt-1.5">
-            위 버튼으로 제목·굵게·목록을 넣을 수 있어요. 저장하면 웹사이트에 똑같이 반영됩니다.
+            위 버튼으로 제목·굵게·목록을 넣을 수 있어요. 저장하면 홈페이지에 똑같이 반영됩니다.
           </p>
         </div>
 

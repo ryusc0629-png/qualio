@@ -31,7 +31,7 @@ const updateBusinessSchema = z.object({
 
   review_reward_type:        z.string().max(20).optional(),
   review_reward_description: z.string().max(200).optional(),
-  // 웹사이트 브랜드 커스터마이징 — 빈 문자열은 "미설정"으로 처리
+  // 홈페이지 브랜드 커스터마이징 — 빈 문자열은 "미설정"으로 처리
   brand_color: z
     .string()
     .refine((v) => v === '' || /^#[0-9a-fA-F]{6}$/.test(v), '색상은 #RRGGBB 형식이어야 합니다')

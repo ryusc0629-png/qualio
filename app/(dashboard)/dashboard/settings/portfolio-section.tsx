@@ -81,7 +81,7 @@ function PhotoSlot({
 }
 
 // 시공 사례 섹션 — 사장님이 비포·애프터 사진을 직접 등록(작업 보고와 별개).
-// 홍보 페이지 '시공 사례' 갤러리에 자동 반영. 청소업 전환율 최강 콘텐츠.
+// 홈페이지 '시공 사례' 갤러리에 자동 반영. 청소업 전환율 최강 콘텐츠.
 export function PortfolioSection({ value, onChange }: Props) {
   const updateItem = (idx: number, patch: Partial<PortfolioItem>) => {
     onChange(value.map((item, i) => (i === idx ? { ...item, ...patch } : item)))
@@ -95,7 +95,7 @@ export function PortfolioSection({ value, onChange }: Props) {
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground leading-relaxed">
-        작업 전·후 사진을 직접 올리면 홍보 페이지 <span className="font-medium text-foreground">‘시공 사례’</span>에 나란히 보여요.
+        작업 전·후 사진을 직접 올리면 홈페이지 <span className="font-medium text-foreground">‘시공 사례’</span>에 나란히 보여요.
         청소는 <span className="font-medium text-foreground">사진 한 장이 가장 강력한 설득</span>이에요. 최대 6개까지 등록할 수 있어요. (선택)
       </p>
 
@@ -143,7 +143,7 @@ export function PortfolioSection({ value, onChange }: Props) {
               </div>
               {(!item.before || !item.after) && (
                 <p className="text-[11px] text-amber-600">
-                  작업 전·후 두 장을 모두 올려야 홍보 페이지에 표시돼요.
+                  작업 전·후 두 장을 모두 올려야 홈페이지에 표시돼요.
                 </p>
               )}
             </div>

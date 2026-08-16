@@ -531,7 +531,7 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium">이 사진을 홈페이지 시공 사례로 올리기</p>
               <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                켜면 우리 홍보 페이지 ‘시공 사례’에 비포·애프터로 보여요. 고객 이름·연락처·메모는 나가지 않아요.
+                켜면 우리 홈페이지 ‘시공 사례’에 비포·애프터로 보여요. 고객 이름·연락처·메모는 나가지 않아요.
               </p>
             </div>
             <span className={`shrink-0 w-11 h-6 rounded-full transition-colors relative ${isPublic ? 'bg-primary' : 'bg-muted'}`}>

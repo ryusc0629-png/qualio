@@ -513,7 +513,7 @@ export default async function DashboardPage() {
                 <ImageIcon className="h-4 w-4 text-sky-500 shrink-0" />
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-sky-800">
-                    웹사이트에 올릴 포트폴리오 초안 {pendingPortfolioCount}개가 있어요
+                    홈페이지에 올릴 포트폴리오 초안 {pendingPortfolioCount}개가 있어요
                   </p>
                   <p className="text-xs text-sky-600 mt-0.5">마케팅에서 확인하고 발행해보세요</p>
                 </div>

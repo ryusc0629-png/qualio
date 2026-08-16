@@ -170,9 +170,9 @@ export async function getBusinessDetail(businessId: string): Promise<BusinessDet
       hint: '홈페이지가 비어 보여요. 설정 → 기본 정보',
     },
     {
-      label: '홍보 페이지 주소',
+      label: '홈페이지 주소',
       done: Boolean(biz.slug),
-      hint: '홈페이지 주소가 없어 링크를 못 보내요. 설정 → 홍보 페이지 주소',
+      hint: '홈페이지 주소가 없어 링크를 못 보내요. 설정 → 홈페이지 주소',
     },
     {
       label: '출장 지역',

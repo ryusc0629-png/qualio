@@ -85,7 +85,7 @@ export function GeoPanel({
   const looksTemporary =
     !slugChosenNow && !!slug && (/^[a-z0-9]{5}$/.test(slug) || /-[a-z0-9]{5}$/.test(slug))
 
-  // 실제로 홍보 페이지 내용을 만든 적이 있는지 — slug 유무가 아니라 생성 기록/제목으로 판단
+  // 실제로 홈페이지 내용을 만든 적이 있는지 — slug 유무가 아니라 생성 기록/제목으로 판단
   // (slug는 저장 시 자동 생성돼 있을 수 있어, slug로 판단하면 생성 전인데 '재생성'으로 잘못 뜸)
   const hasGenerated = !!seoGeneratedAt || !!seoTitle
 
@@ -103,12 +103,12 @@ export function GeoPanel({
       setDraftKeywords(data.geoContent.seoKeywords)
       setEditingKeywords(false)
       setFaqs(data.geoContent.faqs)
-      toast.success('GEO 콘텐츠가 생성되었습니다!')
+      toast.success('홈페이지 내용을 만들었어요!')
       // 생성 완료 → 설정 페이지 서버 데이터 새로고침(seo_generated_at 갱신)
-      // → 미리보기 체크리스트의 '홍보 페이지 내용 만들기'가 즉시 ✅로 바뀜
+      // → 미리보기 체크리스트의 '홈페이지 내용 만들기'가 즉시 ✅로 바뀜
       router.refresh()
     },
-    onError: ({ error }) => toast.error(error.serverError ?? 'GEO 콘텐츠 생성에 실패했습니다'),
+    onError: ({ error }) => toast.error(error.serverError ?? '만들지 못했어요. 다시 눌러주세요'),
   })
 
   // 검색 키워드 저장
@@ -143,7 +143,7 @@ export function GeoPanel({
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs text-muted-foreground">
-            ChatGPT·Gemini·Perplexity 같은 AI 검색에 인용되는 업체 페이지를 자동으로 만들어요
+            ChatGPT·Gemini·Perplexity 같은 AI 검색에 인용되는 홈페이지를 자동으로 만들어요
           </p>
         </div>
         <Button
@@ -378,7 +378,7 @@ export function GeoPanel({
       {!canGenerate && !isGenerating && (
         <div className="rounded-lg border border-dashed bg-muted/40 px-4 py-5 space-y-3">
           <p className="text-sm font-medium">
-            아래를 먼저 채우면 더 정확한 홍보 페이지를 만들어 드려요
+            아래를 먼저 채우면 더 정확한 홈페이지를 만들어 드려요
           </p>
           <ul className="space-y-2.5 text-sm">
             <li className="flex items-start gap-2">
@@ -422,7 +422,7 @@ export function GeoPanel({
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
             오른쪽 위 <span className="font-semibold text-primary">&quot;생성하기&quot;</span> 버튼을 누르면
-            자주 묻는 질문·검색 소개글이 자동으로 채워져 홍보 페이지가 완성돼요.
+            자주 묻는 질문·검색 소개글이 자동으로 채워져 홈페이지가 완성돼요.
           </p>
           <Button
             type="button"
@@ -430,7 +430,7 @@ export function GeoPanel({
             className="w-full h-11 gap-2 mt-1 font-bold"
           >
             <Sparkles className="h-4 w-4" />
-            지금 홍보 페이지 만들기
+            지금 홈페이지 만들기
           </Button>
         </div>
       )}

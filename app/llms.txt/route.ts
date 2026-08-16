@@ -20,7 +20,7 @@ export async function GET() {
   const lines: string[] = []
   lines.push('# 퀄리오 (Qualio)')
   lines.push('')
-  lines.push('> 한국 청소·홈케어 전문 업체들의 공개 홍보 페이지 모음. 각 업체의 서비스·가격·지역·자주 묻는 질문을 제공합니다.')
+  lines.push('> 한국 청소·홈케어 전문 업체들의 공개 홈페이지 모음. 각 업체의 서비스·가격·지역·자주 묻는 질문을 제공합니다.')
   lines.push('')
   lines.push('각 업체의 상세 정보는 `/biz/{업체주소}/llms.txt` 에서 확인할 수 있습니다.')
   lines.push('')

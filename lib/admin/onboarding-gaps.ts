@@ -58,7 +58,7 @@ export async function getOnboardingGaps(): Promise<OnboardingGapRow[]> {
     if (!withService.has(b.id)) missing.push('서비스 항목')
     if (!b.phone) missing.push('업체 전화번호')
     if (!b.address) missing.push('업체 주소')
-    if (!b.slug) missing.push('홍보 페이지 주소')
+    if (!b.slug) missing.push('홈페이지 주소')
     if (!b.description) missing.push('업체 소개글')
 
     if (missing.length === 0) continue

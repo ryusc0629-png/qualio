@@ -6,7 +6,7 @@ import { Check, Copy, Link2 } from 'lucide-react'
 import { MARKETING_CHANNELS } from '@/lib/utils/marketing-channels'
 
 interface ChannelLinksCardProps {
-  // 채널 태그가 붙기 전의 기본 홍보 페이지 주소 (예: https://qualio.co.kr/biz/clean-house)
+  // 채널 태그가 붙기 전의 기본 홈페이지 주소 (예: https://qualio.co.kr/biz/clean-house)
   // 모든 채널을 랜딩(/biz)으로 보냄 — 랜딩이 신뢰를 준 뒤 견적 버튼(?ch= 전달)으로 이어져 통계도 유지됨
   baseUrl: string
 }

@@ -39,7 +39,7 @@ export function StrengthsSection({ value, onChange }: Props) {
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground leading-relaxed">
         고객이 다른 곳 말고 <span className="font-medium text-foreground">우리를 선택하는 이유</span>예요.
-        해당하는 것을 눌러서 켜면 홍보 페이지에 <span className="font-medium text-foreground">‘우리만의 차이’</span> 칸으로
+        해당하는 것을 눌러서 켜면 홈페이지에 <span className="font-medium text-foreground">‘우리만의 차이’</span> 칸으로
         자동으로 올라가요. 눌러 켠 다음 문구는 우리 업체에 맞게 고칠 수 있어요. (최대 {MAX_STRENGTHS}개)
       </p>
 
@@ -132,7 +132,7 @@ export function StrengthsSection({ value, onChange }: Props) {
         <div className="flex items-start gap-2 rounded-lg bg-primary/5 border border-primary/15 px-3 py-2.5">
           <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
           <p className="text-xs text-foreground/80 leading-relaxed">
-            아직 강점을 안 켜셨어요. 위에서 해당하는 것만 눌러도 홍보 페이지가 훨씬 믿음직해져요.
+            아직 강점을 안 켜셨어요. 위에서 해당하는 것만 눌러도 홈페이지가 훨씬 믿음직해져요.
             안 켜면 기본 소개 문구가 들어가요.
           </p>
         </div>

@@ -25,7 +25,7 @@ function formatBusinessNumber(raw: string): string {
 }
 
 // 전문성·신뢰 섹션 — 숨고 '전문성 증명'/'사업자등록증' 벤치마킹.
-// 경력 연차 + 사업자등록번호 + 자격증·보유장비. 홍보 페이지 상단 신뢰 앵커에 자동 반영.
+// 경력 연차 + 사업자등록번호 + 자격증·보유장비. 홈페이지 상단 신뢰 앵커에 자동 반영.
 export function CredentialsSection({
   experienceYears,
   businessNumber,
@@ -53,7 +53,7 @@ export function CredentialsSection({
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground leading-relaxed">
-        경력·사업자 등록·자격증을 넣으면 홍보 페이지 위쪽에 <span className="font-medium text-foreground">‘믿을 수 있는 업체’</span>라는
+        경력·사업자 등록·자격증을 넣으면 홈페이지 위쪽에 <span className="font-medium text-foreground">‘믿을 수 있는 업체’</span>라는
         신뢰 도장이 찍혀요. 특히 제안서 QR로 들어온 고객이 바로 확인하는 부분이에요. (선택)
       </p>
 
@@ -72,7 +72,7 @@ export function CredentialsSection({
           <span className="text-sm text-muted-foreground shrink-0">년</span>
         </div>
         {experienceYears && Number(experienceYears) > 0 && (
-          <p className="text-xs text-primary">→ 홍보 페이지에 표시: 청소 경력 {Number(experienceYears)}년</p>
+          <p className="text-xs text-primary">→ 홈페이지에 표시: 청소 경력 {Number(experienceYears)}년</p>
         )}
       </div>
 
@@ -90,7 +90,7 @@ export function CredentialsSection({
         {businessNumber.replace(/[^0-9]/g, '').length === 10 && (
           <p className="flex items-center gap-1 text-xs text-primary">
             <BadgeCheck className="h-3.5 w-3.5" />
-            → 홍보 페이지에 ‘사업자 등록 업체’ 배지가 붙어요
+            → 홈페이지에 ‘사업자 등록 업체’ 배지가 붙어요
           </p>
         )}
         <p className="text-[11px] text-muted-foreground">
