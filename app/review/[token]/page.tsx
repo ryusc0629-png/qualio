@@ -13,9 +13,11 @@ export default async function ReviewClaimPage({ params }: Props) {
   // 토큰 조회 + 업체/예약 정보
   const { data: claim } = await db
     .from('review_claims' as never)
-    .select('id, claimed_at, businesses!business_id(name, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description), bookings!booking_id(customer_name)' as never)
+    .select('id, claimed_at, booking_id, businesses!business_id(name, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description), bookings!booking_id(customer_name)' as never)
     .eq('token' as never, token)
-    .maybeSingle() as unknown as { data: { id: string; claimed_at: string | null; businesses: unknown; bookings: unknown } | null }
+    .maybeSingle() as unknown as {
+      data: { id: string; claimed_at: string | null; booking_id: string | null; businesses: unknown; bookings: unknown } | null
+    }
 
   if (!claim) notFound()
 
@@ -46,6 +48,37 @@ export default async function ReviewClaimPage({ params }: Props) {
   const customerName = (booking as { customer_name: string | null } | null)?.customer_name ?? '고객'
   const alreadyClaimed = !!claim.claimed_at
 
+  // 그 현장의 작업 전·후 사진 — "아 맞다, 이렇게 깨끗해졌었지"를 떠올리게 한다.
+  // 기억을 먼저 살려야 후기가 구체적으로 나온다.
+  let beforeUrl: string | null = null
+  let afterUrl: string | null = null
+  if (claim.booking_id) {
+    const { data: report } = await db
+      .from('reports')
+      .select('id')
+      .eq('booking_id', claim.booking_id)
+      .maybeSingle()
+    if (report?.id) {
+      const { data: photos } = await db
+        .from('report_photos' as never)
+        .select('url, type, sort_order' as never)
+        .eq('report_id' as never, report.id)
+        .order('sort_order' as never, { ascending: true }) as unknown as {
+          data: { url: string; type: string }[] | null
+        }
+      beforeUrl = photos?.find((p) => p.type === 'before')?.url ?? null
+      afterUrl  = photos?.find((p) => p.type === 'after')?.url ?? null
+    }
+  }
+
+  // 감사 선물 문구 — 저장된 값은 숫자뿐이라(예: '10') 여기서 문장으로 만든다
+  const rewardText =
+    bizInfo.review_reward_type === 'discount_rate' && bizInfo.review_reward_description
+      ? `다음 이용 시 ${bizInfo.review_reward_description}% 할인해 드려요`
+      : bizInfo.review_reward_type === 'discount_amount' && bizInfo.review_reward_description
+        ? `다음 이용 시 ${Number(bizInfo.review_reward_description).toLocaleString()}원 할인해 드려요`
+        : null
+
   // 페이지 방문 기록 (fire-and-forget)
   void db.from('review_claims').update({ clicked_at: new Date().toISOString() }).eq('id', claim.id).is('clicked_at', null)
 
@@ -64,12 +97,34 @@ export default async function ReviewClaimPage({ params }: Props) {
           </p>
         </div>
 
-        {/* 보상 안내 */}
-        {bizInfo.review_reward_type !== 'none' && bizInfo.review_reward_description && (
+        {/* 작업 전·후 사진 — 기억을 먼저 살린다 */}
+        {(beforeUrl || afterUrl) && (
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-2">
+              {beforeUrl && (
+                <div className="space-y-1">
+                  <p className="text-[11px] text-muted-foreground">작업 전</p>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={beforeUrl} alt="작업 전" className="w-full aspect-square object-cover rounded-lg" />
+                </div>
+              )}
+              {afterUrl && (
+                <div className="space-y-1">
+                  <p className="text-[11px] text-primary font-medium">작업 후</p>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={afterUrl} alt="작업 후" className="w-full aspect-square object-cover rounded-lg" />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 감사 선물 안내 — 후기를 남기면 자동으로 쌓인다(사장님이 따로 보내지 않는다) */}
+        {rewardText && (
           <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 space-y-1">
-            <p className="text-xs font-semibold text-amber-700">후기 작성 혜택</p>
-            <p className="text-sm font-medium text-amber-900">{bizInfo.review_reward_description}</p>
-            <p className="text-xs text-amber-600">후기 작성 후 업체에서 개별 안내 드려요</p>
+            <p className="text-xs font-semibold text-amber-700">후기 남겨주시면</p>
+            <p className="text-sm font-medium text-amber-900">{rewardText}</p>
+            <p className="text-xs text-amber-600">후기를 남기시면 자동으로 적립돼요</p>
           </div>
         )}
 
@@ -86,7 +141,7 @@ export default async function ReviewClaimPage({ params }: Props) {
           <ReviewClaimClient
             claimId={claim.id}
             reviewUrl={reviewUrl}
-            hasReward={bizInfo.review_reward_type !== 'none' && !!bizInfo.review_reward_description}
+            hasReward={!!rewardText}
           />
         )}
 

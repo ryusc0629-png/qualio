@@ -49,6 +49,38 @@ export async function POST(request: NextRequest) {
     .update({ claimed_at: new Date().toISOString() })
     .eq('id', claim.id)
 
+  // 다음 이용 할인 자동 적립 — 사장님이 따로 할 일이 없어야 오래 간다.
+  // 별점과 무관하게 후기를 남긴 모든 고객에게 적립한다(좋은 후기에만 주면 리뷰 조작).
+  const rewardType = bizInfo?.review_reward_type ?? 'none'
+  if (rewardType === 'discount_rate' || rewardType === 'discount_amount') {
+    const rewardValue = Number(bizInfo?.review_reward_description ?? 0)
+    const phone = (claim as { customer_phone: string | null }).customer_phone
+    if (rewardValue > 0 && phone) {
+      try {
+        // 고객 행이 이미 있으면 연결해 둔다(없어도 전화번호로 나중에 이어붙는다)
+        const { data: customer } = await db
+          .from('customers')
+          .select('id')
+          .eq('business_id', claim.business_id)
+          .eq('phone', phone)
+          .maybeSingle()
+
+        await db.from('customer_rewards' as never).insert({
+          business_id:    claim.business_id,
+          customer_id:    customer?.id ?? null,
+          customer_phone: phone,
+          reward_type:    rewardType,
+          reward_value:   rewardValue,
+          source:         'review',
+          source_id:      claim.id,   // 같은 후기로 두 번 적립되지 않게(unique)
+        } as never)
+      } catch (e) {
+        // 적립 실패가 후기 저장을 막지는 않는다
+        console.error('[Review] 다음 이용 할인 적립 실패:', e)
+      }
+    }
+  }
+
   // 별점을 남긴 경우 reviews에 저장 (전시용 사회적 증거). claim당 1건(unique) — 중복 무시
   if (rating !== null) {
     try {

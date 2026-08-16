@@ -36,6 +36,16 @@ function generateToken(): string {
   return randomBytes(20).toString('hex')
 }
 
+// 저장된 값은 숫자뿐이라(예: '10') 알림톡에 그대로 넣으면 "혜택: 10"이 된다.
+// 고객 화면(app/review/[token])과 같은 문장으로 맞춘다.
+function rewardSentence(biz: BizInfo): string | null {
+  const v = biz.review_reward_description
+  if (!v) return null
+  if (biz.review_reward_type === 'discount_rate')   return `후기 남겨주시면 다음 이용 시 ${v}% 할인해 드려요`
+  if (biz.review_reward_type === 'discount_amount') return `후기 남겨주시면 다음 이용 시 ${Number(v).toLocaleString()}원 할인해 드려요`
+  return null
+}
+
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -118,7 +128,7 @@ export async function GET(request: NextRequest) {
         cleaningType:  quote?.cleaning_type ?? '청소 서비스',
         reviewUrl:     claimUrl,
         workerName:    workerRow?.name ?? null,
-        rewardText:    biz.review_reward_type !== 'none' ? biz.review_reward_description : null,
+        rewardText:    rewardSentence(biz),
       })
 
       const updateField = isFollowup

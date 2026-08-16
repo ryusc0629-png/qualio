@@ -318,6 +318,18 @@ export default async function CustomerDetailPage({ params }: Props) {
   // 새 견적서에 자동 부여될 다음 순번(미리보기용)
   const suggestedQuoteNumber = await getNextQuoteNumber(db, profile.business_id)
 
+  // 후기로 쌓인 '다음 이용 할인' — 아직 안 쓴 것만.
+  // 후기 시점에 고객 행이 없었을 수 있어 전화번호로도 찾는다.
+  const { data: rewardRows } = await db
+    .from('customer_rewards' as never)
+    .select('id, reward_type, reward_value' as never)
+    .eq('business_id' as never, profile.business_id)
+    .is('used_at' as never, null)
+    .or(`customer_id.eq.${customer.id}${customer.phone ? `,customer_phone.eq.${customer.phone}` : ''}`) as unknown as {
+      data: { id: string; reward_type: string; reward_value: number }[] | null
+    }
+  const rewards = rewardRows ?? []
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
 
@@ -362,6 +374,14 @@ export default async function CustomerDetailPage({ params }: Props) {
                 리뷰 {reviewCount}회
               </span>
             )}
+            {/* 후기로 쌓인 할인 — 다음 견적 낼 때 빼먹지 않도록 이름 옆에 붙인다 */}
+            {rewards.map((r) => (
+              <span key={r.id} className="text-xs px-2 py-1 rounded-full font-medium bg-primary/10 text-primary">
+                다음 이용 {r.reward_type === 'discount_rate'
+                  ? `${r.reward_value}% 할인`
+                  : `${r.reward_value.toLocaleString()}원 할인`}
+              </span>
+            ))}
             {customer.phone && (
               <EditCustomerButton customer={{ ...customer, phone: customer.phone, notes: customer.notes }} />
             )}

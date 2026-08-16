@@ -24,9 +24,9 @@ import { homeSidoAreaValues } from '@/lib/address/korea-regions'
 type RewardType = 'none' | 'discount_amount' | 'discount_rate' | 'gifticon'
 
 // DB에 저장된 타입 → UI 상위 타입으로 변환
-function toRewardCategory(type: string): 'none' | 'discount' | 'gifticon' {
+// 예전에 기프티콘으로 저장해둔 업체는 '안 함'으로 본다 — 기프티콘은 더 이상 제공하지 않는다
+function toRewardCategory(type: string): 'none' | 'discount' {
   if (type === 'discount_amount' || type === 'discount_rate') return 'discount'
-  if (type === 'gifticon') return 'gifticon'
   return 'none'
 }
 
@@ -87,20 +87,13 @@ interface Props {
   publicReportCount: number
 }
 
-// 후기 보상(리뷰 쓰면 기프티콘·할인) 설정을 화면에서 숨긴다. — 2026-08-16
+// 후기 감사 선물 = '다음 이용 할인'만 제공한다. (2026-08-16 재설계)
 //
-// 왜 숨겼나
-//  1) 네이버 플레이스는 대가성 리뷰를 금지한다. 이 설정은 네이버 리뷰를 받는 흐름에 붙어 있어,
-//     리뷰 몇 개 더 받으려다 검색 노출 제재를 받을 수 있다(공정위 추천·보증 심사지침도 대가 표시 의무).
-//  2) 지급이 전부 수동이고 지급 여부를 기록하는 곳이 없다. 고객 화면엔 "업체에서 개별 안내 드려요"라고
-//     약속이 뜨는데 사장님이 놓치면 안 주느니만 못한 결과가 된다.
-//  3) 리뷰 수급률의 주된 레버는 보상이 아니라 요청 타이밍·작업 사진·사장님 이름으로 부탁하기다.
+// 기프티콘을 뺀 이유: 매번 사람이 사서 보내야 해서 두 달이면 반드시 멈춘다.
+// 다음 이용 할인은 후기를 남기는 순간 자동 적립돼(customer_rewards) 사장님이 할 일이 없고,
+// "리뷰를 쓴 대가"가 아니라 재방문 유도라서 네이버의 대가성 리뷰 금지에도 걸리지 않는다.
 //
-// 되살린다면 여기가 아니라 '리뷰 요청을 보내는 화면'에 건별로 두고, 지급 체크칸을 함께 만들 것.
-// 프레임도 "리뷰 쓰면 5천원"이 아니라 "다음 이용 시 10% 할인"(재방문 유도)으로 바꿀 것.
-// DB 컬럼(review_reward_type/description)과 고객 화면 로직은 그대로 살아 있다.
-const SHOW_REVIEW_REWARD = false
-
+// ⛔ 별점 조건(4점 이상만 지급)은 절대 넣지 말 것 — 리뷰 조작으로 플레이스 제재 대상.
 export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicReportCount }: Props) {
   // 할인 세부 타입 (discount_amount | discount_rate) 초기값
   const initialType = business.review_reward_type as RewardType
@@ -109,7 +102,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
       ? business.active_review_platform
       : 'naver') as ReviewPlatform
   )
-  const [rewardCategory, setRewardCategory] = useState<'none' | 'discount' | 'gifticon'>(
+  const [rewardCategory, setRewardCategory] = useState<'none' | 'discount'>(
     toRewardCategory(initialType)
   )
   const [discountType, setDiscountType] = useState<'discount_amount' | 'discount_rate'>(
@@ -158,14 +151,18 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
 
   // 업체 주소 — 시/도·시군구 선택 기반 (상태로 들고 자동 지역 즉시 반영)
   const [address, setAddress] = useState(business.address ?? '')
-  // 출장 지역 — 주소 기준 자동 노출 지역 + 사장님이 선택하는 추가 지역
-  // 내 시/도 전체(모든 구·군) — 출장업 기본 서비스 지역(주소 시/도 기준 자동, 주소 바꾸면 갱신)
-  const homeAreas = homeSidoAreaValues(address)
-  // '더 출장 가는 지역' — 내 시/도 밖의 추가 지역만(초기값에서 내 시/도 중복 제거)
-  const [serviceAreas, setServiceAreas] = useState<string[]>(() => {
-    const home = new Set(homeSidoAreaValues(business.address))
-    return (business.service_areas ?? []).filter((a) => !home.has(a))
-  })
+  // 출장 지역 — 목록에 있는 게 전부이고, 전부 지울 수 있다.
+  //
+  // 예전엔 주소의 시/도 전체(경기면 31개 시군구)를 자동으로 넣으면서 화면에서는 걸러 감췄고,
+  // 저장할 때마다 다시 합쳐서 사장님이 지울 수도, 어디로 등록됐는지 볼 수도 없었다.
+  // 정작 지역 추가 화면은 "넓게 잡으면 핵심 지역 검색 노출이 약해진다"고 경고하는데
+  // 앱이 그 일을 몰래 하고 있었다. 이제 자동 지역도 목록에 그대로 보이고 X로 지워진다.
+  //
+  // 처음 주소를 넣는 업체에는 시/도 전체를 한 번만 채워준다(빈 화면으로 시작하지 않게).
+  // 그 뒤로는 사장님이 지우면 지워진 채로 남는다 — 저장이 되살리지 않는다.
+  const [serviceAreas, setServiceAreas] = useState<string[]>(
+    () => business.service_areas ?? homeSidoAreaValues(business.address)
+  )
 
   // 홈페이지 주소(slug) — 저장 시 서버가 생성/반환하면 즉시 갱신해 미리보기 잠금 해제
   const [slug, setSlug] = useState<string | null>(business.slug)
@@ -278,7 +275,6 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
     // 보상 타입 결정
     let rewardType: string = 'none'
     if (rewardCategory === 'discount') rewardType = discountType
-    else if (rewardCategory === 'gifticon') rewardType = 'gifticon'
 
     execute({
       name:                      name,
@@ -294,8 +290,8 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
       instagram_url:             data.get('instagram_url') as string,
       naver_blog_url:            data.get('naver_blog_url') as string,
       danggeun_business_url:     data.get('danggeun_business_url') as string,
-      // 내 시/도 전체(자동) + 더 출장 가는 지역(수동)을 합쳐 저장
-      service_areas:             [...new Set([...homeAreas, ...serviceAreas])].join(','),
+      // 화면에 보이는 목록 그대로 저장 — 지운 지역이 되살아나지 않게 아무것도 덧붙이지 않는다
+      service_areas:             serviceAreas.join(','),
       review_reward_type:        rewardType,
       review_reward_description: rewardCategory === 'none' ? '' : rewardValue,
       brand_color:               normalizeHex(brandColor) ?? '',
@@ -643,22 +639,23 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
           </div>
         </div>
 
-        {/* 후기 보상 — 2026-08-16 숨김. 지우지 말고 이 플래그만 켜서 되살릴 것 */}
-        {SHOW_REVIEW_REWARD && (
+        {/* 후기 감사 선물 — 다음 이용 할인만 */}
         <div className="space-y-4 pt-4 border-t">
           <div>
-            <Label>후기 보상</Label>
-            <p className="text-xs text-muted-foreground mt-1">후기를 남긴 고객에게 드릴 혜택을 설정하세요</p>
+            <Label>후기 감사 선물 (선택)</Label>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              후기를 남겨주신 고객에게 <span className="font-medium text-foreground">다음 이용 할인</span>을 드려요.
+              후기를 남기는 즉시 자동으로 쌓이니 사장님이 따로 챙기실 일은 없어요.
+            </p>
           </div>
 
         {/* 보상 유형 선택 */}
         <div className="space-y-2">
-          <Label>보상 유형</Label>
-          <div className="grid grid-cols-3 gap-2">
+          <Label>선물 종류</Label>
+          <div className="grid grid-cols-2 gap-2">
             {[
-              { value: 'none' as const,     label: '없음' },
-              { value: 'discount' as const, label: '할인' },
-              { value: 'gifticon' as const, label: '기프티콘' },
+              { value: 'none' as const,     label: '안 함' },
+              { value: 'discount' as const, label: '다음 이용 할인' },
             ].map((opt) => (
               <button
                 key={opt.value}
@@ -752,23 +749,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
           </div>
         )}
 
-        {/* 기프티콘 세부 설정 */}
-        {rewardCategory === 'gifticon' && (
-          <div className="space-y-1.5">
-            <Label htmlFor="reward_value">기프티콘 종류</Label>
-            <Input
-              id="reward_value"
-              placeholder="예: 스타벅스 아메리카노, 편의점 5천원권"
-              value={rewardValue}
-              onChange={(e) => setRewardValue(e.target.value)}
-            />
-            {rewardValue && (
-              <p className="text-xs text-primary">→ 고객에게 표시: 후기 작성 시 {rewardValue} 기프티콘을 드려요</p>
-            )}
-          </div>
-        )}
         </div>
-        )}
       </CollapsibleSection>
 
       {/* SNS·영상 연동 */}
