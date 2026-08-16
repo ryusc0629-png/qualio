@@ -437,6 +437,10 @@ const createBookingSchema = z.object({
     .transform((val) => val.replace(/-/g, ''))
     .refine((val) => phoneRegex.test(val), '올바른 전화번호 형식이 아닙니다'),
   service_address: z.string().min(5, '주소를 입력해주세요'),
+  // 청소 희망 날짜·시간 — 예전엔 안 받아서, 견적에 희망일이 없으면 '지금 이 순간'으로
+  // 예약이 잡혔다(알림톡에 새벽 시각이 찍히고 일정 보드에도 오늘로 들어감).
+  scheduled_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '청소 날짜를 골라주세요'),
+  scheduled_time: z.string().regex(/^\d{2}:\d{2}$/, '시간을 골라주세요').optional(),
 })
 
 export const createBookingAction = publicAction
@@ -466,10 +470,12 @@ export const createBookingAction = publicAction
       parsedInput.selected_tier === 'better' ? (quote.better_price ?? 0) :
       (quote.best_price ?? 0)
 
-    // 예약 생성
-    const scheduledAt = quote.preferred_date
-      ? new Date(quote.preferred_date).toISOString()
-      : new Date().toISOString()
+    // 예약 생성 — 고객이 확정 화면에서 고른 날짜·시간을 쓴다.
+    // KST로 조립해야 한다: 'YYYY-MM-DD'를 그냥 new Date()에 넣으면 UTC 자정으로 읽혀
+    // 한국 시간 오전 9시로 밀린다.
+    const scheduledAt = inputToUtcIso(
+      `${parsedInput.scheduled_date}T${parsedInput.scheduled_time ?? '09:00'}`
+    )
 
     // 선택한 번들에 변동형 서비스(에어컨 대수·줄눈 개수 등)가 있으면 '검토 필요'로 표시
     const review = await detectBundleReview(db, quote.business_id, parsedInput.selected_tier)

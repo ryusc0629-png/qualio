@@ -37,7 +37,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
   const [{ data: quote }, { data: business }, portfolioResult] = await Promise.all([
     db
       .from('quotes')
-      .select('id, cleaning_type, space_size, good_price, better_price, best_price, status, customer_name, customer_phone, ai_pitch, created_at')
+      .select('id, cleaning_type, space_size, good_price, better_price, best_price, status, customer_name, customer_phone, preferred_date, ai_pitch, created_at')
       .eq('id', quoteId)
       .eq('business_id', businessId)
       .maybeSingle(),
@@ -252,6 +252,7 @@ export default async function QuoteLandingPage({ params }: PageProps) {
               tiers={tiers}
               defaultName={quote.customer_name ?? undefined}
               defaultPhone={quote.customer_phone ?? undefined}
+              defaultDate={quote.preferred_date ?? undefined}
               tierReasons={pitch.tierReasons}
               tierIncludes={pitch.tierIncludes}
             />

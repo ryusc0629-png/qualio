@@ -15,6 +15,18 @@ import { trackFunnel } from '@/lib/utils/track-funnel'
 
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
 
+// 오늘(한국 시간) — 지난 날짜를 못 고르게 막는다. 서버 UTC와 어긋나지 않도록 KST로 계산.
+const todayKst = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
+// 분 단위까지 고르게 하면 비테크 고객에게 부담이라 30분 단위 목록으로 준다
+const TIME_OPTIONS = Array.from({ length: 25 }, (_, i) => {
+  const h = 7 + Math.floor(i / 2)
+  const m = i % 2 === 0 ? '00' : '30'
+  const ampm = h < 12 ? '오전' : '오후'
+  const h12 = h > 12 ? h - 12 : h
+  return { value: `${String(h).padStart(2, '0')}:${m}`, label: `${ampm} ${h12}:${m}` }
+})
+
 const bookingSchema = z.object({
   customer_name: z.string().min(2, '이름은 2자 이상 입력해주세요'),
   customer_phone: z
@@ -23,6 +35,9 @@ const bookingSchema = z.object({
     .transform((v) => v.replace(/-/g, ''))
     .refine((v) => phoneRegex.test(v), '올바른 전화번호를 입력해주세요'),
   service_address: z.string().min(5, '주소를 입력해주세요'),
+  // 청소 희망 날짜 — 안 받으면 서버가 '지금 이 순간'으로 예약을 잡아버린다
+  scheduled_date: z.string().min(1, '청소 날짜를 골라주세요'),
+  scheduled_time: z.string().min(1),
 })
 
 type BookingInput = z.infer<typeof bookingSchema>
@@ -40,6 +55,8 @@ interface QuoteBookingSectionProps {
   tiers: Tier[]
   defaultName?: string
   defaultPhone?: string
+  /** 견적 단계에서 고객이 고른 희망 방문일(YYYY-MM-DD) — 있으면 미리 채운다 */
+  defaultDate?: string
   tierReasons?: {
     better: string
     best: string
@@ -58,6 +75,7 @@ export function QuoteBookingSection({
   tiers,
   defaultName,
   defaultPhone,
+  defaultDate,
   tierReasons,
   tierIncludes,
 }: QuoteBookingSectionProps) {
@@ -79,6 +97,8 @@ export function QuoteBookingSection({
     defaultValues: {
       customer_name:  defaultName  ?? '',
       customer_phone: defaultPhone ?? '',
+      scheduled_date: defaultDate  ?? '',
+      scheduled_time: '09:00',
     },
   })
 
@@ -263,6 +283,8 @@ export function QuoteBookingSection({
                 customer_name:   data.customer_name,
                 customer_phone:  data.customer_phone,
                 service_address: data.service_address,
+                scheduled_date:  data.scheduled_date,
+                scheduled_time:  data.scheduled_time,
               })
             )}
             className="space-y-3"
@@ -296,6 +318,36 @@ export function QuoteBookingSection({
                 )}
               </div>
             </div>
+
+            {/* 청소 날짜 — 이게 없으면 서버가 '지금'으로 예약을 잡는다 */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs text-[#6B6B6B]">청소 날짜 (필수)</Label>
+                <Input
+                  type="date"
+                  min={todayKst}
+                  {...register('scheduled_date')}
+                  className="h-12 rounded-2xl"
+                />
+                {errors.scheduled_date && (
+                  <p className="text-xs text-red-500">{errors.scheduled_date.message}</p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-[#6B6B6B]">시작 시간</Label>
+                <select
+                  {...register('scheduled_time')}
+                  className="h-12 w-full rounded-2xl border border-input bg-background px-3 text-base md:text-sm"
+                >
+                  {TIME_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <p className="text-[11px] text-[#8D8D8D] -mt-1">
+              업체 사정으로 조정될 수 있어요. 확정되면 카카오톡으로 알려드려요.
+            </p>
 
             <div className="space-y-1">
               <Label className="text-xs text-[#6B6B6B]">서비스 주소 (필수)</Label>
