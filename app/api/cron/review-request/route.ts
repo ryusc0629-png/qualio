@@ -133,16 +133,43 @@ export async function GET(request: NextRequest) {
     ok ? d1Sent++ : d1Skipped++
   }
 
-  let d3Sent = 0, d3Skipped = 0
-  for (const booking of (d3Result.data ?? [])) {
-    const ok = await sendReview(booking as unknown as BookingRow, true)
+  // 이미 후기를 남긴 고객에게 "후기 남겨주세요"를 또 보내지 않는다.
+  // 발송 기록(auto_review_followup_sent_at)만 보고 재발송하면, 정성껏 써준 고객이
+  // 3일 뒤에 같은 부탁을 또 받는다 — 가장 아껴야 할 고객을 귀찮게 하는 셈.
+  const d3Candidates = (d3Result.data ?? []) as unknown as BookingRow[]
+  const claimedBookingIds = new Set<string>()
+  if (d3Candidates.length > 0) {
+    const { data: claimed } = await db
+      .from('review_claims')
+      .select('booking_id')
+      .in('booking_id', d3Candidates.map((b) => b.id))
+      .not('claimed_at', 'is', null)
+    for (const row of (claimed ?? []) as { booking_id: string }[]) {
+      claimedBookingIds.add(row.booking_id)
+    }
+  }
+
+  let d3Sent = 0, d3Skipped = 0, d3AlreadyReviewed = 0
+  for (const booking of d3Candidates) {
+    if (claimedBookingIds.has(booking.id)) {
+      // 후기를 남긴 고객 — 재발송하지 않되, 다시 후보로 잡히지 않게 발송 기록만 남긴다
+      await db
+        .from('bookings')
+        .update({ auto_review_followup_sent_at: new Date().toISOString() } as never)
+        .eq('id', booking.id)
+      d3AlreadyReviewed++
+      continue
+    }
+    const ok = await sendReview(booking, true)
     ok ? d3Sent++ : d3Skipped++
   }
 
-  console.log(`[Cron] review-request — D+1: ${d1Sent}건 / D+3: ${d3Sent}건`)
+  console.log(
+    `[Cron] review-request — D+1: ${d1Sent}건 / D+3: ${d3Sent}건 (이미 후기 남김 ${d3AlreadyReviewed}건 제외)`
+  )
 
   return NextResponse.json({
     d1: { sent: d1Sent, skipped: d1Skipped },
-    d3: { sent: d3Sent, skipped: d3Skipped },
+    d3: { sent: d3Sent, skipped: d3Skipped, alreadyReviewed: d3AlreadyReviewed },
   })
 }
