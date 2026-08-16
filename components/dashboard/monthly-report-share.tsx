@@ -15,15 +15,16 @@ interface MonthlyReportShareProps {
 export function MonthlyReportShare({ businessId, customerId, customerName }: MonthlyReportShareProps) {
   const [copied, setCopied] = useState(false)
 
-  // 이번 달(KST) 리포트 링크
-  const buildUrl = () => {
+  // 이번 달(KST) 리포트 경로 — 서버 렌더링에서도 계산되므로 window를 쓰지 않는다
+  const buildPath = () => {
     const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000)
     const month = `${nowKST.getUTCFullYear()}-${String(nowKST.getUTCMonth() + 1).padStart(2, '0')}`
-    return `${window.location.origin}/q/${businessId}/monthly-report/${customerId}?month=${month}`
+    return `/q/${businessId}/monthly-report/${customerId}?month=${month}`
   }
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(buildUrl())
+    // 카톡으로 보낼 링크라 도메인까지 붙인다 (클릭 시점이라 window 접근이 안전)
+    await navigator.clipboard.writeText(`${window.location.origin}${buildPath()}`)
     setCopied(true)
     toast.success(`${customerName} 이번 달 리포트 링크를 복사했어요`)
     setTimeout(() => setCopied(false), 2000)
@@ -32,7 +33,7 @@ export function MonthlyReportShare({ businessId, customerId, customerName }: Mon
   return (
     <div className="flex gap-2">
       <a
-        href={buildUrl()}
+        href={buildPath()}
         target="_blank"
         rel="noreferrer"
         className="flex-1 inline-flex items-center justify-center gap-1.5 h-11 rounded-xl border border-emerald-200 bg-emerald-50 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"

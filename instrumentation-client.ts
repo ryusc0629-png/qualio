@@ -17,7 +17,14 @@ Sentry.init({
     'The network connection was lost',
     'The Internet connection appears to be offline',
     'AbortError',
+    // 페이스북·인스타 인앱 브라우저(안드로이드)가 자기 계측 스크립트에서 내는 오류.
+    // 우리 코드와 무관하고 광고 유입이 늘수록 쏟아져 진짜 버그를 가린다.
+    'Error invoking postMessage',
+    'Java object is gone',
+    'Java exception was raised',
   ],
+  // 우리 도메인이 아닌 곳(인앱 브라우저 내부 스크립트 app://…)에서 난 오류는 접수하지 않는다.
+  denyUrls: [/^app:\/\//],
 })
 
 // 페이지 이동(네비게이션) 추적 훅 — Sentry 권장
