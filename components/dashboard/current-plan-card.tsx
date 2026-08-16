@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { PLANS, formatPrice } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
+import { applyLifetimeDiscount } from '@/lib/config/beta'
 import { CalendarClock } from 'lucide-react'
 import { CancelPlanChangeButton } from './cancel-plan-change-button'
 
@@ -10,10 +11,21 @@ interface CurrentPlanCardProps {
   currentPeriodEnd: string | null
   status: string
   nextPlan?: string | null
+  /** 이 업체에 붙은 평생 할인율(%) — businesses.lifetime_discount_rate. 0이면 안내를 띄우지 않는다 */
+  lifetimeDiscountRate?: number
+  /** 베타 순번 — 정원(100팀)이 찬 뒤 가입한 업체는 null이라 안내가 사라진다 */
+  betaNumber?: number | null
 }
 
 // 현재 구독 플랜 표시 카드 (설정 페이지용)
-export function CurrentPlanCard({ planId, currentPeriodEnd, status, nextPlan }: CurrentPlanCardProps) {
+export function CurrentPlanCard({
+  planId,
+  currentPeriodEnd,
+  status,
+  nextPlan,
+  lifetimeDiscountRate = 0,
+  betaNumber = null,
+}: CurrentPlanCardProps) {
   const plan = PLANS[planId] ?? PLANS.beta
 
   // 만료일 포맷
@@ -28,6 +40,7 @@ export function CurrentPlanCard({ planId, currentPeriodEnd, status, nextPlan }: 
 
   const isBeta = planId === 'beta'
   const isPaid = !isBeta
+  const hasLifetimeDiscount = lifetimeDiscountRate > 0
 
   // 예약된 다음 플랜
   const hasScheduledChange = nextPlan && nextPlan !== planId
@@ -51,17 +64,30 @@ export function CurrentPlanCard({ planId, currentPeriodEnd, status, nextPlan }: 
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xl font-bold">{plan.label} 플랜</p>
+          {/* 할인이 붙은 업체에 정가만 보여주면 실제 청구액과 어긋나 보인다 — 정가에 취소선, 실제 금액을 크게 */}
           <p className="text-sm text-muted-foreground mt-0.5">
-            {isBeta ? '무료 베타 기간' : formatPrice(plan.price)}
+            {isBeta ? '무료 베타 기간' : hasLifetimeDiscount ? (
+              <>
+                <span className="line-through mr-1.5">{formatPrice(plan.price)}</span>
+                <span className="text-foreground font-semibold">
+                  {formatPrice(applyLifetimeDiscount(plan.price, lifetimeDiscountRate))}
+                </span>
+              </>
+            ) : formatPrice(plan.price)}
           </p>
           {isPaid && periodEndLabel && (
             <p className="text-xs text-muted-foreground mt-1">
               다음 결제일: {periodEndLabel}
             </p>
           )}
-          {isBeta && (
-            <p className="text-xs text-muted-foreground mt-1">
-              베타 기간 종료 전 유료 플랜으로 전환 시 30% 할인 혜택
+          {/* 평생 할인은 이 업체 계정에 붙어 있을 때만 안내한다.
+              정원이 찬 뒤 가입한 업체는 할인율이 0이라 이 문구가 아예 안 나온다. */}
+          {hasLifetimeDiscount && (
+            <p className="text-xs text-primary font-medium mt-1">
+              {betaNumber ? `베타 ${betaNumber}번 · ` : ''}평생 {lifetimeDiscountRate}% 할인
+              <span className="text-muted-foreground font-normal">
+                {isBeta ? ' — 유료 플랜으로 바꾸셔도 계속 적용돼요' : ' — 지금 금액에 이미 적용돼 있어요'}
+              </span>
             </p>
           )}
         </div>

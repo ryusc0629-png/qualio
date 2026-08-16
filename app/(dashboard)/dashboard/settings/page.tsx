@@ -34,7 +34,7 @@ export default async function SettingsPage() {
   const [businessResult, subscriptionResult, serviceCountResult, publicReportResult] = await Promise.all([
     db
       .from('businesses')
-      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, previous_slugs, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, favicon_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, legal_name, payment_account, certifications, portfolio, target_customer, custom_domain, custom_domain_status' as never)
+      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, previous_slugs, beta_number, lifetime_discount_rate, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, favicon_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, legal_name, payment_account, certifications, portfolio, target_customer, custom_domain, custom_domain_status' as never)
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
@@ -69,6 +69,7 @@ export default async function SettingsPage() {
     instagram_url: string | null; naver_blog_id: string | null; danggeun_business_url: string | null; service_areas: string[] | null
     review_reward_type: string; review_reward_description: string | null
     slug: string | null; previous_slugs: string[] | null
+    beta_number: number | null; lifetime_discount_rate: number | null
     seo_title: string | null; seo_description: string | null
     seo_keywords: string | null; seo_faqs: unknown; seo_generated_at: string | null
     logo_url: string | null; favicon_url: string | null
@@ -84,6 +85,7 @@ export default async function SettingsPage() {
     certifications: string[] | null
     portfolio: { before: string; after: string }[] | null
     target_customer: string | null
+    custom_domain: string | null; custom_domain_status: string | null
   }
   const subscription = subscriptionResult.data ?? {
     plan: 'beta',
@@ -103,8 +105,14 @@ export default async function SettingsPage() {
     (/^[a-z0-9]{5}$/.test(business.slug) || /-[a-z0-9]{5}$/.test(business.slug))
 
   const baseUrl  = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-  // 읽기 좋은 주소(slug)가 있으면 그걸로, 없으면 옛 UUID로 — 둘 다 /q 라우트가 받음
-  const quoteUrl = `${baseUrl}/q/${business.slug ?? profile.business_id}`
+
+  // 사장님 홈페이지 주소 — 자체 도메인을 연결했으면 그게 대표 주소다.
+  // 아직 홈페이지를 안 만들었으면(slug 없음) null → 링크 카드에서 만들라고 안내한다.
+  const homeUrl = business.custom_domain && business.custom_domain_status === 'active'
+    ? `https://${business.custom_domain}`
+    : business.slug
+      ? `${baseUrl}/biz/${business.slug}`
+      : null
 
   return (
     <div className="max-w-xl space-y-6">
@@ -133,16 +141,18 @@ export default async function SettingsPage() {
         <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
       </Link>
 
-      {/* 고객 견적 요청 링크 */}
+      {/* 내 홈페이지 링크 — 사장님이 밖에 뿌리는 대표 주소는 견적 폼이 아니라 홈페이지다.
+          (견적 링크는 홈 화면 우측 상단 '견적 링크 복사'에 그대로 있음) */}
       <div className="bg-white rounded-xl border border-border p-5 space-y-3">
         <div>
-          <h2 className="font-semibold text-sm">고객 견적 요청 링크</h2>
+          <h2 className="font-semibold text-sm">내 홈페이지 링크</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            카카오톡·문자로 공유하면 고객이 직접 견적을 요청할 수 있어요.
-            홈 화면 우측 상단 <span className="font-medium text-foreground">견적 링크 복사</span> 버튼으로도 빠르게 복사할 수 있어요.
+            {homeUrl
+              ? '명함·카카오톡·블로그·SNS에 이 주소를 쓰시면 됩니다. 손님이 서비스와 가격을 보고 바로 견적을 넣을 수 있어요.'
+              : '아직 홈페이지를 안 만드셨어요. 아래 ‘내 홈페이지’에서 만들면 여기에 주소가 나와요.'}
           </p>
         </div>
-        <CopyLinkButton url={quoteUrl} />
+        {homeUrl && <CopyLinkButton url={homeUrl} />}
       </div>
 
       {/* 구독 플랜 현황 */}
@@ -151,6 +161,8 @@ export default async function SettingsPage() {
         status={subscription.status ?? 'active'}
         currentPeriodEnd={subscription.current_period_end ?? null}
         nextPlan={subscription.next_plan ?? null}
+        lifetimeDiscountRate={business.lifetime_discount_rate ?? 0}
+        betaNumber={business.beta_number ?? null}
       />
 
       {/* 구독 취소 — 유료 플랜 + 활성 상태일 때만 노출 */}
@@ -160,11 +172,11 @@ export default async function SettingsPage() {
         </div>
       )}
 
-      {/* 홍보 페이지 내용(GEO) — 미리보기 체크리스트에서 여기로 이동시키기 위해 id 부여 */}
+      {/* 홈페이지 내용(GEO) — 미리보기 체크리스트에서 여기로 이동시키기 위해 id 부여 */}
       {/* 제목에 '홈페이지 주소'를 넣은 이유: 주소 바꾸는 곳이 여기라는 걸 접힌 상태에서도 알 수 있게. */}
       {/* 임시 주소(자동 생성)인 사장님에겐 처음부터 펼쳐 보여준다. */}
       <CollapsibleSection
-        title="홈페이지 주소 · 홍보 내용"
+        title="내 홈페이지 (주소 · 소개글)"
         description="손님에게 보여줄 내 홈페이지 주소를 정하고, 검색·AI(ChatGPT·Gemini)에 노출되는 업체 소개·FAQ를 자동으로 만들어요."
         defaultOpen={slugIsTemporary}
       >
