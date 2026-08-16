@@ -68,8 +68,8 @@ export default async function DashboardPage() {
   const greeting = hour < 12 ? '좋은 아침이에요' : hour < 18 ? '안녕하세요' : '수고하셨어요'
 
   const [
-    { data: completedThisMonth },
-    { data: completedLastMonth },
+    { data: bookingsThisMonth },
+    { data: bookingsLastMonth },
     { data: activeContracts },
     { data: todayBookings },
     { data: upcomingBookings },
@@ -92,16 +92,19 @@ export default async function DashboardPage() {
     { count: needsReviewCount },
     { data: contractVisitLinks },
   ] = await Promise.all([
-    // 이번 달 완료 예약 — 청소일(scheduled_at) 기준.
-    // updated_at은 담당자 배정·정기방문 생성 등 어떤 수정에도 갱신돼, 과거 완료 건이 이번 달로 잘못 잡힘
-    db.from('bookings').select('final_price')
-      .eq('business_id', businessId).eq('status', 'completed')
+    // 이번 달 예약 전체 — 청소일(scheduled_at) 기준, 취소·노쇼만 제외.
+    // 완료분만 세면 월초·월중엔 금액이 너무 작게 보여, 이번 달에 잡힌 일감 전체를 매출로 보여준다.
+    // updated_at은 담당자 배정·정기방문 생성 등 어떤 수정에도 갱신돼, 과거 건이 이번 달로 잘못 잡힘
+    db.from('bookings').select('final_price, status')
+      .eq('business_id', businessId)
+      .not('status', 'in', '("cancelled","no_show")')
       .is('deleted_at', null)
       .gte('scheduled_at', thisMonthStart).lt('scheduled_at', nextMonthStart),
 
-    // 지난달 완료 예약 — 청소일 기준
-    db.from('bookings').select('final_price')
-      .eq('business_id', businessId).eq('status', 'completed')
+    // 지난달 예약 전체 — 청소일 기준 (전월 대비 비교용, 같은 기준으로 맞춤)
+    db.from('bookings').select('final_price, status')
+      .eq('business_id', businessId)
+      .not('status', 'in', '("cancelled","no_show")')
       .is('deleted_at', null)
       .gte('scheduled_at', lastMonthStart).lt('scheduled_at', thisMonthStart),
 
@@ -236,11 +239,19 @@ export default async function DashboardPage() {
   ])
 
   // ── 계산 ──────────────────────────────────────────────
-  const monthRevenue       = (completedThisMonth ?? []).reduce((s, b) => s + (b.final_price ?? 0), 0)
-  const monthCompletedCount = completedThisMonth?.length ?? 0
-  const lastMonthRevenue   = (completedLastMonth ?? []).reduce((s, b) => s + (b.final_price ?? 0), 0)
-  const lastMonthCount     = completedLastMonth?.length ?? 0
-  const avgDealSize        = monthCompletedCount > 0 ? Math.round(monthRevenue / monthCompletedCount) : 0
+  // 이번 달 매출 = 취소·노쇼를 뺀 이번 달 일정 전체 금액 (완료분 + 남은 일정)
+  const monthBookings      = bookingsThisMonth ?? []
+  const monthRevenue       = monthBookings.reduce((s, b) => s + (b.final_price ?? 0), 0)
+  const monthBookingCount  = monthBookings.length
+  const monthCompleted     = monthBookings.filter((b) => b.status === 'completed')
+  const monthCompletedCount = monthCompleted.length
+  const monthCompletedRevenue = monthCompleted.reduce((s, b) => s + (b.final_price ?? 0), 0)
+  const monthRemainingCount = monthBookingCount - monthCompletedCount
+
+  const lastMonthBookings  = bookingsLastMonth ?? []
+  const lastMonthRevenue   = lastMonthBookings.reduce((s, b) => s + (b.final_price ?? 0), 0)
+  const lastMonthCount     = lastMonthBookings.length
+  const avgDealSize        = monthBookingCount > 0 ? Math.round(monthRevenue / monthBookingCount) : 0
   const monthlyContractRevenue = (activeContracts ?? []).reduce((s, c) => s + (c.contract_price ?? 0), 0)
 
   // 방문 누락 감지: 지금 유효기간 안(시작함 & 안 끝남)인 활성 계약인데 앞으로 예정된 방문이 하나도 없는 경우.
@@ -257,7 +268,7 @@ export default async function DashboardPage() {
 
   const revenueDiff    = monthRevenue - lastMonthRevenue
   const revenuePct     = lastMonthRevenue > 0 ? Math.round((revenueDiff / lastMonthRevenue) * 100) : null
-  const countDiff      = monthCompletedCount - lastMonthCount
+  const countDiff      = monthBookingCount - lastMonthCount
 
   const reportedSet    = new Set((reportedBookings ?? []).map((r) => r.booking_id))
   const unreportedCount = (completedBookingIds ?? []).filter((b) => !reportedSet.has(b.id)).length
@@ -616,9 +627,11 @@ export default async function DashboardPage() {
               </p>
               <p className="text-xs font-medium text-muted-foreground mt-1">{monthLabel} 매출</p>
               <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-                {revenuePct !== null
-                  ? `전월 대비 ${revenueDiff >= 0 ? '+' : ''}${Math.round(revenueDiff / 10000)}만원`
-                  : '완료된 예약 기준'}
+                {monthRemainingCount > 0
+                  ? `완료 ${Math.round(monthCompletedRevenue / 10000).toLocaleString('ko-KR')}만원 · 남은 일정 ${monthRemainingCount}건`
+                  : revenuePct !== null
+                    ? `전월 대비 ${revenueDiff >= 0 ? '+' : ''}${Math.round(revenueDiff / 10000)}만원`
+                    : '이번 달 잡힌 일정 전체'}
               </p>
             </div>
           </Link>
@@ -636,9 +649,15 @@ export default async function DashboardPage() {
                   </span>
                 )}
               </div>
-              <p className="text-xl font-bold tabular-nums leading-tight">{monthCompletedCount}건</p>
-              <p className="text-xs font-medium text-muted-foreground mt-1">{monthLabel} 완료</p>
-              <p className="text-[11px] text-muted-foreground/70 mt-0.5">청소 완료한 건수</p>
+              <p className="text-xl font-bold tabular-nums leading-tight">{monthBookingCount}건</p>
+              <p className="text-xs font-medium text-muted-foreground mt-1">{monthLabel} 일정</p>
+              <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                {monthBookingCount === 0
+                  ? '아직 잡힌 일정이 없어요'
+                  : monthRemainingCount > 0
+                    ? `완료 ${monthCompletedCount}건 · 남은 일정 ${monthRemainingCount}건`
+                    : '모두 완료했어요'}
+              </p>
             </div>
           </Link>
 
@@ -653,7 +672,7 @@ export default async function DashboardPage() {
               {avgDealSize > 0 ? `${avgDealSize.toLocaleString('ko-KR')}원` : '—'}
             </p>
             <p className="text-xs font-medium text-muted-foreground mt-1">평균 단가</p>
-            <p className="text-[11px] text-muted-foreground/70 mt-0.5">{monthLabel} 완료 예약 기준</p>
+            <p className="text-[11px] text-muted-foreground/70 mt-0.5">{monthLabel} 예약 {monthBookingCount}건 기준</p>
           </div>
 
           {/* 정기 계약 */}
