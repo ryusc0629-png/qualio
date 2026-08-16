@@ -61,6 +61,13 @@ async function check(name, keys, fn) {
     record(name, 'skip', `환경변수 없음: ${missing.join(', ')}`)
     return
   }
+  // Vercel에서 '민감'으로 표시된 값은 내려받을 때 실제 값 대신 [SENSITIVE]가 온다.
+  // 로컬에 값이 없는 것일 뿐 실서버에는 있으므로, 키가 틀린 것처럼 보이지 않게 구분한다.
+  const sensitive = keys.filter((k) => env[k] === '[SENSITIVE]')
+  if (sensitive.length > 0) {
+    record(name, 'skip', '로컬에 값 없음(Vercel 민감 표시) — 실서버에는 설정돼 있음')
+    return
+  }
   try {
     const detail = await withTimeout(fn())
     record(name, 'ok', detail ?? '정상')
