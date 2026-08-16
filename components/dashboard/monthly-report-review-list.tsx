@@ -32,8 +32,13 @@ function ReviewRow({
   const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/q/${businessId}/monthly-report/${item.customerId}?month=${item.period}`
 
   const { execute: send, isPending: isSending } = useAction(sendMonthlyReportAction, {
-    onSuccess: () => {
-      toast.success(`${item.customerName} ${periodLabel(item.period)} 리포트를 보냄 처리했어요`)
+    onSuccess: ({ data }) => {
+      // 알림톡 템플릿이 승인·연결돼 있으면 실제로 발송된 것, 아니면 표시만 된 것
+      toast.success(
+        data?.alimtalkSent
+          ? `${item.customerName}에 ${periodLabel(item.period)} 리포트를 보냈어요`
+          : `${item.customerName} ${periodLabel(item.period)} 리포트를 보냄 처리했어요 (링크를 직접 전달해 주세요)`
+      )
       onDone(item.id)
     },
     onError: ({ error }) => toast.error(error.serverError ?? '처리에 실패했어요'),

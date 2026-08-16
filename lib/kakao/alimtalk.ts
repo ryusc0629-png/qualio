@@ -616,3 +616,106 @@ export async function sendReviewClaimedAlimtalk(params: ReviewClaimedParams): Pr
     },
   })
 }
+
+// ── 거래처 보고서 2종 ───────────────────────────────────────────────
+//
+// 재방문 유도·견적 팔로업과 달리 이 둘은 통과 가능성이 높다.
+// 계약·작업이라는 '수신자의 액션'에 이어지는 정보성 보고이기 때문.
+// ⚠️ 문안에 "이번 달도 잘 부탁드립니다" 같은 인사나 재계약 유도를 넣으면
+//    그 순간 광고성이 되어 반려된다. 사실 보고만 담을 것.
+
+export interface MonthlyReportParams {
+  customerPhone: string
+  customerName:  string
+  businessName:  string
+  period:        string  // 예: 2026년 8월
+  visitCount:    number  // 그 달 완료 작업 횟수
+  reportUrl:     string  // https://qualio.co.kr/q/... 전체 주소
+}
+
+/** 거래처 월간 작업 보고서 — 사장님이 검토 후 발송을 누를 때. 템플릿 미설정이면 false */
+export async function sendMonthlyReportAlimtalk(params: MonthlyReportParams): Promise<boolean> {
+  const apiKey     = process.env.SOLAPI_API_KEY
+  const apiSecret  = process.env.SOLAPI_API_SECRET
+  const sender     = process.env.SOLAPI_SENDER_PHONE
+  const templateId = process.env.SOLAPI_TEMPLATE_ID_MONTHLY_REPORT
+  const pfId       = process.env.SOLAPI_KAKAO_PF_ID
+
+  if (!apiKey || !apiSecret || !sender || !templateId || !pfId) {
+    console.warn('[Alimtalk] MONTHLY_REPORT 템플릿 미설정 — 발송 생략')
+    return false
+  }
+
+  const service = new SolapiMessageService(apiKey, apiSecret)
+  await service.sendOne({
+    to:   params.customerPhone,
+    from: sender,
+    type: 'ATA',
+    kakaoOptions: {
+      pfId,
+      templateId,
+      variables: {
+        '#{고객명}':   params.customerName,
+        '#{업체명}':   params.businessName,
+        '#{기간}':     params.period,
+        '#{완료횟수}': String(params.visitCount),
+      },
+      buttons: [
+        {
+          buttonType: 'WL' as const,
+          buttonName: '보고서 확인하기',
+          linkMo: params.reportUrl,
+          linkPc: params.reportUrl,
+        },
+      ],
+    },
+  })
+  return true
+}
+
+export interface OnboardingReportParams {
+  customerPhone: string
+  customerName:  string
+  businessName:  string
+  workDate:      string  // 예: 8월 16일
+  reportUrl:     string
+}
+
+/** 첫 작업(초도) 보고서 — 정기계약 시작 후 첫 작업을 마치고 보낸다. 템플릿 미설정이면 false */
+export async function sendOnboardingReportAlimtalk(params: OnboardingReportParams): Promise<boolean> {
+  const apiKey     = process.env.SOLAPI_API_KEY
+  const apiSecret  = process.env.SOLAPI_API_SECRET
+  const sender     = process.env.SOLAPI_SENDER_PHONE
+  const templateId = process.env.SOLAPI_TEMPLATE_ID_ONBOARDING_REPORT
+  const pfId       = process.env.SOLAPI_KAKAO_PF_ID
+
+  if (!apiKey || !apiSecret || !sender || !templateId || !pfId) {
+    console.warn('[Alimtalk] ONBOARDING_REPORT 템플릿 미설정 — 발송 생략')
+    return false
+  }
+
+  const service = new SolapiMessageService(apiKey, apiSecret)
+  await service.sendOne({
+    to:   params.customerPhone,
+    from: sender,
+    type: 'ATA',
+    kakaoOptions: {
+      pfId,
+      templateId,
+      variables: {
+        '#{고객명}': params.customerName,
+        '#{업체명}': params.businessName,
+        '#{작업일}': params.workDate,
+      },
+      buttons: [
+        {
+          buttonType: 'WL' as const,
+          buttonName: '보고서 확인하기',
+          linkMo: params.reportUrl,
+          linkPc: params.reportUrl,
+        },
+      ],
+    },
+  })
+  return true
+}
