@@ -13,6 +13,7 @@ import { isBusinessService } from '@/lib/utils'
 import { findCustomerIdByPhone } from '@/lib/actions/_customer-lookup'
 import { inputToUtcIso } from '@/lib/format/datetime'
 import { normalizeChannel } from '@/lib/utils/marketing-channels'
+import { parseVolumeTiers, unitPriceForSize, volumeRatioForSize } from '@/lib/quote/volume-tiers'
 
 // 공개 폼용 액션 클라이언트 (인증 불필요)
 const publicAction = createSafeActionClient({
@@ -21,6 +22,16 @@ const publicAction = createSafeActionClient({
     console.error('[PublicAction Error]', e)
     return '잠시 문제가 있었어요. 잠시 후 다시 시도해주세요'
   },
+}).use(async ({ next }) => {
+  const result = await next()
+  // 입력값이 스키마에 걸려 거부된 요청은 '예외'가 아니라 조용히 반환돼 아무 기록도 남지 않는다.
+  // 그래서 공개 견적폼이 튕겨도 사장님 눈엔 '문의가 안 들어온다'로만 보인다.
+  // (700평 요청이 상한 300평에 막혔던 건을 며칠 뒤에야 알았다 — 2026-08-17)
+  // 값은 남기지 않는다: 고객 이름·연락처가 로그에 쌓이지 않도록 '어느 칸이 왜 걸렸는지'만 기록.
+  if (result.validationErrors) {
+    console.error('[공개폼 입력 거부]', JSON.stringify(result.validationErrors))
+  }
+  return result
 })
 
 // 한국 전화번호 검증
@@ -37,7 +48,14 @@ const DEFAULT_TIERS = [
 const calculateAndCreateQuoteSchema = z.object({
   business_id: z.string().uuid('올바른 업체 정보가 아닙니다'),
   service_id: z.string().uuid('서비스를 선택해주세요'),
-  space_size: z.coerce.number().min(1).max(300).optional(),
+  // 평수(또는 에어컨 대수). 상한 300은 주거 기준이라 공장·물류창고·사무실 견적이 통째로 막혔다.
+  // (다트클린에 700평 인테리어 후 청소 요청이 들어왔다가 폼에서 튕겨나간 적 있음 — 2026-08-17)
+  // 상한은 봇이 터무니없는 금액을 만들지 못하게 막는 용도로만 남긴다.
+  space_size: z.coerce
+    .number()
+    .min(1, '평수를 입력해주세요')
+    .max(100000, '평수가 너무 커요. 숫자를 다시 확인해주세요')
+    .optional(),
   preferred_date: z.string().max(30).optional(),
   extra_notes: z.string().max(500).optional(),
   // 공개 폼이라 이름·연락처는 선택(가격만 보고 갈 수도 있음)이지만, 값이 있으면 형식을 검증한다 —
@@ -84,14 +102,14 @@ export const calculateAndCreateQuoteAction = publicAction
     // 선택한 서비스 조회 (에어컨·항목별 단가 포함)
     const { data: service } = await db
       .from('service_items')
-      .select('id, name, base_price, unit, ac_type_prices, unit_prices, unit_variants, tier_good_items, tier_better_items, tier_best_items, tier_good_price, tier_better_price, tier_best_price, tier_good_discount_rate, tier_good_discount_amount, tier_better_discount_rate, tier_better_discount_amount, tier_best_discount_rate, tier_best_discount_amount' as never)
+      .select('id, name, base_price, unit, ac_type_prices, unit_prices, unit_variants, volume_tiers, tier_good_items, tier_better_items, tier_best_items, tier_good_price, tier_better_price, tier_best_price, tier_good_discount_rate, tier_good_discount_amount, tier_better_discount_rate, tier_better_discount_amount, tier_best_discount_rate, tier_best_discount_amount' as never)
       .eq('id', parsedInput.service_id)
       .eq('business_id', parsedInput.business_id)
       .eq('is_active', true)
       .is('deleted_at', null)
       .maybeSingle() as unknown as { data: {
         id: string; name: string; base_price: number; unit: string
-        ac_type_prices: unknown; unit_prices: unknown; unit_variants: unknown
+        ac_type_prices: unknown; unit_prices: unknown; unit_variants: unknown; volume_tiers?: unknown
         tier_good_items?: string[] | null; tier_better_items?: string[] | null; tier_best_items?: string[] | null
         tier_good_price?: number | null; tier_better_price?: number | null; tier_best_price?: number | null
         tier_good_discount_rate?: number | null;   tier_good_discount_amount?: number | null
@@ -100,6 +118,11 @@ export const calculateAndCreateQuoteAction = publicAction
       } | null }
 
     if (!service) throw new Error('[APP] 선택한 서비스를 찾을 수 없습니다')
+
+    // 규모 구간별 단가 — 평수(개수)가 크면 업체가 설정해둔 낮은 단가를 적용한다.
+    // 구간을 설정하지 않은 업체는 tiers가 빈 배열이라 기본가 그대로 계산된다(기존 동작 유지).
+    const volumeTiers = parseVolumeTiers(service.volume_tiers)
+    const effectiveUnitPrice = unitPriceForSize(service.base_price, volumeTiers, parsedInput.space_size)
 
     // 기본 금액 계산
     let baseCalc: number
@@ -133,9 +156,9 @@ export const calculateAndCreateQuoteAction = publicAction
         return sum + item.price * count
       }, 0)
     } else if (service.unit === '평당') {
-      baseCalc = service.base_price * (parsedInput.space_size || 1)
+      baseCalc = effectiveUnitPrice * (parsedInput.space_size || 1)
     } else if (service.unit === '개') {
-      baseCalc = service.base_price * (parsedInput.space_size || 1)
+      baseCalc = effectiveUnitPrice * (parsedInput.space_size || 1)
     } else {
       baseCalc = service.base_price
     }
@@ -515,6 +538,10 @@ export const createBookingAction = publicAction
           serviceAddress: parsedInput.service_address,
           selectedTier:   parsedInput.selected_tier as 'good' | 'better' | 'best',
           finalPrice:     finalPrice,
+          // 이 둘이 있어야 V2 템플릿('일정 변경 요청' 버튼 포함)으로 나간다.
+          // 빠져 있어서 대표가 확정한 예약만 버튼 없는 V1로 발송되고 있었다.
+          bookingId:      newBooking.id,
+          businessId:     quote.business_id,
         })
 
         // 발송 성공 시 reports 테이블에 기록
