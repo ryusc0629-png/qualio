@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { createLeadActivityAction, updateLeadStatusAction, updateLeadAction } from '@/lib/actions/crm'
+import { createLeadActivityAction, updateLeadStatusAction, updateLeadAction, deleteLeadAction } from '@/lib/actions/crm'
 import { LeadForm, leadToFormValues, leadFormToInput, type LeadFormValues } from '@/components/dashboard/lead-form'
 import { DeleteActivityButton } from '@/components/dashboard/delete-activity-button'
 import { EditableActivityContent } from '@/components/dashboard/editable-activity-content'
@@ -29,7 +29,7 @@ import { STAGE_CONFIG } from '../pipeline-list'
 import { ConvertToCustomerButton } from './convert-to-customer-button'
 import { B2bQuoteList } from '@/components/dashboard/b2b-quote-list'
 import type { LiveStatus } from '@/lib/utils/lead-live-status'
-import { Calendar, ArrowLeft, Plus, PhoneCall, MapPin as VisitIcon, FileText, StickyNote, Mic, Pencil } from 'lucide-react'
+import { Calendar, ArrowLeft, Plus, PhoneCall, MapPin as VisitIcon, FileText, StickyNote, Mic, Pencil, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { MeetingRecorder } from '@/components/dashboard/meeting-recorder'
 import { ContactActions } from '@/components/dashboard/contact-actions'
@@ -142,6 +142,28 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
+  // 완전 삭제 — 잘못 만든 거래처를 목록에서 아예 없앨 때. 되돌릴 수 없다.
+  const { execute: executeDelete, isPending: deleting } = useAction(deleteLeadAction, {
+    onSuccess: () => {
+      toast.success('삭제했어요')
+      window.location.replace('/dashboard/pipeline')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  const handleDelete = () => {
+    // 견적서가 있으면 지울 수 없다(서버에서도 막는다) — 이유와 다음 행동을 먼저 알려준다
+    if (quotes.length > 0) {
+      toast.error(`견적서 ${quotes.length}장이 있어 삭제할 수 없어요. 견적서를 먼저 지우거나 보관하기를 눌러주세요`)
+      return
+    }
+
+    const extra = activities.length > 0 ? `\n상담 기록 ${activities.length}개도 함께 지워져요.` : ''
+    if (confirm(`"${lead.company_name}"을(를) 완전히 삭제할까요?${extra}\n\n되돌릴 수 없어요. 나중에 다시 볼 수도 있다면 '보관하기'를 쓰세요.`)) {
+      executeDelete({ leadId: lead.id })
+    }
+  }
+
   // 거래처 정보 수정 (거래처명·담당자·전화·주소 등)
   const [editOpen, setEditOpen] = useState(false)
   const [editForm, setEditForm] = useState<LeadFormValues>(() => leadToFormValues(lead))
@@ -212,17 +234,28 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
             {unarchiving ? '처리 중...' : '보관 해제'}
           </button>
         ) : (
-          <button
-            onClick={() => {
-              if (confirm('이 거래처를 보관할까요?\n고객 데이터와 상담 기록은 그대로 유지돼요.')) {
-                executeArchive({ leadId: lead.id, status: 'archived' })
-              }
-            }}
-            disabled={archiving}
-            className="text-xs text-muted-foreground hover:text-red-600 disabled:opacity-50"
-          >
-            {archiving ? '처리 중...' : '보관하기'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                if (confirm('이 거래처를 보관할까요?\n고객 데이터와 상담 기록은 그대로 유지돼요.')) {
+                  executeArchive({ leadId: lead.id, status: 'archived' })
+                }
+              }}
+              disabled={archiving}
+              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              {archiving ? '처리 중...' : '보관하기'}
+            </button>
+            {/* 완전 삭제 — 보관과 헷갈리지 않게 아이콘+빨간색으로 구분 */}
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-red-600 disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {deleting ? '삭제 중...' : '삭제'}
+            </button>
+          </div>
         )}
       </div>
 

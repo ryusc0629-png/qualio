@@ -306,6 +306,19 @@ export const deleteLeadAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getAuthenticatedBusinessId()
 
+    // 견적서가 딸린 거래처는 지우지 않는다.
+    // leads를 지워도 b2b_quotes는 lead_id만 null이 되어 남는데(FK가 SET NULL),
+    // 그러면 화면 어디에서도 열 수 없는 문서가 되어 사장님 눈엔 '견적서가 사라진' 셈이 된다.
+    const { count: quoteCount } = await db
+      .from('b2b_quotes')
+      .select('id', { count: 'exact', head: true })
+      .eq('lead_id', parsedInput.leadId)
+      .eq('business_id', businessId)
+
+    if (quoteCount && quoteCount > 0) {
+      throw new Error('[APP] 견적서가 있는 거래처는 삭제할 수 없어요. 견적서를 먼저 지우거나 보관하기를 눌러주세요')
+    }
+
     const { error } = await db
       .from('leads')
       .delete()
