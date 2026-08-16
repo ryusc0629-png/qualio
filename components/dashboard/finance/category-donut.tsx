@@ -12,14 +12,17 @@ interface CategoryDonutProps {
 export function CategoryDonut({ items, total }: CategoryDonutProps) {
   const [active, setActive] = useState<number | null>(null)
 
-  // 각 조각의 시작 위치(%)와 길이(%) 계산 — pathLength=100 기준
-  let acc = 0
-  const segments = items.map((it, i) => {
+  // 각 조각의 시작 위치(%)와 길이(%) 계산 — pathLength=100 기준.
+  // 바로 앞 조각의 (시작 + 길이)가 이번 조각의 시작이라, 따로 누적 변수를 두지 않는다.
+  const segments = items.reduce<
+    (typeof items[number] & { i: number; pct: number; start: number; color: string })[]
+  >((acc, it, i) => {
     const pct = total > 0 ? (it.amount / total) * 100 : 0
-    const start = acc
-    acc += pct
-    return { ...it, i, pct, start, color: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }
-  })
+    const prev = acc[acc.length - 1]
+    const start = prev ? prev.start + prev.pct : 0
+    acc.push({ ...it, i, pct, start, color: CATEGORY_COLORS[i % CATEGORY_COLORS.length] })
+    return acc
+  }, [])
 
   const activeItem = active !== null ? segments[active] : null
 

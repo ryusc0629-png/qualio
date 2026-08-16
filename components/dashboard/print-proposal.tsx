@@ -76,7 +76,7 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
         {sections.investment && (
           <section className="page">
             <div className="body full">
-              <h2>청소는 아까운 '지출'이 아니라,<br />사업을 돕는 '투자'입니다<span className="u" /></h2>
+              <h2>청소는 아까운 &apos;지출&apos;이 아니라,<br />사업을 돕는 &apos;투자&apos;입니다<span className="u" /></h2>
               <div className="two-col">
                 <div className="col-text">
                   {C.investmentParas.map((p, i) => (

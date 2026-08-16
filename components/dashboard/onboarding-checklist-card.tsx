@@ -27,6 +27,8 @@ export function OnboardingChecklistCard({ steps, done, total, nextLabel }: Props
   const [snoozed, setSnoozed] = useState(false)
 
   useEffect(() => {
+    // '오늘 닫았는지'는 브라우저에만 있는 정보라 화면이 뜬 뒤에야 알 수 있다(깜빡임 방지)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
     if (typeof window !== 'undefined' && localStorage.getItem(SNOOZE_KEY) === todayKST()) {
       setSnoozed(true) // 오늘 이미 닫음 → 내일 다시 노출

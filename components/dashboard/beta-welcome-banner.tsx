@@ -17,6 +17,9 @@ export function BetaWelcomeBanner() {
   useEffect(() => {
     if (process.env.NEXT_PUBLIC_BETA_OPEN !== 'true') return
     if (localStorage.getItem(DISMISS_KEY) === '1') return
+    // 배너를 닫았는지는 브라우저에만 있는 정보라 화면이 뜬 뒤에야 알 수 있다.
+    // 서버에서 미리 보여줬다가 지우면 이미 닫은 사람에게 배너가 깜빡이므로 이 순서가 맞다.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShow(true)
   }, [])
 

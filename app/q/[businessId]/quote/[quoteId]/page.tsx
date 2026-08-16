@@ -127,6 +127,8 @@ export default async function QuoteLandingPage({ params }: PageProps) {
   const isBooked = quote.status === 'booked'
 
   const expiresAt = new Date(new Date(quote.created_at).getTime() + 48 * 60 * 60 * 1000)
+  // 서버 컴포넌트라 요청이 올 때 서버에서 한 번만 계산된다(고객이 열어본 시점 기준 남은 시간)
+  // eslint-disable-next-line react-hooks/purity
   const hoursLeft = Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60)))
   const isExpired = !isBooked && hoursLeft === 0
   const isUrgent  = !isBooked && hoursLeft > 0 && hoursLeft <= 12

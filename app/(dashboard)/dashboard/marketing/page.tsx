@@ -108,6 +108,8 @@ export default async function MarketingPage({
   const autoDailyPostLimit = getAutoDailyPostLimit(planId)
 
   // 오늘 KST 기준 발행 건수 → 일 한도 초과 여부 확인
+  // (서버 컴포넌트라 요청마다 서버에서 한 번만 실행 — 브라우저 재렌더와 무관)
+  // eslint-disable-next-line react-hooks/purity
   const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000)
   const todayKSTStr = nowKST.toISOString().slice(0, 10)
   const todayPostCount = posts.filter((p) => {

@@ -31,6 +31,8 @@ export function InstallPrompt() {
     if (localStorage.getItem(DISMISS_KEY)) return
 
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    // 아이폰인지·이미 설치했는지는 브라우저에서만 알 수 있어 화면이 뜬 뒤에 판단한다
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsIOS(ios)
 
     if (ios) {

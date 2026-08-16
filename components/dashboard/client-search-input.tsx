@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { Search, X } from 'lucide-react'
 
 export function ClientSearchInput() {
@@ -10,10 +10,14 @@ export function ClientSearchInput() {
   const [query, setQuery] = useState(searchParams.get('q') ?? '')
   const timerRef = useRef<ReturnType<typeof setTimeout>>(null)
 
-  // URL 검색어와 동기화
-  useEffect(() => {
-    setQuery(searchParams.get('q') ?? '')
-  }, [searchParams])
+  // URL 검색어와 동기화 (뒤로가기 등으로 주소가 바뀌면 입력칸도 따라간다).
+  // effect가 아니라 렌더 중에 맞춘다 — effect로 하면 옛 검색어로 한 번 그린 뒤 다시 그린다.
+  const urlQuery = searchParams.get('q') ?? ''
+  const [syncedQuery, setSyncedQuery] = useState(urlQuery)
+  if (syncedQuery !== urlQuery) {
+    setSyncedQuery(urlQuery)
+    setQuery(urlQuery)
+  }
 
   const updateUrl = (value: string) => {
     const params = new URLSearchParams(searchParams.toString())

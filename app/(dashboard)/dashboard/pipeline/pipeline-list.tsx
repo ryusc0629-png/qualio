@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -145,7 +145,10 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
   // 서버 데이터(props)가 임시값과 같아진 항목만 정리한다.
   // onSuccess에서 곧바로 전부 비우면 router.refresh 완료 전까지 예전 상태로 깜빡여
   // "안 눌렸나?" 하는 착각을 준다 → props와 일치하는 것만 제거해 깜빡임 없이 동기화.
-  useEffect(() => {
+  // effect가 아니라 렌더 중에 정리한다 — effect로 하면 정리 전 화면을 한 번 그린 뒤 다시 그린다.
+  const [syncedLeads, setSyncedLeads] = useState(leads)
+  if (syncedLeads !== leads) {
+    setSyncedLeads(leads)
     setStatusOverrides((prev) => {
       const keys = Object.keys(prev)
       if (keys.length === 0) return prev
@@ -156,10 +159,10 @@ export function PipelineList({ leads, filterStatus, quoteByLead = {}, convertedL
       }
       return Object.keys(next).length === keys.length ? prev : next
     })
-  }, [leads])
+  }
 
   const { execute: executeStatus } = useAction(updateLeadStatusAction, {
-    onSuccess: () => startTransition(() => router.refresh()), // 임시값은 위 useEffect가 동기화 후 정리
+    onSuccess: () => startTransition(() => router.refresh()), // 임시값은 위 동기화 블록이 정리
     onError: ({ error }) => {
       setStatusOverrides({}) // 실패 시 서버 상태(원래대로)로 되돌림
       toast.error(error.serverError ?? '다시 시도해주세요')

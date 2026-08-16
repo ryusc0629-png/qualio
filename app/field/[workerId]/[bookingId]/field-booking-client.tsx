@@ -21,6 +21,7 @@ import {
 } from '@/lib/actions/field'
 import { FieldBookingItemsEditor } from '@/components/field/field-booking-items-editor'
 import { ContactActions } from '@/components/dashboard/contact-actions'
+import { buildUploadPath } from '@/lib/storage/upload-path'
 import {
   ArrowLeft,
   Clock,
@@ -263,8 +264,7 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
     const supabase = createClient()
     const uploaded: string[] = []
     for (const file of toUpload) {
-      const ext = file.name.split('.').pop() ?? 'jpg'
-      const path = `${businessId}/${booking.id}/checklist/${itemId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      const path = buildUploadPath(`${businessId}/${booking.id}/checklist/${itemId}`, file.name)
       const { error } = await supabase.storage.from('report-photos').upload(path, file, { upsert: true })
       if (error) {
         toast.error('사진 업로드에 실패했어요')

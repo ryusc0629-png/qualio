@@ -304,6 +304,9 @@ export function BookingDetailSheet({
   // 화면은 즉시 바꾸고(로컬 상태), 서버 저장만 디바운스로 묶는다 — 여러 명을 빠르게 눌러도 자유롭게 클릭 가능
   const queueWorkersSave = (bookingId: string, newIds: string[]) => {
     if (workersSaveTimer.current) clearTimeout(workersSaveTimer.current)
+    // 위 언마운트 정리 effect가 이 타이머를 읽는다는 이유로 규칙이 수정을 막지만,
+    // 타이머 보관은 useRef의 본래 용도이고 화면 그리기와 무관하다(클릭했을 때만 실행).
+    // eslint-disable-next-line react-hooks/immutability
     workersSaveTimer.current = setTimeout(() => {
       updateWorkers({ bookingId, workerIds: newIds })
     }, 600)

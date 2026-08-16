@@ -18,7 +18,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-lg font-semibold mb-3">제1조 (개인정보의 처리 목적)</h2>
           <p className="text-muted-foreground leading-relaxed mb-3">
-            퀄리오(이하 "회사")는 다음의 목적을 위하여 개인정보를 처리합니다.
+            퀄리오(이하 &quot;회사&quot;)는 다음의 목적을 위하여 개인정보를 처리합니다.
           </p>
           <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
             <li>서비스 회원 가입 및 관리 (이용자 식별, 가입 의사 확인)</li>

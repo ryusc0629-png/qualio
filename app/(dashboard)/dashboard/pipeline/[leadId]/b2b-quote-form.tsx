@@ -401,9 +401,14 @@ export function B2bQuoteForm({ leadId, customerId, clientName, clientAddress, bu
 
   // 생성 중 진행 문구를 2.2초마다 다음 단계로 넘김 (마지막 단계에서 멈춤)
   const [specStep, setSpecStep] = useState(0)
-  useEffect(() => {
-    if (!generatingSpec) { setSpecStep(0); return }
+  // 생성이 시작/종료될 때 문구를 처음으로 되돌린다 — effect가 아니라 렌더 중에 맞춘다
+  const [syncedGenerating, setSyncedGenerating] = useState(generatingSpec)
+  if (syncedGenerating !== generatingSpec) {
+    setSyncedGenerating(generatingSpec)
     setSpecStep(0)
+  }
+  useEffect(() => {
+    if (!generatingSpec) return
     const id = setInterval(() => setSpecStep((s) => Math.min(s + 1, SPEC_STEPS.length - 1)), 2200)
     return () => clearInterval(id)
   }, [generatingSpec])

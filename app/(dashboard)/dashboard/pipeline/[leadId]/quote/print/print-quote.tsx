@@ -74,6 +74,15 @@ interface Props {
   initialMode?: DocMode
 }
 
+// 발행일/작성일 — 견적 저장일(created_at)을 KST로 표시. 저장값이 없으면 오늘 날짜로 폴백.
+// (예전엔 항상 렌더 시점 new Date()라 재열람할 때마다 날짜가 바뀌었고, 시방서 작성일이 견적서와 어긋났음)
+// 컴포넌트 밖에 두는 이유: 안에 두면 리액트가 "렌더할 때마다 값이 달라진다"고 경고한다.
+function formatIssueDate(createdAt: string | null | undefined) {
+  return new Date(createdAt ?? Date.now()).toLocaleDateString('ko-KR', {
+    year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Seoul',
+  })
+}
+
 export function PrintQuote({ lead, quote, business, variant = 'internal', disableTracking = false, publicToken, initialMode = 'both' }: Props) {
   const items = (Array.isArray(quote.items) ? quote.items : []) as QuoteItem[]
   const isOneOff = quote.job_type === 'one_off'
@@ -127,11 +136,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
     ...(canContract ? ([['contract', '계약서']] as [DocMode, string][]) : []),
   ]
 
-  // 발행일/작성일 — 견적 저장일(created_at)을 KST로 표시. 저장값이 없으면 오늘 날짜로 폴백.
-  // (예전엔 항상 렌더 시점 new Date()라 재열람할 때마다 날짜가 바뀌었고, 시방서 작성일이 견적서와 어긋났음)
-  const issueDate = new Date(quote.created_at ?? Date.now()).toLocaleDateString('ko-KR', {
-    year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Seoul',
-  })
+  const issueDate = formatIssueDate(quote.created_at)
 
   // 계약서 본문 — 사장님이 편집해 저장한 텍스트 우선, 없으면 견적 데이터로 표준 문안 즉석 생성
   const contractBody = quote.contract_content?.trim()

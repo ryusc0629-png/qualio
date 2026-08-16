@@ -55,8 +55,12 @@ export default async function AttendancePage() {
     .eq('business_id' as never, businessId) as unknown as { data: { id: string; name: string }[] | null }
   const workerName = new Map((workers ?? []).map((w) => [w.id, w.name]))
 
+  // 이 파일은 서버 컴포넌트라 요청이 올 때 서버에서 한 번만 실행된다.
+  // 브라우저에서 다시 그리는 일이 없어 '현재 시각'을 그대로 써도 화면이 흔들리지 않는다.
+  /* eslint-disable react-hooks/purity */
   const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000)
   const now = Date.now()
+  /* eslint-enable react-hooks/purity */
   const withStatus = visits.map((v) => ({ v, s: computeVisitStatus(v, durationById, now) }))
   const doneCount = withStatus.filter((x) => x.s === 'done').length
   const overdueCount = withStatus.filter((x) => x.s === 'overdue').length

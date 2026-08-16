@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect, useRef } from 'react'
+import { useState, useTransition } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -113,8 +113,13 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
   // 상태는 누르는 즉시 화면에 반영(낙관적 업데이트) — 저장은 백그라운드.
   // 서버 응답/재패칭을 기다리지 않아 "안 먹히나?" 하는 딜레이 착각을 없앤다.
   const [optimisticStatus, setOptimisticStatus] = useState(lead.status)
-  // 재패칭 등으로 서버값이 바뀌면 동기화 (보관 해제·전환 등 다른 경로 반영)
-  useEffect(() => setOptimisticStatus(lead.status), [lead.status])
+  // 재패칭 등으로 서버값이 바뀌면 동기화 (보관 해제·전환 등 다른 경로 반영).
+  // effect가 아니라 렌더 중에 맞춘다 — effect로 하면 예전 상태로 한 번 그린 뒤 다시 그려 깜빡인다.
+  const [syncedStatus, setSyncedStatus] = useState(lead.status)
+  if (syncedStatus !== lead.status) {
+    setSyncedStatus(lead.status)
+    setOptimisticStatus(lead.status)
+  }
 
   const { execute: executeStatus } = useAction(updateLeadStatusAction, {
     onSuccess: () => startTransition(() => router.refresh()),

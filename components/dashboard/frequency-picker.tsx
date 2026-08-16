@@ -12,21 +12,13 @@ interface FrequencyPickerProps {
 }
 
 export function FrequencyPicker({ value, onChange, error }: FrequencyPickerProps) {
-  const [type, setType] = useState<'weekly' | 'monthly'>('weekly')
-  const [count, setCount] = useState(1)
-  const [days, setDays] = useState<string[]>([])
-
-  // 외부 value가 바뀌면 내부 상태 동기화 (폼 reset 등)
-  useEffect(() => {
-    const parsed = parseFrequency(value)
-    if (parsed) {
-      setType(parsed.type)
-      setCount(parsed.count)
-      setDays(parsed.days ?? [])
-    } else {
-      // 파싱 실패 시 기본값 유지
-    }
-  }, []) // 마운트 시 1회만 동기화
+  // 처음 받은 value를 초기값으로 그대로 사용한다(파싱 실패 시 기본값).
+  // 예전엔 마운트 후 effect로 다시 채웠는데, 그러면 기본값으로 한 번 그렸다가 다시 그려
+  // 화면이 살짝 깜빡였다. 초기값으로 넣으면 처음부터 올바른 값으로 한 번만 그린다.
+  const initial = parseFrequency(value)
+  const [type, setType] = useState<'weekly' | 'monthly'>(initial?.type ?? 'weekly')
+  const [count, setCount] = useState(initial?.count ?? 1)
+  const [days, setDays] = useState<string[]>(initial?.days ?? [])
 
   // 내부 상태가 바뀔 때마다 직렬화해서 부모에 전달
   useEffect(() => {

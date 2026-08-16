@@ -19,7 +19,7 @@ export default function TermsPage() {
         <section>
           <h2 className="text-lg font-semibold mb-3">제1조 (목적)</h2>
           <p className="text-muted-foreground leading-relaxed">
-            본 약관은 퀄리오(이하 "회사")가 제공하는 청소업체 관리 SaaS 서비스(이하 "서비스")의
+            본 약관은 퀄리오(이하 &quot;회사&quot;)가 제공하는 청소업체 관리 SaaS 서비스(이하 &quot;서비스&quot;)의
             이용 조건 및 절차, 회사와 이용자의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.
           </p>
         </section>
@@ -27,10 +27,10 @@ export default function TermsPage() {
         <section>
           <h2 className="text-lg font-semibold mb-3">제2조 (용어의 정의)</h2>
           <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
-            <li>"서비스"란 회사가 제공하는 퀄리오 플랫폼 및 관련 부가 서비스를 의미합니다.</li>
-            <li>"이용자"란 본 약관에 동의하고 서비스를 이용하는 사업자(청소업체 운영자)를 의미합니다.</li>
-            <li>"고객"이란 이용자의 서비스를 통해 견적을 요청하거나 예약을 진행하는 최종 소비자를 의미합니다.</li>
-            <li>"구독"이란 이용자가 서비스를 이용하기 위해 등록한 결제 수단으로 매월 자동 결제(정기결제)하는 월정액 요금제를 의미합니다.</li>
+            <li>&quot;서비스&quot;란 회사가 제공하는 퀄리오 플랫폼 및 관련 부가 서비스를 의미합니다.</li>
+            <li>&quot;이용자&quot;란 본 약관에 동의하고 서비스를 이용하는 사업자(청소업체 운영자)를 의미합니다.</li>
+            <li>&quot;고객&quot;이란 이용자의 서비스를 통해 견적을 요청하거나 예약을 진행하는 최종 소비자를 의미합니다.</li>
+            <li>&quot;구독&quot;이란 이용자가 서비스를 이용하기 위해 등록한 결제 수단으로 매월 자동 결제(정기결제)하는 월정액 요금제를 의미합니다.</li>
           </ul>
         </section>
 
