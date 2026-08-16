@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { getWorkerLimit, type PlanId } from '@/lib/config/plans'
 
 async function getBusinessId() {
   const authClient = await createClient()
@@ -21,6 +22,20 @@ async function getBusinessId() {
   return { db, businessId: profile.business_id }
 }
 
+// 구독 플랜 조회 — 구독 행이 없으면 베타로 본다(베타는 확장과 동일 대우)
+async function getPlanId(
+  db: Awaited<ReturnType<typeof getBusinessId>>['db'],
+  businessId: string
+): Promise<PlanId> {
+  const { data } = (await db
+    .from('subscriptions')
+    .select('plan' as never)
+    .eq('business_id', businessId)
+    .maybeSingle()) as unknown as { data: { plan: string } | null }
+
+  return (data?.plan as PlanId) ?? 'beta'
+}
+
 // 직원/도급사 추가
 export const addWorkerAction = action
   .schema(z.object({
@@ -31,6 +46,20 @@ export const addWorkerAction = action
   }))
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getBusinessId()
+
+    // [축1] 플랜별 직원 수 제한 — 사람을 늘리면 요금도 같이 올라가는 구조
+    const limit = getWorkerLimit(await getPlanId(db, businessId))
+    if (limit !== null) {
+      const { count } = await db
+        .from('workers' as never)
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', businessId)
+      if ((count ?? 0) >= limit) {
+        throw new Error(
+          `[APP] 지금 요금제에서는 직원을 ${limit}명까지 등록할 수 있어요. 더 등록하시려면 요금제를 올려주세요`
+        )
+      }
+    }
 
     const { error } = await db.from('workers' as never).insert({
       business_id: businessId,
