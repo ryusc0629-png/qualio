@@ -31,6 +31,8 @@ interface Props {
     frequency: string | null
     serviceName: string | null
     jobType?: string | null
+    /** 견적서에 적은 현장 주소 (상세 주소 포함) */
+    siteAddress?: string | null
   } | null
   alreadyConverted: boolean
 }
@@ -41,7 +43,9 @@ export function ConvertToCustomerButton({ lead, quote, alreadyConverted }: Props
   // 견적서 기반 초기값 (없으면 빈 값)
   const [name, setName] = useState(lead.company_name)
   const [phone, setPhone] = useState(lead.phone ?? '')
-  const [address, setAddress] = useState(lead.address ?? '')
+  // 견적서에 적은 현장 주소를 우선 쓴다. 거래처 주소는 층·호수가 빠진 경우가 많아
+  // 그대로 두면 사장님이 상세 주소를 또 입력해야 한다.
+  const [address, setAddress] = useState(quote?.siteAddress || lead.address || '')
   // 정기 계약이 기본. 단, 견적이 일회성(one_off) 작업이면 정기계약 등록을 기본 해제
   const [hasContract, setHasContract] = useState(quote?.jobType !== 'one_off')
   const [serviceType, setServiceType] = useState(quote?.serviceName ?? '')
@@ -126,7 +130,13 @@ export function ConvertToCustomerButton({ lead, quote, alreadyConverted }: Props
             />
           </div>
 
-          <AddressField value={address} onChange={setAddress} />
+          <div className="space-y-1">
+            <Label htmlFor="convert-address">주소</Label>
+            {quote?.siteAddress && (
+              <p className="text-xs text-muted-foreground">견적서에 적은 현장 주소를 가져왔어요</p>
+            )}
+            <AddressField id="convert-address" hideLabel value={address} onChange={setAddress} />
+          </div>
 
           {/* 정기계약 등록 여부 */}
           <div className="rounded-lg border p-4 space-y-3">

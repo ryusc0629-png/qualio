@@ -375,6 +375,8 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
                     frequency: primaryQuote.frequency,
                     serviceName: primaryQuote.items[0]?.name ?? null,
                     jobType: primaryQuote.job_type,
+                    // 견적서에 적은 현장 주소(층·호수 포함)를 그대로 이어받는다 — 사장님이 주소를 두 번 치지 않게
+                    siteAddress: primaryQuote.site_address,
                   }
                 : null
             }

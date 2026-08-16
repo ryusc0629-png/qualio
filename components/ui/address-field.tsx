@@ -6,22 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Search } from 'lucide-react'
 import { openAddressSearch } from '@/lib/address/postcode'
 
-// 기본 주소(도로명/지번)와 상세 주소(동·호수·층)를 하나의 문자열로 합쳐 저장한다.
-// 저장 형식: "울산 남구 삼산로 123 — 101동 1234호"
-export const ADDRESS_SEPARATOR = ' — '
-
-/** 저장된 주소 한 줄을 기본 주소 / 상세 주소로 나눈다. */
-export function splitAddress(full?: string | null): { base: string; detail: string } {
-  const v = full ?? ''
-  const i = v.indexOf(ADDRESS_SEPARATOR)
-  if (i === -1) return { base: v, detail: '' }
-  return { base: v.slice(0, i), detail: v.slice(i + ADDRESS_SEPARATOR.length) }
-}
-
-/** 기본 주소와 상세 주소를 한 줄로 합친다. 상세가 비면 기본 주소만 남긴다. */
-export function joinAddress(base: string, detail: string): string {
-  return detail.trim() ? `${base}${ADDRESS_SEPARATOR}${detail}` : base
-}
+// 주소 한 줄 형식(기본 — 상세) 유틸은 서버에서도 써야 해 lib/address/format.ts에 있다.
+// 기존 import 경로가 깨지지 않게 여기서 그대로 다시 내보낸다.
+import { splitAddress, joinAddress } from '@/lib/address/format'
+export { ADDRESS_SEPARATOR, splitAddress, joinAddress } from '@/lib/address/format'
 
 interface AddressFieldProps {
   /** 기본+상세가 합쳐진 주소 한 줄 */

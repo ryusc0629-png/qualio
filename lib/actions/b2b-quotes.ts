@@ -7,6 +7,7 @@ import { generateSpecSheet } from '@/lib/ai/spec-sheet'
 import { extractQuoteFromMeeting } from '@/lib/ai/extract-quote-from-meeting'
 import { revalidatePath } from 'next/cache'
 import { getNextQuoteNumber } from '@/lib/utils/quote-number'
+import { mergeAddressDetail } from '@/lib/address/format'
 
 const quoteItemSchema = z.object({
   name:       z.string().min(1),
@@ -245,6 +246,30 @@ export const saveB2bQuoteAction = action
       if (error || !inserted) throw new Error('[APP] 견적서 저장에 실패했습니다')
       quoteId = inserted.id
       publicToken = inserted.public_token
+    }
+
+    // 견적서에 적은 현장 주소의 상세(층·호수)를 거래처·고객 주소에도 이어붙인다.
+    // 같은 건물일 때만 보강하므로(mergeAddressDetail) 본사와 현장이 다른 경우는 그대로 둔다.
+    // 이게 없으면 고객 전환·예약 화면에서 사장님이 "3층"을 매번 다시 입력하게 된다.
+    const table = isCustomer ? 'customers' : 'leads'
+    const rowId = isCustomer ? parsedInput.customerId : parsedInput.leadId
+    if (rowId && parsedInput.siteAddress) {
+      const { data: row } = await db
+        .from(table)
+        .select('address')
+        .eq('id', rowId)
+        .eq('business_id', businessId)
+        .maybeSingle() as unknown as { data: { address: string | null } | null }
+
+      const mergedAddress = mergeAddressDetail(row?.address, parsedInput.siteAddress)
+      if (mergedAddress) {
+        const { error: addrError } = await db
+          .from(table)
+          .update({ address: mergedAddress } as never)
+          .eq('id', rowId)
+        // 주소 보강 실패는 견적서 저장을 막지 않는다(부가 작업)
+        if (addrError) console.error('[B2bQuotes] 주소 상세 동기화 실패:', addrError)
+      }
     }
 
     if (isCustomer) revalidatePath(`/dashboard/clients/${parsedInput.customerId}`)
