@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { createClient } from '@/lib/supabase/client'
 import { saveReportAction, ownerSendReportAction, ownerGenerateAiReportAction, skipReportSendAction } from '@/lib/actions/reports'
+import { canSendReport } from '@/lib/utils/report-send-guard'
 import {
   ArrowLeft,
   Camera,
@@ -32,6 +33,8 @@ interface BookingInfo {
   customerPhone: string | null
   serviceAddress: string | null
   scheduledAt: string
+  /** 예약 상태 — 아직 시작 안 한 일정에는 보고서를 보낼 수 없다 */
+  status: string
 }
 
 interface AiReportData {
@@ -81,6 +84,8 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
   )
   const [savedReportId, setSavedReportId] = useState<string | null>(existingReport?.id ?? null)
   const [alreadySent, setAlreadySent] = useState(!!existingReport?.sentAt)
+  // 아직 시작 안 한 일정에는 보고서를 못 보낸다(서버에서도 막지만, 눌러보고 실패하기 전에 알려준다)
+  const canSend = canSendReport(booking.status)
   const [aiReport, setAiReport] = useState<AiReportData | null>(existingReport?.aiReportData ?? null)
   const [selectedServices, setSelectedServices] = useState<Set<string>>(
     new Set(existingReport?.aiReportData?.recommendedServices ?? [])
@@ -696,13 +701,20 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
               size="lg"
               className="w-full h-14 text-base gap-2"
               variant={alreadySent ? 'outline' : 'default'}
-              disabled={!booking.customerPhone || isSending}
+              disabled={!booking.customerPhone || !canSend || isSending}
               onClick={handleSend}
             >
               <Send className="h-5 w-5" />
               {isSending ? '발송 중...' : alreadySent ? '고객에게 다시 보내기' : '고객에게 보고서 발송하기'}
             </Button>
-            {!booking.customerPhone && (
+            {!canSend && (
+              <p className="text-xs text-amber-700 text-center bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                아직 시작하지 않은 일정이에요. 작업을 마치고 <b>완료 처리</b>한 뒤에 보낼 수 있어요.
+                <br />
+                지금 쓴 내용은 저장해두면 그대로 남아요.
+              </p>
+            )}
+            {canSend && !booking.customerPhone && (
               <p className="text-xs text-muted-foreground text-center">고객 연락처가 없어 알림톡을 보낼 수 없어요</p>
             )}
             <Button

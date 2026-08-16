@@ -86,6 +86,7 @@ export default async function OwnerReportPage({ params }: Props) {
         customerPhone: booking.customer_phone,
         serviceAddress: booking.service_address,
         scheduledAt: booking.scheduled_at,
+        status: booking.status,
       }}
       existingReport={report ? {
         id: report.id,

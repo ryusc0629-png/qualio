@@ -7,6 +7,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendWorkCompleteAlimtalk, sendReviewRequestAlimtalk } from '@/lib/kakao/alimtalk'
 import { generateAiReport } from '@/lib/ai/report-writer'
 import { createPortfolioDraft } from '@/lib/actions/portfolio'
+import { assertReportSendable } from '@/lib/utils/report-send-guard'
 import { revalidatePath } from 'next/cache'
 
 const aiReportDataSchema = z.object({
@@ -50,12 +51,16 @@ export const saveReportAction = action
     // 예약이 이 업체 소속인지 확인
     const { data: booking } = await db
       .from('bookings')
-      .select('id, customer_name, customer_phone, scheduled_at, service_address, quotes!quote_id(cleaning_type), businesses!business_id(name, phone)')
+      .select('id, status, customer_name, customer_phone, scheduled_at, service_address, quotes!quote_id(cleaning_type), businesses!business_id(name, phone)')
       .eq('id', bookingId)
       .eq('business_id', profile.business_id)
       .single()
 
     if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
+
+    // 아직 시작도 안 한 일정에는 보고서를 보내지 않는다. 저장 전에 막아야
+    // '저장은 됐는데 발송만 실패'한 어정쩡한 상태가 남지 않는다.
+    if (sendAlimtalk) assertReportSendable(booking.status)
 
     // 보고서 upsert (booking_id unique 제약)
     const upsertData: Record<string, unknown> = {
@@ -172,11 +177,12 @@ export const ownerSendReportAction = action
 
     const { data: booking } = await db
       .from('bookings')
-      .select('customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), businesses!business_id(name, phone)')
+      .select('status, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), businesses!business_id(name, phone)')
       .eq('id', report.booking_id)
       .eq('business_id', profile.business_id)
       .single()
     if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
+    assertReportSendable(booking.status)
     if (!booking.customer_phone) throw new Error('[APP] 고객 연락처가 없어 발송할 수 없어요')
 
     const biz   = Array.isArray(booking.businesses) ? booking.businesses[0] : booking.businesses

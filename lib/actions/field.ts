@@ -14,6 +14,7 @@ import { sendOnMyWayForBooking } from '@/lib/kakao/on-my-way'
 import { generateAiReport } from '@/lib/ai/report-writer'
 import { geocodeAddress } from '@/lib/roadmap/geo'
 import { postBookingRevenue } from '@/lib/finance/post-booking-revenue'
+import { assertReportSendable } from '@/lib/utils/report-send-guard'
 
 // workers 테이블 타입 (Supabase 타입 아직 미생성)
 interface WorkerRow {
@@ -513,6 +514,10 @@ export const fieldSendReportAction = action
   .action(async ({ parsedInput }) => {
     const { db, worker } = await verifyWorker(parsedInput.workerId)
     const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    // 아직 시작도 안 한 일정에는 보고서를 보내지 않는다.
+    // ('진행 중'은 허용 — 수금 전이라 아직 완료로 안 넘어간 정상 상황이다)
+    assertReportSendable(booking.status)
 
     if (!booking.customer_phone) throw new Error('[APP] 고객 연락처가 없어 발송할 수 없어요')
 
