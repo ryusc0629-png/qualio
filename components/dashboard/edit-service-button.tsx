@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { updateServiceItemAction } from '@/lib/actions/services'
 import { Pencil, X, Zap, ListPlus, Trash2, Plus, Users, Check } from 'lucide-react'
+import { VolumeTierEditor, toVolumeTiers, toVolumeTierRows, type VolumeTierRow } from '@/components/dashboard/volume-tier-editor'
 import { getApplianceTypes, isApplianceService } from '@/lib/utils'
 import { getTemplatesForService, type QuoteTemplate } from '@/lib/config/quote-templates'
 import { BETTER_UPLIFT_BAND, MIN_PREMIUM_GAP_PCT, type PricingBenchmark } from '@/lib/benchmarks/pricing-band'
@@ -119,6 +120,7 @@ interface EditServiceButtonProps {
     ac_type_prices: Record<string, number> | null
     unit_prices: Array<{ name: string; price: number; variant?: string }> | null
     unit_variants: string[] | null
+    volume_tiers?: Array<{ min_size: number; price: number }> | null
     tier_good_items: string[]
     tier_better_items: string[]
     tier_best_items: string[]
@@ -327,6 +329,9 @@ export function EditServiceButton({
     Array.isArray(service.unit_variants) ? service.unit_variants : []
   )
   const [newVariantInput, setNewVariantInput] = useState('')
+  // 규모 구간별 단가 (기존 값으로 초기화)
+  const [volumeRows, setVolumeRows] = useState<VolumeTierRow[]>(() => toVolumeTierRows(service.volume_tiers))
+  const [showVolumeTiers, setShowVolumeTiers] = useState(() => volumeRows.length > 0)
   const [unitItemsByVariant, setUnitItemsByVariant] = useState<Record<string, Array<{ name: string; price: string }>>>(() => {
     if (!Array.isArray(service.unit_prices) || service.unit_prices.length === 0) {
       return { '': [{ name: '', price: '' }] }
@@ -363,6 +368,8 @@ export function EditServiceButton({
   // 3단계(기본/추천/프리미엄) 플랜은 입주·이사 같은 평당 거주지 청소에만 자연스러움.
   // 대수·개수·정액·상담 단위(에어컨·가전·줄눈·B2B)는 단일 금액이 맞아 플랜 설정을 숨긴다.
   const supportsTiers = currentUnit === '평당'
+  // 규모 구간 단가는 규모를 곱하는 단위(평당·개수)에서만 의미가 있다
+  const supportsVolumeTiers = currentUnit === '평당' || currentUnit === '개'
 
   // ── 가격 가이드 ── 직접 가격(있으면) 또는 기본가 × 배수로 플랜별 예시 가격 실시간 계산
   const currentBase = Number(watch('base_price')) || service.base_price
@@ -575,6 +582,8 @@ export function EditServiceButton({
                 ac_type_prices:    acTypePrices,
                 unit_prices:       unitPrices,
                 unit_variants:     unitVariants.length > 0 ? unitVariants : undefined,
+                // 구간을 껐으면 빈 배열로 보내 기존에 저장된 구간을 지운다
+                volume_tiers:      showVolumeTiers ? toVolumeTiers(volumeRows) : [],
                 tier_good_items:   tierGood.filter(Boolean),
                 tier_better_items: tierBetter.filter(Boolean),
                 tier_best_items:   tierBest.filter(Boolean),
@@ -704,6 +713,18 @@ export function EditServiceButton({
                 <Input type="number" {...register('base_price')} />
                 {errors.base_price && <p className="text-xs text-destructive">{errors.base_price.message}</p>}
               </div>
+            )}
+
+            {/* 규모 구간별 단가 — 평당·개수처럼 규모를 곱하는 단위에서만 의미가 있다 */}
+            {!isAcByName && !isUnitByName && supportsVolumeTiers && (
+              <VolumeTierEditor
+                unit={currentUnit}
+                basePrice={currentBase}
+                enabled={showVolumeTiers}
+                onEnabledChange={setShowVolumeTiers}
+                rows={volumeRows}
+                onRowsChange={setVolumeRows}
+              />
             )}
 
             {/* 가전(에어컨·냉장고 등) 유형별 단가 */}

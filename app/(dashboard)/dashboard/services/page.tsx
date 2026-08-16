@@ -70,6 +70,22 @@ export default async function ServicesPage() {
     if (!error && data) for (const r of data as unknown as DiscRow[]) discMap[r.id] = r
   }
 
+  // 규모 구간별 단가 — database.ts 타입이 아직 갱신되지 않아 할인과 같은 방식으로 따로 조회
+  type VolumeRow = { id: string; volume_tiers: Array<{ min_size: number; price: number }> | null }
+  const volumeMap: Record<string, VolumeRow['volume_tiers']> = {}
+  {
+    const { data, error } = await db
+      .from('service_items')
+      .select('id, volume_tiers' as never)
+      .eq('business_id', profile.business_id)
+      .is('deleted_at', null)
+    if (!error && data) {
+      for (const r of data as unknown as VolumeRow[]) {
+        volumeMap[r.id] = Array.isArray(r.volume_tiers) ? r.volume_tiers : null
+      }
+    }
+  }
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
 
@@ -153,6 +169,7 @@ export default async function ServicesPage() {
                       unit_variants: Array.isArray(service.unit_variants)
                         ? service.unit_variants as string[]
                         : null,
+                      volume_tiers: volumeMap[service.id] ?? null,
                       tier_good_items:   service.tier_good_items   ?? [],
                       tier_better_items: service.tier_better_items ?? [],
                       tier_best_items:   service.tier_best_items   ?? [],

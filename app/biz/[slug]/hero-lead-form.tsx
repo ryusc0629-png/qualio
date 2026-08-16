@@ -11,6 +11,7 @@ import { calculateAndCreateQuoteAction, createConsultationRequestAction } from '
 import { trackFunnel } from '@/lib/utils/track-funnel'
 import { trackMetaPixel } from '@/lib/utils/meta-pixel'
 import { isBusinessService } from '@/lib/utils'
+import { actionErrorMessage } from '@/lib/utils/action-error'
 
 // 랜딩 히어로에 넣는 서비스 정보 — 견적 자동계산 가능 여부 판별에 필요한 최소 필드
 export interface HeroFormService {
@@ -69,7 +70,8 @@ export function HeroLeadForm({ businessId, businessName, services, channel }: Pr
       trackMetaPixel('CompleteRegistration')
       setResult('quote')
     },
-    onError: () => toast.error('견적을 못 보냈어요. 잠시 후 다시 눌러주세요'),
+    onError: ({ error }) =>
+      toast.error(actionErrorMessage(error, '견적을 못 보냈어요. 잠시 후 다시 눌러주세요')),
   })
 
   const consultAction = useAction(createConsultationRequestAction, {
@@ -78,7 +80,8 @@ export function HeroLeadForm({ businessId, businessName, services, channel }: Pr
       trackMetaPixel('Contact')
       setResult('consult')
     },
-    onError: () => toast.error('접수를 못 했어요. 잠시 후 다시 눌러주세요'),
+    onError: ({ error }) =>
+      toast.error(actionErrorMessage(error, '접수를 못 했어요. 잠시 후 다시 눌러주세요')),
   })
 
   const isPending = quoteAction.isPending || consultAction.isPending

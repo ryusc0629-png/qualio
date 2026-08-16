@@ -11,6 +11,7 @@ import { calculateAndCreateQuoteAction, createConsultationRequestAction } from '
 import { getApplianceTypes, getAppliancePreset, isApplianceService, type ApplianceType } from '@/lib/utils'
 import { trackFunnel } from '@/lib/utils/track-funnel'
 import { trackMetaPixel } from '@/lib/utils/meta-pixel'
+import { actionErrorMessage } from '@/lib/utils/action-error'
 
 // 서비스 유형에 따라 스텝 분기
 const STEP_SEQUENCE_DEFAULT      = ['service', 'space', 'context', 'date', 'notes', 'name', 'phone'] as const
@@ -557,7 +558,7 @@ export function QuoteForm({ businessId, businessName, businessLogoUrl, services,
     },
     onError: ({ error }) => {
       setFinalizing(false)
-      toast.error(error.serverError ?? '견적 계산에 실패했습니다')
+      toast.error(actionErrorMessage(error, '견적 계산에 실패했습니다'))
     },
   })
 
@@ -572,7 +573,7 @@ export function QuoteForm({ businessId, businessName, businessLogoUrl, services,
       trackMetaPixel('Contact')
       setConsultDone(true)
     },
-    onError: ({ error }) => toast.error(error.serverError ?? '접수에 실패했어요. 다시 시도해주세요'),
+    onError: ({ error }) => toast.error(actionErrorMessage(error, '접수에 실패했어요. 다시 시도해주세요')),
   })
 
   // 말풍선 프로필 아이콘 — 카톡 대화처럼 보이는 화면이라 업체 로고가 있으면 그걸 쓴다

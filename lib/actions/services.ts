@@ -22,6 +22,13 @@ const unitPricesSchema = z.array(z.object({
 // 항목별 구분 목록 스키마 — ["신축", "구축"]
 const unitVariantsSchema = z.array(z.string().min(1)).optional()
 
+// 규모 구간별 단가 스키마 — [{min_size, price}]
+// "100평부터는 평당 22,000원" 같은 구간. 평당·개수 단위에서만 쓰인다.
+const volumeTiersSchema = z.array(z.object({
+  min_size: z.number().min(1),
+  price:    z.number().min(0),
+})).optional()
+
 // 서비스 항목 생성 스키마 — z.enum() 대신 z.string().refine() 사용 (Zod v4 호환)
 const createServiceItemSchema = z.object({
   name: z.string().min(1, '서비스명을 입력해주세요'),
@@ -34,6 +41,7 @@ const createServiceItemSchema = z.object({
   ac_type_prices:  acTypePricesSchema,
   unit_prices:     unitPricesSchema,
   unit_variants:   unitVariantsSchema,
+  volume_tiers:    volumeTiersSchema,
 })
 
 // 서비스 항목 수정 스키마
@@ -49,6 +57,7 @@ const updateServiceItemSchema = z.object({
   ac_type_prices:  acTypePricesSchema,
   unit_prices:     unitPricesSchema,
   unit_variants:   unitVariantsSchema,
+  volume_tiers:    volumeTiersSchema,
   tier_good_items:   z.array(z.string()).optional(),
   tier_better_items: z.array(z.string()).optional(),
   tier_best_items:   z.array(z.string()).optional(),
@@ -149,7 +158,8 @@ export const createServiceItemAction = action
       ac_type_prices: parsedInput.ac_type_prices ?? null,
       unit_prices:    parsedInput.unit_prices    ?? null,
       unit_variants:  parsedInput.unit_variants  ?? null,
-    })
+      volume_tiers:   parsedInput.volume_tiers   ?? null,
+    } as never)
 
     if (error) throw new Error('[APP] 서비스 추가에 실패했습니다')
 
@@ -189,10 +199,11 @@ export const updateServiceItemAction = action
         ac_type_prices:    parsedInput.ac_type_prices ?? null,
         unit_prices:       parsedInput.unit_prices    ?? null,
         unit_variants:     parsedInput.unit_variants  ?? null,
+        volume_tiers:      parsedInput.volume_tiers   ?? null,
         tier_good_items:   parsedInput.tier_good_items ?? [],
         tier_better_items: parsedInput.tier_better_items ?? [],
         tier_best_items:   parsedInput.tier_best_items ?? [],
-      })
+      } as never)
       .eq('id', parsedInput.id)
       .eq('business_id', profile.business_id)
 

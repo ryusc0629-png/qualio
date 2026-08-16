@@ -244,15 +244,19 @@ export const calculateAndCreateQuoteAction = publicAction
 
         const { data: svcItems } = await db
           .from('service_items')
-          .select('id, base_price, unit')
-          .in('id', svcIds)
+          .select('id, base_price, unit, volume_tiers' as never)
+          .in('id', svcIds) as unknown as {
+            data: Array<{ id: string; base_price: number; unit: string; volume_tiers?: unknown }> | null
+          }
 
         if (!svcItems) return null
 
         return roundToThousand(
           svcItems.reduce((sum, s) => {
+            // 번들에 묶인 서비스도 각자의 구간 단가를 따른다
             const price = s.unit === '평당'
-              ? s.base_price * (parsedInput.space_size || 1)
+              ? unitPriceForSize(s.base_price, parseVolumeTiers(s.volume_tiers), parsedInput.space_size)
+                * (parsedInput.space_size || 1)
               : s.base_price
             return sum + price
           }, 0)
@@ -271,10 +275,13 @@ export const calculateAndCreateQuoteAction = publicAction
 
       // 번들 없으면: 서비스별 직접 가격(tier_*_price)이 있으면 그 값 우선, 없으면 기본가 × 배수.
       // 직접 가격은 원/평(평당) 또는 정액 단가이므로 평당이면 평수만큼 곱한다.
+      // 플랜 직접 가격에도 규모 구간 비율을 함께 적용한다 — 안 그러면 큰 건에서
+      // 기본 금액만 내려가고 추천·프리미엄은 그대로라 플랜 순서가 뒤집힌다.
       const sizeMult = service.unit === '평당' ? (parsedInput.space_size || 1) : 1
+      const volumeRatio = volumeRatioForSize(service.base_price, volumeTiers, parsedInput.space_size)
       const tierByPriceOrMult = (override: number | null | undefined, mult: number) =>
         override != null && override > 0
-          ? roundToThousand(override * sizeMult)
+          ? roundToThousand(override * volumeRatio * sizeMult)
           : roundToThousand(baseCalc * mult)
 
       goodPrice   = applyDiscount(bundleGood   ?? tierByPriceOrMult(service.tier_good_price,   Number(goodTier?.price_multiplier   ?? 1.0)), 'good')

@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { createServiceItemAction } from '@/lib/actions/services'
 import { Plus, X, Zap, ListPlus, Trash2 } from 'lucide-react'
 import { getApplianceTypes, getAppliancePreset } from '@/lib/utils'
+import { VolumeTierEditor, toVolumeTiers, type VolumeTierRow } from '@/components/dashboard/volume-tier-editor'
 
 // 구분 설정에서 빠른 선택 가능한 자주 쓰는 구분 프리셋
 const VARIANT_PRESETS = ['신축', '구축', '아파트', '빌라', '오피스텔', '상가']
@@ -139,6 +140,9 @@ export function AddServiceForm() {
   const [acPrices, setAcPrices] = useState<Partial<Record<string, string>>>({})
   // 항목별 단가 상태
   const [showUnitPrices, setShowUnitPrices] = useState(false)
+  // 규모 구간별 단가 (예: 100평부터 평당 22,000원)
+  const [showVolumeTiers, setShowVolumeTiers] = useState(false)
+  const [volumeRows, setVolumeRows] = useState<VolumeTierRow[]>([])
   const [unitVariants, setUnitVariants] = useState<string[]>([])
   const [newVariantInput, setNewVariantInput] = useState('')
   // variants가 있으면: { variantName: [{name, price}] }, 없으면: [{name, price}] 형태를 variants 키 '' 로 통일
@@ -227,6 +231,8 @@ export function AddServiceForm() {
   const applianceKey   = getAppliancePreset(currentName)?.key ?? null
   const isAppliance    = applianceTypes != null
   const isUnit         = !isAppliance && showUnitPrices
+  // 규모 구간 단가는 규모를 곱하는 단위(평당·개수)에서만 의미가 있다
+  const supportsVolumeTiers = currentUnit === '평당' || currentUnit === '개'
 
   // 가전이 감지되면 유형별 기본 단가를 제안값으로 자동 채움 (프리셋이 바뀔 때만 → 사용자가 고친 값은 유지)
   const [filledApplianceKey, setFilledApplianceKey] = useState<string | null>(null)
@@ -300,6 +306,7 @@ export function AddServiceForm() {
           ac_type_prices: acTypePrices,
           unit_prices:    unitPrices,
           unit_variants:  unitVariants.length > 0 ? unitVariants : undefined,
+          volume_tiers:   showVolumeTiers ? toVolumeTiers(volumeRows) : undefined,
         })
       })}
       className="rounded-lg border bg-card p-4 space-y-4"
@@ -520,6 +527,18 @@ export function AddServiceForm() {
               <p className="text-xs text-destructive">{errors.base_price.message}</p>
             )}
           </div>
+        )}
+
+        {/* 규모 구간별 단가 — 평당·개수처럼 규모를 곱하는 단위에서만 의미가 있다 */}
+        {!isAppliance && !isUnit && supportsVolumeTiers && (
+          <VolumeTierEditor
+            unit={currentUnit}
+            basePrice={Number(watch('base_price')) || 0}
+            enabled={showVolumeTiers}
+            onEnabledChange={setShowVolumeTiers}
+            rows={volumeRows}
+            onRowsChange={setVolumeRows}
+          />
         )}
       </div>
 
