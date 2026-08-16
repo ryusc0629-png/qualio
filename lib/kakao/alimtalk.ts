@@ -198,7 +198,13 @@ export interface ReviewRequestParams {
   rewardText?:   string | null    // 감사 선물 안내 한 줄. 없으면 그 줄이 비어서 나간다
 }
 
-// 리뷰 요청 알림톡 발송 (작업 완료 후 고객에게 발송)
+// 후기 요청 알림톡 발송 (작업 완료 후 고객에게 발송)
+//
+// 2026-08-16 심사 진행 중. 작업 완료라는 '수신자의 액션'에 이어지는 메시지라
+// 팔로업·재방문 유도와 달리 정보성으로 인정될 여지가 있다.
+// ⚠️ 다만 #{혜택}에 할인 문구가 들어가면 광고성으로 반려될 수 있다.
+//    반려되면 혜택 줄을 빼고 재제출할 것 — 혜택은 인증 페이지에서만 보여주면 된다.
+//    이 함수는 혜택이 비어도 정상 동작한다(공백 한 칸으로 채움).
 export async function sendReviewRequestAlimtalk(params: ReviewRequestParams): Promise<void> {
   const apiKey     = process.env.SOLAPI_API_KEY
   const apiSecret  = process.env.SOLAPI_API_SECRET
@@ -475,6 +481,13 @@ interface ReengagementParams {
   quoteUrl:      string   // 견적 신청 페이지 URL
 }
 
+// ⛔ 2026-08-16 카카오 반려 — 알림톡으로는 영구히 못 보낸다.
+//    사유: "수신자가 요청하지 않은 내용 및 리마인드는 광고성·공지성에 해당"
+//    알림톡은 수신자의 액션(예약·결제·작업완료)을 기반한 정보성 메시지만 허용된다.
+//    재방문 유도는 성격 자체가 광고라 문안을 고쳐도 통과하지 않는다.
+//    대안: 광고 문자(LMS, '(광고)' 표기 + 무료수신거부번호 필수) 또는
+//         사장님이 직접 연락 — 우리는 '오늘 연락할 사람' 목록과 문구만 제공한다.
+//    ⚠️ 이 템플릿으로 다시 심사 넣지 말 것.
 export async function sendReengagementAlimtalk(params: ReengagementParams): Promise<void> {
   const apiKey     = process.env.SOLAPI_API_KEY
   const apiSecret  = process.env.SOLAPI_API_SECRET
@@ -521,6 +534,11 @@ interface QuoteFollowupParams {
   isSecond:      boolean  // D+3 팔로업 여부
 }
 
+// ⛔ 2026-08-16 카카오 반려 — 1차·2차(D+3) 모두 반려됐다.
+//    사유: "수신자가 요청하지 않은 내용 및 리마인드는 광고성·공지성에 해당"
+//    견적을 보낸 뒤 답이 없다고 다시 찔러보는 건 고객이 요청한 적 없는 리마인드다.
+//    대안: 사장님이 직접 연락 — 우리는 대상 목록과 문구만 만들어 준다.
+//    ⚠️ 이 템플릿으로 다시 심사 넣지 말 것.
 export async function sendQuoteFollowupAlimtalk(params: QuoteFollowupParams): Promise<void> {
   const apiKey     = process.env.SOLAPI_API_KEY
   const apiSecret  = process.env.SOLAPI_API_SECRET
