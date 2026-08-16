@@ -27,6 +27,8 @@ export async function GET(req: NextRequest) {
     .eq('status', 'confirmed')
     .gte('scheduled_at', rangeStart.toISOString())
     .lt('scheduled_at', rangeEnd.toISOString())
+    // 이미 보낸 예약은 제외 — 크론이 재시도돼도 고객이 같은 안내를 두 번 받지 않게
+    .is('reminder_sent_at', null)
 
   if (error) {
     console.error('[Cron] remind 조회 실패:', error)
@@ -59,6 +61,10 @@ export async function GET(req: NextRequest) {
         scheduledAt:    booking.scheduled_at,
         serviceAddress: booking.service_address ?? '',
       })
+      await db
+        .from('bookings')
+        .update({ reminder_sent_at: new Date().toISOString() } as never)
+        .eq('id', booking.id)
       sent++
     } catch (err) {
       console.error(`[Cron] remind 발송 실패 booking=${booking.id}:`, err)

@@ -19,6 +19,9 @@ const SUB_TASKS = [
   // auto-post는 멱등: 9시에 이미 발행됐으면 needed=0으로 건너뛰므로 중복 발행 없음.
   'auto-post',
   'expire-quotes',
+  // 내일 방문하는 고객에게 예약 리마인더 알림톡. 템플릿은 승인돼 있었는데
+  // 이 목록에도 vercel.json crons에도 없어서 한 번도 실행된 적이 없었다(2026-08-16 발견).
+  'remind',
   'review-request',
   'quote-followup',
   'reengagement',
