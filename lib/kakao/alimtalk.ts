@@ -452,6 +452,11 @@ export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): 
         '#{선택플랜}':   tierLabel,
         '#{최종금액}':   priceFormatted,
         '#{업체연락처}': contactInfo,
+        // V2 템플릿의 버튼 링크가 https://qualio.co.kr/q/#{업체ID}/reschedule/#{예약ID} 형태다.
+        // 이 두 변수를 안 보내면 빈 값으로 치환돼 /q//reschedule/ → /q/reschedule 로 404가 난다.
+        // (2026-08-17 실제 발생 — linkMo에 전체 주소를 실어도 템플릿에 박힌 링크가 우선한다)
+        '#{업체ID}':     params.businessId,
+        '#{예약ID}':     params.bookingId,
       },
       // V2 버튼: 일정 변경 요청 (전화 연결은 카카오가 tel: 웹링크를 막아 제외 — 전화번호는 본문 '문의:'로 안내)
       ...(useV2 && rescheduleUrl !== undefined ? {
