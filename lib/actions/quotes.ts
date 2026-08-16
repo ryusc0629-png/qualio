@@ -516,7 +516,7 @@ export const createBookingAction = publicAction
       .update({ status: 'booked' })
       .eq('id', quote.id)
 
-    // 예약 확정 시 고객 DB 자동 등록 (전화번호 기준, 이미 있으면 스킵)
+    // 예약 확정 시 고객 DB 자동 등록 (전화번호 기준, 이미 있으면 재사용)
     // 숫자만으로 비교해 하이픈 형식 차이로 인한 고객 카드 중복을 막는다.
     if (parsedInput.customer_phone) {
       const existingId = await findCustomerIdByPhone(db, quote.business_id, parsedInput.customer_phone)
@@ -526,9 +526,25 @@ export const createBookingAction = publicAction
           business_id: quote.business_id,
           name: parsedInput.customer_name,
           phone: parsedInput.customer_phone,
-          address: parsedInput.service_address ?? null,
+          address: parsedInput.service_address || null,
           type: 'one_time',
         })
+      } else if (parsedInput.service_address) {
+        // 이미 있는 고객이면 '비어 있는 칸만' 채운다.
+        // 예전엔 통째로 건너뛰어서, 고객이 예약할 때마다 주소를 넣어도 고객 카드는
+        // 계속 비어 있었다. 사장님이 정리해둔 주소는 덮지 않는다.
+        const { data: existing } = await db
+          .from('customers')
+          .select('address')
+          .eq('id', existingId)
+          .maybeSingle()
+
+        if (!existing?.address?.trim()) {
+          await db
+            .from('customers')
+            .update({ address: parsedInput.service_address })
+            .eq('id', existingId)
+        }
       }
     }
 
@@ -811,7 +827,7 @@ export const confirmBookingFromQuoteAction = authAction
       .update({ status: 'booked' })
       .eq('id', quote.id)
 
-    // 예약 확정 시 고객 DB 자동 등록 (전화번호 기준, 이미 있으면 스킵)
+    // 예약 확정 시 고객 DB 자동 등록 (전화번호 기준, 이미 있으면 재사용)
     // 숫자만으로 비교해 하이픈 형식 차이로 인한 고객 카드 중복을 막는다.
     if (quote.customer_phone) {
       const existingId = await findCustomerIdByPhone(db, quote.business_id, quote.customer_phone)
@@ -821,9 +837,23 @@ export const confirmBookingFromQuoteAction = authAction
           business_id: quote.business_id,
           name: quote.customer_name ?? '고객',
           phone: quote.customer_phone,
-          address: parsedInput.service_address ?? null,
+          address: parsedInput.service_address || null,
           type: 'one_time',
         })
+      } else if (parsedInput.service_address) {
+        // 이미 있는 고객이면 비어 있는 주소만 채운다(사장님이 정리해둔 값은 덮지 않는다)
+        const { data: existing } = await db
+          .from('customers')
+          .select('address')
+          .eq('id', existingId)
+          .maybeSingle()
+
+        if (!existing?.address?.trim()) {
+          await db
+            .from('customers')
+            .update({ address: parsedInput.service_address })
+            .eq('id', existingId)
+        }
       }
     }
 
