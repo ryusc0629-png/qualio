@@ -325,6 +325,75 @@ export const skipReportSendAction = action
     return { success: true }
   })
 
+// 보고서를 아직 안 만든 예약을 '안 보내고 넘김' 처리.
+//
+// 위 skipReportSendAction은 보고서 행이 있어야 표시할 수 있다. 보고서를 만들지 않고
+// 넘기려면 표시할 곳이 없어(빈 보고서를 만들면 고객 이력에 백지 링크가 생긴다)
+// 예약 쪽 report_skipped_at에 기록한다.
+export const skipBookingReportAction = action
+  .schema(z.object({ bookingId: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+    const { data: profile } = await db.from('profiles').select('business_id').eq('id', user.id).single()
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const { data: booking } = await db
+      .from('bookings')
+      .select('id')
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', profile.business_id)
+      .maybeSingle()
+    if (!booking) throw new Error('[APP] 예약을 찾을 수 없습니다')
+
+    // report_skipped_at은 database.ts 타입에 아직 없어 단언 (CLAUDE.md 새 컬럼 패턴)
+    await db
+      .from('bookings')
+      .update({ report_skipped_at: new Date().toISOString() } as never)
+      .eq('id', parsedInput.bookingId)
+
+    revalidatePath('/dashboard/alimtalk-todo')
+    revalidatePath('/dashboard/schedule')
+    revalidatePath('/dashboard')
+    return { success: true }
+  })
+
+// 리뷰 요청 건너뛰기 (요청을 보내지 않고 목록에서만 제거)
+export const skipReviewRequestAction = action
+  .schema(z.object({ reportId: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+    const { data: profile } = await db.from('profiles').select('business_id').eq('id', user.id).single()
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    const { data: report } = await db
+      .from('reports')
+      .select('id')
+      .eq('id', parsedInput.reportId)
+      .eq('business_id', profile.business_id)
+      .maybeSingle()
+    if (!report) throw new Error('[APP] 보고서를 찾을 수 없습니다')
+
+    // 발송 시각을 채워 '처리됨'으로 둔다 — 이 값은 할 일 목록 표시에만 쓰이고
+    // 리뷰 성과 집계는 review_claims(실제 작성 기록)로 하므로 통계가 부풀지 않는다.
+    await db
+      .from('reports')
+      .update({ review_request_sent_at: new Date().toISOString() })
+      .eq('id', parsedInput.reportId)
+
+    revalidatePath('/dashboard/alimtalk-todo')
+    revalidatePath('/dashboard/schedule')
+    revalidatePath('/dashboard')
+    return { success: true }
+  })
+
 // 완성된 릴스 건너뛰기 (작업물 목록에서 제거)
 export const dismissReelAction = action
   .schema(z.object({ reportId: z.string().uuid() }))

@@ -29,12 +29,14 @@ export default async function AlimtalkTodoPage() {
     // 완료된 예약 (worker_id, customer_id 포함)
     // ⚠️ 정기계약 방문(contract_id 있음)은 제외 — 정기 현장은 매일 보고서가 필요없고,
     //    특이사항은 직원 앱에서 별도로 보고한다. 일회성(대청소 등) 작업만 보고서 대상.
+    // '안 보내고 넘김'(report_skipped_at) 처리한 건도 제외 — 사장님이 이미 판단한 건이다.
     db.from('bookings')
       .select('id, customer_name, customer_phone, scheduled_at, final_price, service_address, customer_id, quotes!quote_id(cleaning_type)')
       .eq('business_id', businessId)
       .eq('status', 'completed')
       .is('deleted_at', null)
       .is('contract_id' as never, null)
+      .is('report_skipped_at' as never, null)
       .order('scheduled_at', { ascending: false }),
 
     // 알림톡 발송(또는 발송 건너뛰기) 완료된 보고서의 booking_id

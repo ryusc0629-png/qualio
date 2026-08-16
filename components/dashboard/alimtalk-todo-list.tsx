@@ -5,7 +5,7 @@ import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { Send, Star, CheckCircle2, ClipboardList, Phone, FileText, User, ChevronRight, SkipForward } from 'lucide-react'
+import { Star, CheckCircle2, ClipboardList, Phone, FileText, User, ChevronRight, SkipForward } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,7 +15,12 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { sendReviewRequestAction, skipReportSendAction } from '@/lib/actions/reports'
+import {
+  sendReviewRequestAction,
+  skipReportSendAction,
+  skipBookingReportAction,
+  skipReviewRequestAction,
+} from '@/lib/actions/reports'
 
 interface UnreportedBooking {
   bookingId: string
@@ -59,21 +64,31 @@ function UnreportedRow({
 
   const hasReport = !!booking.reportId
 
-  const { execute: skipSend, isPending: isSkipping } = useAction(skipReportSendAction, {
-    onSuccess: () => {
-      toast.success(`${booking.customer_name}님 보고서 발송을 건너뛰었어요`)
-      onSkipped(booking.bookingId)
-    },
-    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  const skipDone = () => {
+    toast.success(`${booking.customer_name}님 보고서 발송을 건너뛰었어요`)
+    onSkipped(booking.bookingId)
+  }
+  const skipFailed = ({ error }: { error: { serverError?: string } }) =>
+    toast.error(error.serverError ?? '다시 시도해주세요')
+
+  // 보고서를 이미 만든 건은 보고서에, 아직 안 만든 건은 예약에 '넘김'을 기록한다
+  const { execute: skipSend, isPending: isSkippingReport } = useAction(skipReportSendAction, {
+    onSuccess: skipDone,
+    onError: skipFailed,
   })
+  const { execute: skipBooking, isPending: isSkippingBooking } = useAction(skipBookingReportAction, {
+    onSuccess: skipDone,
+    onError: skipFailed,
+  })
+  const isSkipping = isSkippingReport || isSkippingBooking
 
   const handleSkip = () => {
-    if (!booking.reportId) return
     const confirmed = window.confirm(
-      `${booking.customer_name}님에게 보고서를 발송하지 않을까요?\n\n발송 목록에서 사라져요.`
+      `${booking.customer_name}님에게 보고서를 보내지 않을까요?\n\n발송 목록에서 사라져요. 보고서는 나중에 예약에서 다시 만들 수 있어요.`
     )
     if (!confirmed) return
-    skipSend({ reportId: booking.reportId })
+    if (booking.reportId) skipSend({ reportId: booking.reportId })
+    else skipBooking({ bookingId: booking.bookingId })
   }
 
   return (
@@ -133,18 +148,18 @@ function UnreportedRow({
               {hasReport ? '발송하기' : '보고서 작성'}
             </Button>
           </Link>
-          {hasReport && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 gap-1 px-3 text-xs text-muted-foreground"
-              disabled={isSkipping}
-              onClick={handleSkip}
-            >
-              <SkipForward className="h-3 w-3" />
-              {isSkipping ? '처리 중...' : '건너뛰기'}
-            </Button>
-          )}
+          {/* 안 보내고 넘기기 — 보고서를 아직 안 만든 건에도 필요하다.
+              (안 그러면 보내지 않기로 한 작업이 목록에 영원히 남는다) */}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1 px-3 text-xs text-muted-foreground"
+            disabled={isSkipping}
+            onClick={handleSkip}
+          >
+            <SkipForward className="h-3 w-3" />
+            {isSkipping ? '처리 중...' : '안 보내고 넘기기'}
+          </Button>
         </div>
       </div>
     </div>
@@ -170,6 +185,23 @@ function UnreviewedRow({
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
+
+  // 리뷰 요청을 보내지 않기로 한 고객 — 목록에서만 치운다(알림톡은 나가지 않음)
+  const { execute: skipReview, isPending: isSkipping } = useAction(skipReviewRequestAction, {
+    onSuccess: () => {
+      toast.success(`${item.customer_name}님 리뷰 요청을 건너뛰었어요`)
+      onSent(item.reportId)
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  const handleSkip = () => {
+    const confirmed = window.confirm(
+      `${item.customer_name}님께 리뷰 요청을 보내지 않을까요?\n\n발송 목록에서 사라져요.`
+    )
+    if (!confirmed) return
+    skipReview({ reportId: item.reportId })
+  }
 
   const dateLabel = item.scheduled_at
     ? format(new Date(item.scheduled_at), 'M월 d일 (EEE)', { locale: ko })
@@ -205,15 +237,27 @@ function UnreviewedRow({
             )}
           </div>
 
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-10 gap-1.5 shrink-0 px-4 mt-0.5"
-            onClick={() => setOpen(true)}
-          >
-            <Star className="h-3.5 w-3.5" />
-            리뷰 요청
-          </Button>
+          <div className="shrink-0 mt-0.5 flex flex-col gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-10 gap-1.5 px-4 w-full"
+              onClick={() => setOpen(true)}
+            >
+              <Star className="h-3.5 w-3.5" />
+              리뷰 요청
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1 px-3 text-xs text-muted-foreground"
+              disabled={isSkipping}
+              onClick={handleSkip}
+            >
+              <SkipForward className="h-3 w-3" />
+              {isSkipping ? '처리 중...' : '안 보내고 넘기기'}
+            </Button>
+          </div>
         </div>
       </div>
 

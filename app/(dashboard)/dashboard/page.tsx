@@ -130,14 +130,21 @@ export default async function DashboardPage() {
       .not('status', 'in', '("cancelled","completed")')
       .order('scheduled_at', { ascending: true }).limit(5),
 
-    // 미답변 견적 수
+    // 미답변 견적 수 — 테스트 견적(대표 본인 번호로 넣어본 것)은 제외.
+    // 목록을 보여주는 고객 관리(clients/page.tsx)가 is_test를 걸러내므로 여기서도 같은 기준이라야 한다.
+    // 안 그러면 홈은 "확인 안 된 견적 1건"이라는데 눌러서 가면 아무것도 없어, 사장님이
+    // 없앨 수 없는 알림을 계속 보게 된다.
     db.from('quotes').select('id', { count: 'exact', head: true })
-      .eq('business_id', businessId).eq('status', 'pending'),
+      .eq('business_id', businessId).eq('status', 'pending')
+      .eq('is_test' as never, false as never),
 
-    // 완료 예약 ID (보고서 체크용) — 정기계약 방문(contract_id)은 매일 보고서 불필요라 제외
+    // 완료 예약 ID (보고서 체크용) — 정기계약 방문(contract_id)은 매일 보고서 불필요라 제외.
+    // '안 보내고 넘김'(report_skipped_at) 처리한 건도 제외 — 알림톡 목록과 같은 기준이라야
+    // 목록은 비었는데 홈 알림만 남는 일이 없다.
     db.from('bookings').select('id')
       .eq('business_id', businessId).eq('status', 'completed').is('deleted_at', null)
-      .is('contract_id' as never, null),
+      .is('contract_id' as never, null)
+      .is('report_skipped_at' as never, null),
 
     // 보고서 발송 목록
     db.from('reports').select('booking_id').eq('business_id', businessId),
