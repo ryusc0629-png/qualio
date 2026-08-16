@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/server'
-import { chargeWithBillingKey } from './kcp-billing'
+import { chargeBillingKey } from './portone'
 import { PLANS } from '@/lib/config/plans'
 import { getChargeAmount } from './pricing'
 import type { PlanId } from '@/lib/config/plans'
@@ -9,9 +9,14 @@ import type { PlanId } from '@/lib/config/plans'
 // 정기결제 자동청구 — 이용기간이 만료된 활성 구독을 저장된 빌키(billing_key)로 재청구한다.
 //
 // ⚠️ 아직 cron(daily-maintenance)에 연결하지 않았다.
-//    KCP 정기결제 개통 + 실결제 테스트(빌키발급→이 함수로 1회 청구 성공)까지 검증한 뒤에
+//    실결제 테스트(카드등록 → 이 함수로 1회 청구 성공)까지 확인한 뒤에
 //    daily-maintenance에서 `await chargeDueSubscriptions()` 한 줄로 연결할 것.
 //    (검증 전 연결하면 미검증 상태로 실제 카드가 청구될 수 있음)
+//
+// ⚠️ 청구는 반드시 빌키를 발급한 곳과 같은 경로로 해야 한다.
+//    우리 빌키는 포트원 카드등록창(portone-billing-return)에서 발급되므로 포트원 API로 청구한다.
+//    예전엔 KCP 직접연동 함수(kcp-billing.chargeWithBillingKey)를 부르고 있었는데,
+//    그건 KCP와 직접 계약해 발급한 빌키용이라 포트원 빌키로는 청구가 되지 않는다.
 //
 // Vercel Hobby는 cron 2개 제한이라 새 cron을 만들지 말고 daily-maintenance에 통합한다.
 
@@ -53,7 +58,7 @@ export async function chargeDueSubscriptions(): Promise<ChargeSummary> {
     // 청구 금액도 예약된 플랜 기준으로 뽑아야 돈과 부여 플랜이 어긋나지 않는다.
     const effectivePlan = (sub.next_plan ?? sub.plan) as PlanId
     if (!PLANS[effectivePlan]) {
-      console.error('[KCP billing charge] 알 수 없는 플랜:', sub.business_id, effectivePlan)
+      console.error('[Billing charge] 알 수 없는 플랜:', sub.business_id, effectivePlan)
       continue
     }
 
@@ -74,11 +79,12 @@ export async function chargeDueSubscriptions(): Promise<ChargeSummary> {
     })
 
     try {
-      const r = await chargeWithBillingKey({
-        batchKey: sub.billing_key,
-        ordrIdxx,
-        goodMny: amount,
-        goodName: `퀄리오 ${planLabel} 플랜 정기결제`,
+      const r = await chargeBillingKey({
+        paymentId: ordrIdxx,
+        billingKey: sub.billing_key,
+        planId: effectivePlan,
+        amount,
+        orderName: `퀄리오 ${planLabel} 플랜 정기결제`,
       })
 
       if (r.ok) {
@@ -91,22 +97,22 @@ export async function chargeDueSubscriptions(): Promise<ChargeSummary> {
           next_plan: null,       // 반영했으니 예약 비움
           current_period_start: now.toISOString(),
           current_period_end: nextEnd.toISOString(),
-          toss_payment_key: r.tno ?? ordrIdxx,
+          toss_payment_key: ordrIdxx,
         } as never).eq('id', sub.id)
         await (db as unknown as SupabaseClient).from('kcp_payment_orders')
-          .update({ status: 'paid', kcp_tno: r.tno ?? null, paid_at: now.toISOString() })
+          .update({ status: 'paid', paid_at: now.toISOString() })
           .eq('ordr_idxx', ordrIdxx)
         charged++
       } else {
         // 청구 실패 → past_due 로 표시(재시도·안내는 후속). 서비스 즉시 차단은 하지 않음.
-        console.error('[KCP billing charge] 실패:', sub.business_id, r.resCd, r.resMsg)
+        console.error('[Billing charge] 실패:', sub.business_id, r.error)
         await db.from('subscriptions').update({ status: 'past_due' } as never).eq('id', sub.id)
         await (db as unknown as SupabaseClient).from('kcp_payment_orders')
           .update({ status: 'failed' }).eq('ordr_idxx', ordrIdxx)
         failed++
       }
     } catch (e) {
-      console.error('[KCP billing charge] 예외:', sub.business_id, e)
+      console.error('[Billing charge] 예외:', sub.business_id, e)
       await (db as unknown as SupabaseClient).from('kcp_payment_orders')
         .update({ status: 'failed' }).eq('ordr_idxx', ordrIdxx)
       failed++

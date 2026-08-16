@@ -7,11 +7,18 @@
 // one_off   = 1개월 이용권을 그때그때 결제 (자동 청구 없음)
 // recurring = 카드(빌키)를 등록해 매월 자동 청구
 //
-// ⚠️ 포트원 KPN 정기결제 심사 캡처를 위해 임시로 one_off로 내려둔 상태.
-//    심사가 끝나면 'recurring'으로 되돌릴 것 (upgrade-form의 결제창도 이 값을 따라간다).
+// ⚠️ 이 값은 판매하는 상품이 무엇인지를 정한다 — 화면 문구뿐 아니라 결제창 동작까지 바뀐다.
+//    (recurring이면 upgrade-form이 카드등록(빌키) 창을 띄우고, one_off면 단건 결제창을 띄운다)
+//
+//    2026-08-16 'recurring'으로 되돌림. 이유:
+//    포트원(KPN) 심사는 정기결제 상품으로 신청했고 이용약관 제2·5·6조도 매월 자동결제로 적혀 있는데,
+//    2026-08-13(d27c1f2)에 하나카드 캡처용으로 one_off로 내려두면서 요금제·홈 문구만 "자동 결제 없음"이 됐다.
+//    같은 사이트에서 약관과 요금제가 서로 다른 말을 하는 상태라 심사 반송 사유가 된다.
+//    심사 자료 제출이 끝났고 포트원 채널 MID도 정기결제용(merchantes10)이라 되돌리는 게 맞다.
+//    다시 단건 캡처가 필요하면 이 한 줄만 one_off로 내렸다가 되돌릴 것.
 export type BillingMode = 'one_off' | 'recurring'
 
-const CURRENT_BILLING_MODE = 'one_off' as BillingMode
+const CURRENT_BILLING_MODE = 'recurring' as BillingMode
 export const BILLING_MODE: BillingMode = CURRENT_BILLING_MODE
 
 export const IS_RECURRING_BILLING = BILLING_MODE === 'recurring'
