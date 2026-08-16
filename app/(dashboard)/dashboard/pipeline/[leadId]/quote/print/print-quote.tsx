@@ -186,8 +186,10 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
 
   return (
     <>
-      {/* 상단 툴바 (화면에서만 보임, 인쇄 시 숨김) */}
-      <div className="print:hidden fixed top-4 right-4 z-50 flex flex-wrap items-center gap-2 justify-end max-w-[calc(100vw-2rem)]">
+      {/* 상단 툴바 (화면에서만 보임, 인쇄 시 숨김)
+          모바일: 화면 폭을 꽉 채우는 고정 막대 — 예전엔 fixed 로 떠 있어 견적서 제목을 가렸다.
+          데스크탑(sm~): 기존처럼 문서 위에 떠 있는 버튼 묶음. */}
+      <div className="print:hidden sticky top-0 z-50 flex flex-wrap items-center justify-end gap-2 border-b bg-white/95 px-3 py-2 backdrop-blur sm:fixed sm:top-4 sm:right-4 sm:left-auto sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none sm:max-w-[calc(100vw-2rem)]">
         {/* 문서 선택 토글 */}
         {modeOptions.length > 1 && (
           <div className="flex rounded-lg border bg-white shadow-lg overflow-hidden text-sm font-medium">
@@ -231,19 +233,22 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
         )}
       </div>
 
-      <div className="max-w-[210mm] mx-auto bg-white p-[20mm] text-[14px] leading-relaxed print:p-[15mm] print:max-w-none font-sans">
+      {/* 문서 본문
+          A4(210mm) 종이를 그대로 폰에 넣으면 화면보다 2배 넓어 확대·잘림이 생긴다.
+          모바일은 종이 흉내를 버리고 여백 16px의 일반 문서로, sm~ 와 인쇄는 기존 A4 그대로. */}
+      <div className="max-w-[210mm] mx-auto bg-white px-4 py-6 text-[15px] leading-relaxed sm:p-[20mm] sm:text-[14px] print:p-[15mm] print:max-w-none print:text-[14px] font-sans">
 
         {/* ── 견적서 ─────────────────────────────── */}
         {showQuote && (
         <div className="mb-12 print:mb-10">
 
           {/* 헤더 */}
-          <div className="flex items-start justify-between border-b-2 border-gray-800 pb-4 mb-6">
+          <div className="flex flex-col gap-2 border-b-2 border-gray-800 pb-4 mb-6 sm:flex-row sm:items-start sm:justify-between print:flex-row print:items-start print:justify-between print:gap-0">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">견 적 서</h1>
+              <h1 className="text-2xl sm:text-3xl print:text-3xl font-bold tracking-tight">견 적 서</h1>
               <p className="text-sm text-gray-500 mt-1">ESTIMATE</p>
             </div>
-            <div className="text-right text-sm text-gray-600 space-y-0.5">
+            <div className="text-sm text-gray-600 space-y-0.5 sm:text-right print:text-right">
               {quote.quote_number && <p>견적번호: <span className="font-medium text-gray-900">{quote.quote_number}</span></p>}
               <p>발행일: <span className="font-medium text-gray-900">{issueDate}</span></p>
               {quote.valid_until && (
@@ -255,7 +260,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
           </div>
 
           {/* 수신 / 공급자 */}
-          <div className="grid grid-cols-2 gap-8 mb-8">
+          <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 sm:gap-8 sm:mb-8 print:grid-cols-2 print:gap-8 print:mb-8">
             <div className="border rounded-lg p-4 space-y-1.5">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">수 신</p>
               <p className="font-bold text-lg">{lead.company_name} 귀중</p>
@@ -271,8 +276,29 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
             </div>
           </div>
 
-          {/* 견적 항목 표 */}
-          <table className="w-full border-collapse mb-6 text-sm">
+          {/* 견적 항목 — 모바일: 한 항목씩 쌓아 보여주는 목록
+              좁은 화면에서 표를 쓰면 '서비스 내용' 칸이 한 글자 폭까지 눌려 글자가 세로로 쌓인다.
+              그래서 폰에서는 표를 버리고 '이름 / 조건 / 금액' 세 줄 구조로 보여준다. */}
+          <div className="mb-6 divide-y rounded-lg border sm:hidden print:hidden">
+            {items.map((item, idx) => (
+              <div key={idx} className="flex items-start justify-between gap-3 p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold break-keep">{item.name}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">
+                    {[
+                      item.unit,
+                      showCountCol ? `${countLabel} ${item.qty}` : null,
+                      showUnitPriceCol ? `단가 ${item.unit_price.toLocaleString()}원` : null,
+                    ].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
+                <p className="shrink-0 font-bold tabular-nums">{lineTotal(item).toLocaleString()}원</p>
+              </div>
+            ))}
+          </div>
+
+          {/* 견적 항목 표 — 데스크탑·인쇄(A4)에서만. 인쇄물은 기존 서식을 그대로 유지한다 */}
+          <table className="hidden w-full border-collapse mb-6 text-sm sm:table print:table">
             <thead>
               <tr className="bg-gray-800 text-white">
                 <th className="py-2.5 px-3 text-left font-medium w-8">No.</th>
@@ -299,7 +325,8 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
 
           {/* 합계 */}
           <div className="flex justify-end">
-            <div className="w-64 space-y-1.5 text-sm">
+            {/* 모바일은 합계가 주인공이라 폭을 꽉 채우고 글자를 키운다 */}
+            <div className="w-full space-y-1.5 text-sm sm:w-64 print:w-64">
               <div className="flex justify-between py-1">
                 <span className="text-gray-600">소 계</span>
                 <span className="tabular-nums">{subtotal.toLocaleString()}원</span>
@@ -318,7 +345,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
                   <span className="tabular-nums">{tax.toLocaleString()}원</span>
                 </div>
               )}
-              <div className="flex justify-between py-2 border-t-2 border-gray-800 font-bold text-base">
+              <div className="flex justify-between py-2 border-t-2 border-gray-800 font-bold text-lg sm:text-base print:text-base">
                 <span>합 계</span>
                 <span className="tabular-nums">{total.toLocaleString()}원</span>
               </div>
@@ -342,13 +369,13 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
         {showSpec && (
           <div className={mode === 'both' ? 'print:break-before-page' : ''}>
             <div className="border-b-2 border-gray-800 pb-4 mb-6">
-              <h1 className="text-3xl font-bold tracking-tight">시 방 서</h1>
+              <h1 className="text-2xl sm:text-3xl print:text-3xl font-bold tracking-tight">시 방 서</h1>
               <p className="text-sm text-gray-500 mt-1">SPECIFICATION</p>
             </div>
 
             {/* 현장 정보 */}
             {(quote.site_name || quote.site_address || quote.site_area || quote.frequency) && (
-              <div className="grid grid-cols-2 gap-4 mb-8 text-sm border rounded-lg p-4">
+              <div className="grid grid-cols-1 gap-4 mb-6 text-sm border rounded-lg p-4 sm:grid-cols-2 sm:mb-8 print:grid-cols-2 print:mb-8">
                 <div className="space-y-1.5">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">현장 정보</p>
                   {quote.site_name && <p><span className="text-gray-500">현장명:</span> <span className="font-medium">{quote.site_name}</span></p>}
@@ -383,7 +410,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
           <div>
             {/* 헤더 */}
             <div className="text-center border-b-2 border-gray-800 pb-4 mb-8">
-              <h1 className="text-3xl font-bold tracking-tight">용역(청소) 계약서</h1>
+              <h1 className="text-2xl sm:text-3xl print:text-3xl font-bold tracking-tight">용역(청소) 계약서</h1>
               <p className="text-sm text-gray-500 mt-1">SERVICE AGREEMENT</p>
             </div>
 
@@ -399,7 +426,7 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
             </p>
 
             {/* 서명란 */}
-            <div className="grid grid-cols-2 gap-8 text-sm">
+            <div className="grid grid-cols-1 gap-6 text-sm sm:grid-cols-2 sm:gap-8 print:grid-cols-2 print:gap-8">
               <div className="space-y-1.5">
                 <p className="font-semibold text-gray-700 border-b pb-1 mb-2">“갑” (발주자)</p>
                 <p>상호: {lead.company_name}</p>
