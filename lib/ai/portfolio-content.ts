@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 
 /**
  * AI가 JSON 문자열 값 안에 literal 줄바꿈을 넣을 때 JSON.parse가 깨지는 문제 방지.
@@ -87,7 +87,7 @@ export async function generatePortfolioContent(input: PortfolioInput): Promise<P
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('[APP] AI 기능을 사용하려면 API 키가 필요합니다')
 
-  const client = new Anthropic({ apiKey })
+  const client = getClaude('portfolio-content')
 
   const maskedAddress = input.address ? maskAddress(input.address) : '고객 현장'
   const dateStr = new Date(input.scheduledAt).toLocaleDateString('ko-KR', {

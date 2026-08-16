@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 
 interface ServiceItem {
   id: string
@@ -25,7 +25,7 @@ export async function recommendBundles(
     throw new Error('[APP] AI 기능을 사용하려면 API 키가 필요합니다')
   }
 
-  const client = new Anthropic({ apiKey })
+  const client = getClaude('bundle-recommendation')
 
   const serviceList = services
     .map((s, i) => `${i + 1}. [ID: ${s.id}] ${s.name} — ${s.base_price.toLocaleString()}원/${s.unit}${s.category ? ` (${s.category})` : ''}`)

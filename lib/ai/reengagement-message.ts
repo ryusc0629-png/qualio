@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 
 interface ReengagementInput {
   businessName: string
@@ -18,7 +18,7 @@ export async function generateReengagementMessage(input: ReengagementInput): Pro
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return fallback
 
-  const client = new Anthropic({ apiKey })
+  const client = getClaude('reengagement-message')
   try {
     const msg = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',

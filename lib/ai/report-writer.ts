@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 
 export interface AiReport {
   beforeStatus: string    // 작업 전 상태
@@ -23,7 +23,7 @@ export async function generateAiReport(
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return FALLBACK
 
-  const client = new Anthropic({ apiKey })
+  const client = getClaude('report-writer')
 
   // 서비스 목록이 있으면 프롬프트에 포함
   const serviceListSection = serviceItems && serviceItems.length > 0

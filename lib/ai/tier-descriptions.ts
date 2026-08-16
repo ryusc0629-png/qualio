@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 
 interface TierDescriptionInput {
   serviceName: string
@@ -28,7 +28,7 @@ export async function generateTierDescriptions(
     return { good: [], better: [], best: [] }
   }
 
-  const client = new Anthropic({ apiKey })
+  const client = getClaude('tier-descriptions')
   const sizeText = input.spaceSize ? `${input.spaceSize}평 공간 기준` : ''
 
   console.log('[AI] tier descriptions 생성 시작:', input.serviceName, sizeText)

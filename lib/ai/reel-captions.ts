@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 
 // 릴스 자막 한 컷 — 흰색 설정줄(top) + 강조색 펀치줄(bottom)
 // tone에 따라 펀치줄 색이 결정됨 (problem=빨강, action=노랑, result=초록)
@@ -31,7 +31,7 @@ export async function generateReelCaptions(input: ReelCaptionInput): Promise<Ree
   if (!apiKey) return FALLBACK_CAPTIONS
 
   try {
-    const client = new Anthropic({ apiKey })
+    const client = getClaude('reel-captions')
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',

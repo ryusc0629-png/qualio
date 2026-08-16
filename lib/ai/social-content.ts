@@ -1,7 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 import { naturalRegionLabel } from '@/lib/address/parse-region'
 
-const client = new Anthropic()
 
 interface SocialContentInput {
   businessName: string
@@ -138,6 +137,7 @@ ${pureContent.slice(0, 2500)}
 
   // max_tokens는 넉넉히 — 네이버 본문(~2,000자)+당근+인스타+태그 22개를 한 JSON으로 받으므로
   // 2,000으로는 응답이 중간에 잘려 JSON 파싱이 실패(채널 원고가 조용히 누락)했음. 8,000으로 상향.
+  const client = getClaude('social-content')
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 8000,

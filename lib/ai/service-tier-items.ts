@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 
 export interface ServiceTierItems {
   good: string[]    // 기본 플랜 항목
@@ -19,7 +19,7 @@ export async function recommendServiceTierItems(input: Input): Promise<ServiceTi
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('[APP] AI 기능을 사용하려면 API 키가 필요합니다')
 
-  const client = new Anthropic({ apiKey })
+  const client = getClaude('service-tier-items')
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',

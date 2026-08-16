@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 
 export interface QuotePitchReason {
   emoji: string
@@ -92,7 +92,7 @@ export async function generateQuotePitch({
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return FALLBACK_PITCH
 
-  const client = new Anthropic({ apiKey })
+  const client = getClaude('quote-pitch')
 
   const hasTierItems = existingTierItems && existingTierItems.good.length > 0
 

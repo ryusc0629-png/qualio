@@ -1,5 +1,5 @@
 import 'server-only'
-import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 import { RESOLUTION_LABEL, type OnboardingItem } from '@/lib/onboarding/types'
 
 // 초도 진단·보고 리포트의 '작업 시방' 문구와 '관리 멘트' 초안을 전문가 데이터 톤으로 작성.
@@ -56,7 +56,7 @@ ${itemLines}
 반드시 아래 JSON만 출력: {"specNote":"...","managementNote":"..."}`
 
   try {
-    const client = new Anthropic({ apiKey })
+    const client = getClaude('onboarding-note')
     const res = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 800,

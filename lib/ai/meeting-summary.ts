@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 
 // 받아쓴 미팅 원문을 노션 회의록 스타일로 요약
 // 실패 시 원문을 그대로 반환(요약만 못 하고 기록 자체는 살림)
@@ -7,7 +7,7 @@ export async function summarizeMeeting(transcript: string): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY?.replace(/\s/g, '')
   if (!apiKey || !transcript.trim()) return transcript
 
-  const client = new Anthropic({ apiKey })
+  const client = getClaude('meeting-summary')
 
   // 요약(Claude) 호출 — 실패해도 받아쓴 원문은 살린다(크레딧 부족/장애 대비)
   try {

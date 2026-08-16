@@ -1,5 +1,5 @@
 import 'server-only'
-import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 
 // 클레임(고객 불만)이 들어왔을 때 '고객에게 보낼 말'을 응대 3단계로 초안 작성.
 // - acknowledge: 즉시 접수·공감(사과 + 바로 확인하겠다는 첫마디) — 화가 커지기 전에 가장 먼저 나갈 말
@@ -53,7 +53,7 @@ export async function generateClaimReplies(input: ClaimReplyInput): Promise<Clai
 반드시 아래 JSON만 출력: {"acknowledge":"...","resolve":"...","closing":"..."}`
 
   try {
-    const client = new Anthropic({ apiKey })
+    const client = getClaude('claim-reply')
     const res = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 900,

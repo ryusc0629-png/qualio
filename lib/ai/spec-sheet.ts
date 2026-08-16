@@ -1,7 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 import { formatAreaWithBoth } from '@/lib/utils/area'
 
-const client = new Anthropic()
 
 export interface SpecSheetInput {
   businessName: string
@@ -97,6 +96,7 @@ ${meetingBlock}
 [간결한 내용]`
 
   // 두 항목만 간결히 받으므로 max_tokens를 낮춤(과다 생성 방지). 스트리밍으로 타임아웃 방지.
+    const client = getClaude('spec-sheet')
   const stream = client.messages.stream({
     model: 'claude-haiku-4-5',
     max_tokens: 2500,

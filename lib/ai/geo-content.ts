@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 import { buildRegionPromptHint, naturalRegionLabel } from '@/lib/address/parse-region'
 import { getKeywordStats, opportunityScore, type KeywordStat } from '@/lib/keyword/naver-searchad'
 
@@ -78,7 +78,7 @@ export async function generateGeoContent(input: GeoInput): Promise<GeoContent> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('[APP] AI 기능을 사용하려면 API 키가 필요합니다')
 
-  const client = new Anthropic({ apiKey })
+  const client = getClaude('geo-content')
 
   // 서비스를 카테고리(주거/가전/상업 등)별로 묶어 구성을 또렷하게 전달
   const byCategory = new Map<string, string[]>()
@@ -181,7 +181,7 @@ export async function generatePostContent(input: PostInput): Promise<PostContent
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('[APP] AI 기능을 사용하려면 API 키가 필요합니다')
 
-  const client = new Anthropic({ apiKey })
+  const client = getClaude('geo-content')
 
   const serviceList = input.services
     .map((s) => `${s.name} (${s.base_price.toLocaleString()}원/${s.unit})`)
@@ -430,7 +430,7 @@ ${input.targets.map((t, i) => `${i + 1}. ${t.question}${t.keyword ? ` (핵심 �
 반드시 아래 JSON 배열로만 응답 (입력과 개수·순서 동일):
 ["제목1", "제목2", ...]`
 
-  const client = new Anthropic({ apiKey })
+  const client = getClaude('geo-content')
   // 일시적 오류로 한 달치 제목이 통째로 폴백되는 걸 줄이기 위해 1회 재시도
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -478,7 +478,7 @@ export async function generateTopicSuggestions(input: {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('[APP] AI 기능을 사용하려면 API 키가 필요합니다')
 
-  const client = new Anthropic({ apiKey })
+  const client = getClaude('geo-content')
 
   const serviceNames = input.services.map((s) => s.name).join(', ')
   const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']

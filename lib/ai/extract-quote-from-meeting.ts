@@ -1,9 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 
 // 미팅 회의록(요약/원문) 텍스트에서 견적서·시방서 입력칸에 들어갈 항목을 뽑아낸다.
 // 핵심 규칙: 회의록에 실제로 나온 내용만 채우고, 애매하면 비워둔다(지어내지 않음).
 
-const client = new Anthropic()
 
 export interface ExtractedQuoteFields {
   jobType: 'recurring' | 'one_off' | null
@@ -86,6 +86,7 @@ export async function extractQuoteFromMeeting(meetingText: string): Promise<Extr
   }
 
   try {
+    const client = getClaude('extract-quote-from-meeting')
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,

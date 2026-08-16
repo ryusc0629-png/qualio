@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { getClaude } from '@/lib/ai/client'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendPushToBusiness } from '@/lib/push/web-push'
 import {
@@ -191,7 +192,7 @@ export async function POST(
     services: typedServices,
   })
 
-  const client = new Anthropic({ apiKey })
+  const client = getClaude('consult-chat')
 
   // Claude 응답을 토큰 단위로 흘려보내는 스트림 — 도구 호출이 나오면 실행 후 이어서 답변
   const encoder = new TextEncoder()
