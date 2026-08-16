@@ -14,9 +14,12 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { loginAction } from '@/lib/actions/auth'
 
+// 로그인 화면에서는 '몇 자 이상' 같은 가입 규칙을 검사하지 않는다.
+// 여기서 필요한 건 빈칸인지 아닌지뿐이고, 맞고 틀리고는 서버가 판단한다.
+// (가입 기준이 6자→8자로 바뀐 적이 있어 옛 비밀번호를 쓰는 계정이 로그인조차 못 하게 될 수 있음)
 const loginSchema = z.object({
-  email: z.string().email('올바른 이메일 형식이 아닙니다'),
-  password: z.string().min(6, '비밀번호는 6자 이상이어야 합니다'),
+  email: z.string().min(1, '이메일을 입력해주세요').email('이메일 주소를 다시 확인해주세요 (예: hong@naver.com)'),
+  password: z.string().min(1, '비밀번호를 입력해주세요'),
 })
 
 type LoginInput = z.infer<typeof loginSchema>
@@ -73,7 +76,7 @@ function LoginForm() {
             <Input
               id="password"
               type="password"
-              placeholder="••••••••"
+              placeholder="비밀번호 입력"
               {...register('password')}
             />
             {errors.password && (

@@ -5,9 +5,12 @@ import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 // 로그인 입력값 검증 스키마
+// 화면(login/page.tsx)과 같은 기준 — 빈칸만 막고 길이는 보지 않는다.
+// 로그인은 '맞나 틀리나'만 가리면 되고, 가입 기준(8자)을 여기서 또 재면
+// 그 전에 6자로 가입한 계정이 로그인 자체를 못 하게 된다.
 const loginSchema = z.object({
-  email: z.string().email('올바른 이메일 형식이 아닙니다'),
-  password: z.string().min(6, '비밀번호는 6자 이상이어야 합니다'),
+  email: z.string().min(1, '이메일을 입력해주세요').email('이메일 주소를 다시 확인해주세요 (예: hong@naver.com)'),
+  password: z.string().min(1, '비밀번호를 입력해주세요'),
   // 로그인 후 복귀할 원래 목적지 (알림 클릭 등으로 진입 시 proxy가 채워줌)
   next: z.string().optional(),
 })
@@ -53,7 +56,7 @@ export const loginAction = action
         throw new Error('[APP] 로그인 시도가 너무 많았어요. 1분 뒤에 다시 눌러주세요')
       }
       if (error.code === 'invalid_credentials') {
-        throw new Error('[APP] 이메일 또는 비밀번호가 올바르지 않습니다')
+        throw new Error('[APP] 이메일 또는 비밀번호가 맞지 않아요. 다시 확인해주세요')
       }
       // 서버 오류 등 — 사장님 잘못이 아니라는 걸 알려준다
       throw new Error('[APP] 지금은 로그인이 안 돼요. 잠시 후 다시 시도해주세요')
