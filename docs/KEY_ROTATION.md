@@ -90,6 +90,45 @@ npm run check:keys
 - `VERCEL_`로 시작하는 이름은 Vercel 예약어라 쓸 수 없어 `QUALIO_VERCEL_*`로 두고 있습니다. 이름을 바꾸지 마세요.
 - 키를 바꾼 날짜를 이 문서 아래에 적어두면 다음 교체 주기를 잡기 쉽습니다.
 
-교체 기록:
+## 편하게 쓰는 명령 3개
 
-- (미교체) 2026-08-13 기준 최초 발급 키 그대로 사용 중
+```bash
+npm run key         # 새 키를 파일에 넣기 (목록에서 번호 선택 → 값은 클립보드에서 자동 읽음)
+npm run key:copy    # 파일에 있는 값을 클립보드로 꺼내기 (Vercel에 붙여넣을 때)
+npm run check:keys  # 키가 살아있는지 확인
+```
+
+`npm run key`는 값이 화면에 안 보이게 처리한다. 키를 터미널 프롬프트에 직접 붙여넣지 말 것 —
+명령으로 실행되면서 셸 기록에 남는다(2026-08-16에 실제로 발생, 그 키는 폐기함).
+
+---
+
+## 교체 기록
+
+**2026-08-16 (1일차)**
+
+- Supabase ✅ 완료
+  - 새 방식 키로 전환: publishable(`sb_publishable_7Mt…`) / secret(`qualio_server`, `sb_secret_TCQPc…`)
+  - 노출된 default secret key 삭제
+  - 예전 `anon`·`service_role`(JWT 방식) **사용 중지** → 옛 키 전면 무효화
+  - Legacy HS256 서명 비밀값은 standby로 내려감(검증에도 미사용). ⚠️ JWT Keys 화면의 **Rotate keys 누르지 말 것** — 예전 방식으로 되돌아감
+  - 확인: 로그인·일정·사진 업로드·고객사 홈페이지·상담 챗봇 정상
+- Anthropic ✅ 완료
+  - 새 키 `qualio-prod`(`sk-ant-api03-kZw…`)로 교체, Vercel 반영·재배포 완료
+  - 옛 키 `퀄리오 맥`(4kR…) 비활성화(삭제는 보류), `claude_code_key_…`는 미사용 상태로 둠
+  - 확인: 실서버 상담 챗봇 응답 정상
+
+**남은 교체 (2일차 이후)**
+
+1. Solapi API Key·Secret — 2026-08-16 스크린샷으로 노출됨. 우선순위 1
+2. 포트원 V2 시크릿 / 토스 시크릿 / KCP 인증서 2종
+3. 카카오 REST, 네이버 검색광고 2종
+4. 웹푸시 VAPID 키쌍 — ⚠️ 바꾸면 알림 켠 폰이 전부 해제됨(다시 켜야 함)
+5. CRON_SECRET — ⚠️ 바꾸면 Supabase Vault의 `qualio_cron_secret`도 같이 바꿔야 자동 발행이 안 멈춤
+6. OpenAI / Gemini / Perplexity / FAL / Ayrshare / Creatomate / Notion / Vercel 토큰
+
+**참고**
+
+- Vercel에서 Sensitive로 표시된 값은 `vercel env pull`로 못 꺼낸다(`[SENSITIVE]`만 내려옴).
+  로컬 복구는 불가능하니, 값을 잃으면 발급처에서 새로 만드는 게 정답이다.
+- `.env.local`은 편집기로 열어둔 채 두지 말 것. 디스크와 어긋나 덮어쓰기 사고가 난다(2026-08-16 발생, 25개 값 유실).
