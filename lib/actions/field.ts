@@ -377,7 +377,7 @@ export const fieldCompletePaymentAction = action
             customerName:  booking.customer_name ?? '고객',
             businessName:  business.name,
             cleaningType,
-            reviewUrl:     `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'}/review/${token}`,
+            reviewToken:   token,
             workerName:    worker.name ?? null,
           })
 

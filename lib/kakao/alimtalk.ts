@@ -184,13 +184,16 @@ export async function sendReminderAlimtalk(params: ReminderParams): Promise<void
   })
 }
 
+// 후기 인증 페이지 주소 — 알림톡 템플릿의 버튼 링크(https://qualio.co.kr/review/#{리뷰토큰})와 반드시 일치해야 한다
+const REVIEW_LINK_BASE = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'}/review`
+
 // 리뷰 요청 알림톡 파라미터
 export interface ReviewRequestParams {
   customerPhone: string
   customerName:  string
   businessName:  string
   cleaningType:  string
-  reviewUrl:     string           // 후기 인증 페이지(/review/토큰) 링크
+  reviewToken:   string           // 후기 인증 토큰. 링크는 템플릿이 https://qualio.co.kr/review/#{리뷰토큰} 형태로 갖고 있다
   workerName?:   string | null    // 현장 담당자 이름 — 회사가 아니라 사람이 부탁해야 응답률이 오른다
   rewardText?:   string | null    // 감사 선물 안내 한 줄. 없으면 그 줄이 비어서 나간다
 }
@@ -221,7 +224,9 @@ export async function sendReviewRequestAlimtalk(params: ReviewRequestParams): Pr
         '#{고객명}':   params.customerName,
         '#{업체명}':   params.businessName,
         '#{서비스명}': params.cleaningType,
-        '#{리뷰링크}': params.reviewUrl,
+        // 알림톡 버튼 링크는 프로토콜(https://)과 도메인을 템플릿에 고정으로 박아야 한다.
+        // 전체 주소를 변수로 넣으면 https://https://... 가 되고, 도메인을 변수로 두면 심사에서 반려된다.
+        '#{리뷰토큰}': params.reviewToken,
         // 담당자를 모르면 업체명으로 대체한다(빈 값은 알림톡 발송이 거부됨)
         '#{담당자}':   params.workerName?.trim() || params.businessName,
         // 선물이 없으면 공백 한 칸 — 빈 문자열은 변수 미치환으로 반려될 수 있다
@@ -231,8 +236,8 @@ export async function sendReviewRequestAlimtalk(params: ReviewRequestParams): Pr
         {
           buttonType: 'WL' as const,
           buttonName: '후기 남기기',
-          linkMo: params.reviewUrl,
-          linkPc: params.reviewUrl,
+          linkMo: `${REVIEW_LINK_BASE}/${params.reviewToken}`,
+          linkPc: `${REVIEW_LINK_BASE}/${params.reviewToken}`,
         },
       ],
     },

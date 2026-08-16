@@ -117,16 +117,13 @@ export async function GET(request: NextRequest) {
         worker_id:     booking.worker_id,   // 성과 집계용 — 그 현장의 담당 기사
       } as never)
 
-      // 인증 페이지 URL (토큰 포함) — 클릭 시 인증 후 후기 사이트로 이동
-      const claimUrl = `${appUrl}/review/${token}`
-
       const workerRow = Array.isArray(booking.workers) ? booking.workers[0] : booking.workers
       await sendReviewRequestAlimtalk({
         customerPhone: booking.customer_phone,
         customerName:  booking.customer_name ?? '고객',
         businessName:  biz.name,
         cleaningType:  quote?.cleaning_type ?? '청소 서비스',
-        reviewUrl:     claimUrl,
+        reviewToken:   token,
         workerName:    workerRow?.name ?? null,
         rewardText:    rewardSentence(biz),
       })
