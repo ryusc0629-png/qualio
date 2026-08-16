@@ -2,6 +2,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { startOfWeek, endOfWeek, addWeeks, subWeeks, startOfMonth, endOfMonth, addMonths, subMonths, addDays, subDays, format } from 'date-fns'
 import { ko } from 'date-fns/locale'
+import { toMarketYmd, marketDayRange } from '@/lib/format/datetime'
 import { ScheduleBoard } from '@/components/dashboard/schedule-board'
 import { AddClientForm } from '@/components/dashboard/add-client-form'
 import Link from 'next/link'
@@ -30,34 +31,49 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   const businessId = profile.business_id
 
   // 뷰별 범위 계산
-  const baseDate = (dateParam ?? week) ? new Date((dateParam ?? week) + 'T00:00:00') : new Date()
+  //
+  // 날짜 계산은 '연-월-일'만 다루고(parseYmd), DB 조회 시각으로 바꿀 때만 한국 시간대를 입힌다.
+  // 이렇게 하지 않으면 서버(UTC)의 자정과 한국의 자정이 9시간 어긋나서,
+  // 범위 첫날 오전 0~9시 일정이 조회에서 통째로 빠진다.
+  // (실제로 8/17(월) 08:00 예약이 주 캘린더에서만 사라지고 월 캘린더엔 보이는 버그가 있었음)
+  const parseYmd = (s: string) => {
+    const [y, m, d] = s.split('-').map(Number)
+    return new Date(y, m - 1, d)
+  }
+  const baseYmd = (dateParam ?? week) ?? toMarketYmd()
+  const baseDate = parseYmd(baseYmd)
 
-  let rangeStart: Date
-  let rangeEnd: Date
+  let startYmd: string
+  let endYmd: string
   let prevNav: string
   let nextNav: string
   let rangeLabel: string
 
   if (view === 'day') {
-    rangeStart = new Date(format(baseDate, 'yyyy-MM-dd') + 'T00:00:00')
-    rangeEnd   = new Date(format(baseDate, 'yyyy-MM-dd') + 'T23:59:59')
-    prevNav = format(subDays(rangeStart, 1), 'yyyy-MM-dd')
-    nextNav = format(addDays(rangeStart, 1), 'yyyy-MM-dd')
-    rangeLabel = format(rangeStart, 'M월 d일 (EEE)', { locale: ko })
+    startYmd = endYmd = format(baseDate, 'yyyy-MM-dd')
+    prevNav = format(subDays(baseDate, 1), 'yyyy-MM-dd')
+    nextNav = format(addDays(baseDate, 1), 'yyyy-MM-dd')
+    rangeLabel = format(baseDate, 'M월 d일 (EEE)', { locale: ko })
   } else if (view === 'month') {
-    rangeStart = startOfMonth(baseDate)
-    rangeEnd   = endOfMonth(baseDate)
-    prevNav = format(subMonths(rangeStart, 1), 'yyyy-MM-dd')
-    nextNav = format(addMonths(rangeStart, 1), 'yyyy-MM-dd')
-    rangeLabel = format(rangeStart, 'yyyy년 M월', { locale: ko })
+    const first = startOfMonth(baseDate)
+    startYmd = format(first, 'yyyy-MM-dd')
+    endYmd   = format(endOfMonth(baseDate), 'yyyy-MM-dd')
+    prevNav = format(subMonths(first, 1), 'yyyy-MM-dd')
+    nextNav = format(addMonths(first, 1), 'yyyy-MM-dd')
+    rangeLabel = format(first, 'yyyy년 M월', { locale: ko })
   } else {
-    // week (기본)
-    rangeStart = startOfWeek(baseDate, { weekStartsOn: 1 })
-    rangeEnd   = endOfWeek(baseDate, { weekStartsOn: 1 })
-    prevNav = format(subWeeks(rangeStart, 1), 'yyyy-MM-dd')
-    nextNav = format(addWeeks(rangeStart, 1), 'yyyy-MM-dd')
-    rangeLabel = `${format(rangeStart, 'M월 d일', { locale: ko })} — ${format(rangeEnd, 'M월 d일', { locale: ko })}`
+    // week (기본) — 월요일 시작
+    const first = startOfWeek(baseDate, { weekStartsOn: 1 })
+    const last  = endOfWeek(baseDate, { weekStartsOn: 1 })
+    startYmd = format(first, 'yyyy-MM-dd')
+    endYmd   = format(last, 'yyyy-MM-dd')
+    prevNav = format(subWeeks(first, 1), 'yyyy-MM-dd')
+    nextNav = format(addWeeks(first, 1), 'yyyy-MM-dd')
+    rangeLabel = `${format(first, 'M월 d일', { locale: ko })} — ${format(last, 'M월 d일', { locale: ko })}`
   }
+
+  // 한국 기준 하루의 시작~끝을 UTC 시각으로 환산해 조회한다
+  const { from: rangeFrom, to: rangeTo } = marketDayRange(startYmd, endYmd)
 
   const [workersResult, bookingsResult, servicesResult] = await Promise.all([
     db
@@ -72,8 +88,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
       .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, worker_id, cancellation_reason, needs_review, review_reason, contract_id, quotes!quote_id(cleaning_type)')
       .eq('business_id' as never, businessId)
       .in('status' as never, ['confirmed', 'in_progress', 'completed', 'cancelled'])
-      .gte('scheduled_at' as never, rangeStart.toISOString())
-      .lte('scheduled_at' as never, rangeEnd.toISOString())
+      .gte('scheduled_at' as never, rangeFrom)
+      .lte('scheduled_at' as never, rangeTo)
       .is('deleted_at' as never, null)
       .order('scheduled_at' as never),
 
@@ -234,7 +250,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           isRecurring:      !!b.contract_id,
           contract_id:      b.contract_id ?? null,
         }))}
-        weekStart={rangeStart.toISOString()}
+        weekStart={startYmd}
         weekLabel={rangeLabel}
         prevNav={prevNav}
         nextNav={nextNav}

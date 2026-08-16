@@ -71,7 +71,7 @@ interface Props {
   businessId: string
   workers: Worker[]
   bookings: Booking[]
-  weekStart: string
+  weekStart: string   // 'yyyy-MM-dd' — 보이는 범위의 첫날(한국 달력 기준)
   weekLabel: string
   prevNav: string
   nextNav: string
@@ -466,12 +466,17 @@ export function ScheduleBoard({
   })
 
   // 뷰에 따라 날짜 열 생성
+  // weekStart는 'yyyy-MM-dd'(한국 달력 날짜). new Date('2026-08-17')로 읽으면
+  // UTC 자정으로 파싱돼 하루 밀릴 수 있으므로 연·월·일을 직접 넣어 만든다.
+  const [wy, wm, wd] = weekStart.split('-').map(Number)
+  const weekStartDate = new Date(wy, wm - 1, wd)
+
   const dayCount = view === 'day' ? 1
-    : view === 'month' ? getDaysInMonth(new Date(weekStart))
+    : view === 'month' ? getDaysInMonth(weekStartDate)
     : 7
 
   const days = Array.from({ length: dayCount }, (_, i) => {
-    const d = addDays(new Date(weekStart), i)
+    const d = addDays(weekStartDate, i)
     return {
       date:    format(d, 'yyyy-MM-dd'),
       label:   view === 'month'

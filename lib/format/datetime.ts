@@ -47,6 +47,35 @@ export function formatDateTime(
 }
 
 /**
+ * 시장 타임존(기본 KST) 기준의 달력 날짜를 'yyyy-MM-dd'로 돌려준다.
+ *
+ * 왜 이렇게 쓰는가:
+ *   Vercel 서버는 UTC라 `new Date()`의 날짜가 한국 날짜와 다를 수 있다.
+ *   (한국 오전 0~9시엔 서버 날짜가 아직 '어제')
+ *   캘린더의 '오늘'·조회 범위처럼 날짜 단위로 끊는 계산은 반드시 이 함수를 거친다.
+ */
+export function toMarketYmd(input: DateInput = new Date()): string {
+  const { timeZone } = getMarket()
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date(input))
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '00'
+  return `${get('year')}-${get('month')}-${get('day')}`
+}
+
+/**
+ * 시장 타임존 기준 하루의 시작/끝 시각을 UTC ISO로 돌려준다. DB 범위 조회용.
+ * 예) '2026-08-17' → 2026-08-16T15:00:00Z ~ 2026-08-17T14:59:59Z
+ */
+export function marketDayRange(startYmd: string, endYmd: string = startYmd): { from: string; to: string } {
+  return {
+    from: inputToUtcIso(`${startYmd}T00:00:00`),
+    to:   inputToUtcIso(`${endYmd}T23:59:59`),
+  }
+}
+
+/**
  * 입력 폼에서 온 '타임존이 없는' 시각 문자열(datetime-local의 "2026-08-01T08:00" 등)을
  * 시장 타임존(기본 KST)의 벽시계 시각으로 해석해 UTC ISO 문자열로 변환한다.
  *
