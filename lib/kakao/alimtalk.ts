@@ -190,7 +190,9 @@ export interface ReviewRequestParams {
   customerName:  string
   businessName:  string
   cleaningType:  string
-  reviewUrl:     string  // 네이버 플레이스 리뷰 링크
+  reviewUrl:     string           // 후기 인증 페이지(/review/토큰) 링크
+  workerName?:   string | null    // 현장 담당자 이름 — 회사가 아니라 사람이 부탁해야 응답률이 오른다
+  rewardText?:   string | null    // 감사 선물 안내 한 줄. 없으면 그 줄이 비어서 나간다
 }
 
 // 리뷰 요청 알림톡 발송 (작업 완료 후 고객에게 발송)
@@ -220,11 +222,15 @@ export async function sendReviewRequestAlimtalk(params: ReviewRequestParams): Pr
         '#{업체명}':   params.businessName,
         '#{서비스명}': params.cleaningType,
         '#{리뷰링크}': params.reviewUrl,
+        // 담당자를 모르면 업체명으로 대체한다(빈 값은 알림톡 발송이 거부됨)
+        '#{담당자}':   params.workerName?.trim() || params.businessName,
+        // 선물이 없으면 공백 한 칸 — 빈 문자열은 변수 미치환으로 반려될 수 있다
+        '#{혜택}':     params.rewardText?.trim() || ' ',
       },
       buttons: [
         {
           buttonType: 'WL' as const,
-          buttonName: '리뷰 남기기',
+          buttonName: '후기 남기기',
           linkMo: params.reviewUrl,
           linkPc: params.reviewUrl,
         },

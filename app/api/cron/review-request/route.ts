@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
   const [d1Result, d3Result] = await Promise.all([
     db
       .from('bookings')
-      .select('id, business_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), businesses!business_id(name, phone, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)')
+      .select('id, business_id, worker_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), workers!worker_id(name), businesses!business_id(name, phone, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)')
       .eq('status', 'completed')
       .gte('scheduled_at', d1Start.toISOString())
       .lt('scheduled_at', d1End.toISOString())
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
 
     db
       .from('bookings')
-      .select('id, business_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), businesses!business_id(name, phone, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)')
+      .select('id, business_id, worker_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), workers!worker_id(name), businesses!business_id(name, phone, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)')
       .eq('status', 'completed')
       .gte('scheduled_at', d3Start.toISOString())
       .lt('scheduled_at', d3End.toISOString())
@@ -77,10 +77,12 @@ export async function GET(request: NextRequest) {
   interface BookingRow {
     id: string
     business_id: string
+    worker_id: string | null
     customer_name: string | null
     customer_phone: string | null
     scheduled_at: string
     quotes: { cleaning_type: string | null } | { cleaning_type: string | null }[] | null
+    workers: { name: string | null } | { name: string | null }[] | null
     businesses: BizInfo | BizInfo[] | null
   }
 
@@ -102,17 +104,21 @@ export async function GET(request: NextRequest) {
         customer_phone: booking.customer_phone,
         token,
         is_followup:   isFollowup,
-      })
+        worker_id:     booking.worker_id,   // 성과 집계용 — 그 현장의 담당 기사
+      } as never)
 
       // 인증 페이지 URL (토큰 포함) — 클릭 시 인증 후 후기 사이트로 이동
       const claimUrl = `${appUrl}/review/${token}`
 
+      const workerRow = Array.isArray(booking.workers) ? booking.workers[0] : booking.workers
       await sendReviewRequestAlimtalk({
         customerPhone: booking.customer_phone,
         customerName:  booking.customer_name ?? '고객',
         businessName:  biz.name,
         cleaningType:  quote?.cleaning_type ?? '청소 서비스',
         reviewUrl:     claimUrl,
+        workerName:    workerRow?.name ?? null,
+        rewardText:    biz.review_reward_type !== 'none' ? biz.review_reward_description : null,
       })
 
       const updateField = isFollowup

@@ -28,7 +28,25 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
   if (!profile?.business_id) redirect('/onboarding')
 
   const payroll = await getMonthlyPayroll(db as unknown as SupabaseClient, profile.business_id, month)
-  const { label } = monthRangeUtc(month)
+  const { label, start, end } = monthRangeUtc(month)
+
+  // 이 달에 기사별로 받아온 후기 수.
+  // 고객에게 대가를 주는 대신(네이버 정책 위반) 현장에서 부탁한 기사에게 성과급을 준다.
+  // 실제로 손님에게 말을 거는 사람이 움직여야 후기가 모인다.
+  const { data: claimRows } = await db
+    .from('review_claims')
+    .select('worker_id' as never)
+    .eq('business_id', profile.business_id)
+    .not('worker_id', 'is', null)
+    .not('claimed_at', 'is', null)
+    .gte('claimed_at', start)
+    .lt('claimed_at', end) as unknown as { data: { worker_id: string }[] | null }
+
+  const reviewsByWorker = new Map<string, number>()
+  for (const r of claimRows ?? []) {
+    reviewsByWorker.set(r.worker_id, (reviewsByWorker.get(r.worker_id) ?? 0) + 1)
+  }
+  const totalReviews = claimRows?.length ?? 0
   const total = payroll.reduce((s, p) => s + p.amount, 0)
   const prevMonth = shiftMonth(month, -1)
   const nextMonth = shiftMonth(month, 1)
@@ -72,6 +90,19 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
             <span className="text-2xl font-bold tabular-nums">{formatWon(total)}</span>
           </div>
 
+          {/* 이 달 받아온 후기 — 기사에게 성과급으로 얹으라는 신호 */}
+          {totalReviews > 0 && (
+            <div className="rounded-xl border bg-card p-4 space-y-1">
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm text-muted-foreground">이 달 받아온 후기</span>
+                <span className="text-lg font-bold tabular-nums">{totalReviews}건</span>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                현장에서 손님께 한마디 건넨 사람이 받아온 숫자예요. 건당 얼마씩 얹어주시면 다음 달에 더 늘어나요.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-3">
             {payroll.map((p) => {
               const hasRate = !!(p.worker.pay_type && p.worker.pay_rate)
@@ -97,6 +128,11 @@ export default async function PayrollPage({ searchParams }: { searchParams: Prom
                     <span>완료 {p.visitCount}건</span>
                     <span>근무 {p.hours ? p.hours.toFixed(1) : 0}시간</span>
                     <span>{p.workDays}일 근무</span>
+                    {(reviewsByWorker.get(p.worker.id) ?? 0) > 0 && (
+                      <span className="text-primary font-medium">
+                        후기 {reviewsByWorker.get(p.worker.id)}건 받아옴
+                      </span>
+                    )}
                   </div>
 
                   {/* 안내 */}

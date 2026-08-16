@@ -1,5 +1,6 @@
 'use server'
 
+import { randomBytes } from 'crypto'
 import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createServiceClient } from '@/lib/supabase/server'
@@ -353,17 +354,38 @@ export const fieldCompletePaymentAction = action
     }
 
     // 리뷰 요청 발송 (skipReview=true면 생략, 실패해도 수금 완료는 유지)
+    //
+    // 크론(D+1·D+3)과 똑같이 인증 페이지(/review/토큰)로 보낸다.
+    // 예전엔 여기서만 리뷰 사이트로 직접 보내서 발송·클릭·작성 기록이 하나도 안 남았고,
+    // 담당 기사도 알 수 없었다. 같은 경로로 통일해야 집계와 성과급이 성립한다.
     if (!parsedInput.skipReview) {
       const reviewUrl = business.google_place_url || business.naver_place_url
       if (booking.customer_phone && reviewUrl) {
         try {
+          const token = randomBytes(20).toString('hex')
+          await db.from('review_claims').insert({
+            booking_id:     parsedInput.bookingId,
+            business_id:    worker.business_id,
+            customer_phone: booking.customer_phone,
+            token,
+            is_followup:    false,
+            worker_id:      worker.id,   // 현장에서 마감한 기사에게 귀속
+          } as never)
+
           await sendReviewRequestAlimtalk({
             customerPhone: booking.customer_phone,
             customerName:  booking.customer_name ?? '고객',
             businessName:  business.name,
             cleaningType,
-            reviewUrl,
+            reviewUrl:     `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'}/review/${token}`,
+            workerName:    worker.name ?? null,
           })
+
+          // 크론이 다음 날 같은 요청을 또 보내지 않게 발송 기록을 남긴다
+          await db
+            .from('bookings')
+            .update({ auto_review_sent_at: new Date().toISOString() } as never)
+            .eq('id', parsedInput.bookingId)
         } catch (err) {
           console.error('[Field] 리뷰 요청 발송 실패:', err)
         }
