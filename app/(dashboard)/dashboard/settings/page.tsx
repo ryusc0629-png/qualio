@@ -23,9 +23,10 @@ export default async function SettingsPage() {
   if (!user) redirect('/login')
 
   const db = createServiceClient()
+  // full_name = 가입할 때 받은 대표님 성함 (설정에서 고칠 수 있게 함께 읽어온다)
   const { data: profile } = await db
     .from('profiles')
-    .select('business_id')
+    .select('business_id, full_name')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -211,6 +212,7 @@ export default async function SettingsPage() {
       {/* 업체 정보 */}
       <SettingsForm
         business={business}
+        ownerFullName={profile.full_name ?? ''}
         serviceCount={serviceCount}
         hasGeneratedPage={!!business.seo_generated_at}
         publicReportCount={publicReportCount}

@@ -82,6 +82,8 @@ interface Business {
 
 interface Props {
   business: Business
+  /** 가입할 때 받은 대표님 성함 (profiles.full_name) — businesses가 아니라 계정 쪽 값 */
+  ownerFullName: string
   serviceCount: number
   hasGeneratedPage: boolean
   publicReportCount: number
@@ -94,7 +96,9 @@ interface Props {
 // "리뷰를 쓴 대가"가 아니라 재방문 유도라서 네이버의 대가성 리뷰 금지에도 걸리지 않는다.
 //
 // ⛔ 별점 조건(4점 이상만 지급)은 절대 넣지 말 것 — 리뷰 조작으로 플레이스 제재 대상.
-export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicReportCount }: Props) {
+export function SettingsForm({ business, ownerFullName, serviceCount, hasGeneratedPage, publicReportCount }: Props) {
+  // 계정 주인 이름(profiles.full_name). 아래 ownerName(홈페이지에 나가는 대표명)과 다른 값이다.
+  const [accountName, setAccountName] = useState(ownerFullName)
   // 할인 세부 타입 (discount_amount | discount_rate) 초기값
   const initialType = business.review_reward_type as RewardType
   const [activePlatform, setActivePlatform] = useState<ReviewPlatform>(
@@ -290,6 +294,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
 
     execute({
       name:                      name,
+      owner_full_name:           accountName.trim(),
       phone:                     phone,
       address:                   address,
       description:               description,
@@ -353,6 +358,23 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
             placeholder="예: 깔끔청소 홍길동"
             required
           />
+        </div>
+
+        {/* 가입할 때 받은 대표님 성함 — 예전엔 오타로 넣어도 고칠 방법이 없었다.
+            홈페이지에 나가는 값이 아니라 계정 주인 이름이라 아래 '대표 인사말'과 다른 칸이다. */}
+        <div id="field-owner-full-name" className="space-y-2">
+          <Label htmlFor="owner_full_name">대표님 성함</Label>
+          <Input
+            id="owner_full_name"
+            name="owner_full_name"
+            value={accountName}
+            onChange={(e) => setAccountName(e.target.value)}
+            placeholder="예: 홍길동"
+            maxLength={50}
+          />
+          <p className="text-xs text-muted-foreground">
+            가입하실 때 넣으신 이름이에요. 홈페이지에는 안 나오고, 문의 주실 때 저희가 알아보는 용도예요.
+          </p>
         </div>
 
         <div id="field-phone" className="space-y-2">

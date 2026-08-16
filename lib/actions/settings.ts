@@ -18,6 +18,9 @@ const updateBusinessSchema = z.object({
     .optional(),
   address: z.string().max(200).optional(),
   description: z.string().max(500).optional(),
+  // 대표님 성함 — 가입할 때 받은 이름. businesses가 아니라 profiles에 저장된다.
+  // (홈페이지에 공개되는 owner_name과는 다른 값 — 이건 계정 주인 이름이고 본사만 본다)
+  owner_full_name:           z.string().max(50).optional(),
   naver_place_url:           z.string().max(300).optional(),
   google_place_url:          z.string().max(300).optional(),
   danggeun_review_url:       z.string().max(300).optional(),
@@ -168,6 +171,21 @@ export const updateBusinessAction = action
       .eq('id', profile.business_id)
 
     if (error) throw new Error('[APP] 설정 저장에 실패했습니다')
+
+    // 대표님 성함은 profiles에 있어 위 businesses 저장과 별개로 처리한다.
+    // 가입할 때 한 번 받고 나면 고칠 방법이 없었다(오타로 넣으면 본사 화면에 그대로 남음).
+    // 빈 값으로 지우는 건 막는다 — 본사 회원 목록에서 누구인지 알 수 없게 되므로.
+    const ownerFullName = parsedInput.owner_full_name?.trim()
+    if (ownerFullName) {
+      const { error: nameError } = await db
+        .from('profiles')
+        .update({ full_name: ownerFullName })
+        .eq('id', user.id)
+      if (nameError) {
+        console.error('[Settings] 대표 성함 저장 실패:', nameError)
+        throw new Error('[APP] 대표님 성함을 저장하지 못했어요. 다시 눌러주세요')
+      }
+    }
 
     revalidatePath('/dashboard/settings')
     revalidatePath('/dashboard', 'layout')
