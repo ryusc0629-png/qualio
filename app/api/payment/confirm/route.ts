@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { verifyPortOnePaymentByOrder } from '@/lib/payments/portone'
 import { activateSubscription } from '@/lib/payments/activate'
+import { claimPendingOrder, releaseClaimedOrder } from '@/lib/payments/order-claim'
 import type { PlanId } from '@/lib/config/plans'
 
 // 포트원(PortOne) V2 단건 결제 검증 API — 데스크톱 팝업 흐름에서 호출.
@@ -52,8 +53,11 @@ export async function POST(req: NextRequest) {
     if (order.business_id !== profile.business_id) {
       return NextResponse.json({ error: '잘못된 주문 정보입니다' }, { status: 400 })
     }
+    const planId = order.plan_id as PlanId
+
+    // 웹훅이 먼저 처리했을 수 있다 — 결제는 정상이므로 오류가 아니라 성공으로 돌려준다
     if (order.status === 'paid') {
-      return NextResponse.json({ error: '이미 처리된 결제입니다' }, { status: 409 })
+      return NextResponse.json({ success: true, planId, amount: order.amount })
     }
 
     // 포트원 서버 조회로 상태·금액 위변조 검증
@@ -62,15 +66,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: verified.error }, { status: 400 })
     }
 
-    const planId = order.plan_id as PlanId
-    await activateSubscription(db as unknown as SupabaseClient, profile.business_id, planId, {
-      orderId,
-      paymentKey: verified.paymentKey,
-    })
-    await (db as unknown as SupabaseClient)
-      .from('kcp_payment_orders')
-      .update({ status: 'paid' })
-      .eq('ordr_idxx', orderId)
+    // 주문 선점 — 웹훅과 동시에 도착해도 구독 활성화는 한 번만 일어난다
+    const claimed = await claimPendingOrder(db as unknown as SupabaseClient, orderId)
+    if (!claimed) {
+      return NextResponse.json({ success: true, planId, amount: order.amount })
+    }
+
+    try {
+      await activateSubscription(db as unknown as SupabaseClient, profile.business_id, planId, {
+        orderId,
+        paymentKey: verified.paymentKey,
+      })
+    } catch (e) {
+      await releaseClaimedOrder(db as unknown as SupabaseClient, orderId)
+      throw e
+    }
 
     return NextResponse.json({ success: true, planId, amount: order.amount })
   } catch (e) {

@@ -45,11 +45,13 @@ export async function POST(_req: NextRequest) {
       return NextResponse.json({ error: '이미 취소된 구독입니다' }, { status: 400 })
     }
 
-    // 구독 취소 — status만 cancelled로 변경 (plan, current_period_end 유지)
+    // 구독 취소 — status를 cancelled로 변경 (plan, current_period_end 유지)
+    // 예약된 플랜 변경(next_plan)도 함께 비운다 — 안 비우면 나중에 재결제할 때
+    // 취소 전에 걸어둔 옛 예약이 되살아나 엉뚱한 플랜이 붙는다.
     // 환불은 포트원(PortOne) 콘솔에서 수동 처리
     const { error: updateError } = await db
       .from('subscriptions')
-      .update({ status: 'cancelled' })
+      .update({ status: 'cancelled', next_plan: null } as never)
       .eq('id', subscription.id)
 
     if (updateError) {

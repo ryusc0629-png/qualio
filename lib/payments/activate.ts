@@ -2,7 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PlanId } from '@/lib/config/plans'
 
 // 결제 성공 후 구독을 활성화(1개월/30일)한다. 포트원·토스 공용.
-// next_plan 예약(플랜 변경 예약)이 있으면 그 플랜을 우선 적용한다.
+//
+// ⚠️ 방금 결제한 플랜(planId)을 그대로 부여한다. 예약(next_plan)을 우선 적용하면
+//    "확장 요금을 냈는데 시작 플랜이 부여되는" 돈≠플랜 불일치가 생긴다.
+//    예약은 사용자가 결제창에서 플랜을 다시 고른 시점에 무효가 되므로 여기서 비운다.
+//    '다음 결제부터 적용'되는 예약은 자동청구(lib/payments/billing-charge.ts)에서 반영한다.
 //
 // ref.orderId  — 우리가 만든 주문 식별자
 // ref.paymentKey — PG가 발급한 결제 키(포트원 paymentId / 토스 paymentKey)
@@ -20,24 +24,21 @@ export async function activateSubscription(
 
   const { data: existing } = (await db
     .from('subscriptions')
-    .select('id, next_plan' as never)
+    .select('id')
     .eq('business_id', businessId)
     .maybeSingle()) as unknown as {
-    data: { id: string; next_plan: string | null } | null
+    data: { id: string } | null
   }
 
-  // 예약된 변경이 있으면 그 플랜, 없으면 결제한 플랜을 적용
-  const effectivePlan = existing?.next_plan ?? planId
-
   const fields: Record<string, unknown> = {
-    plan: effectivePlan,
+    plan: planId,
     status: 'active',
     payment_id: ref.orderId,
     toss_order_id: ref.orderId,
     toss_payment_key: ref.paymentKey,
     current_period_start: now.toISOString(),
     current_period_end: nextMonth.toISOString(),
-    next_plan: null, // 예약 초기화
+    next_plan: null, // 방금 플랜을 직접 골라 결제했으므로 이전 변경 예약은 무효
   }
   // 정기결제 빌링키가 있으면 저장 (매월 자동청구에 사용)
   if (ref.billingKey) fields.billing_key = ref.billingKey

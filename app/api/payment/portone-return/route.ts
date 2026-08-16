@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/server'
 import { verifyPortOnePaymentByOrder } from '@/lib/payments/portone'
 import { activateSubscription } from '@/lib/payments/activate'
+import { claimPendingOrder, releaseClaimedOrder } from '@/lib/payments/order-claim'
 import type { PlanId } from '@/lib/config/plans'
 
 // 포트원 단건 결제 모바일 리다이렉트 복귀 지점.
@@ -49,14 +50,21 @@ export async function GET(req: NextRequest) {
     if (!verified.ok) return fail(verified.error)
 
     const planId = order.plan_id as PlanId
-    await activateSubscription(db as unknown as SupabaseClient, order.business_id, planId, {
-      orderId,
-      paymentKey: verified.paymentKey,
-    })
-    await (db as unknown as SupabaseClient)
-      .from('kcp_payment_orders')
-      .update({ status: 'paid' })
-      .eq('ordr_idxx', orderId)
+
+    // 주문 선점 — 웹훅과 동시에 도착해도 구독 활성화는 한 번만 일어난다.
+    // 선점에 실패했으면 웹훅이 이미 처리한 것이므로 그대로 성공 페이지로 보낸다.
+    const claimed = await claimPendingOrder(db as unknown as SupabaseClient, orderId)
+    if (claimed) {
+      try {
+        await activateSubscription(db as unknown as SupabaseClient, order.business_id, planId, {
+          orderId,
+          paymentKey: verified.paymentKey,
+        })
+      } catch (e) {
+        await releaseClaimedOrder(db as unknown as SupabaseClient, orderId)
+        throw e
+      }
+    }
 
     return NextResponse.redirect(
       `${base}/upgrade/success?status=paid&ordr=${encodeURIComponent(orderId)}&amount=${order.amount}&plan=${planId}`

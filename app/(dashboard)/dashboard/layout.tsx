@@ -4,6 +4,7 @@ import { DashboardShell } from '@/components/layout/dashboard-shell'
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register'
 import { SessionRefresher } from '@/components/pwa/session-refresher'
 import { UsageTracker } from '@/components/dashboard/usage-tracker'
+import { evaluateSubscription } from '@/lib/payments/subscription-access'
 
 // 대시보드 레이아웃 — 서버 컴포넌트에서 인증 검증 후 업체명 전달
 export default async function DashboardLayout({
@@ -44,23 +45,15 @@ export default async function DashboardLayout({
   const betaOpen = process.env.NEXT_PUBLIC_BETA_OPEN === 'true' && !isPaymentReviewer
 
   if (!isAdmin && !betaOpen) {
-    // 구독 플랜 확인 — 베타 또는 만료된 취소 구독이면 결제 페이지로 이동
+    // 구독 플랜 확인 — 베타이거나 이용기간이 끝났으면 결제 페이지로 이동.
+    // 판정은 /upgrade와 같은 함수를 쓴다(어긋나면 결제창과 대시보드를 무한 왕복하게 됨).
     const { data: subscription } = await db
       .from('subscriptions')
       .select('plan, status, current_period_end')
       .eq('business_id', profile.business_id)
       .maybeSingle()
 
-    if (!subscription || subscription.plan === 'beta') redirect('/upgrade')
-
-    // 취소된 구독 + 결제 기간 만료 시 접근 차단
-    if (
-      subscription.status === 'cancelled' &&
-      subscription.current_period_end &&
-      new Date(subscription.current_period_end) < new Date()
-    ) {
-      redirect('/upgrade')
-    }
+    if (!evaluateSubscription(subscription).allowed) redirect('/upgrade')
   }
 
   const businessName =

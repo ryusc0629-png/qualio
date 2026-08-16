@@ -4,6 +4,7 @@ import { UpgradeForm } from '@/components/dashboard/upgrade-form'
 import { LogoutButton } from '@/components/dashboard/logout-button'
 import { Button } from '@/components/ui/button'
 import { resolvePaymentProvider } from '@/lib/payments/provider'
+import { evaluateSubscription } from '@/lib/payments/subscription-access'
 import Link from 'next/link'
 
 // 플랜 결제 페이지 — 대시보드 밖에 위치해야 페이월 무한루프 방지
@@ -47,15 +48,9 @@ export default async function UpgradePage({
     .maybeSingle() as { data: { plan: string; status: string; current_period_end: string | null; next_plan: string | null } | null }
 
   const currentPlan = subscription?.plan ?? 'beta'
-  const isBeta = currentPlan === 'beta'
 
-  // 만료 여부 판별: 취소+기간만료 또는 구독 없음
-  const isExpired = !subscription
-    || (subscription.status === 'cancelled'
-      && !!subscription.current_period_end
-      && new Date(subscription.current_period_end) < new Date())
-  // 결제가 필요한 상태: 베타이거나 만료된 유료 사용자
-  const needsPayment = isBeta || isExpired
+  // 결제 필요 여부는 대시보드 페이월과 같은 함수로 판정한다(lib/payments/subscription-access.ts)
+  const { isBeta, expired: isExpired, needsPayment } = evaluateSubscription(subscription)
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

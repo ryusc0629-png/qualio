@@ -19,6 +19,7 @@ interface DueSubscription {
   id: string
   business_id: string
   plan: string
+  next_plan: string | null
   billing_key: string | null
   current_period_end: string | null
 }
@@ -36,7 +37,7 @@ export async function chargeDueSubscriptions(): Promise<ChargeSummary> {
   // 만료 도래한 active 구독 (billing_key 보유분만) — 컬럼이 database.ts 타입 미반영 → 캐스팅
   const { data: subs } = await (db as unknown as SupabaseClient)
     .from('subscriptions')
-    .select('id, business_id, plan, billing_key, current_period_end')
+    .select('id, business_id, plan, next_plan, billing_key, current_period_end')
     .eq('status', 'active')
     .not('billing_key', 'is', null)
     .lte('current_period_end', now.toISOString()) as unknown as { data: DueSubscription[] | null }
@@ -47,18 +48,27 @@ export async function chargeDueSubscriptions(): Promise<ChargeSummary> {
 
   for (const sub of due) {
     if (!sub.billing_key) continue
+
+    // 플랜 변경 예약(next_plan)은 '다음 결제부터 적용' — 자동청구가 바로 그 시점이다.
+    // 청구 금액도 예약된 플랜 기준으로 뽑아야 돈과 부여 플랜이 어긋나지 않는다.
+    const effectivePlan = (sub.next_plan ?? sub.plan) as PlanId
+    if (!PLANS[effectivePlan]) {
+      console.error('[KCP billing charge] 알 수 없는 플랜:', sub.business_id, effectivePlan)
+      continue
+    }
+
     // beta(무료) 등 유료 아님 → 스킵. 금액은 평생 할인까지 반영된 실제 청구액
-    const { amount } = await getChargeAmount(sub.business_id, sub.plan as PlanId)
+    const { amount } = await getChargeAmount(sub.business_id, effectivePlan)
     if (!amount || amount <= 0) continue
 
-    const planLabel = PLANS[sub.plan as PlanId]?.label ?? sub.plan
+    const planLabel = PLANS[effectivePlan]?.label ?? effectivePlan
     const ordrIdxx = `QR${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`.toUpperCase()
 
     // 감사/멱등용 주문 기록
     await (db as unknown as SupabaseClient).from('kcp_payment_orders').insert({
       ordr_idxx: ordrIdxx,
       business_id: sub.business_id,
-      plan_id: sub.plan,
+      plan_id: effectivePlan,
       amount,
       status: 'pending',
     })
@@ -77,6 +87,8 @@ export async function chargeDueSubscriptions(): Promise<ChargeSummary> {
         const nextEnd = new Date(base)
         nextEnd.setMonth(nextEnd.getMonth() + 1)
         await db.from('subscriptions').update({
+          plan: effectivePlan,   // 예약된 변경이 있었으면 이번 결제부터 적용
+          next_plan: null,       // 반영했으니 예약 비움
           current_period_start: now.toISOString(),
           current_period_end: nextEnd.toISOString(),
           toss_payment_key: r.tno ?? ordrIdxx,

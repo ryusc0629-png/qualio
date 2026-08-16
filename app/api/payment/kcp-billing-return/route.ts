@@ -69,13 +69,15 @@ export async function POST(req: NextRequest) {
     const nextMonth = new Date(now)
     nextMonth.setMonth(nextMonth.getMonth() + 1)
 
+    // ⚠️ 방금 결제한 플랜(order.plan_id)을 그대로 부여한다 — 예약(next_plan)을 우선하면 돈≠플랜이 된다.
+    //    (자세한 이유는 lib/payments/activate.ts 주석)
     const { data: existing } = await db
       .from('subscriptions')
-      .select('id, next_plan' as never)
+      .select('id')
       .eq('business_id', order.business_id)
-      .maybeSingle() as unknown as { data: { id: string; next_plan: string | null } | null }
+      .maybeSingle() as unknown as { data: { id: string } | null }
 
-    const effectivePlan = existing?.next_plan ?? order.plan_id
+    const effectivePlan = order.plan_id
     const fields = {
       plan: effectivePlan,
       status: 'active',
