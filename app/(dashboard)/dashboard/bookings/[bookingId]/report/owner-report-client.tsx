@@ -220,8 +220,12 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
 
   const handleSend = () => {
     if (!savedReportId) return
+    // 이미 보낸 뒤에도 다시 보낼 수 있어야 한다 — 발송이 실패했거나 고객이 못 받은 경우가 있다.
+    // 다만 실수로 두 번 보내지 않도록 다른 문구로 한 번 더 확인한다.
     const confirmed = window.confirm(
-      '보고서를 검토하셨나요?\n\n고객에게 카카오 알림톡으로 보고서가 발송됩니다.'
+      alreadySent
+        ? '이미 한 번 보낸 보고서예요.\n\n고객에게 다시 보낼까요?'
+        : '보고서를 검토하셨나요?\n\n고객에게 카카오 알림톡으로 보고서가 발송됩니다.'
     )
     if (!confirmed) return
     sendReport({ reportId: savedReportId })
@@ -691,11 +695,12 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
             <Button
               size="lg"
               className="w-full h-14 text-base gap-2"
-              disabled={!booking.customerPhone || isSending || alreadySent}
+              variant={alreadySent ? 'outline' : 'default'}
+              disabled={!booking.customerPhone || isSending}
               onClick={handleSend}
             >
               <Send className="h-5 w-5" />
-              {isSending ? '발송 중...' : alreadySent ? '발송 완료' : '고객에게 보고서 발송하기'}
+              {isSending ? '발송 중...' : alreadySent ? '고객에게 다시 보내기' : '고객에게 보고서 발송하기'}
             </Button>
             {!booking.customerPhone && (
               <p className="text-xs text-muted-foreground text-center">고객 연락처가 없어 알림톡을 보낼 수 없어요</p>

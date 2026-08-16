@@ -67,7 +67,10 @@ export const saveReportAction = action
     // 홈 공개 토글 — 값이 전달된 경우에만 반영(부분 저장 시 기존값 보존)
     if (isPublic !== undefined) upsertData.is_public = isPublic
     if (aiReportData) upsertData.ai_report_data = aiReportData
-    if (sendAlimtalk) upsertData.kakao_sent_at = new Date().toISOString()
+    // ⚠️ 여기서 kakao_sent_at을 미리 넣지 않는다.
+    //    예전엔 발송 시도 전에 찍어놓고 실패는 catch로 삼켜서, 고객은 아무것도 못 받았는데
+    //    사장님 화면은 '발송 완료'로 잠겼다(2026-08-17 채널 불일치 기간에 실제로 발생).
+    //    아래에서 실제 발송이 성공한 뒤에만 기록한다.
 
     const { data: report, error: reportError } = await db
       .from('reports')
@@ -106,6 +109,7 @@ export const saveReportAction = action
     }
 
     // 알림톡 발송
+    let alimtalkSent = false
     if (sendAlimtalk && booking.customer_phone) {
       const biz   = Array.isArray(booking.businesses) ? booking.businesses[0] : booking.businesses
       const quote = Array.isArray(booking.quotes)     ? booking.quotes[0]     : booking.quotes
@@ -121,6 +125,12 @@ export const saveReportAction = action
           scheduledAt:   booking.scheduled_at ?? '',
           reportUrl:     `${appBaseUrl}/q/${profile.business_id}/report/${report.id}`,
         })
+        // 실제로 나간 뒤에만 '보냈다'고 기록한다
+        await db
+          .from('reports')
+          .update({ kakao_sent_at: new Date().toISOString() })
+          .eq('id', report.id)
+        alimtalkSent = true
       } catch (err) {
         console.error('[Reports] alimtalk 발송 실패:', err)
       }
@@ -137,7 +147,7 @@ export const saveReportAction = action
     revalidatePath('/dashboard/work')
     revalidatePath('/dashboard/schedule')
     revalidatePath('/dashboard/marketing')
-    return { reportId: report.id }
+    return { reportId: report.id, alimtalkSent }
   })
 
 // 저장된 보고서 발송 (사장님 전용 — 이미 저장된 보고서에 대한 알림톡 발송)
