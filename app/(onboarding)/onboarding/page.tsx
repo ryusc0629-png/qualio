@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -29,6 +29,11 @@ const ACQUISITION_OPTIONS = [
   { value: 'etc', label: '기타' },
 ]
 
+// 적던 내용을 이 브라우저에 잠깐 저장해두는 자리.
+// 뒤로가기·새로고침으로 화면을 다시 열어도 쓰던 게 남아 있고, 고쳐 쓸 수 있다.
+// (업체 등록이 끝나면 지운다)
+const DRAFT_KEY = 'qualio-onboarding-draft'
+
 export default function OnboardingPage() {
   const [source, setSource] = useState<string | null>(null)
   const [detail, setDetail] = useState('')
@@ -36,14 +41,45 @@ export default function OnboardingPage() {
   const {
     register,
     handleSubmit,
+    reset,
+    watch,
     formState: { errors },
   } = useForm<OnboardingInput>({
     resolver: zodResolver(onboardingSchema),
   })
 
+  // 적다 만 내용 되살리기 — 브라우저에만 있는 값이라 화면이 뜬 뒤에 채운다
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY)
+      if (!raw) return
+      const draft = JSON.parse(raw) as { name?: string; phone?: string; source?: string; detail?: string }
+      reset({ name: draft.name ?? '', phone: draft.phone ?? '' })
+      if (draft.source) setSource(draft.source)
+      if (draft.detail) setDetail(draft.detail)
+    } catch {
+      // 임시 저장이 깨져도 새로 적을 수 있어야 하므로 무시한다
+    }
+  }, [reset])
+
+  // 적는 대로 임시 저장
+  const draftName = watch('name')
+  const draftPhone = watch('phone')
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ name: draftName, phone: draftPhone, source, detail }),
+      )
+    } catch {
+      // 저장 공간이 막혀 있어도 입력 자체는 계속돼야 한다
+    }
+  }, [draftName, draftPhone, source, detail])
+
   const { execute, isPending } = useAction(createBusinessAction, {
     onSuccess: () => {
       toast.success('업체가 등록되었습니다!')
+      try { sessionStorage.removeItem(DRAFT_KEY) } catch { /* 지우기 실패는 무시 */ }
       // 베타 기간(NEXT_PUBLIC_BETA_OPEN=true)엔 결제 없이 바로 대시보드로,
       // 그 외엔 결제 페이지로 이동(유료 플랜 선택 필수)
       window.location.replace(

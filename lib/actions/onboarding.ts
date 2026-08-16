@@ -8,6 +8,10 @@ import { getAdminBusinessIds, isAdminEmail } from '@/lib/admin/auth'
 import { BETA_SEATS, BETA_LIFETIME_DISCOUNT_RATE } from '@/lib/config/beta'
 
 // 한국 전화번호 검증: 하이픈 제거 후 010/011/02/031... 형식 확인
+//
+// 070(인터넷 전화)은 맨 뒤 `0[3-9]\d`에 걸려 통과한다 — 의도한 동작이다.
+// 청소업체 중 070을 대표번호로 쓰는 곳이 실제로 있어서, 막으면 정상 업체가 가입에서 막힌다.
+// (0503 같은 안심번호는 자릿수가 넘어 자연히 걸러진다)
 const phoneRegex = /^(010|011|016|017|018|019|02|0[3-9]\d)\d{7,8}$/
 
 // 가입 경로(자가응답) 채널 코드 — z.enum 금지 규칙에 따라 refine 사용

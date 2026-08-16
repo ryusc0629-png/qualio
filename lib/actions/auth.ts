@@ -39,7 +39,25 @@ export const loginAction = action
       password: parsedInput.password,
     })
 
-    if (error) throw new Error('[APP] 이메일 또는 비밀번호가 올바르지 않습니다')
+    // 실패 원인을 구분해서 알려준다.
+    // 예전엔 모든 실패를 "이메일 또는 비밀번호가 올바르지 않습니다" 한 줄로 덮어써서,
+    // 서버가 잠깐 죽어도·시도 횟수를 넘겨도 사장님 눈엔 "비번 틀림"으로만 보였다.
+    // 단, 계정이 있는지 없는지는 여전히 알려주지 않는다(계정 존재 여부 캐내기 방지).
+    if (error) {
+      console.error('[login] 로그인 실패:', error.code, error.message)
+
+      if (error.code === 'email_not_confirmed') {
+        throw new Error('[APP] 이메일 확인이 아직 안 됐어요. 받으신 메일의 링크를 눌러주세요')
+      }
+      if (error.status === 429 || error.code === 'over_request_rate_limit') {
+        throw new Error('[APP] 로그인 시도가 너무 많았어요. 1분 뒤에 다시 눌러주세요')
+      }
+      if (error.code === 'invalid_credentials') {
+        throw new Error('[APP] 이메일 또는 비밀번호가 올바르지 않습니다')
+      }
+      // 서버 오류 등 — 사장님 잘못이 아니라는 걸 알려준다
+      throw new Error('[APP] 지금은 로그인이 안 돼요. 잠시 후 다시 시도해주세요')
+    }
 
     // 업체 등록 여부 확인 — 서비스 롤로 조회 (로그인 직후 세션 쿠키 타이밍 문제 방지)
     const db = createServiceClient()

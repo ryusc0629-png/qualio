@@ -272,6 +272,18 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
     const form = e.currentTarget
     const data = new FormData(form)
 
+    // 색상은 잘못 적었을 때 조용히 지우지 말고 알려준다.
+    // 예전엔 '11' 같은 값을 넣으면 normalizeHex가 null을 뱉고 빈 값으로 저장돼,
+    // 오류도 안 나고 입력한 색만 사라졌다("저장됐어요"가 뜨는데 색은 안 바뀜).
+    const badColor = [
+      { label: '대표 색상', value: brandColor },
+      { label: '서브 색상', value: brandSecondary },
+    ].find((c) => c.value.trim() !== '' && !normalizeHex(c.value))
+    if (badColor) {
+      toast.error(`${badColor.label}을 다시 확인해주세요 — #에 여섯 자리로 적어주세요 (예: #059669)`)
+      return
+    }
+
     // 보상 타입 결정
     let rewardType: string = 'none'
     if (rewardCategory === 'discount') rewardType = discountType
@@ -406,23 +418,15 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
       {/* 출장 지역 (검색 노출) */}
       <CollapsibleSection
         title="출장 지역"
-        description="위 주소 기준으로 검색 노출 지역이 자동 설정돼요. 더 멀리 가시면 추가하세요."
+        description="여기 있는 지역으로 검색에 노출돼요. 안 가는 곳은 ✕로 빼세요."
       >
 
-        {/* 내 시/도 전체 — 주소 기준 자동 설정(출장업이라 내 지역은 전부 포함) */}
-        {homeAreas.length > 0 ? (
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">자동 설정된 지역 (내 지역 전체)</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {homeAreas.map((a) => (
-                <span key={a} className="inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-                  {a}
-                </span>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">위에 주소를 입력하고 저장하면 지역이 자동으로 잡혀요.</p>
+        {/* 예전엔 주소 기준 자동 지역을 지울 수 없는 회색 칩으로만 보여줬다.
+            이제 자동으로 채워진 지역도 아래 목록에 함께 들어가 ✕로 지울 수 있다. */}
+        {serviceAreas.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            위에 주소를 넣으면 그 지역이 자동으로 채워져요. 안 가는 곳은 빼셔도 됩니다.
+          </p>
         )}
 
         {/* 더 출장 가는 지역 — 시/도 → 시군구 선택 */}
