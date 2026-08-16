@@ -66,7 +66,10 @@ export function Sidebar({ businessName, isAdmin = false, isOpen = false, onClose
   return (
     <aside
       className={cn(
-        'fixed inset-y-0 left-0 z-50 w-56 border-r border-border bg-white flex flex-col h-screen transition-transform duration-200',
+        // h-dvh(100vh 아님): 모바일 브라우저는 100vh가 주소창·툴바에 가려진 영역까지 포함해서
+        // 실제 보이는 화면보다 길다. 그래서 h-screen이면 맨 아래 로그아웃 버튼이 화면 밖으로
+        // 밀려나 아예 누를 수 없었다. h-dvh는 지금 보이는 높이라 항상 화면 안에 들어온다.
+        'fixed inset-y-0 left-0 z-50 w-56 border-r border-border bg-white flex flex-col h-dvh transition-transform duration-200',
         'md:sticky md:top-0 md:translate-x-0 md:z-auto md:self-start',
         'print:hidden', // PDF 저장(인쇄) 시 사이드바 제외
         isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
@@ -98,8 +101,8 @@ export function Sidebar({ businessName, isAdmin = false, isOpen = false, onClose
         </button>
       </div>
 
-      {/* 네비게이션 */}
-      <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
+      {/* 네비게이션 — 메뉴가 길어지면 여기만 스크롤되고 아래 로그아웃은 항상 붙어 있는다 */}
+      <nav className="flex-1 min-h-0 px-2 py-3 space-y-0.5 overflow-y-auto overscroll-contain">
         {navItems.map((item) => {
           const active = isActive(item.href, item.exact)
           return (
@@ -131,7 +134,11 @@ export function Sidebar({ businessName, isAdmin = false, isOpen = false, onClose
       </nav>
 
       {/* 본사 관리자(관리자 계정에만 노출) + 로그아웃 */}
-      <div className="px-2 py-3 border-t border-border space-y-0.5">
+      {/* 아이폰 홈 인디케이터에 버튼이 가리지 않도록 아래 안전영역만큼 여백 확보 */}
+      <div
+        className="shrink-0 px-2 py-3 border-t border-border space-y-0.5"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      >
         {isAdmin && (
           <Link
             href="/admin"

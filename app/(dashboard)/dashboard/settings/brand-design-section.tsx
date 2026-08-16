@@ -148,7 +148,7 @@ export function BrandDesignSection({
   return (
     <div className="space-y-5">
       <p className="text-xs text-muted-foreground">
-        고객에게 보이는 내 업체 홍보 페이지의 색상과 분위기를 골라보세요.
+        고객에게 보이는 내 업체 홈페이지의 색상과 분위기를 골라보세요.
       </p>
 
       {/* ── 히어로 문구 직접 입력 ── */}
@@ -280,7 +280,9 @@ export function BrandDesignSection({
         {!allReady && (
           <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
             <p className="text-xs font-semibold text-amber-800">
-              홈페이지를 열려면 아래를 먼저 채워주세요 (로고만 선택이에요)
+              {slug
+                ? '홈페이지는 이미 손님에게 열려 있어요. 아래를 채우면 더 잘 보여요 (로고는 선택이에요)'
+                : '홈페이지를 열려면 아래를 먼저 채워주세요 (로고만 선택이에요)'}
             </p>
             <ul className="grid grid-cols-1 gap-1">
               {checklist.map((c) => (
@@ -308,21 +310,22 @@ export function BrandDesignSection({
         )}
 
         {/* 실제 홈페이지를 새 탭에서 열기 — a 태그라 팝업 차단 없이 항상 열림.
-            준비 전이면 onPreviewClick이 열지 않고 안 채운 칸으로 데려간다. */}
+            체크리스트가 덜 찼어도 막지 않는다(이미 고객에게 공개된 페이지라 사장님도 봐야 한다).
+            주소가 아직 없을 때만 onPreviewClick이 저장으로 데려간다. */}
         <a
           href={previewHref}
           target="_blank"
           rel="noopener noreferrer"
           onClick={onPreviewClick}
-          aria-disabled={!allReady || !slug}
+          aria-disabled={!slug}
           className={`mt-1 flex items-center justify-center gap-2 h-12 rounded-lg border text-sm font-bold transition-colors ${
-            allReady && slug
+            slug
               ? 'border-primary/40 bg-primary/5 text-primary hover:bg-primary/10'
               : 'border-muted-foreground/20 bg-muted/40 text-muted-foreground'
           }`}
         >
           <ExternalLink className="h-4 w-4" />
-          {allReady && slug ? '내 홈페이지 새 창으로 열어보기' : '홈페이지 열어보기 (준비 중)'}
+          {slug ? '내 홈페이지 새 창으로 열어보기' : '저장하면 홈페이지가 만들어져요'}
         </a>
       </div>
 
@@ -541,7 +544,10 @@ export function BrandDesignSection({
       {/* ── 히어로 배경 이미지 업로드 ── */}
       <div id="field-hero-image" className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label className="text-xs">대표 사진 <span className="text-destructive">(필수)</span></Label>
+          {/* 없어도 페이지는 정상 동작(색상 배경으로 대체)이라 '필수'가 아니라 이득으로 안내한다 */}
+          <Label className="text-xs">
+            대표 사진 <span className="font-semibold text-emerald-600">— 있으면 훨씬 전문적으로 보여요</span>
+          </Label>
           <button
             type="button"
             onClick={() => setShowHeroGuide((v) => !v)}
@@ -648,7 +654,8 @@ export function BrandDesignSection({
           onChange={handleHeroImageUpload}
         />
         <p className="text-[11px] text-muted-foreground">
-          홍보 페이지 상단에 표시되는 대표 사진이에요. 비워두면 색상 배경만 보여요. (JPG, PNG 5MB 이하)
+          홈페이지에 들어온 손님이 가장 먼저 보는 사진이에요. 실제 시공 사진이 걸려 있으면
+          &lsquo;일 잘하는 업체&rsquo;라는 인상이 훨씬 강해져요. 비워두면 색상 배경만 보여요. (JPG, PNG 5MB 이하)
         </p>
       </div>
 

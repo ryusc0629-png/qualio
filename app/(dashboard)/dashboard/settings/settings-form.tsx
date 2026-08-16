@@ -87,6 +87,20 @@ interface Props {
   publicReportCount: number
 }
 
+// 후기 보상(리뷰 쓰면 기프티콘·할인) 설정을 화면에서 숨긴다. — 2026-08-16
+//
+// 왜 숨겼나
+//  1) 네이버 플레이스는 대가성 리뷰를 금지한다. 이 설정은 네이버 리뷰를 받는 흐름에 붙어 있어,
+//     리뷰 몇 개 더 받으려다 검색 노출 제재를 받을 수 있다(공정위 추천·보증 심사지침도 대가 표시 의무).
+//  2) 지급이 전부 수동이고 지급 여부를 기록하는 곳이 없다. 고객 화면엔 "업체에서 개별 안내 드려요"라고
+//     약속이 뜨는데 사장님이 놓치면 안 주느니만 못한 결과가 된다.
+//  3) 리뷰 수급률의 주된 레버는 보상이 아니라 요청 타이밍·작업 사진·사장님 이름으로 부탁하기다.
+//
+// 되살린다면 여기가 아니라 '리뷰 요청을 보내는 화면'에 건별로 두고, 지급 체크칸을 함께 만들 것.
+// 프레임도 "리뷰 쓰면 5천원"이 아니라 "다음 이용 시 10% 할인"(재방문 유도)으로 바꿀 것.
+// DB 컬럼(review_reward_type/description)과 고객 화면 로직은 그대로 살아 있다.
+const SHOW_REVIEW_REWARD = false
+
 export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicReportCount }: Props) {
   // 할인 세부 타입 (discount_amount | discount_rate) 초기값
   const initialType = business.review_reward_type as RewardType
@@ -103,7 +117,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
   )
   const [rewardValue, setRewardValue] = useState(business.review_reward_description ?? '')
 
-  // 웹사이트 디자인 상태
+  // 홈페이지 디자인 상태
   const [brandColor, setBrandColor] = useState(business.brand_color ?? '')
   const [brandSecondary, setBrandSecondary] = useState(business.brand_color_secondary ?? '')
   const [heroStyle, setHeroStyle] = useState<HeroStyle>(
@@ -165,6 +179,8 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
   })
 
   // ── 홈페이지 공개 준비 체크리스트 (로고만 선택, 나머지는 필수) ──
+  // 대표 사진은 여기 없다 — 비워도 색상 배경으로 정상 표시되므로 '필수'가 아니라
+  // 아래 강화 항목(있으면 더 전문적으로 보임)으로 안내한다.
   const checklist = [
     { key: 'services',      label: '서비스와 가격 등록', done: serviceCount > 0 },
     { key: 'name',          label: '업체명',           done: !!name.trim() },
@@ -173,14 +189,14 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
     { key: 'description',   label: '업체 소개',         done: !!description.trim() },
     { key: 'hero_title',    label: '페이지 제목',        done: !!heroTitle.trim() },
     { key: 'hero_subtitle', label: '페이지 소개글',      done: !!heroSubtitle.trim() },
-    { key: 'hero_image',    label: '대표 사진',         done: !!heroImageUrl.trim() },
-    { key: 'geo',           label: '홍보 페이지 내용 만들기 (FAQ·검색 소개)', done: hasGeneratedPage },
+    { key: 'geo',           label: '홈페이지 내용 만들기 (FAQ·검색 소개)', done: hasGeneratedPage },
   ]
   const allReady = checklist.every((c) => c.done)
 
   // ── 홈페이지 완성도(숨고식) — 필수(공개) + 강화(설득력) 통합 목록 ──
   const completenessItems: CompletenessItem[] = [
     ...checklist.map((c) => ({ key: c.key, label: c.label, done: c.done, essential: true })),
+    { key: 'hero_image', label: '대표 사진', hint: '손님이 가장 먼저 보는 사진이에요 — 있으면 훨씬 전문적으로 보여요', done: !!heroImageUrl.trim(), essential: false },
     { key: 'owner_intro', label: '대표 인사말', hint: '사장님 얼굴·한마디면 신뢰가 확 올라가요', done: !!(ownerGreeting.trim() || ownerPhotoUrl.trim()), essential: false },
     { key: 'strengths', label: '우리 업체 강점', hint: '경쟁사와 다른 점을 카드로 보여줘요', done: strengths.filter((s) => s.title.trim()).length > 0, essential: false },
     { key: 'experience', label: '청소 경력 연차', hint: '“경력 N년”이 표시돼요', done: experienceYears.trim() !== '' && Number(experienceYears) > 0, essential: false },
@@ -190,8 +206,10 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
     { key: 'youtube', label: '시공 영상 (유튜브)', hint: '말보다 영상이 확실해요', done: !!business.youtube_url?.trim(), essential: false },
   ]
 
-  // 안 채운 칸으로 데려가기 — 같은 페이지면 스크롤+포커스+빨간 테두리 강조, 다른 페이지는 이동
-  const jumpTo = (key: string) => {
+  // 해당 칸으로 데려가기 — 같은 페이지면 스크롤+포커스+테두리 강조, 다른 페이지는 이동.
+  // 이미 채운 항목을 '수정'하러 갈 때도 쓰이므로, 그때는 빨간색(=오류처럼 보임) 대신
+  // 브랜드 초록으로 "여기예요"만 알려준다.
+  const jumpTo = (key: string, opts?: { done?: boolean }) => {
     if (key === 'services') {
       window.location.href = '/dashboard/services'
       return
@@ -221,7 +239,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
     if (details) details.open = true
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     // Tailwind purge 영향 없이 인라인 스타일로 잠깐 강조
-    el.style.outline = '2px solid #ef4444'
+    el.style.outline = `2px solid ${opts?.done ? '#059669' : '#ef4444'}`
     el.style.outlineOffset = '4px'
     el.style.borderRadius = '10px'
     // GEO 패널은 내부에 여러 입력칸이 있어 자동 포커스가 오히려 헷갈림 → 스크롤+강조만
@@ -235,23 +253,21 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
     }, 2600)
   }
 
-  // "내 홈페이지 열어보기" 클릭 — 준비 안 됐으면 열지 않고 안 채운 곳으로 안내
+  // "내 홈페이지 열어보기" 클릭
+  //
+  // 체크리스트가 덜 찼다고 막지 않는다. 홈페이지는 이미 공개돼 있고, 사장님이 카카오톡으로
+  // 뿌리는 '고객 견적 요청 링크'(/q/…)가 서비스가 하나라도 있으면 곧장 /biz/[slug]로 보낸다.
+  // 즉 고객은 이미 보고 있는 페이지인데 정작 사장님만 못 보는 상태였다 → 고칠 곳도 알 수 없었음.
+  // 아직 주소(slug)가 없어 페이지 자체가 없을 때만 막는다.
   const handlePreviewClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    const firstMissing = checklist.find((c) => !c.done)
-    if (firstMissing) {
-      e.preventDefault()
-      toast.error(`아직 '${firstMissing.label}'을(를) 안 채우셨어요`)
-      jumpTo(firstMissing.key)
-      return
-    }
     if (!slug) {
-      // 항목은 다 채웠지만 아직 저장 전 → 저장해야 홈페이지가 만들어짐
+      // 저장 전이라 주소가 아직 안 만들어짐 → 저장해야 홈페이지가 생긴다
       e.preventDefault()
       toast.error('먼저 아래 저장하기를 눌러 홈페이지를 만들어 주세요')
       jumpTo('save')
       return
     }
-    // 준비 완료 → 앵커가 /biz/[slug]를 새 창으로 정상 오픈
+    // 앵커가 /biz/[slug]를 새 창으로 정상 오픈
   }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -360,12 +376,12 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
           <p className="text-xs text-muted-foreground">고객 견적 폼 상단에 표시됩니다</p>
         </div>
 
-        {/* 주 고객 유형 — 홍보 페이지 카피(공감·프로세스)를 B2B/B2C에 맞게 분기 */}
+        {/* 주 고객 유형 — 홈페이지 카피(공감·프로세스)를 B2B/B2C에 맞게 분기 */}
         <div className="space-y-2 pt-4 border-t">
           <div>
             <Label>주 고객 유형</Label>
             <p className="text-xs text-muted-foreground mt-1">
-              누구에게 청소를 파는지에 따라 홍보 페이지 문구가 자동으로 맞춰져요.
+              누구에게 청소를 파는지에 따라 홈페이지 문구가 자동으로 맞춰져요.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -424,8 +440,8 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
         </div>
       </CollapsibleSection>
 
-      {/* 웹사이트 디자인 (브랜드 커스터마이징) */}
-      <CollapsibleSection title="홍보 페이지 디자인">
+      {/* 홈페이지 디자인 (브랜드 커스터마이징) */}
+      <CollapsibleSection title="홈페이지 디자인">
       <BrandDesignSection
         businessId={business.id}
         businessName={name || business.name}
@@ -455,14 +471,14 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
       />
       </CollapsibleSection>
 
-      {/* 우리 업체 강점 (홍보 페이지 '우리만의 차이'에 자동 반영) */}
+      {/* 우리 업체 강점 (홈페이지 '우리만의 차이'에 자동 반영) */}
       <CollapsibleSection title="우리 업체 강점">
         <div id="field-strengths">
           <StrengthsSection value={strengths} onChange={setStrengths} />
         </div>
       </CollapsibleSection>
 
-      {/* 대표 인사말 (홍보 페이지 '대표 인사말' 섹션에 자동 반영) */}
+      {/* 대표 인사말 (홈페이지 '대표 인사말' 섹션에 자동 반영) */}
       <CollapsibleSection title="대표 인사말">
       <div id="field-owner-intro">
         <OwnerIntroSection
@@ -480,7 +496,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
       </div>
       </CollapsibleSection>
 
-      {/* 전문성·신뢰 (경력·사업자·자격증 → 홍보 페이지 상단 신뢰 앵커) */}
+      {/* 전문성·신뢰 (경력·사업자·자격증 → 홈페이지 상단 신뢰 앵커) */}
       <CollapsibleSection title="전문성·신뢰 (경력·자격증)">
       <div id="field-credentials">
         <CredentialsSection
@@ -529,7 +545,7 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
         </div>
       </CollapsibleSection>
 
-      {/* 시공 사례 (비포·애프터 직접 등록 → 홍보 페이지 '시공 사례' 갤러리에 자동 반영) */}
+      {/* 시공 사례 (비포·애프터 직접 등록 → 홈페이지 '시공 사례' 갤러리에 자동 반영) */}
       <CollapsibleSection title="시공 사례 (비포·애프터)">
         <div id="field-portfolio">
           <PortfolioSection value={portfolio} onChange={setPortfolio} />
@@ -627,7 +643,8 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
           </div>
         </div>
 
-        {/* 후기 보상 — 리뷰 남긴 고객에게 드릴 혜택 */}
+        {/* 후기 보상 — 2026-08-16 숨김. 지우지 말고 이 플래그만 켜서 되살릴 것 */}
+        {SHOW_REVIEW_REWARD && (
         <div className="space-y-4 pt-4 border-t">
           <div>
             <Label>후기 보상</Label>
@@ -751,12 +768,13 @@ export function SettingsForm({ business, serviceCount, hasGeneratedPage, publicR
           </div>
         )}
         </div>
+        )}
       </CollapsibleSection>
 
       {/* SNS·영상 연동 */}
       <CollapsibleSection
         title="SNS·영상 연동"
-        description="SNS를 연결하면 홍보 페이지 하단에 노출되고, 검색·AI가 같은 업체로 인식해 신뢰도가 올라가요."
+        description="SNS를 연결하면 홈페이지 하단에 노출되고, 검색·AI가 같은 업체로 인식해 신뢰도가 올라가요."
       >
         <div id="field-youtube" className="space-y-2">
           <Label htmlFor="youtube_url">유튜브 시공 영상 URL</Label>

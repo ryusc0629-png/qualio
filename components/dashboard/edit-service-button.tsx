@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -11,10 +11,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { updateServiceItemAction } from '@/lib/actions/services'
-import { createClient } from '@/lib/supabase/client'
-import { Pencil, X, ImagePlus, Loader2, Zap, ListPlus, Trash2, Plus, Users, Check } from 'lucide-react'
+import { Pencil, X, Zap, ListPlus, Trash2, Plus, Users, Check } from 'lucide-react'
 import { getApplianceTypes, isApplianceService } from '@/lib/utils'
-import { getTemplatesForService } from '@/lib/config/quote-templates'
+import { getTemplatesForService, type QuoteTemplate } from '@/lib/config/quote-templates'
+import { BETTER_UPLIFT_BAND, MIN_PREMIUM_GAP_PCT, type PricingBenchmark } from '@/lib/benchmarks/pricing-band'
 
 const VARIANT_PRESETS = ['신축', '구축', '아파트', '빌라', '오피스텔', '상가']
 
@@ -116,7 +116,6 @@ interface EditServiceButtonProps {
     category: string | null
     base_price: number
     unit: string
-    photos: string[] | null
     ac_type_prices: Record<string, number> | null
     unit_prices: Array<{ name: string; price: number; variant?: string }> | null
     unit_variants: string[] | null
@@ -137,6 +136,8 @@ interface EditServiceButtonProps {
   availableServices?: { id: string; name: string }[]
   // 플랜 배수 (기본가 대비) — 예시 가격 계산용
   tierMultipliers?: { good: number; better: number; best: number }
+  // 객단가 상위 업체 실집계 (매일 갱신) — 표본 미달이면 null 이라 문구가 숨겨진다
+  pricingBenchmark?: PricingBenchmark | null
 }
 
 // 플랜 항목 입력 컴포넌트
@@ -296,13 +297,11 @@ export function EditServiceButton({
   service,
   availableServices = [],
   tierMultipliers = { good: 1.0, better: 1.2, best: 1.5 },
+  pricingBenchmark = null,
 }: EditServiceButtonProps) {
   // 현재 서비스를 제외한 나머지 — 플랜에 끌어올 수 있는 후보
   const otherServices = availableServices.filter((s) => s.id !== service.id)
   const [open, setOpen] = useState(false)
-  const [photos, setPhotos] = useState<string[]>(service.photos ?? [])
-  const [uploading, setUploading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const [tierGood,   setTierGood]   = useState<string[]>(service.tier_good_items)
   const [tierBetter, setTierBetter] = useState<string[]>(service.tier_better_items)
   const [tierBest,   setTierBest]   = useState<string[]>(service.tier_best_items)
@@ -376,15 +375,59 @@ export function EditServiceButton({
   const exG = currentBase                                        // 기본 = 기본가
   const exB = tierBetterPrice ? roundK(Number(tierBetterPrice)) : autoB
   const exP = tierBestPrice   ? roundK(Number(tierBestPrice))   : autoP
-  const recoLo = roundK(exG * 1.25)
-  const recoHi = roundK((exG + exP) / 2)
+
+  // ── 판단 기준은 금액이 아니라 "기본가 대비 몇 %" ──
+  // 기본가가 1만원이든 3만원이든 같은 잣대로 보려면 인상률이어야 한다.
+  // (예전엔 기본가×1.25 와 (기본+프리미엄)/2 를 비교했는데, 기본 배수가 1.5면 두 값이
+  //  똑같아져 권장 구간이 0원 폭이 됐다 → 자동 제안가 +20%마저 "너무 비슷해요"로 떴다)
+  const betterUpliftPct = exG > 0 && exB > 0 ? (exB / exG - 1) * 100 : 0   // 기본 → 추천 인상률
+  const premiumGapPct   = exB > 0 && exP > 0 ? (exP / exB - 1) * 100 : 0   // 추천 → 프리미엄 간격
+  const pct = (n: number) => `${n >= 0 ? '+' : ''}${Math.round(n)}%`
+  // 권장 가격대 = 기준 퍼센트를 지금 기본가에 적용한 금액
+  // (1,000원 단위로 반올림하면 구간이 좁아져 표시된 %와 어긋나므로 100원 단위로 둔다)
+  const round100 = (n: number) => Math.round(n / 100) * 100
+  const recoLo = round100(exG * (1 + BETTER_UPLIFT_BAND.min / 100))
+  const recoHi = round100(exG * (1 + BETTER_UPLIFT_BAND.max / 100))
+
   const priceNudge: { level: 'good' | 'tip' | 'warn'; msg: string } = (() => {
     if (!(exG > 0 && exB > 0 && exP > 0)) return { level: 'tip', msg: '기본가를 입력하면 추천 가격대가 표시돼요' }
     if (!(exG < exB && exB < exP)) return { level: 'warn', msg: '가격이 기본 < 추천 < 프리미엄 순서가 되도록 조정하세요' }
-    if (exB < recoLo) return { level: 'tip', msg: '추천이 기본과 너무 비슷해요. 추천 가격을 조금 올리면 업그레이드처럼 보여요' }
-    if (exB > recoHi) return { level: 'tip', msg: '추천이 프리미엄에 너무 가까워요. 추천 가격을 조금 낮추면 가장 합리적으로 보여요' }
-    return { level: 'good', msg: '좋아요! 추천 플랜이 중간에서 가장 합리적으로 보여 가장 많이 선택될 구조예요' }
+    if (betterUpliftPct < BETTER_UPLIFT_BAND.min) {
+      return {
+        level: 'tip',
+        msg: `추천이 기본보다 ${pct(betterUpliftPct)}밖에 안 돼요. ${pct(BETTER_UPLIFT_BAND.min)}~${pct(BETTER_UPLIFT_BAND.max)} 정도는 올려야 "조금 더 내고 업그레이드" 느낌이 나요`,
+      }
+    }
+    if (betterUpliftPct > BETTER_UPLIFT_BAND.max) {
+      return {
+        level: 'tip',
+        msg: `추천이 기본보다 ${pct(betterUpliftPct)}로 너무 높아요. ${pct(BETTER_UPLIFT_BAND.max)} 안쪽이면 부담 없이 고르기 좋아요`,
+      }
+    }
+    if (premiumGapPct < MIN_PREMIUM_GAP_PCT) {
+      return {
+        level: 'tip',
+        msg: `추천과 프리미엄 차이가 ${pct(premiumGapPct)}뿐이라 프리미엄이 굳이 필요 없어 보여요. 프리미엄을 조금 올리거나 추천을 낮춰주세요`,
+      }
+    }
+    return {
+      level: 'good',
+      msg: `좋아요! 추천이 기본보다 ${pct(betterUpliftPct)} — 객단가는 올라가면서도 부담스럽지 않은 구간이에요`,
+    }
   })()
+  // 객단가 상위 업체가 실제로 쓰는 인상률 — 실집계가 있을 때만 문구를 만든다.
+  // (표본이 모자라면 pricingBenchmark 자체가 null 로 내려와 이 줄이 통째로 사라진다)
+  const benchmarkLine = (() => {
+    const b = pricingBenchmark
+    if (!b || b.topBetterUpliftPct === null) return null
+    const head = `객단가가 높은 사장님들(상위 ${b.topBiz}곳)은 추천 플랜을 기본보다 평균 ${pct(b.topBetterUpliftPct)} 높게 잡고 있어요`
+    // 내 설정이 그보다 확실히 낮을 때만 비교를 덧붙인다 — 잘 맞춰둔 사장님을 흔들지 않기 위함
+    if (exG > 0 && exB > 0 && betterUpliftPct < b.topBetterUpliftPct - 5) {
+      return `${head}. 지금 설정(${pct(betterUpliftPct)})보다 높은 편이에요`
+    }
+    return `${head}.`
+  })()
+
   const priceNudgeStyle = {
     good: 'border-emerald-200 bg-emerald-50 text-emerald-900',
     tip:  'border-amber-200 bg-amber-50 text-amber-900',
@@ -439,7 +482,27 @@ export function EditServiceButton({
 
   // 다른 업체들이 많이 쓰는 구성(템플릿)에서 골라 불러오기 → 그 자리에서 수정 가능
   const [showTemplates, setShowTemplates] = useState(false)
-  const templates = getTemplatesForService(service.name, service.category)
+  // 객단가 상위 업체들이 실제로 쓰는 구성 — 매일 집계돼 자동으로 최신 상태가 된다.
+  // 표본이 모자라 항목이 비어 있으면 목록에 넣지 않는다(빈 구성 적용 방지).
+  const benchmarkTemplate: QuoteTemplate | null = (() => {
+    const items = pricingBenchmark?.topItems
+    if (!items || !pricingBenchmark) return null
+    if (items.good.length === 0 && items.better.length === 0 && items.best.length === 0) return null
+    return {
+      id: 'benchmark_top_revenue',
+      label: `객단가 상위 ${pricingBenchmark.topBiz}곳이 쓰는 구성`,
+      description: '실제 사용 중인 구성에서 많이 겹치는 항목 — 매일 자동으로 갱신돼요',
+      keywords: [],
+      good: items.good,
+      better: items.better,
+      best: items.best,
+    }
+  })()
+  // 실집계 구성을 맨 위에 — 없으면 기존 업계 표준 템플릿만 보인다
+  const templates = [
+    ...(benchmarkTemplate ? [benchmarkTemplate] : []),
+    ...getTemplatesForService(service.name, service.category),
+  ]
 
   const applyTemplate = (templateId: string) => {
     const tpl = templates.find((t) => t.id === templateId)
@@ -450,37 +513,6 @@ export function EditServiceButton({
     setShowTemplates(false)
     toast.success('구성을 불러왔어요. 필요하면 수정한 뒤 저장하세요')
   }
-
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? [])
-    if (files.length === 0) return
-    if (photos.length + files.length > 3) {
-      toast.error('사진은 최대 3장까지 등록할 수 있어요')
-      return
-    }
-
-    setUploading(true)
-    const supabase = createClient()
-    const newUrls: string[] = []
-
-    for (const file of files) {
-      const ext = file.name.split('.').pop()
-      const path = `${service.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error } = await supabase.storage.from('service-photos').upload(path, file, { upsert: true })
-      if (error) {
-        toast.error('사진 업로드에 실패했어요')
-        continue
-      }
-      const { data: { publicUrl } } = supabase.storage.from('service-photos').getPublicUrl(path)
-      newUrls.push(publicUrl)
-    }
-
-    setPhotos((prev) => [...prev, ...newUrls])
-    setUploading(false)
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
-
-  const removePhoto = (url: string) => setPhotos((prev) => prev.filter((p) => p !== url))
 
   return (
     <>
@@ -540,7 +572,6 @@ export function EditServiceButton({
                 category:          data.category || undefined,
                 base_price:        basePrice,
                 unit:              data.unit,
-                photos,
                 ac_type_prices:    acTypePrices,
                 unit_prices:       unitPrices,
                 unit_variants:     unitVariants.length > 0 ? unitVariants : undefined,
@@ -705,59 +736,6 @@ export function EditServiceButton({
               </div>
             )}
 
-            {/* 사진 업로드 */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>견적 페이지에 보여줄 사진 (최대 3장)</Label>
-                <span className="text-xs text-muted-foreground">{photos.length}/3</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                사진이 있으면 고객 견적 랜딩 페이지에 자동으로 표시됩니다
-              </p>
-
-              {/* 사진 미리보기 */}
-              <div className="flex gap-2 flex-wrap">
-                {photos.map((url) => (
-                  <div key={url} className="relative w-20 h-20 rounded-lg overflow-hidden border">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt="서비스 사진" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => removePhoto(url)}
-                      className="absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5"
-                    >
-                      <X className="h-3 w-3 text-white" />
-                    </button>
-                  </div>
-                ))}
-
-                {/* 추가 버튼 */}
-                {photos.length < 3 && (
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploading}
-                    className="w-20 h-20 rounded-lg border-2 border-dashed border-zinc-300 flex flex-col items-center justify-center gap-1 hover:border-primary transition-colors disabled:opacity-50"
-                  >
-                    {uploading
-                      ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                      : <ImagePlus className="h-5 w-5 text-muted-foreground" />
-                    }
-                    <span className="text-[10px] text-muted-foreground">사진 추가</span>
-                  </button>
-                )}
-              </div>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                className="hidden"
-                onChange={handlePhotoUpload}
-              />
-            </div>
-
             {/* 플랜 구성 항목 — 평당(거주지) 청소만 3단계 사용, 그 외엔 단일 금액 안내 */}
             <div className="space-y-4 border-t pt-4">
               {supportsTiers ? (
@@ -886,18 +864,35 @@ export function EditServiceButton({
                 <p className="text-[11px] text-muted-foreground">
                   기본가 {currentBase.toLocaleString()}원{perUnit} 기준 예시. 실제 견적은 옵션·평수에 따라 달라져요.
                 </p>
-                {exG > 0 && exP > 0 && recoHi > recoLo && (
+                {exG > 0 && recoHi > recoLo && (
                   <p className="text-xs text-muted-foreground">
-                    추천 플랜 권장 가격대:{' '}
+                    추천 플랜 권장 구간:{' '}
                     <span className="font-semibold text-foreground tabular-nums">
-                      {recoLo.toLocaleString()}~{recoHi.toLocaleString()}원{perUnit}
+                      기본보다 +{BETTER_UPLIFT_BAND.min}~{BETTER_UPLIFT_BAND.max}%
                     </span>
+                    {' '}({recoLo.toLocaleString()}~{recoHi.toLocaleString()}원{perUnit})
+                  </p>
+                )}
+                {exG > 0 && exB > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    지금 설정:{' '}
+                    <span className="font-semibold text-foreground tabular-nums">추천 {pct(betterUpliftPct)}</span>
+                    {exP > 0 && (
+                      <> · <span className="font-semibold text-foreground tabular-nums">프리미엄 {pct((exP / exG - 1) * 100)}</span></>
+                    )}
+                    {' '}(기본가 대비)
                   </p>
                 )}
                 <div className={`rounded-lg border px-3 py-2 text-xs leading-relaxed ${priceNudgeStyle}`}>
                   {priceNudge.level === 'good' ? '✓ ' : priceNudge.level === 'warn' ? '⚠️ ' : '💡 '}
                   {priceNudge.msg}
                 </div>
+                {/* 객단가 상위 업체 실집계 — 표본이 모였을 때만 노출(지어낸 수치 금지) */}
+                {benchmarkLine && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs leading-relaxed text-emerald-900">
+                    📈 {benchmarkLine}
+                  </div>
+                )}
               </div>
               </>
               ) : (
@@ -913,7 +908,7 @@ export function EditServiceButton({
 
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>취소</Button>
-              <Button type="submit" size="sm" disabled={isPending || uploading}>
+              <Button type="submit" size="sm" disabled={isPending}>
                 {isPending ? '저장 중...' : '저장하기'}
               </Button>
             </div>

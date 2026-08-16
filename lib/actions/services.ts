@@ -46,7 +46,6 @@ const updateServiceItemSchema = z.object({
     (val): val is typeof VALID_UNITS[number] => (VALID_UNITS as readonly string[]).includes(val),
     '올바른 단위를 선택해주세요'
   ),
-  photos: z.array(z.string()).optional(),
   ac_type_prices:  acTypePricesSchema,
   unit_prices:     unitPricesSchema,
   unit_variants:   unitVariantsSchema,
@@ -185,7 +184,8 @@ export const updateServiceItemAction = action
         category:          parsedInput.category ?? null,
         base_price:        parsedInput.base_price,
         unit:              parsedInput.unit,
-        photos:            parsedInput.photos ?? [],
+        // photos 는 더 이상 화면에서 다루지 않는다(고객 페이지에서 쓰이지 않던 기능).
+        // 여기서 건드리면 기존에 올려둔 사진이 저장할 때마다 지워지므로 update 대상에서 제외한다.
         ac_type_prices:    parsedInput.ac_type_prices ?? null,
         unit_prices:       parsedInput.unit_prices    ?? null,
         unit_variants:     parsedInput.unit_variants  ?? null,

@@ -5,8 +5,9 @@ import { DeleteServiceButton } from '@/components/dashboard/delete-service-butto
 import { DuplicateServiceButton } from '@/components/dashboard/duplicate-service-button'
 import { EditServiceButton } from '@/components/dashboard/edit-service-button'
 import { ServicesGuideCard } from '@/components/dashboard/services-guide-card'
-import { Image, Zap } from 'lucide-react'
+import { Zap } from 'lucide-react'
 import { isApplianceService, getApplianceTypes } from '@/lib/utils'
+import { getLatestPricingBenchmark } from '@/lib/benchmarks/pricing-benchmark'
 
 export default async function ServicesPage() {
   const authClient = await createClient()
@@ -25,7 +26,7 @@ export default async function ServicesPage() {
 
   const { data: services } = await db
     .from('service_items')
-    .select('id, name, category, base_price, unit, is_active, photos, ac_type_prices, unit_prices, unit_variants, tier_good_items, tier_better_items, tier_best_items')
+    .select('id, name, category, base_price, unit, is_active, ac_type_prices, unit_prices, unit_variants, tier_good_items, tier_better_items, tier_best_items')
     .eq('business_id', profile.business_id)
     .is('deleted_at', null)
     .order('sort_order')
@@ -48,6 +49,9 @@ export default async function ServicesPage() {
       }
     }
   }
+
+  // 객단가 상위 업체 가격 벤치마크 (매일 cron 갱신) — 표본 미달이면 null 이라 문구가 숨겨진다
+  const pricingBenchmark = await getLatestPricingBenchmark()
 
   // 서비스별 플랜 할인 (컬럼 없으면 빈 맵 — 마이그레이션 전 안전)
   type DiscRow = {
@@ -90,8 +94,6 @@ export default async function ServicesPage() {
       ) : (
         <div className="space-y-2">
           {services.map((service) => {
-            const photoCount = service.photos?.length ?? 0
-
             return (
               <div
                 key={service.id}
@@ -137,12 +139,6 @@ export default async function ServicesPage() {
                         <span className="text-xs text-muted-foreground ml-1">/ {service.unit}</span>
                       </p>
                     )}
-                    {photoCount > 0 && (
-                      <p className="text-xs text-primary mt-1 flex items-center gap-1">
-                        <Image className="h-3 w-3" />
-                        사진 {photoCount}장
-                      </p>
-                    )}
                   </div>
 
                   <div className="shrink-0 flex items-center gap-1">
@@ -169,6 +165,7 @@ export default async function ServicesPage() {
                     }}
                     availableServices={(services ?? []).map((s) => ({ id: s.id, name: s.name }))}
                     tierMultipliers={tierMultipliers}
+                    pricingBenchmark={pricingBenchmark}
                     />
                     <DuplicateServiceButton id={service.id} />
                     <DeleteServiceButton id={service.id} />

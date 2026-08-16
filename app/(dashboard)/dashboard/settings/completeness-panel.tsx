@@ -12,7 +12,8 @@ export interface CompletenessItem {
 
 interface Props {
   items: CompletenessItem[]
-  onJump: (key: string) => void
+  // done: 이미 채운 항목을 수정하러 가는 경우 — 강조색을 오류(빨강) 대신 초록으로 쓰기 위함
+  onJump: (key: string, opts?: { done?: boolean }) => void
 }
 
 // 숨고식 완성도 온보딩 패널 — 채울수록 홈페이지 설득력이 강해진다는 걸 % 진행바로 보여준다.
@@ -35,32 +36,39 @@ export function CompletenessPanel({ items, onJump }: Props) {
           ? '좋아요! 채울수록 고객 설득이 강해져요'
           : '항목을 채우면 홈페이지가 점점 좋아져요'
 
+  // 다 채운 항목도 눌러서 그 자리로 갈 수 있게 한다 — 채운 내용을 다시 손보려면
+  // 설정 화면을 처음부터 훑어 내려가야 했는데, 이 목록이 곧 목차 역할을 하기 때문.
+  // 채운 항목은 '수정', 안 채운 항목은 '채우기'로 다음 행동을 분명히 나눈다.
   const renderRow = (item: CompletenessItem) => (
     <li key={item.key}>
-      {item.done ? (
-        <div className="flex items-center gap-2 py-1.5">
+      <button
+        type="button"
+        onClick={() => onJump(item.key, { done: item.done })}
+        className="group flex w-full items-center gap-2 py-1.5 text-left"
+      >
+        {item.done ? (
           <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-          <span className="text-sm text-foreground/80">{item.label}</span>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => onJump(item.key)}
-          className="group flex w-full items-center gap-2 py-1.5 text-left"
-        >
+        ) : (
           <span className="inline-block h-4 w-4 rounded-full border-2 border-muted-foreground/40 shrink-0 group-hover:border-primary transition-colors" />
-          <span className="flex-1 min-w-0">
-            <span className="text-sm font-medium text-foreground">{item.label}</span>
-            {item.hint && (
-              <span className="block text-[11px] text-muted-foreground leading-snug">{item.hint}</span>
-            )}
+        )}
+        <span className="flex-1 min-w-0">
+          <span className={item.done ? 'text-sm text-foreground/80' : 'text-sm font-medium text-foreground'}>
+            {item.label}
           </span>
-          <span className="flex items-center gap-0.5 text-xs text-primary font-medium shrink-0">
-            채우기
-            <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
-          </span>
-        </button>
-      )}
+          {/* 힌트는 왜 채워야 하는지 설명이라 이미 채운 항목엔 필요 없다 */}
+          {!item.done && item.hint && (
+            <span className="block text-[11px] text-muted-foreground leading-snug">{item.hint}</span>
+          )}
+        </span>
+        <span
+          className={`flex items-center gap-0.5 text-xs font-medium shrink-0 ${
+            item.done ? 'text-muted-foreground group-hover:text-primary transition-colors' : 'text-primary'
+          }`}
+        >
+          {item.done ? '수정' : '채우기'}
+          <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
+        </span>
+      </button>
     </li>
   )
 
