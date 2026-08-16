@@ -1002,3 +1002,61 @@ export const createConsultationRequestAction = publicAction
 
     return { success: true }
   })
+
+// 고객이 카카오톡 '일정 변경 요청' 버튼으로 새 일정을 제안한다 ────────
+//
+// 바로 바꾸지 않고 '요청'으로만 받는다: 그 시간에 다른 현장이 잡혀 있을 수 있고
+// 기사 배정도 함께 움직여야 한다. 고객이 일정표를 직접 바꾸면 사장님이 감당 못 한다.
+const requestRescheduleSchema = z.object({
+  booking_id:     z.string().uuid(),
+  business_id:    z.string().uuid(),
+  scheduled_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '원하시는 날짜를 골라주세요'),
+  scheduled_time: z.string().regex(/^\d{2}:\d{2}$/, '시간을 골라주세요'),
+  note:           z.string().max(300).optional(),
+})
+
+export const requestRescheduleAction = publicAction
+  .schema(requestRescheduleSchema)
+  .action(async ({ parsedInput }) => {
+    const db = createServiceClient()
+
+    const { data: booking } = await db
+      .from('bookings')
+      .select('id, customer_name, scheduled_at, status')
+      .eq('id', parsedInput.booking_id)
+      .eq('business_id', parsedInput.business_id)
+      .maybeSingle()
+
+    if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없어요')
+    if (['completed', 'cancelled', 'no_show'].includes(booking.status as string)) {
+      throw new Error('[APP] 이미 끝난 예약이라 변경할 수 없어요. 업체로 연락 부탁드려요')
+    }
+
+    const wantedAt = inputToUtcIso(`${parsedInput.scheduled_date}T${parsedInput.scheduled_time}`)
+
+    const { error } = await db
+      .from('bookings')
+      .update({
+        reschedule_requested_at:  new Date().toISOString(),
+        reschedule_requested_for: wantedAt,
+        reschedule_note:          parsedInput.note?.trim() || null,
+      } as never)
+      .eq('id', parsedInput.booking_id)
+
+    if (error) throw new Error('[APP] 요청을 못 보냈어요. 다시 눌러주세요')
+
+    // 사장님 폰으로 즉시 알림 — 고객은 답을 기다리는 중이라 늦으면 신뢰가 깨진다
+    const whenLabel = new Date(wantedAt).toLocaleString('ko-KR', {
+      month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      timeZone: 'Asia/Seoul',
+    })
+    const bookingDate = wantedAt.slice(0, 10)
+    await sendPushToBusiness(parsedInput.business_id, {
+      title: '고객이 일정 변경을 요청했어요 📅',
+      body: `${booking.customer_name ?? '고객'}님 — ${whenLabel} 희망${parsedInput.note ? ` · "${parsedInput.note.slice(0, 30)}"` : ''}`,
+      url: `/dashboard/schedule?view=day&date=${bookingDate}&booking=${parsedInput.booking_id}`,
+      tag: `reschedule-${parsedInput.booking_id}`,
+    })
+
+    return { success: true }
+  })

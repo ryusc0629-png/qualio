@@ -62,6 +62,9 @@ interface Booking {
   hasReviewHistory?: boolean
   hasOpenClaim?: boolean
   needsReview?: boolean
+  /** 고객이 카톡으로 보낸 일정 변경 희망 일시 — 있으면 카드에 표시 */
+  rescheduleRequestedFor?: string | null
+  rescheduleNote?: string | null
   reviewReason?: string | null
   isRecurring?: boolean
   cancellation_reason?: string | null
@@ -158,6 +161,14 @@ function BookingCard({
             className="shrink-0 inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white text-[9px] font-bold leading-none"
           >
             ₩
+          </span>
+        )}
+        {booking.rescheduleRequestedFor && !isCancelled && !isCompleted && (
+          <span
+            title={`고객이 일정 변경을 요청했어요${booking.rescheduleNote ? ` — ${booking.rescheduleNote}` : ''}`}
+            className="shrink-0 text-[9px] font-bold px-1 py-0.5 rounded bg-blue-600 text-white leading-none"
+          >
+            변경요청
           </span>
         )}
         {booking.isRecurring && !isCancelled && (

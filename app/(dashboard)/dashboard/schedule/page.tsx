@@ -85,7 +85,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
 
     db
       .from('bookings' as never)
-      .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, worker_id, cancellation_reason, needs_review, review_reason, contract_id, quotes!quote_id(cleaning_type)')
+      .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, worker_id, cancellation_reason, needs_review, review_reason, reschedule_requested_at, reschedule_requested_for, reschedule_note, contract_id, quotes!quote_id(cleaning_type)')
       .eq('business_id' as never, businessId)
       .in('status' as never, ['confirmed', 'in_progress', 'completed', 'cancelled'])
       .gte('scheduled_at' as never, rangeFrom)
@@ -138,6 +138,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     service_address: string | null; scheduled_at: string; final_price: number
     status: string; worker_id: string | null; cancellation_reason: string | null
     needs_review: boolean | null; review_reason: string | null
+    reschedule_requested_at: string | null; reschedule_requested_for: string | null; reschedule_note: string | null
     contract_id: string | null
     quotes: { cleaning_type: string | null } | null
   }
@@ -246,6 +247,8 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           hasReviewHistory: b.customer_phone ? reviewedPhones.has(b.customer_phone) : false,
           hasOpenClaim:     b.customer_phone ? claimPhones.has(b.customer_phone) : false,
           needsReview:      b.needs_review ?? false,
+          rescheduleRequestedFor: b.reschedule_requested_for ?? null,
+          rescheduleNote:         b.reschedule_note ?? null,
           reviewReason:     b.review_reason ?? null,
           isRecurring:      !!b.contract_id,
           contract_id:      b.contract_id ?? null,
