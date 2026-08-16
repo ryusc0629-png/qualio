@@ -12,9 +12,12 @@ export interface BookingConfirmParams {
   serviceAddress: string
   selectedTier: 'good' | 'better' | 'best'
   finalPrice: number
-  // V2 버튼 템플릿용 (선택) — 전화 연결·일정 변경 버튼
-  bookingId?: string
-  businessId?: string
+  // '일정 변경 요청' 버튼 링크를 만드는 데 쓴다.
+  // ⚠️ 선택값이 아니라 필수다 — 예전엔 optional이라 한쪽 호출부가 빼먹어도 조용히
+  //    버튼 없는 V1으로 나갔고, 대표가 확정한 예약은 전부 그렇게 발송됐다(2026-08-16).
+  //    타입으로 막아야 같은 실수가 반복되지 않는다.
+  bookingId: string
+  businessId: string
 }
 
 // 티어 한국어 라벨 매핑
@@ -408,13 +411,14 @@ export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): 
   const apiKey     = process.env.SOLAPI_API_KEY
   const apiSecret  = process.env.SOLAPI_API_SECRET
   const sender     = process.env.SOLAPI_SENDER_PHONE
-  const templateId = process.env.SOLAPI_TEMPLATE_ID_BOOKING_CONFIRM
   const pfId       = process.env.SOLAPI_KAKAO_PF_ID   // 퀄리오 단일 채널 ID
 
-  // V2 템플릿이 있으면 V1 없이도 발송 가능
-  const templateIdV2    = process.env.SOLAPI_TEMPLATE_ID_BOOKING_CONFIRM_V2
-  const useV2           = !!(templateIdV2 && params.bookingId && params.businessId)
-  const activeTemplateId = useV2 ? templateIdV2! : templateId
+  // V2('일정 변경 요청' 버튼 포함)를 기본으로 쓰고, 없을 때만 옛 V1으로 내려간다.
+  // bookingId·businessId가 필수가 됐으므로 조건 분기로 V1에 잘못 빠질 일은 없다.
+  const templateIdV2     = process.env.SOLAPI_TEMPLATE_ID_BOOKING_CONFIRM_V2
+  const templateId       = process.env.SOLAPI_TEMPLATE_ID_BOOKING_CONFIRM
+  const useV2            = !!templateIdV2
+  const activeTemplateId = templateIdV2 ?? templateId
 
   if (!apiKey || !apiSecret || !sender || !activeTemplateId || !pfId) {
     console.warn('[Alimtalk] 환경변수 미설정 — 발송 생략')
