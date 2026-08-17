@@ -75,6 +75,7 @@ export function ProposalEditor({ business, settings, extras, qrDataUrl }: Props)
 
   const SECTION_LABELS: { key: keyof ProposalSectionToggles; label: string; missing?: boolean; missingHint?: string }[] = [
     { key: 'owner', label: '대표 인사말 (홈페이지 값)', missing: missing.owner, missingHint: '설정 > 대표 인사말을 채우면 나와요' },
+    { key: 'pain', label: '이런 일 겪어보셨죠 (불편 → 해결)' },
     { key: 'investment', label: '청소는 투자입니다 (설득)' },
     { key: 'services', label: '제공하는 서비스', missing: missing.services, missingHint: '서비스 항목을 등록하면 나와요' },
     { key: 'principles', label: '우리의 3원칙' },

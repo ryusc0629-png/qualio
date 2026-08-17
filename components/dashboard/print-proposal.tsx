@@ -135,7 +135,38 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
           </section>
         )}
 
-        {/* ── 3. 왜 투자인가 ─────────────────────── */}
+        {/* ── 3. 결핍 → 해소 (설득의 뼈대) ───────── */}
+        {sections.pain && (
+          <section className="page">
+            <div className="body full mid">
+              <h2>{C.painTitle}<span className="u" /></h2>
+              <p className="para wide"><Rich text={t(C.painLead)} /></p>
+              <div className="pain-head">
+                <div className="ph-now">{C.painNowLabel}</div>
+                <div />
+                <div className="ph-fix">{t(C.painFixLabel)}</div>
+              </div>
+              <div className="pain-rows">
+                {category.pains.map((p, i) => (
+                  <div className="pain-row" key={i}>
+                    <div className="pn">
+                      <div className="pt">{p.pain}</div>
+                      <div className="pd">{p.painDesc}</div>
+                    </div>
+                    <div className="parrow">→</div>
+                    <div className="pf">
+                      <div className="pt">{p.fix}</div>
+                      <div className="pd">{p.fixDesc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="foot-tag"><RichPoint text={C.painFootTag} /></div>
+            </div>
+          </section>
+        )}
+
+        {/* ── 4. 왜 투자인가 ─────────────────────── */}
         {sections.investment && (
           <section className="page">
             <div className="body full">
@@ -468,6 +499,19 @@ const proposalCss = `
 .proposal-doc .stat .sv { font-size: 44px; font-weight: 900; color: var(--primary-dark); letter-spacing: -2px; line-height: 1; }
 .proposal-doc .stat .su { font-size: 20px; letter-spacing: 0; margin-left: 2px; }
 .proposal-doc .stat .sl { font-size: 13px; color: var(--ink-soft); margin-top: 9px; font-weight: 700; line-height: 1.45; }
+
+/* 결핍 → 해소 */
+.proposal-doc .pain-head { display: grid; grid-template-columns: 1fr 40px 1.12fr; gap: 0 10px; margin-top: 18px; }
+.proposal-doc .ph-now { font-size: 12.5px; font-weight: 900; color: #8b8d82; letter-spacing: .5px; }
+.proposal-doc .ph-fix { font-size: 12.5px; font-weight: 900; color: var(--primary-dark); letter-spacing: .5px; }
+.proposal-doc .pain-rows { margin-top: 7px; display: flex; flex-direction: column; gap: 9px; }
+.proposal-doc .pain-row { display: grid; grid-template-columns: 1fr 40px 1.12fr; gap: 0 10px; align-items: stretch; }
+.proposal-doc .pain-row .pn { background: #f4f5f0; border-radius: 10px; padding: 11px 14px; }
+.proposal-doc .pain-row .pf { background: var(--pale); border-left: 4px solid var(--primary); border-radius: 10px; padding: 11px 14px; }
+.proposal-doc .pain-row .pn .pt { font-size: 15px; font-weight: 800; color: #6f7168; }
+.proposal-doc .pain-row .pf .pt { font-size: 15px; font-weight: 900; color: var(--primary-dark); }
+.proposal-doc .pain-row .pd { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; line-height: 1.5; }
+.proposal-doc .parrow { display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 20px; font-weight: 900; }
 
 /* 대표 인사말 */
 .proposal-doc .owner-photo { width: 100%; height: 72mm; object-fit: cover; border-radius: 12px; }

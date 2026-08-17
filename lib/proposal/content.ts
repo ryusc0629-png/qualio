@@ -38,6 +38,7 @@ export interface ProposalSettings {
 
 export interface ProposalSectionToggles {
   owner: boolean      // 대표 인사말(홈페이지 값)
+  pain: boolean       // 지금 겪는 불편(결핍) → 우리가 어떻게 없애는지
   investment: boolean
   services: boolean   // 제공 서비스(견적 항목)
   principles: boolean
@@ -50,6 +51,7 @@ export interface ProposalSectionToggles {
 
 export const DEFAULT_SECTIONS: ProposalSectionToggles = {
   owner: true,
+  pain: true,
   investment: true,
   services: true,
   principles: true,
@@ -139,6 +141,14 @@ export interface SpaceCard {
   desc: string
 }
 
+// 결핍(지금 겪는 불편) → 해소(우리는 이렇게 없앱니다). 제안서 설득의 뼈대.
+export interface PainItem {
+  pain: string      // 겪고 있는 문제 한 줄
+  painDesc: string  // 그래서 무슨 일이 생기는지
+  fix: string       // 우리가 없애는 방식 한 줄
+  fixDesc: string   // 어떻게 하는지
+}
+
 export interface ProposalCategoryDef {
   id: ProposalCategory
   name: string           // 선택 UI용
@@ -146,6 +156,7 @@ export interface ProposalCategoryDef {
   sideTitle: string      // '대상 공간' 섹션 사이드 제목
   sideLines: string[]    // 사이드 설명(강조는 **로 감싸 굵게)
   cards: SpaceCard[]      // 관리 대상 공간 카드
+  pains: PainItem[]       // 결핍 → 해소 (공간마다 겪는 불편이 다름)
 }
 
 export const PROPOSAL_CATEGORIES: Record<ProposalCategory, ProposalCategoryDef> = {
@@ -165,6 +176,32 @@ export const PROPOSAL_CATEGORIES: Record<ProposalCategory, ProposalCategoryDef> 
       { emoji: '🏬', title: '상가 · 상업공간', desc: '방문 고객에게 전하는 무언의 신뢰. 첫인상을 관리합니다.' },
       { emoji: '🎓', title: '학원 · 시설', desc: '수많은 사람이 오가는 공간을 매일 새것처럼. 구석까지 꼼꼼히.' },
     ],
+    pains: [
+      {
+        pain: '사람이 바뀔 때마다 상태가 달라진다',
+        painDesc: '지난주는 깨끗했는데 이번 주는 대충 한 티가 납니다.',
+        fix: '담당을 고정합니다',
+        fixDesc: '같은 담당이 오니 그 공간의 취약 구역을 기억하고, 매번 같은 기준으로 관리합니다.',
+      },
+      {
+        pain: '눈에 보이는 곳만 닦여 있다',
+        painDesc: '바닥과 로비는 깨끗한데 책상 밑·환풍구는 몇 달째 그대로입니다.',
+        fix: '안 보이는 구역까지 목록에 넣습니다',
+        fixDesc: '그 공간 전용 체크리스트로 매번 같은 순서로 확인해, 빠지는 곳을 없앱니다.',
+      },
+      {
+        pain: '전화로 받은 견적이 현장에서 바뀐다',
+        painDesc: '막상 작업 날이 되면 추가금 이야기가 나옵니다.',
+        fix: '직접 보고 정한 금액 그대로 갑니다',
+        fixDesc: '무료 방문 견적으로 공간을 확인한 뒤 금액을 확정하고, 안 되는 일은 미리 말씀드립니다.',
+      },
+      {
+        pain: '문제를 말해도 그때 한 번뿐이다',
+        painDesc: '요청한 곳만 그날 하고, 다음 주면 다시 원래대로 돌아옵니다.',
+        fix: '한 번 하신 말씀은 계속 남습니다',
+        fixDesc: '요청은 체크리스트에 넣어 매번 반복하고, 만족하실 때까지 다시 작업합니다.',
+      },
+    ],
   },
   hospital: {
     id: 'hospital',
@@ -181,6 +218,32 @@ export const PROPOSAL_CATEGORIES: Record<ProposalCategory, ProposalCategoryDef> 
       { emoji: '🚻', title: '대기실 · 화장실', desc: '환자가 가장 많이 머무는 곳. 위생과 냄새까지 관리합니다.' },
       { emoji: '🌬️', title: '공기 순환 구역', desc: '호흡기와 직결되는 환풍구·필터 집중 케어.' },
       { emoji: '🧴', title: '접점 표면', desc: '손잡이·접수대 등 손이 닿는 곳을 반복 소독합니다.' },
+    ],
+    pains: [
+      {
+        pain: '병원 기준을 모르는 채로 청소한다',
+        painDesc: '상가 청소하듯 도구 하나로 진료실까지 들어갑니다. 교차 오염이 걱정될 수밖에 없습니다.',
+        fix: '구역별로 도구를 나눠 씁니다',
+        fixDesc: '진료·처치·대기 구역의 도구와 동선을 분리하고, 소독 순서를 정해 두고 지킵니다.',
+      },
+      {
+        pain: '환자가 있는 시간에 청소가 겹친다',
+        painDesc: '대기 환자 앞에서 걸레질을 하면, 청결을 위한 일이 오히려 병원 이미지를 깎습니다.',
+        fix: '진료 시간표에 맞춰 들어갑니다',
+        fixDesc: '진료 전·후 시간대로 일정을 잡아 환자 동선과 겹치지 않게 작업합니다.',
+      },
+      {
+        pain: '정작 손이 닿는 곳이 빠져 있다',
+        painDesc: '손잡이·접수대·카드 단말기처럼 하루에 수십 번 만지는 곳은 늘 그대로입니다.',
+        fix: '접점 표면을 고정 목록에 넣습니다',
+        fixDesc: '매 방문 체크리스트에 넣어 반복 소독하고, 빠뜨렸는지 눈으로 확인합니다.',
+      },
+      {
+        pain: '담당이 계속 바뀌어 매번 다시 설명한다',
+        painDesc: '원장님이 말씀하신 요청은 그 사람이 그만두면 같이 사라집니다.',
+        fix: '담당 고정 + 요청은 기록으로 남깁니다',
+        fixDesc: '한 번 말씀하신 내용이 체크리스트에 남아, 사람이 바뀌어도 다음 방문에 그대로 반영됩니다.',
+      },
     ],
   },
   office: {
@@ -199,6 +262,32 @@ export const PROPOSAL_CATEGORIES: Record<ProposalCategory, ProposalCategoryDef> 
       { emoji: '🚻', title: '화장실', desc: '냄새·물때까지 관리해 방문객 첫인상을 지킵니다.' },
       { emoji: '🪟', title: '로비 · 회의실', desc: '고객을 맞는 공간을 늘 새것처럼 되돌려 놓습니다.' },
     ],
+    pains: [
+      {
+        pain: '직원들이 청소를 나눠 맡고 있다',
+        painDesc: '쓰레기통 비우기·탕비실 정리에 매일 업무 시간이 조금씩 샙니다. 서로 눈치도 봅니다.',
+        fix: '그 일을 통째로 가져갑니다',
+        fixDesc: '정해진 주기로 들어와 직원 손이 안 가게 정리합니다. 직원은 자기 일만 하면 됩니다.',
+      },
+      {
+        pain: '눈에 보이는 곳만 닦여 있다',
+        painDesc: '책상 밑, 모니터 뒤, 환풍구 먼지는 몇 달째 그대로 쌓입니다.',
+        fix: '안 보이는 구역까지 목록에 넣습니다',
+        fixDesc: '사무실 전용 체크리스트로 매번 같은 순서로 확인해, 빠지는 곳을 없앱니다.',
+      },
+      {
+        pain: '손님 오는 날만 급하게 치운다',
+        painDesc: '미팅 전날이면 직원들이 붙어서 로비와 회의실을 정리합니다.',
+        fix: '늘 손님 맞을 수 있는 상태로 둡니다',
+        fixDesc: '로비·회의실을 기본 관리 구역으로 잡아, 갑작스러운 방문에도 준비가 되어 있습니다.',
+      },
+      {
+        pain: '사람이 바뀌면 퀄리티가 바뀐다',
+        painDesc: '지난주와 이번 주가 다르니, 결국 사장님이 매번 확인해야 합니다.',
+        fix: '담당을 고정합니다',
+        fixDesc: '같은 담당이 오니 취약 구역을 기억하고, 사장님이 확인하지 않아도 상태가 유지됩니다.',
+      },
+    ],
   },
   store: {
     id: 'store',
@@ -216,6 +305,32 @@ export const PROPOSAL_CATEGORIES: Record<ProposalCategory, ProposalCategoryDef> 
       { emoji: '🚻', title: '화장실', desc: '매장 평가를 좌우하는 곳. 냄새·물때까지 관리합니다.' },
       { emoji: '✨', title: '유리 · 바닥', desc: '얼룩 없는 유리와 광나는 바닥으로 매장 격을 올립니다.' },
     ],
+    pains: [
+      {
+        pain: '첫인상에서 손님을 놓친다',
+        painDesc: '입구 유리 얼룩과 바닥 자국은, 사장님보다 손님이 먼저 봅니다.',
+        fix: '손님 눈에 닿는 순서대로 관리합니다',
+        fixDesc: '입구·유리·바닥을 우선 구역으로 잡아, 매장 첫인상부터 정리합니다.',
+      },
+      {
+        pain: '화장실 냄새가 끝내 안 잡힌다',
+        painDesc: '청소는 하는데 냄새가 남습니다. 손님은 그걸로 매장 전체를 평가합니다.',
+        fix: '냄새가 나는 지점을 잡습니다',
+        fixDesc: '물때·배수구처럼 원인이 되는 곳을 정해 두고 반복 관리합니다.',
+      },
+      {
+        pain: '영업시간에 청소가 겹친다',
+        painDesc: '손님 앞에서 걸레질을 하게 되고, 결국 매출 시간대를 깎아먹습니다.',
+        fix: '영업 전·후 시간에 들어갑니다',
+        fixDesc: '매장 일정에 맞춰 시간을 정하고, 손님이 있는 시간은 피합니다.',
+      },
+      {
+        pain: '바쁜 날이 지나면 매장이 무너진다',
+        painDesc: '주말이 지나면 상태가 확 떨어지는데, 사장님이 챙길 여유는 없습니다.',
+        fix: '정해진 주기로 무조건 들어옵니다',
+        fixDesc: '사장님이 신경 쓰지 않아도 같은 상태로 되돌려 놓습니다.',
+      },
+    ],
   },
   interior: {
     id: 'interior',
@@ -232,6 +347,32 @@ export const PROPOSAL_CATEGORIES: Record<ProposalCategory, ProposalCategoryDef> 
       { emoji: '🌫️', title: '숨은 먼지 흡진', desc: '천장 틈새·몰딩·수납장 안쪽 미세먼지까지 장비로 제거.' },
       { emoji: '🪟', title: '마감재별 세정', desc: '유리·금속·목재 소재에 맞는 전용 세정제로 안전하게.' },
       { emoji: '🔍', title: '최종 점검', desc: '체크리스트로 구석까지 다시 확인해 티끌 없이 마무리.' },
+    ],
+    pains: [
+      {
+        pain: '마감 인력이 대충 쓸고 끝낸다',
+        painDesc: '보이는 것만 치워 놓으니, 입주하고 나서 먼지가 계속 올라옵니다.',
+        fix: '숨은 먼지를 장비로 뽑아냅니다',
+        fixDesc: '몰딩·틈새·수납장 안쪽까지 흡진한 뒤 마무리해, 입주 후 먼지를 줄입니다.',
+      },
+      {
+        pain: '새 마감재가 상해서 돌아온다',
+        painDesc: '잘못된 세제와 수세미 때문에 유리·금속·목재에 흠집이 남습니다.',
+        fix: '소재별로 약품과 도구를 나눕니다',
+        fixDesc: '마감재에 맞는 전용 세정으로, 새 자재를 상하지 않게 되살립니다.',
+      },
+      {
+        pain: '청소가 늦어져 오픈 일정이 흔들린다',
+        painDesc: '공정이 밀리면 청소부터 밀리고, 결국 입주 날짜가 흔들립니다.',
+        fix: '공정에 맞춰 인원을 넣습니다',
+        fixDesc: '마감 일정을 먼저 확인하고 인원·시간 계획을 잡아 날짜를 맞춥니다.',
+      },
+      {
+        pain: '다 됐다더니 하자가 남아 있다',
+        painDesc: '입주하고 나서야 스티커 자국·본드 자국이 눈에 들어옵니다.',
+        fix: '확인을 받고 철수합니다',
+        fixDesc: '구역별 체크리스트로 다시 점검하고, 고객님 최종 확인까지 받은 뒤 마칩니다.',
+      },
     ],
   },
 }
@@ -266,6 +407,12 @@ export interface StandardCopy {
   ctaTitle: string
   ctaLead: string
   prepPills: PrepPill[]
+  // 결핍 → 해소
+  painTitle: string
+  painLead: string
+  painNowLabel: string
+  painFixLabel: string
+  painFootTag: string
   // 홈페이지 값으로 채우는 페이지들
   ownerTitle: string
   ownerSideTitle: string
@@ -337,6 +484,12 @@ export const STANDARD_COPY: StandardCopy = {
     { title: '② 대략적인 평수', desc: '예: 약 40평' },
     { title: '③ 원하시는 서비스', desc: '주 2회 정기 / 인테리어 대청소 등' },
   ],
+  painTitle: '이런 일, 겪어보셨을 겁니다',
+  painLead:
+    '청소를 안 해서 생기는 문제는 거의 없습니다. **매번 같지 않아서** 생깁니다. 아래는 대표님들이 실제로 겪는 일들과, {업체명}이 그 일을 없애는 방식입니다.',
+  painNowLabel: '지금 겪는 일',
+  painFixLabel: '{업체명}은 이렇게 합니다',
+  painFootTag: '문제를 아는 곳에 맡기면, **사장님이 신경 쓸 일이 줄어듭니다**.',
   ownerTitle: '대표가 직접 인사드립니다',
   ownerSideTitle: '결국\n사람을\n믿고 맡깁니다',
   ownerFallbackGreeting:

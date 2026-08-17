@@ -53,6 +53,7 @@ const saveProposalSchema = z.object({
     .optional(),
   sections: z.object({
     owner: z.boolean(),
+    pain: z.boolean(),
     investment: z.boolean(),
     services: z.boolean(),
     principles: z.boolean(),
