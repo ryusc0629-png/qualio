@@ -218,7 +218,7 @@ export default async function SettingsPage() {
         title="내 인터넷 주소 연결"
         description="가지고 계신 주소가 있으면 홈페이지를 그 주소로 열 수 있어요."
       >
-        <div className="space-y-4">
+        <div className="space-y-4" id="field-custom-domain">
           <CustomDomainSection
             domain={(business as { custom_domain?: string | null }).custom_domain ?? null}
             status={(business as { custom_domain_status?: string | null }).custom_domain_status ?? null}
@@ -266,6 +266,9 @@ export default async function SettingsPage() {
         serviceCount={serviceCount}
         hasGeneratedPage={!!business.seo_generated_at}
         publicReportCount={publicReportCount}
+        hasCustomDomain={
+          (business as { custom_domain_status?: string | null }).custom_domain_status === 'active'
+        }
       />
     </div>
   )

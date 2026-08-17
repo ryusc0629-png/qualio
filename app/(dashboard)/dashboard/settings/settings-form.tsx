@@ -87,6 +87,8 @@ interface Props {
   serviceCount: number
   hasGeneratedPage: boolean
   publicReportCount: number
+  /** 자체 도메인이 실제로 연결돼 홈페이지가 그 주소로 열리는 상태 */
+  hasCustomDomain: boolean
 }
 
 // 후기 감사 선물 = '다음 이용 할인'만 제공한다. (2026-08-16 재설계)
@@ -96,7 +98,7 @@ interface Props {
 // "리뷰를 쓴 대가"가 아니라 재방문 유도라서 네이버의 대가성 리뷰 금지에도 걸리지 않는다.
 //
 // ⛔ 별점 조건(4점 이상만 지급)은 절대 넣지 말 것 — 리뷰 조작으로 플레이스 제재 대상.
-export function SettingsForm({ business, ownerFullName, serviceCount, hasGeneratedPage, publicReportCount }: Props) {
+export function SettingsForm({ business, ownerFullName, serviceCount, hasGeneratedPage, publicReportCount, hasCustomDomain }: Props) {
   // 계정 주인 이름(profiles.full_name). 아래 ownerName(홈페이지에 나가는 대표명)과 다른 값이다.
   const [accountName, setAccountName] = useState(ownerFullName)
   // 할인 세부 타입 (discount_amount | discount_rate) 초기값
@@ -205,6 +207,9 @@ export function SettingsForm({ business, ownerFullName, serviceCount, hasGenerat
     { key: 'certifications', label: '자격증·보유장비', hint: '전문성을 증명하는 항목이에요', done: certifications.filter((c) => c.trim()).length > 0, essential: false },
     { key: 'portfolio', label: '시공 사례 사진 (비포·애프터)', hint: '청소는 사진이 가장 강력해요', done: publicReportCount > 0 || portfolio.some((p) => p.before?.trim() && p.after?.trim()), essential: false },
     { key: 'youtube', label: '시공 영상 (유튜브)', hint: '말보다 영상이 확실해요', done: !!business.youtube_url?.trim(), essential: false },
+    // 자체 도메인은 온보딩에서 밀지 않는다 — 가입 직후에 돈 쓰는 결정을 요구하면 이탈한다.
+    // 대신 여기에 한 줄로 계속 남겨 두고, 어려우면 대신 해주는 버튼으로 잇는다.
+    { key: 'custom_domain', label: '내 인터넷 주소 연결', hint: '검색 점수가 우리 업체 이름으로 쌓여요 — 어려우면 대신 해드려요', done: hasCustomDomain, essential: false },
   ]
 
   // 해당 칸으로 데려가기 — 같은 페이지면 스크롤+포커스+테두리 강조, 다른 페이지는 이동.
@@ -232,6 +237,7 @@ export function SettingsForm({ business, ownerFullName, serviceCount, hasGenerat
       certifications: 'field-credentials',
       portfolio: 'field-portfolio',
       youtube: 'field-youtube',
+      custom_domain: 'field-custom-domain',
     }
     const el = document.getElementById(idMap[key])
     if (!el) return
