@@ -78,7 +78,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
   const [workersResult, bookingsResult, servicesResult] = await Promise.all([
     db
       .from('workers' as never)
-      .select('id, name, type, color, phone')
+      .select('id, name, type, color, phone, contract_signed_at')
       .eq('business_id' as never, businessId)
       .eq('is_active' as never, true)
       .order('created_at' as never),
@@ -131,6 +131,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
 
   const workers = (workersResult.data ?? []) as Array<{
     id: string; name: string; type: string; color: string; phone: string | null
+    contract_signed_at: string | null
   }>
 
   type RawBooking = {

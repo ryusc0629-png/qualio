@@ -17,7 +17,8 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { addDays, format, getDaysInMonth } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2, Smartphone, CalendarDays } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2, Smartphone, CalendarDays, FileText } from 'lucide-react'
+import Link from 'next/link'
 import { formatPhone } from '@/lib/format/phone'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
@@ -42,6 +43,7 @@ interface Worker {
   type: string
   color: string
   phone: string | null
+  contract_signed_at?: string | null  // 도급사 표준 계약 체결 여부
 }
 
 interface Booking {
@@ -498,9 +500,15 @@ export function ScheduleBoard({
   })
 
   // rows: 미배정 + 각 worker
-  const rows: Array<{ id: string | null; label: string; color: string; phone?: string | null; type?: string }> = [
+  const rows: Array<{
+    id: string | null; label: string; color: string
+    phone?: string | null; type?: string; contractSigned?: boolean
+  }> = [
     { id: null, label: '미배정', color: '#94a3b8' },
-    ...workers.map((w) => ({ id: w.id, label: w.name, color: w.color, phone: w.phone, type: w.type })),
+    ...workers.map((w) => ({
+      id: w.id, label: w.name, color: w.color, phone: w.phone, type: w.type,
+      contractSigned: !!w.contract_signed_at,
+    })),
   ]
 
   // 다중 배정: 해당 직원이 workerIds에 포함된 예약을 모두 반환
@@ -747,6 +755,14 @@ export function ScheduleBoard({
               </button>
             ))}
           </div>
+          {workers.some((w) => w.type === 'contractor') && (
+            <Button asChild variant="outline" size="sm" className="gap-1.5 h-8 text-xs">
+              <Link href="/dashboard/contractors">
+                <FileText className="h-3.5 w-3.5" />
+                도급사 계약
+              </Link>
+            </Button>
+          )}
           <AddWorkerDialog />
         </div>
       </div>
@@ -819,6 +835,20 @@ export function ScheduleBoard({
                           <p className="text-[10px] text-muted-foreground">
                             {row.type === 'employee' ? '직원' : '도급사'}
                           </p>
+                        )}
+                        {/* 도급사는 표준 계약 여부를 한눈에 — 안 쓴 곳이 눈에 띄어야 챙기게 된다 */}
+                        {row.type === 'contractor' && (
+                          <Link
+                            href={`/dashboard/contractors/${row.id}`}
+                            className={[
+                              'inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded-full mt-0.5 transition-colors',
+                              row.contractSigned
+                                ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                                : 'bg-amber-100 text-amber-800 hover:bg-amber-200',
+                            ].join(' ')}
+                          >
+                            {row.contractSigned ? '계약 완료' : '계약 필요'}
+                          </Link>
                         )}
                         {row.phone && (
                           <p className="text-[10px] text-muted-foreground flex items-center gap-0.5">
