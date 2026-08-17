@@ -1,256 +1,104 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { useState } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { createServiceItemAction } from '@/lib/actions/services'
-import { Plus, X, Zap, ListPlus, Trash2 } from 'lucide-react'
-import { getApplianceTypes, getAppliancePreset } from '@/lib/utils'
-import { VolumeTierEditor, toVolumeTiers, type VolumeTierRow } from '@/components/dashboard/volume-tier-editor'
+import { createServiceItemAction, createServiceItemsAction } from '@/lib/actions/services'
+import { Plus, X, ChevronDown } from 'lucide-react'
 
-// 구분 설정에서 빠른 선택 가능한 자주 쓰는 구분 프리셋
-const VARIANT_PRESETS = ['신축', '구축', '아파트', '빌라', '오피스텔', '상가']
+// 자주 쓰는 서비스 — 골라서 한 번에 담는다. 가격은 나중에 넣어도 되므로 이름·단위만 정해 둔다.
+// unit: 고객에게 무엇을 물어볼지와 같은 뜻 ('평당'=평수, '개'=개수, '상담'=안 물어봄)
+const PRESETS: { name: string; category: string; unit: AskValue }[] = [
+  { name: '사무실 정기청소', category: '사무실',   unit: '평당' },
+  { name: '상가 정기청소',   category: '상업 공간', unit: '평당' },
+  { name: '입주 청소',       category: '주거 공간', unit: '평당' },
+  { name: '이사 청소',       category: '주거 공간', unit: '평당' },
+  { name: '준공 청소',       category: '특수/시공', unit: '평당' },
+  { name: '거주 청소',       category: '주거 공간', unit: '평당' },
+  { name: '에어컨 청소',     category: '가전 케어', unit: '개' },
+  { name: '유리창 청소',     category: '기타',     unit: '상담' },
+  { name: '바닥 왁스',       category: '기타',     unit: '평당' },
+  { name: '특수 청소',       category: '특수/시공', unit: '상담' },
+]
 
-function VariantSelector({
-  variants, onChange, onAdd, newInput, onNewInputChange, onRemove,
-}: {
-  variants: string[]
-  onChange: (v: string[]) => void
-  onAdd: () => void
-  newInput: string
-  onNewInputChange: (v: string) => void
-  onRemove: (v: string) => void
-}) {
-  const toggle = (preset: string) => {
-    if (variants.includes(preset)) {
-      onChange(variants.filter((v) => v !== preset))
-    } else {
-      onChange([...variants, preset])
-    }
-  }
+// 고객에게 무엇을 물어볼지 — 이 값이 곧 단위가 된다
+type AskValue = '평당' | '개' | '상담'
 
-  return (
-    <div className="space-y-2">
-      <p className="text-xs font-medium text-muted-foreground">구분 설정 (선택) — 신축/구축처럼 단가가 다를 때 사용</p>
-      {/* 프리셋 칩 */}
-      <div className="flex flex-wrap gap-1.5">
-        {VARIANT_PRESETS.map((preset) => {
-          const selected = variants.includes(preset)
-          return (
-            <button
-              key={preset}
-              type="button"
-              onClick={() => toggle(preset)}
-              className={[
-                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
-                selected
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:text-foreground',
-              ].join(' ')}
-            >
-              {selected && <span className="mr-1">✓</span>}{preset}
-            </button>
-          )
-        })}
-      </div>
-      {/* 선택된 구분 + 직접 입력 */}
-      <div className="flex flex-wrap gap-1.5 items-center">
-        {variants.filter((v) => !VARIANT_PRESETS.includes(v)).map((v) => (
-          <span key={v} className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2.5 py-1 font-medium">
-            {v}
-            <button type="button" onClick={() => onRemove(v)} className="hover:text-destructive transition-colors">
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
-        <div className="flex items-center gap-1">
-          <Input
-            placeholder="직접 입력"
-            value={newInput}
-            onChange={(e) => onNewInputChange(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onAdd() } }}
-            className="h-7 text-xs w-28"
-          />
-          {newInput.trim() && (
-            // onMouseDown preventDefault: 입력창 포커스를 떼지 않아 맥북에서 첫 클릭이 삼켜지는 문제 방지
-            <Button type="button" variant="outline" size="sm" onMouseDown={(e) => e.preventDefault()} onClick={onAdd} className="h-7 text-xs px-2">추가</Button>
-          )}
-        </div>
-      </div>
-      {variants.length > 0 && (
-        <p className="text-[11px] text-muted-foreground">선택된 구분: {variants.join(', ')}</p>
-      )}
-    </div>
-  )
-}
-
-// 에어컨·냉장고 등 유형별 단가 프리셋은 lib/utils.ts(APPLIANCE_PRESETS)에서 관리
-
-// 표준 카테고리 목록 (데이터 일관성을 위해 고정값 사용)
-const CATEGORIES = [
-  '주거 공간',   // 이사/입주/거주 청소
-  '가전 케어',   // 에어컨, 세탁기, 냉장고 등
-  '특수/시공',   // 줄눈, 나노코팅, 방역 등
-  '상업 공간',   // 카페, 식당, 매장
-  '사무실',      // 오피스 청소
-  '기타',
-] as const
-
-// 단위 옵션 (한스클린 등 업계 표준 기준)
-const UNITS = [
-  { value: '정액', label: '정액 (1회 고정가)' },
-  { value: '평당', label: '평당 가격' },
-  { value: '개',   label: '대·개당 가격' },
-  { value: '시간', label: '시간당 가격' },
-  { value: '상담', label: '현장 견적 (방문 후 산출)' },
-] as const
-
-type UnitValue = typeof UNITS[number]['value']
-
-// 업계 표준 프리셋 서비스 목록
-// 에어컨은 유형별 분리 없이 하나로 통합 — 고객이 견적 폼에서 유형+대수 직접 선택
-const PRESETS = [
-  { name: '이사 청소',   category: '주거 공간', unit: '평당', base_price: 15000 },
-  { name: '입주 청소',   category: '주거 공간', unit: '평당', base_price: 18000 },
-  { name: '거주 청소',   category: '주거 공간', unit: '정액', base_price: 80000 },
-  { name: '에어컨 청소', category: '가전 케어', unit: '개',   base_price: 80000 },
-  { name: '냉장고 청소', category: '가전 케어', unit: '개',   base_price: 70000 },
-  { name: '세탁기 청소', category: '가전 케어', unit: '개',   base_price: 60000 },
-  { name: '줄눈 시공',   category: '특수/시공', unit: '평당', base_price: 30000 },
-] as const
-
-const schema = z.object({
-  name: z.string().min(1, '서비스명을 입력해주세요'),
-  category: z.string().optional(),
-  base_price: z.string().min(1, '금액을 입력해주세요'),
-  unit: z.string().min(1, '단위를 선택해주세요'),
-})
-
-type FormInput = z.infer<typeof schema>
+const ASK_OPTIONS: { value: AskValue; title: string; desc: string }[] = [
+  { value: '평당', title: '평수를 물어봐요', desc: '사무실·상가·집처럼 넓이로 정해지는 청소' },
+  { value: '개',   title: '개수를 물어봐요', desc: '에어컨·창문처럼 개수로 정해지는 청소' },
+  { value: '상담', title: '안 물어봐요',     desc: '봐야 아는 청소. 연락처만 받아요' },
+]
 
 export function AddServiceForm() {
   const [open, setOpen] = useState(false)
-  // 에어컨 유형별 단가 상태 (ID → 원 단위 문자열)
-  const [acPrices, setAcPrices] = useState<Partial<Record<string, string>>>({})
-  // 항목별 단가 상태
-  const [showUnitPrices, setShowUnitPrices] = useState(false)
-  // 규모 구간별 단가 (예: 100평부터 평당 22,000원)
-  const [showVolumeTiers, setShowVolumeTiers] = useState(false)
-  const [volumeRows, setVolumeRows] = useState<VolumeTierRow[]>([])
-  const [unitVariants, setUnitVariants] = useState<string[]>([])
-  const [newVariantInput, setNewVariantInput] = useState('')
-  // variants가 있으면: { variantName: [{name, price}] }, 없으면: [{name, price}] 형태를 variants 키 '' 로 통일
-  const [unitItemsByVariant, setUnitItemsByVariant] = useState<Record<string, Array<{ name: string; price: string }>>>({
-    '': [{ name: '', price: '' }],
+  const [picked, setPicked] = useState<string[]>([])
+  const [name, setName] = useState('')
+  const [ask, setAsk] = useState<AskValue>('평당')
+  const [showPrice, setShowPrice] = useState(false)
+  const [price, setPrice] = useState('')
+
+  const closeAndReset = () => {
+    setPicked([])
+    setName('')
+    setAsk('평당')
+    setShowPrice(false)
+    setPrice('')
+    setOpen(false)
+  }
+
+  const bulk = useAction(createServiceItemsAction, {
+    onSuccess: ({ data }) => {
+      const added = data?.added ?? 0
+      toast.success(added > 0 ? `서비스 ${added}개를 추가했어요!` : '이미 등록된 서비스예요')
+      closeAndReset()
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 눌러주세요'),
   })
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<FormInput>({
-    resolver: zodResolver(schema),
-    defaultValues: { unit: '정액', base_price: '0' },
-  })
-
-  const { execute, isPending } = useAction(createServiceItemAction, {
+  const single = useAction(createServiceItemAction, {
     onSuccess: () => {
       toast.success('서비스가 추가됐어요!')
-      reset({ unit: '정액', base_price: '0' })
-      setAcPrices({})
-      setShowUnitPrices(false)
-      setUnitVariants([])
-      setNewVariantInput('')
-      setUnitItemsByVariant({ '': [{ name: '', price: '' }] })
-      setOpen(false)
+      closeAndReset()
     },
-    onError: ({ error }) => {
-      toast.error(error.serverError ?? '서비스 추가에 실패했습니다')
-    },
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 눌러주세요'),
   })
 
-  // 프리셋 클릭 시 모든 필드 자동 채우기 (가전 유형별 단가는 아래 useEffect가 자동 채움)
-  const applyPreset = (preset: typeof PRESETS[number]) => {
-    setValue('name', preset.name)
-    setValue('category', preset.category)
-    setValue('unit', preset.unit as UnitValue)
-    setValue('base_price', String(preset.base_price))
-    setShowUnitPrices(false)
-    setUnitVariants([])
-    setNewVariantInput('')
-    setUnitItemsByVariant({ '': [{ name: '', price: '' }] })
+  const isPending = bulk.isPending || single.isPending
+
+  const togglePreset = (presetName: string) =>
+    setPicked((prev) => (prev.includes(presetName) ? prev.filter((n) => n !== presetName) : [...prev, presetName]))
+
+  const addPicked = () => {
+    const items = PRESETS.filter((p) => picked.includes(p.name)).map((p) => ({
+      name: p.name,
+      category: p.category,
+      unit: p.unit,
+      base_price: 0, // 가격은 나중에 — 그 전까지는 문의가 '상담'으로 접수된다
+    }))
+    if (items.length === 0) return
+    bulk.execute({ items })
   }
 
-  // 구분(variant) 추가/삭제/토글
-  const handleVariantsChange = (next: string[]) => {
-    // 새로 추가된 variant에 빈 항목 행 초기화
-    setUnitVariants(next)
-    setUnitItemsByVariant((prev) => {
-      const updated = { ...prev }
-      next.forEach((v) => { if (!updated[v]) updated[v] = [{ name: '', price: '' }] })
-      return updated
+  const addOne = () => {
+    const trimmed = name.trim()
+    if (!trimmed) {
+      toast.error('서비스 이름을 적어주세요 (예: 사무실 정기청소)')
+      return
+    }
+    single.execute({
+      name: trimmed,
+      unit: ask,
+      base_price: showPrice ? Number(price.replace(/[^0-9]/g, '')) || 0 : 0,
     })
   }
-  const addVariant = () => {
-    const v = newVariantInput.trim()
-    if (!v || unitVariants.includes(v)) return
-    handleVariantsChange([...unitVariants, v])
-    setNewVariantInput('')
-  }
-  const removeVariant = (v: string) => {
-    handleVariantsChange(unitVariants.filter((x) => x !== v))
-    setUnitItemsByVariant((prev) => { const next = { ...prev }; delete next[v]; return next })
-  }
-
-  // 항목 추가/수정/삭제 헬퍼 (variant 키 기반)
-  const updateUnitItem = (variantKey: string, idx: number, field: 'name' | 'price', value: string) => {
-    setUnitItemsByVariant((prev) => ({
-      ...prev,
-      [variantKey]: (prev[variantKey] ?? []).map((item, i) => i === idx ? { ...item, [field]: value } : item),
-    }))
-  }
-  const addUnitItem = (variantKey: string) => {
-    setUnitItemsByVariant((prev) => ({
-      ...prev,
-      [variantKey]: [...(prev[variantKey] ?? []), { name: '', price: '' }],
-    }))
-  }
-  const removeUnitItem = (variantKey: string, idx: number) => {
-    setUnitItemsByVariant((prev) => ({
-      ...prev,
-      [variantKey]: (prev[variantKey] ?? []).filter((_, i) => i !== idx),
-    }))
-  }
-
-  const currentUnit = watch('unit')
-  const currentName = watch('name') ?? ''
-  // 가전(에어컨·냉장고 등) 유형별 단가 프리셋 감지
-  const applianceTypes = getApplianceTypes(currentName)
-  const applianceKey   = getAppliancePreset(currentName)?.key ?? null
-  const isAppliance    = applianceTypes != null
-  const isUnit         = !isAppliance && showUnitPrices
-  // 규모 구간 단가는 규모를 곱하는 단위(평당·개수)에서만 의미가 있다
-  const supportsVolumeTiers = currentUnit === '평당' || currentUnit === '개'
-
-  // 가전이 감지되면 유형별 기본 단가를 제안값으로 자동 채움 (프리셋이 바뀔 때만 → 사용자가 고친 값은 유지)
-  const [filledApplianceKey, setFilledApplianceKey] = useState<string | null>(null)
-  useEffect(() => {
-    if (applianceKey && applianceKey !== filledApplianceKey) {
-      const defaults: Partial<Record<string, string>> = {}
-      applianceTypes!.forEach((t) => { defaults[t.id] = String(t.defaultPrice) })
-      setAcPrices(defaults)
-      setFilledApplianceKey(applianceKey)
-    } else if (!applianceKey && filledApplianceKey) {
-      setAcPrices({})
-      setFilledApplianceKey(null)
-    }
-  }, [applianceKey, applianceTypes, filledApplianceKey])
 
   if (!open) {
     return (
-      <Button onClick={() => setOpen(true)} size="sm">
+      <Button onClick={() => setOpen(true)} className="w-full h-12">
         <Plus className="h-4 w-4 mr-1" />
         서비스 추가
       </Button>
@@ -258,298 +106,116 @@ export function AddServiceForm() {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit((data) => {
-        let acTypePrices: Record<string, number> | undefined
-        let unitPrices: Array<{ name: string; price: number }> | undefined
-        // 현장 견적(상담)은 미리 가격이 없으므로 0으로 저장
-        let basePrice = data.unit === '상담' ? 0 : Number(data.base_price)
-
-        if (isAppliance) {
-          // 가전(에어컨·냉장고 등): 유형별 단가에서 최저 단가를 base_price로 설정
-          const parsed: Record<string, number> = {}
-          let minPrice = Infinity
-          for (const [id, val] of Object.entries(acPrices)) {
-            const n = Number(val)
-            if (n > 0) {
-              parsed[id] = n
-              if (n < minPrice) minPrice = n
-            }
-          }
-          if (Object.keys(parsed).length > 0) {
-            acTypePrices = parsed
-            basePrice = minPrice === Infinity ? basePrice : minPrice
-          }
-        } else if (isUnit) {
-          // 항목별 단가: variant 구분 포함하여 변환
-          const hasVariants = unitVariants.length > 0
-          const allItems: Array<{ name: string; price: number; variant?: string }> = []
-          const keys = hasVariants ? unitVariants : ['']
-          for (const key of keys) {
-            const rows = (unitItemsByVariant[key] ?? []).filter((r) => r.name.trim() && Number(r.price) > 0)
-            for (const r of rows) {
-              allItems.push(hasVariants
-                ? { name: r.name.trim(), price: Number(r.price), variant: key }
-                : { name: r.name.trim(), price: Number(r.price) }
-              )
-            }
-          }
-          if (allItems.length > 0) {
-            unitPrices = allItems
-            basePrice = Math.min(...allItems.map((i) => i.price))
-          }
-        }
-
-        execute({
-          ...data,
-          base_price:    basePrice,
-          ac_type_prices: acTypePrices,
-          unit_prices:    unitPrices,
-          unit_variants:  unitVariants.length > 0 ? unitVariants : undefined,
-          volume_tiers:   showVolumeTiers ? toVolumeTiers(volumeRows) : undefined,
-        })
-      })}
-      className="rounded-lg border bg-card p-4 space-y-4"
-    >
+    <div className="rounded-xl border bg-card p-4 space-y-5 w-full">
       <div className="flex items-center justify-between">
-        <h3 className="font-medium text-sm">새 서비스 추가</h3>
-        <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
+        <h3 className="font-semibold text-sm">서비스 추가</h3>
+        <Button type="button" variant="ghost" size="sm" onClick={closeAndReset}>
           <X className="h-4 w-4" />
         </Button>
       </div>
 
-      {/* 프리셋 버튼 */}
-      <div className="space-y-2">
-        <p className="text-xs text-muted-foreground">자주 쓰는 서비스 바로 추가</p>
+      {/* ① 자주 쓰는 서비스 — 눌러서 고르고 한 번에 추가 */}
+      <section className="space-y-2">
+        <Label className="text-sm">자주 쓰는 서비스에서 고르기</Label>
         <div className="flex flex-wrap gap-1.5">
-          {PRESETS.map((preset) => (
-            <button
-              key={preset.name}
-              type="button"
-              onClick={() => applyPreset(preset)}
-              className="rounded-full border px-3 py-1 text-xs hover:bg-accent transition-colors"
-            >
-              {preset.name}
-            </button>
-          ))}
+          {PRESETS.map((p) => {
+            const on = picked.includes(p.name)
+            return (
+              <button
+                key={p.name}
+                type="button"
+                onClick={() => togglePreset(p.name)}
+                className={`rounded-full border px-3 py-2 text-xs font-medium transition-colors ${
+                  on
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                }`}
+              >
+                {on && <span className="mr-1">✓</span>}
+                {p.name}
+              </button>
+            )
+          })}
         </div>
-      </div>
+        <Button
+          type="button"
+          className="w-full h-12"
+          disabled={picked.length === 0 || isPending}
+          onClick={addPicked}
+        >
+          {isPending ? '추가 중...' : picked.length > 0 ? `고른 ${picked.length}개 추가하기` : '위에서 골라주세요'}
+        </Button>
+      </section>
 
-      <div className="border-t pt-3 space-y-3">
-        {/* 서비스명 */}
+      {/* ② 직접 적기 — 이름 + 무엇을 물어볼지 */}
+      <section className="space-y-3 border-t pt-4">
+        <Label className="text-sm">직접 적기</Label>
+
         <div className="space-y-1">
-          <Label htmlFor="name">서비스명 *</Label>
-          <Input id="name" placeholder="예) 가정집 청소" {...register('name')} />
-          {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+          <Label htmlFor="svc-name" className="text-xs text-muted-foreground">서비스 이름 (필수)</Label>
+          <Input
+            id="svc-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="예: 사무실 정기청소"
+            className="h-12"
+          />
         </div>
 
-        {/* 가전(에어컨·냉장고 등) 안내 + 유형별 단가 입력 */}
-        {isAppliance && applianceTypes && (
-          <div className="space-y-3">
-            <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-1">
-              <div className="flex items-center gap-1.5">
-                <Zap className="h-3.5 w-3.5 text-primary shrink-0" />
-                <p className="text-xs font-bold text-primary">유형별 단가를 설정하면 자동으로 계산됩니다</p>
-              </div>
-              <p className="text-xs text-primary/80 leading-relaxed">
-                고객이 견적 폼에서 유형·대수를 선택하면, 아래 단가를 기준으로 자동 합산됩니다.
-              </p>
-            </div>
-
-            {/* 유형별 단가 입력 그리드 */}
-            <div className="space-y-2">
-              {applianceTypes.map((t) => (
-                <div key={t.id} className="flex items-center gap-2">
-                  <div className="w-36 shrink-0">
-                    <p className="text-xs font-semibold text-foreground">{t.label}</p>
-                    {t.sub && <p className="text-[11px] text-muted-foreground">{t.sub}</p>}
-                  </div>
-                  <div className="flex-1 relative">
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder={t.defaultPrice.toLocaleString('ko-KR')}
-                      value={acPrices[t.id] ? Number(acPrices[t.id]).toLocaleString('ko-KR') : ''}
-                      onChange={(e) => setAcPrices((prev) => ({ ...prev, [t.id]: e.target.value.replace(/[^0-9]/g, '') }))}
-                      className="h-9 text-sm pr-8"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="text-[11px] text-muted-foreground">단가를 비워두면 미제공 유형으로 처리돼요</p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 gap-3">
-          {/* 카테고리 */}
-          <div className="space-y-1">
-            <Label htmlFor="category">카테고리</Label>
-            <select
-              id="category"
-              {...register('category')}
-              className="w-full h-9 rounded-md border bg-background px-3 text-sm"
-            >
-              <option value="">선택 안 함</option>
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 단위 */}
-          <div className="space-y-1">
-            <Label htmlFor="unit">단위 *</Label>
-            <select
-              id="unit"
-              {...register('unit')}
-              className="w-full h-9 rounded-md border bg-background px-3 text-sm"
-            >
-              {UNITS.map((u) => (
-                <option key={u.value} value={u.value}>{u.label}</option>
-              ))}
-            </select>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">고객에게 무엇을 물어볼까요?</Label>
+          <div className="grid gap-2">
+            {ASK_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => setAsk(o.value)}
+                className={`rounded-lg border p-3 text-left transition-colors ${
+                  ask === o.value ? 'border-primary bg-primary/5' : 'hover:border-primary/40'
+                }`}
+              >
+                <p className="text-sm font-semibold">{o.title}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">{o.desc}</p>
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* 현장 견적(상담) — 가격 대신 안내만 */}
-        {currentUnit === '상담' && (
-          <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-            현장 방문 후 견적이라 미리 가격을 넣지 않아도 돼요. 고객이 이 서비스를 고르면
-            연락처를 받아 &lsquo;상담 요청&rsquo;으로 접수되고, 사장님께 알림이 갑니다.
-          </p>
-        )}
-
-        {/* 기본가 — 가전 유형별/항목별 단가/현장견적 모드에서는 숨김 */}
-        {!isAppliance && !isUnit && currentUnit !== '상담' && (
-          <div className="space-y-1">
-            <Label htmlFor="base_price">
-              기본 가격 (원) *
-              <span className="ml-1 text-xs text-muted-foreground font-normal">
-                {currentUnit === '평당' && '— 평당 금액'}
-                {currentUnit === '개' && '— 개당 금액'}
-                {currentUnit === '시간' && '— 시간당 금액'}
-                {currentUnit === '정액' && '— 1회 고정 금액'}
-              </span>
-            </Label>
-            <Input
-              id="base_price"
-              type="number"
-              placeholder={
-                currentUnit === '평당' ? '예) 15000' :
-                currentUnit === '개' ? '예) 80000' :
-                currentUnit === '시간' ? '예) 30000' :
-                '예) 80000'
-              }
-              {...register('base_price')}
-            />
-            {errors.base_price && (
-              <p className="text-xs text-destructive">{errors.base_price.message}</p>
-            )}
-          </div>
-        )}
-
-        {/* 항목별 단가 토글 (가전 유형별 단가가 아닐 때만 표시) */}
-        {!isAppliance && (
+        {/* 가격은 선택 — 접어둔다 */}
+        <div className="rounded-lg border border-dashed">
           <button
             type="button"
-            onClick={() => setShowUnitPrices((v) => !v)}
-            className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors ${
-              showUnitPrices
-                ? 'border-primary/40 bg-primary/5 text-primary'
-                : 'border-dashed text-muted-foreground hover:text-foreground hover:border-border'
-            }`}
+            onClick={() => setShowPrice((v) => !v)}
+            className="w-full flex items-center justify-between px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground"
           >
-            <ListPlus className="h-3.5 w-3.5 shrink-0" />
-            {showUnitPrices ? '항목별 단가 설정 중 (클릭하면 해제)' : '항목별 단가 설정하기 (예: 화장실 1곳 얼마, 주방 얼마)'}
+            <span>가격도 지금 정할래요 (안 정해도 돼요)</span>
+            <ChevronDown className={`h-4 w-4 transition-transform ${showPrice ? 'rotate-180' : ''}`} />
           </button>
-        )}
-
-        {/* 항목별 단가 입력 */}
-        {isUnit && (
-          <div className="space-y-3">
-            <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-1">
-              <div className="flex items-center gap-1.5">
-                <ListPlus className="h-3.5 w-3.5 text-primary shrink-0" />
-                <p className="text-xs font-bold text-primary">항목별 단가를 설정하면 자동으로 계산됩니다</p>
-              </div>
-              <p className="text-xs text-primary/80 leading-relaxed">
-                고객이 견적 폼에서 항목·수량을 선택하면, 아래 단가를 기준으로 자동 합산됩니다.
+          {showPrice && (
+            <div className="px-3 pb-3 space-y-1">
+              <Input
+                value={price}
+                onChange={(e) => setPrice(e.target.value.replace(/[^0-9]/g, ''))}
+                inputMode="numeric"
+                placeholder={ask === '개' ? '예: 80000 (1대 금액)' : ask === '평당' ? '예: 15000 (1평 금액)' : '예: 100000'}
+                className="h-12"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                금액을 넣으면 문의가 들어올 때 예상 금액이 함께 계산돼요. 고객 화면에는 안 보여요.
               </p>
             </div>
+          )}
+        </div>
 
-            {/* 구분(신축/구축 등) 설정 */}
-            <VariantSelector variants={unitVariants} onChange={setUnitVariants} onAdd={addVariant} newInput={newVariantInput} onNewInputChange={setNewVariantInput} onRemove={removeVariant} />
-
-            {/* 구분이 없으면 단일 항목 목록, 있으면 구분별 항목 목록 */}
-            {(unitVariants.length > 0 ? unitVariants : ['']).map((variantKey) => {
-              const items = unitItemsByVariant[variantKey] ?? []
-              return (
-                <div key={variantKey} className="space-y-2">
-                  {variantKey && (
-                    <p className="text-xs font-semibold text-foreground border-b pb-1">{variantKey}</p>
-                  )}
-                  {items.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <Input
-                        placeholder="항목명 (예: 화장실)"
-                        value={item.name}
-                        onChange={(e) => updateUnitItem(variantKey, idx, 'name', e.target.value)}
-                        className="h-9 text-sm flex-1"
-                      />
-                      <div className="relative w-36 shrink-0">
-                        <Input
-                          type="text"
-                          inputMode="numeric"
-                          placeholder="50,000"
-                          value={item.price ? Number(item.price).toLocaleString('ko-KR') : ''}
-                          onChange={(e) => updateUnitItem(variantKey, idx, 'price', e.target.value.replace(/[^0-9]/g, ''))}
-                          className="h-9 text-sm pr-6"
-                        />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
-                      </div>
-                      {items.length > 1 && (
-                        <button type="button" onClick={() => removeUnitItem(variantKey, idx)} className="text-muted-foreground hover:text-destructive transition-colors">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addUnitItem(variantKey)}
-                    className="flex items-center gap-1.5 text-xs text-primary hover:underline"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> 항목 추가
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* 규모 구간별 단가 — 평당·개수처럼 규모를 곱하는 단위에서만 의미가 있다 */}
-        {!isAppliance && !isUnit && supportsVolumeTiers && (
-          <VolumeTierEditor
-            unit={currentUnit}
-            basePrice={Number(watch('base_price')) || 0}
-            enabled={showVolumeTiers}
-            onEnabledChange={setShowVolumeTiers}
-            rows={volumeRows}
-            onRowsChange={setVolumeRows}
-          />
-        )}
-      </div>
-
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
-          취소
+        <Button type="button" variant="outline" className="w-full h-12" disabled={isPending} onClick={addOne}>
+          {isPending ? '추가 중...' : '이 서비스 추가하기'}
         </Button>
-        <Button type="submit" size="sm" disabled={isPending}>
-          {isPending ? '추가 중...' : '추가'}
-        </Button>
-      </div>
-    </form>
+      </section>
+
+      <p className="text-[11px] text-muted-foreground leading-relaxed border-t pt-3">
+        가격·플랜은 나중에 목록에서 <span className="font-medium text-foreground">수정</span>을 눌러 언제든 넣을 수 있어요.
+        가격을 안 넣은 서비스는 문의가 들어오면 금액 없이 <span className="font-medium text-foreground">상담 요청</span>으로 접수돼요.
+      </p>
+    </div>
   )
 }

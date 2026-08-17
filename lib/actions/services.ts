@@ -173,6 +173,69 @@ export const createServiceItemAction = action
     return { success: true }
   })
 
+// 여러 서비스를 한 번에 생성 — 자주 쓰는 서비스를 골라 담고 한 번에 등록하는 용도.
+// 가격은 나중에 넣어도 되므로 이름·단위만으로 만들어진다.
+const createServiceItemsSchema = z.object({
+  items: z.array(z.object({
+    name: z.string().min(1),
+    category: z.string().optional(),
+    base_price: z.coerce.number().min(0),
+    unit: z.string().refine(
+      (val): val is typeof VALID_UNITS[number] => (VALID_UNITS as readonly string[]).includes(val),
+      '올바른 단위를 선택해주세요'
+    ),
+  })).min(1, '추가할 서비스를 골라주세요').max(12),
+})
+
+export const createServiceItemsAction = action
+  .schema(createServiceItemsSchema)
+  .action(async ({ parsedInput }) => {
+    const authClient = await createClient()
+    const { data: { user } } = await authClient.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const db = createServiceClient()
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    // 이미 있는 이름은 건너뛴다 — 같은 서비스가 두 번 뜨면 고객 문의폼이 지저분해진다
+    const { data: existing } = await db
+      .from('service_items')
+      .select('name')
+      .eq('business_id', profile.business_id)
+      .is('deleted_at', null)
+
+    const taken = new Set((existing ?? []).map((s) => s.name.trim()))
+    const rows = parsedInput.items
+      .filter((i) => !taken.has(i.name.trim()))
+      .map((i) => ({
+        business_id: profile.business_id,
+        name:        i.name.trim(),
+        category:    i.category ?? null,
+        base_price:  i.base_price,
+        unit:        i.unit,
+      }))
+
+    if (rows.length === 0) return { success: true, added: 0 }
+
+    const { error } = await db.from('service_items').insert(rows as never)
+    if (error) {
+      console.error('[Services] 여러 서비스 추가 실패:', error)
+      throw new Error('[APP] 서비스를 추가하지 못했어요. 다시 눌러주세요')
+    }
+
+    await invalidateBundleCache(db, profile.business_id)
+    await markSeoStale(db, profile.business_id)
+
+    revalidatePath('/dashboard/services')
+    return { success: true, added: rows.length }
+  })
+
 // 서비스 항목 수정 액션
 export const updateServiceItemAction = action
   .schema(updateServiceItemSchema)

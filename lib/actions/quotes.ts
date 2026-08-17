@@ -911,6 +911,9 @@ const consultationRequestSchema = z.object({
     .transform((v) => v.replace(/[^0-9]/g, ''))
     .refine((v) => phoneRegex.test(v), '올바른 전화번호 형식이 아닙니다'),
   company_name:   z.string().max(100).optional(), // B2B 서비스에서 고객이 입력한 회사명
+  // 규모(평수·개수) — 가격을 안 넣은 서비스도 상담으로 접수되므로, 사장님이 다시 전화로
+  // 묻지 않게 고객이 적은 규모를 그대로 들고 온다.
+  space_size:     z.coerce.number().int().min(1).max(100000).optional(),
   notes:          z.string().max(500).optional(),
   // 유입 채널(?ch=) — 제안서 QR·전단지 QR 등 오프라인 영업 유입도 리드에 채널로 남긴다
   channel:        z.string().max(50).optional(),
@@ -924,7 +927,7 @@ export const createConsultationRequestAction = publicAction
 
     const { data: service } = await db
       .from('service_items')
-      .select('name')
+      .select('name, unit')
       .eq('id', parsedInput.service_id)
       .maybeSingle()
     const serviceName = service?.name ?? '상담 요청'
@@ -933,7 +936,11 @@ export const createConsultationRequestAction = publicAction
     const name = parsedInput.customer_name.trim()
     const companyInput = parsedInput.company_name?.trim()
     const noteText = parsedInput.notes?.trim()
-    const notes = `[현장견적 상담요청] ${serviceName}${noteText ? ` · ${noteText}` : ''}`
+    // 규모 단위는 서비스 단위를 따른다(개수로 받는 서비스는 '개', 그 외는 '평')
+    const sizeText = parsedInput.space_size
+      ? `${parsedInput.space_size}${service?.unit === '개' ? '개' : '평'}`
+      : ''
+    const notes = `[현장견적 상담요청] ${serviceName}${sizeText ? ` · ${sizeText}` : ''}${noteText ? ` · ${noteText}` : ''}`
 
     // 정기청소·업무공간(사무실·상가·공장·병원 등) 문의는 사업자(법인)로 고정 —
     // 실측상 정기청소=100% 회사 고객이고, 업무공간 청소도 사실상 전부 법인 계약.
@@ -992,7 +999,7 @@ export const createConsultationRequestAction = publicAction
       await sendPushToBusiness(parsedInput.business_id, {
         title: '현장 견적 상담 요청! 📞',
         // 회사명이 있으면 "회사명(담당자님)"으로 표시해 대표가 누구인지 바로 알게 함
-        body: `${isBusinessCustomer && companyInput ? `${companyInput}(${name}님)` : `${name}님`} · ${phone} · ${serviceName}`,
+        body: `${isBusinessCustomer && companyInput ? `${companyInput}(${name}님)` : `${name}님`} · ${phone} · ${serviceName}${sizeText ? ` · ${sizeText}` : ''}`,
         url: '/dashboard/crm',
         tag: `consult-${phone}`,
       })

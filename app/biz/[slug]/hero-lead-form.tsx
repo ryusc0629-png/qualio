@@ -38,9 +38,11 @@ function needsSize(s: HeroFormService): boolean {
 }
 
 // 가전(유형·대수)·항목별·구분(신축/구축)·상담형은 폼만으로 정확한 자동견적이 어려움 → 상담 접수로 처리
+// 가격을 아직 안 넣은 서비스도 여기로 보낸다 — 0원짜리 견적이 쌓이면 사장님이 더 헷갈린다.
 function isConsultType(s: HeroFormService): boolean {
   return (
     s.unit === '상담' ||
+    s.base_price <= 0 ||
     (!!s.ac_type_prices && Object.keys(s.ac_type_prices).length > 0) ||
     (Array.isArray(s.unit_prices) && s.unit_prices.length > 0) ||
     (Array.isArray(s.unit_variants) && s.unit_variants.length > 0)
@@ -124,7 +126,7 @@ export function HeroLeadForm({ businessId, businessName, services, channel }: Pr
       toast.error('연락처를 정확히 입력해주세요 (예: 01012345678)')
       return
     }
-    if (sizeMode && !consultMode && (!size || Number(size) < 1)) {
+    if (sizeMode && (!size || Number(size) < 1)) {
       toast.error(`${sizeLabel}를 입력해주세요 (예: 30)`)
       return
     }
@@ -133,6 +135,7 @@ export function HeroLeadForm({ businessId, businessName, services, channel }: Pr
       consultAction.execute({
         business_id: businessId,
         service_id: selected.id,
+        space_size: sizeMode ? Number(size) : undefined,
         customer_name: trimmedName,
         customer_phone: phoneDigits,
         company_name: businessMode ? trimmedCompany : undefined,
@@ -212,8 +215,8 @@ export function HeroLeadForm({ businessId, businessName, services, channel }: Pr
           </select>
         </div>
 
-        {/* 규모(평수/개수) — 해당 서비스에만 노출 */}
-        {sizeMode && !consultMode && (
+        {/* 규모(평수/개수) — 상담으로 접수되는 서비스도 규모는 함께 받는다(사장님이 다시 안 묻게) */}
+        {sizeMode && (
           <div className="space-y-1">
             <label className="text-xs font-medium text-slate-500">{sizeLabel} (필수)</label>
             <Input

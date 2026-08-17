@@ -89,15 +89,15 @@ export default async function ServicesPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
 
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">서비스 항목</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            등록된 서비스는 고객 견적 폼에 자동으로 노출돼요
-          </p>
-        </div>
-        <AddServiceForm />
+      <div>
+        <h1 className="text-2xl font-bold">서비스 항목</h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          여기 등록한 이름이 고객 문의 폼의 &lsquo;어떤 청소가 필요하세요?&rsquo; 목록이 돼요
+        </p>
       </div>
+
+      {/* 추가 — 닫혀 있을 땐 버튼, 열면 이 자리에 폼이 펼쳐진다 */}
+      <AddServiceForm />
 
       {/* 단계별 안내 카드 (비테크 사장님용) */}
       <ServicesGuideCard serviceCount={serviceCount} hasBundles={hasBundles} />
@@ -149,12 +149,22 @@ export default async function ServicesPage() {
                           )
                         })}
                       </div>
-                    ) : (
+                    ) : service.base_price > 0 ? (
                       <p className="text-sm mt-1.5">
                         <span className="font-bold tabular-nums">{service.base_price.toLocaleString('ko-KR')}원</span>
                         <span className="text-xs text-muted-foreground ml-1">/ {service.unit}</span>
                       </p>
+                    ) : (
+                      // 가격을 아직 안 넣은 서비스 — 문의는 금액 없이 상담으로 접수된다
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        가격 미설정 · 문의가 오면 <span className="font-medium text-foreground">상담 요청</span>으로 접수돼요
+                      </p>
                     )}
+                    {/* 고객 문의 폼에서 무엇을 물어보는지 — 설정이 어디에 쓰이는지 보이게 */}
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      고객에게{' '}
+                      {service.unit === '평당' ? '평수를 물어봐요' : service.unit === '개' ? '개수를 물어봐요' : '따로 안 물어봐요'}
+                    </p>
                   </div>
 
                   <div className="shrink-0 flex items-center gap-1">
