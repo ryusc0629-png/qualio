@@ -87,12 +87,20 @@ export function OnboardingChecklistCard({ steps, done, total, nextLabel }: Props
         {steps.map((step) => (
           <li key={step.key}>
             {step.done ? (
-              <div className="flex items-center gap-3 rounded-xl px-3 py-2.5">
+              // 끝낸 단계도 다시 들어가 고칠 수 있게 — 서비스 값·플랜은 나중에 바꿀 일이 생긴다
+              <Link
+                href={step.href}
+                className="group flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-primary/10 transition-colors"
+              >
                 <CheckCircle2 className="h-5 w-5 shrink-0 text-primary" />
-                <span className="text-sm font-medium text-muted-foreground line-through decoration-muted-foreground/40">
+                <span className="flex-1 min-w-0 text-sm font-medium text-muted-foreground line-through decoration-muted-foreground/40">
                   {step.label}
                 </span>
-              </div>
+                <span className="shrink-0 inline-flex items-center gap-0.5 text-xs font-medium text-muted-foreground group-hover:text-primary transition-colors">
+                  수정
+                  <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
+                </span>
+              </Link>
             ) : (
               <Link
                 href={step.href}
