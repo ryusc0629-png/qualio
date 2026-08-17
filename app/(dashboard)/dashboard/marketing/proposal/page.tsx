@@ -13,5 +13,5 @@ export default async function ProposalPage() {
   const bizUrl = ctx.business.slug ? `https://qualio.co.kr/biz/${ctx.business.slug}?ch=proposal` : null
   const qr = bizUrl ? await generateProposalQr(bizUrl) : null
 
-  return <ProposalEditor business={ctx.business} settings={ctx.settings} qrDataUrl={qr} />
+  return <ProposalEditor business={ctx.business} settings={ctx.settings} extras={ctx.extras} qrDataUrl={qr} />
 }

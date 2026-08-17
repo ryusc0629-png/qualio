@@ -20,10 +20,22 @@ function Rich({ text }: { text: string }) {
   )
 }
 
+// 하단 한 줄 문구 — **강조** 토큰을 포인트 색으로 렌더
+function RichPoint({ text }: { text: string }) {
+  const parts = text.split('**')
+  return (
+    <>
+      {parts.map((p, i) =>
+        i % 2 === 1 ? <span className="g" key={i}>{p}</span> : <span key={i}>{p}</span>,
+      )}
+    </>
+  )
+}
+
 export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) {
   const name = data.businessName
   const t = (s: string) => fillName(s, name)
-  const { theme, category, sections } = data
+  const { theme, category, sections, owner } = data
 
   // 테마 색을 CSS 변수로 주입 (문서 전체 스코프)
   const styleVars = {
@@ -34,6 +46,12 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
     '--ink-soft': theme.inkSoft,
   } as React.CSSProperties
 
+  // 데이터가 없으면 그 페이지는 자동으로 빠진다(빈 페이지 방지)
+  const showOwner = sections.owner && !!owner
+  const showServices = sections.services && data.services.length > 0
+  const showGallery = sections.gallery && data.beforeAfter.length > 0
+  const showReviews = sections.reviews && data.reviews.length > 0
+
   const QrBlock = ({ small }: { small?: boolean }) =>
     data.bizUrl ? (
       <a href={data.bizUrl} className="qblock">
@@ -43,6 +61,8 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
         <div className="qcap">스캔 시 무료 방문 견적 폼<br /><span className="qlink">{data.bizUrl.replace('https://', '')}</span></div>
       </a>
     ) : null
+
+  const SideLogo = () => (data.logoUrl ? <img className="side-logo" src={data.logoUrl} alt={name} /> : null)
 
   return (
     <>
@@ -55,24 +75,67 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
         </div>
       )}
 
-      <div className="proposal-doc" style={styleVars}>
+      <div className={`proposal-doc d-${data.design}`} style={styleVars}>
 
         {/* ── 1. 표지 ───────────────────────────── */}
-        <section className="page cover">
-          <div className="cover-bg" />
-          <div className="cover-inner">
-            {data.logoUrl
-              ? <img className="cover-logo" src={data.logoUrl} alt={name} />
-              : <div className="cover-logo-text">{name}</div>}
-            <div className="kicker">{data.coverKicker}</div>
-            <h1 className="big">회사 소개서</h1>
-            <div className="tagline">{data.coverTagline}</div>
-          </div>
-          <div className="cover-qr">{QrBlock({})}</div>
-          <div className="cover-name">_{name}</div>
-        </section>
+        {data.design === 'photo' && data.coverPhoto ? (
+          <section className="page cover cover-photo">
+            <img className="cover-photo-img" src={data.coverPhoto} alt="" />
+            <div className="cover-photo-veil" />
+            <div className="cover-inner on-photo">
+              {data.logoUrl
+                ? <img className="cover-logo on-photo-logo" src={data.logoUrl} alt={name} />
+                : <div className="cover-logo-text">{name}</div>}
+              <div className="kicker">{data.coverKicker}</div>
+              <h1 className="big">회사 소개서</h1>
+              <div className="tagline">{data.coverTagline}</div>
+            </div>
+            <div className="cover-qr">{QrBlock({})}</div>
+            <div className="cover-name">_{name}</div>
+          </section>
+        ) : (
+          <section className="page cover">
+            <div className="cover-bg" />
+            <div className="cover-inner">
+              {data.logoUrl
+                ? <img className="cover-logo" src={data.logoUrl} alt={name} />
+                : <div className="cover-logo-text">{name}</div>}
+              <div className="kicker">{data.coverKicker}</div>
+              <h1 className="big">회사 소개서</h1>
+              <div className="tagline">{data.coverTagline}</div>
+            </div>
+            <div className="cover-qr">{QrBlock({})}</div>
+            <div className="cover-name">_{name}</div>
+          </section>
+        )}
 
-        {/* ── 2. 왜 투자인가 ─────────────────────── */}
+        {/* ── 2. 대표 인사말 (홈페이지 설정값) ───── */}
+        {showOwner && owner && (
+          <section className="page">
+            <div className="side">
+              <SideLogo />
+              <div className="side-title">{C.ownerSideTitle}</div>
+              <div className="rule" />
+              {owner.photo
+                ? <img className="owner-photo" src={owner.photo} alt={owner.name} />
+                : <div className="ph owner-ph">대표 사진</div>}
+              <div className="owner-name">{owner.name}</div>
+              <div className="side-qr">{QrBlock({ small: true })}</div>
+            </div>
+            <div className="body mid">
+              <h2>{C.ownerTitle}<span className="u" /></h2>
+              <p className="para greeting">{owner.greeting}</p>
+              {owner.badges.length > 0 && (
+                <div className="badges">
+                  {owner.badges.map((b, i) => <span className="bpill" key={i}>{b}</span>)}
+                </div>
+              )}
+              <div className="sign">— {owner.name}</div>
+            </div>
+          </section>
+        )}
+
+        {/* ── 3. 왜 투자인가 ─────────────────────── */}
         {sections.investment && (
           <section className="page">
             <div className="body full">
@@ -94,13 +157,16 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
           </section>
         )}
 
-        {/* ── 3. 대상 공간 (핵심, 항상) ──────────── */}
+        {/* ── 4. 대상 공간 (핵심, 항상) ──────────── */}
         <section className="page">
           <div className="side">
-            {data.logoUrl && <img className="side-logo" src={data.logoUrl} alt={name} />}
+            <SideLogo />
             <div className="side-title">{category.sideTitle}</div>
             <div className="rule" />
             {category.sideLines.map((l, i) => <p key={i}><Rich text={t(l)} /></p>)}
+            {data.design === 'photo' && data.categoryPhoto && (
+              <img className="side-photo" src={data.categoryPhoto} alt="현장 작업" />
+            )}
             <div className="side-qr">{QrBlock({ small: true })}</div>
           </div>
           <div className="body">
@@ -117,11 +183,37 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
           </div>
         </section>
 
-        {/* ── 4. 3원칙 ───────────────────────────── */}
+        {/* ── 5. 제공 서비스 (견적 항목) ─────────── */}
+        {showServices && (
+          <section className="page">
+            <div className="side">
+              <SideLogo />
+              <div className="side-title">{C.servicesSideTitle}</div>
+              <div className="rule" />
+              {C.servicesSideLines.map((l, i) => <p key={i}><Rich text={t(l)} /></p>)}
+              <div className="side-qr">{QrBlock({ small: true })}</div>
+            </div>
+            <div className="body">
+              <h2>{C.servicesTitle}<span className="u" /></h2>
+              <div className="chips">
+                {data.services.map((s, i) => <span className="chip" key={i}>{s}</span>)}
+              </div>
+              {data.serviceAreas.length > 0 && (
+                <div className="areas">
+                  <div className="areas-t">출장 가능 지역</div>
+                  <div className="areas-d">{data.serviceAreas.join(' · ')}</div>
+                </div>
+              )}
+              <div className="foot-tag"><RichPoint text={C.servicesFootTag} /></div>
+            </div>
+          </section>
+        )}
+
+        {/* ── 6. 3원칙 ───────────────────────────── */}
         {sections.principles && (
           <section className="page">
             <div className="side">
-              {data.logoUrl && <img className="side-logo" src={data.logoUrl} alt={name} />}
+              <SideLogo />
               <div className="side-title">매일 똑같이{'\n'}꼼꼼한 청소가{'\n'}차이를 만듭니다</div>
               <div className="rule" />
               <p>청소는 누구나 할 수 있습니다. 하지만 <b>일정한 퀄리티로 꾸준히 유지하는 것</b>은 아무나 할 수 없습니다.</p>
@@ -145,7 +237,32 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
           </section>
         )}
 
-        {/* ── 5. 100% 환불 (다크) ────────────────── */}
+        {/* ── 7. 시공 사례 비포·애프터 ───────────── */}
+        {showGallery && (
+          <section className="page">
+            <div className="body full">
+              <h2>{C.galleryTitle}<span className="u" /></h2>
+              <p className="para wide">{C.galleryLead}</p>
+              <div className={`ba-grid ${data.beforeAfter.length <= 2 ? 'big' : ''}`}>
+                {data.beforeAfter.map((p, i) => (
+                  <div className="ba-pair" key={i}>
+                    <figure className="ba-item">
+                      <img src={p.before} alt="작업 전" />
+                      <figcaption className="ba-cap before">작업 전</figcaption>
+                    </figure>
+                    <figure className="ba-item">
+                      <img src={p.after} alt="작업 후" />
+                      <figcaption className="ba-cap after">작업 후</figcaption>
+                    </figure>
+                  </div>
+                ))}
+              </div>
+              <div className="foot-tag"><RichPoint text={C.galleryFootTag} /></div>
+            </div>
+          </section>
+        )}
+
+        {/* ── 8. 100% 환불 (다크) ────────────────── */}
         {sections.refund && (
           <section className="page dark">
             <div className="wrap">
@@ -165,11 +282,11 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
           </section>
         )}
 
-        {/* ── 6. 진행 프로세스 ───────────────────── */}
+        {/* ── 9. 진행 프로세스 ───────────────────── */}
         {sections.process && (
           <section className="page">
             <div className="side">
-              {data.logoUrl && <img className="side-logo" src={data.logoUrl} alt={name} />}
+              <SideLogo />
               <div className="side-title">{C.processSideTitle}</div>
               <div className="rule" />
               {C.processSideLines.map((l, i) => <p key={i}><Rich text={t(l)} /></p>)}
@@ -190,7 +307,32 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
           </section>
         )}
 
-        {/* ── 7. 믿고 맡기는 이유 (통계 + 카드) ──── */}
+        {/* ── 10. 고객 후기 (실제 후기만) ─────────── */}
+        {showReviews && (
+          <section className="page">
+            <div className="body full mid">
+              <h2>{C.reviewsTitle}<span className="u" /></h2>
+              <p className="para wide">{C.reviewsLead}</p>
+              {data.reviewCount > 0 && (
+                <div className="rv-summary">
+                  <span className="rv-avg">★ {data.reviewAvg.toFixed(1)}</span>
+                  <span className="rv-count">공개 후기 {data.reviewCount}개</span>
+                </div>
+              )}
+              <div className={`rv-grid n${data.reviews.length}`}>
+                {data.reviews.map((r, i) => (
+                  <div className="rv" key={i}>
+                    <div className="rv-stars">{'★'.repeat(Math.round(r.rating))}</div>
+                    <div className="rv-text">“{r.comment}”</div>
+                    <div className="rv-name">{r.customerName} 고객님</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ── 11. 믿고 맡기는 이유 (통계 + 카드) ──── */}
         {sections.trust && (
           <section className="page">
             <div className="body full">
@@ -218,7 +360,7 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
           </section>
         )}
 
-        {/* ── 8. CTA / 연락처 (항상) ─────────────── */}
+        {/* ── 12. CTA / 연락처 (항상) ─────────────── */}
         <section className="page">
           <div className="cta-strip" />
           <div className="ctapad">
@@ -256,6 +398,7 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
 }
 
 // 다트클린 소개서 디자인을 테마 변수 기반으로 일반화한 CSS (.proposal-doc 스코프)
+// 디자인 템플릿은 .d-classic / .d-photo / .d-clean / .d-bold 덮어쓰기로 구현한다.
 const proposalCss = `
 .pp-toolbar { position: fixed; top: 16px; right: 16px; z-index: 50; display: flex; gap: 8px; }
 .pp-btn { padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; background: #fff; border: 1px solid #e5e7eb; box-shadow: 0 2px 8px rgba(0,0,0,.12); cursor: pointer; }
@@ -267,6 +410,8 @@ const proposalCss = `
 .proposal-doc .side { position: absolute; top: 0; left: 0; width: 34%; height: 100%; background: var(--pale); padding: 30mm 14mm 22mm; display: flex; flex-direction: column; }
 .proposal-doc .body { position: absolute; top: 0; right: 0; width: 66%; height: 100%; padding: 32mm 18mm 24mm; }
 .proposal-doc .body.full { width: 100%; padding: 32mm 20mm 24mm; }
+/* 내용이 적은 페이지는 위아래 가운데로 — 아래가 텅 비어 보이지 않게 */
+.proposal-doc .body.mid { display: flex; flex-direction: column; justify-content: center; }
 
 .proposal-doc .side-logo { height: 46px; width: auto; object-fit: contain; margin-bottom: 22px; align-self: flex-start; }
 .proposal-doc .side-title { font-size: 24px; font-weight: 900; color: var(--primary-dark); letter-spacing: -1px; margin-bottom: 20px; line-height: 1.3; white-space: pre-line; }
@@ -274,6 +419,7 @@ const proposalCss = `
 .proposal-doc .side b { color: var(--ink); }
 .proposal-doc .rule { width: 40px; height: 2px; background: var(--primary); opacity: .5; margin: 6px 0 18px; }
 .proposal-doc .side-qr { margin-top: auto; }
+.proposal-doc .side-photo { width: 100%; height: 52mm; object-fit: cover; border-radius: 10px; margin-top: 6px; }
 
 .proposal-doc h1.big { font-size: 66px; font-weight: 900; letter-spacing: -3px; color: var(--ink); line-height: 1.06; }
 .proposal-doc .tagline { font-size: 26px; font-weight: 800; color: var(--ink); margin-top: 12px; letter-spacing: -1px; }
@@ -323,6 +469,42 @@ const proposalCss = `
 .proposal-doc .stat .su { font-size: 20px; letter-spacing: 0; margin-left: 2px; }
 .proposal-doc .stat .sl { font-size: 13px; color: var(--ink-soft); margin-top: 9px; font-weight: 700; line-height: 1.45; }
 
+/* 대표 인사말 */
+.proposal-doc .owner-photo { width: 100%; height: 72mm; object-fit: cover; border-radius: 12px; }
+.proposal-doc .ph.owner-ph { width: 100%; height: 72mm; }
+.proposal-doc .owner-name { margin-top: 12px; font-size: 18px; font-weight: 900; color: var(--ink); }
+.proposal-doc p.para.greeting { font-size: 17px; line-height: 1.85; color: var(--ink); margin-top: 26px; max-width: 96%; white-space: pre-line; }
+.proposal-doc .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+.proposal-doc .bpill { border: 1.5px solid var(--primary); color: var(--primary-dark); border-radius: 30px; padding: 6px 14px; font-size: 13.5px; font-weight: 800; background: #fff; }
+.proposal-doc .sign { margin-top: 26px; font-size: 18px; font-weight: 900; color: var(--primary-dark); }
+
+/* 제공 서비스 */
+.proposal-doc .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+.proposal-doc .chip { border: 1.5px solid #e4e5da; background: #fcfdf8; border-radius: 10px; padding: 11px 16px; font-size: 15.5px; font-weight: 800; color: var(--ink); }
+.proposal-doc .areas { margin-top: 26px; border-top: 1px dashed #e4e5da; padding-top: 16px; }
+.proposal-doc .areas-t { font-size: 13px; font-weight: 900; color: var(--primary-dark); }
+.proposal-doc .areas-d { font-size: 15px; color: var(--ink-soft); margin-top: 4px; }
+
+/* 시공 사례 비포·애프터 */
+.proposal-doc .ba-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
+.proposal-doc .ba-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.proposal-doc .ba-item { position: relative; margin: 0; }
+.proposal-doc .ba-item img { width: 100%; height: 46mm; object-fit: cover; border-radius: 10px; display: block; }
+.proposal-doc .ba-grid.big .ba-item img { height: 74mm; }
+.proposal-doc .ba-cap { position: absolute; left: 8px; bottom: 8px; font-size: 11.5px; font-weight: 900; color: #fff; padding: 3px 9px; border-radius: 20px; background: rgba(31,42,36,.78); }
+.proposal-doc .ba-cap.after { background: var(--primary-dark); }
+
+/* 고객 후기 */
+.proposal-doc .rv-summary { display: flex; align-items: baseline; gap: 12px; margin-top: 14px; }
+.proposal-doc .rv-avg { font-size: 30px; font-weight: 900; color: var(--primary-dark); letter-spacing: -1px; }
+.proposal-doc .rv-count { font-size: 14px; font-weight: 700; color: var(--ink-soft); }
+.proposal-doc .rv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 22px; }
+.proposal-doc .rv-grid.n3 { grid-template-columns: repeat(3, 1fr); }
+.proposal-doc .rv { border: 1.5px solid #e4e5da; border-radius: 12px; padding: 20px 22px; background: #fcfdf8; min-height: 46mm; }
+.proposal-doc .rv-stars { color: var(--primary); font-size: 17px; letter-spacing: 2px; }
+.proposal-doc .rv-text { font-size: 15.5px; color: var(--ink); margin-top: 10px; line-height: 1.65; }
+.proposal-doc .rv-name { font-size: 13px; font-weight: 800; color: var(--ink-soft); margin-top: 12px; }
+
 .proposal-doc .page.dark { background: var(--ink); color: #f3f3ee; }
 .proposal-doc .page.dark .wrap { padding: 30mm 20mm; height: 100%; display: flex; flex-direction: column; justify-content: center; }
 .proposal-doc .badge { display: inline-block; background: var(--primary); color: #fff; font-weight: 900; font-size: 15px; padding: 7px 16px; border-radius: 30px; margin-bottom: 22px; width: fit-content; }
@@ -362,6 +544,61 @@ const proposalCss = `
 .proposal-doc .cta-hand { text-align: right; }
 .proposal-doc .cta-hand .emoji { font-size: 34px; }
 .proposal-doc .cta-hand .hand-text { font-size: 16px; font-weight: 800; color: var(--ink); margin-top: 4px; }
+
+/* ── 템플릿: 사진 강조 ── 표지를 사진으로 꽉 채우고 내지 사진을 크게 */
+.proposal-doc.d-photo .cover-photo-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.proposal-doc.d-photo .cover-photo-veil { position: absolute; inset: 0; background: linear-gradient(100deg, rgba(15,20,17,.88) 0 42%, rgba(15,20,17,.55) 62%, rgba(15,20,17,.25) 100%); }
+.proposal-doc.d-photo .cover-inner.on-photo h1.big,
+.proposal-doc.d-photo .cover-inner.on-photo .tagline { color: #fff; }
+.proposal-doc.d-photo .cover-inner.on-photo .kicker { color: #fff; opacity: .92; }
+.proposal-doc.d-photo .cover-inner.on-photo .cover-logo-text { color: #fff; }
+.proposal-doc.d-photo .cover-photo .cover-name { color: #fff; }
+.proposal-doc.d-photo .cover-photo .qcap { color: #e9eae4; }
+.proposal-doc.d-photo .cover-photo .qlink { color: #fff; }
+.proposal-doc.d-photo .cover-photo .qrimg { background: #fff; padding: 4px; }
+.proposal-doc.d-photo .photo.tall { height: 92mm; }
+
+/* ── 템플릿: 깔끔한 흰색 ── 색을 최소로, 선으로 구분 */
+.proposal-doc.d-clean .side { background: #fff; border-right: 1px solid #e8e9e4; padding-top: 34mm; }
+.proposal-doc.d-clean .side-title { color: var(--ink); font-size: 22px; letter-spacing: -.6px; }
+.proposal-doc.d-clean .rule { width: 28px; height: 1.5px; opacity: 1; }
+.proposal-doc.d-clean h2 { font-size: 29px; letter-spacing: -.8px; }
+.proposal-doc.d-clean h2 .u { width: 44px; height: 3px; border-radius: 2px; margin-top: 12px; }
+.proposal-doc.d-clean .card,
+.proposal-doc.d-clean .stat,
+.proposal-doc.d-clean .rv,
+.proposal-doc.d-clean .chip,
+.proposal-doc.d-clean .prep .pill { background: #fff; border-color: #e8e9e4; border-radius: 8px; }
+.proposal-doc.d-clean .card .ct { color: var(--ink); font-size: 16.5px; }
+.proposal-doc.d-clean .cover .cover-bg { background: linear-gradient(120deg, #fff 0 72%, var(--pale) 72%); }
+/* 표지 왼쪽 얇은 포인트 선 — 본문 위치는 그대로 두고 선만 덧그린다(QR과 겹치지 않게) */
+.proposal-doc.d-clean .cover-inner { padding-left: calc(40mm + 20px); }
+.proposal-doc.d-clean .cover-inner::before { content: ''; position: absolute; left: 40mm; top: 30%; height: 30%; width: 4px; background: var(--primary); }
+.proposal-doc.d-clean .kicker { color: var(--ink-soft); letter-spacing: 2px; font-size: 15px; }
+.proposal-doc.d-clean h1.big { font-size: 58px; letter-spacing: -2px; }
+.proposal-doc.d-clean .cta-strip { background: #f7f8f5; }
+
+/* ── 템플릿: 눈에 띄는 강조 ── 색면과 큰 글자 */
+.proposal-doc.d-bold .side { background: var(--primary-dark); }
+.proposal-doc.d-bold .side-title { color: #fff; font-size: 27px; }
+.proposal-doc.d-bold .side p { color: rgba(255,255,255,.82); }
+.proposal-doc.d-bold .side b { color: #fff; }
+.proposal-doc.d-bold .side .rule { background: #fff; opacity: .9; }
+.proposal-doc.d-bold .side-logo { background: #fff; padding: 7px 12px; border-radius: 10px; }
+.proposal-doc.d-bold .side .owner-name { color: #fff; }
+.proposal-doc.d-bold .side .qcap { color: rgba(255,255,255,.85); }
+.proposal-doc.d-bold .side .qlink { color: #fff; }
+.proposal-doc.d-bold .side .qrimg { background: #fff; padding: 4px; }
+.proposal-doc.d-bold h1.big { font-size: 78px; letter-spacing: -4px; }
+.proposal-doc.d-bold h2 { font-size: 38px; letter-spacing: -1.8px; }
+.proposal-doc.d-bold h2 .u { width: 120px; height: 10px; }
+.proposal-doc.d-bold .card { background: var(--pale); border: 0; border-radius: 14px; padding: 18px 20px; }
+.proposal-doc.d-bold .chip { background: var(--pale); border: 0; font-size: 16.5px; }
+.proposal-doc.d-bold .stat { background: var(--pale); border: 0; }
+.proposal-doc.d-bold .diff .no { border-radius: 10px; background: var(--primary); }
+.proposal-doc.d-bold .cover .cover-bg { background: linear-gradient(120deg, #fff 0 46%, var(--pale) 46% 62%, var(--primary) 62%); }
+.proposal-doc.d-bold .tagline { font-size: 29px; }
+.proposal-doc.d-bold .foot-tag { font-size: 19px; }
 
 @media print {
   .proposal-doc { background: #fff; padding: 0; }

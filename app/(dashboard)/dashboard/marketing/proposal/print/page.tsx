@@ -12,7 +12,7 @@ export default async function ProposalPrintPage() {
   const ctx = await loadProposalContext()
   if (!ctx) redirect('/dashboard/marketing/proposal')
 
-  const data = buildProposalData(ctx.business, ctx.settings)
+  const data = buildProposalData(ctx.business, ctx.settings, ctx.extras)
   const qr = data.bizUrl ? await generateProposalQr(data.bizUrl, data.theme.primaryDark) : null
 
   return <PrintProposal data={data} qrDataUrl={qr} variant="internal" />

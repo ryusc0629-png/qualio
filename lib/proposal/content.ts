@@ -5,6 +5,8 @@
 
 export type ProposalCategory = 'general' | 'hospital' | 'office' | 'store' | 'interior'
 export type ProposalThemeId = 'brand' | 'emerald' | 'gold' | 'slate'
+// 디자인 템플릿 — 같은 내용을 다른 레이아웃/무게감으로 인쇄한다
+export type ProposalDesignId = 'classic' | 'photo' | 'clean' | 'bold'
 
 // 소개서 전용 저장값(businesses.proposal_settings) — 소수 입력만 담는다
 export interface ProposalStat {
@@ -13,31 +15,64 @@ export interface ProposalStat {
   label: string // 예: '정기청소를 운영해 온 시간'
 }
 
+// 소개서에서 쓸 사진 — 비우면 홈페이지 사진(시공사례·대표사진)을 자동으로 쓴다
+export interface ProposalPhotos {
+  cover?: string      // 표지
+  investment?: string // '청소는 투자입니다' 페이지
+  category?: string   // '이런 공간을 관리합니다' 페이지
+  owner?: string      // 대표 인사말(비면 홈페이지 대표 사진)
+}
+
 export interface ProposalSettings {
   template?: string
+  design?: ProposalDesignId
   category?: ProposalCategory
   theme?: ProposalThemeId
   headline?: string // 표지 큰 강조 문구(비면 업체 소개로 대체)
   kicker?: string   // 표지 상단 한 줄(지역·포지셔닝). 비면 카테고리 기본값
   stats?: ProposalStat[]
-  sections?: ProposalSectionToggles
+  photos?: ProposalPhotos
+  // 옛 저장분에는 뒤에 추가된 항목이 없으므로 일부만 담길 수 있다(빌드에서 기본값과 병합)
+  sections?: Partial<ProposalSectionToggles>
 }
 
 export interface ProposalSectionToggles {
+  owner: boolean      // 대표 인사말(홈페이지 값)
   investment: boolean
+  services: boolean   // 제공 서비스(견적 항목)
   principles: boolean
+  gallery: boolean    // 시공 사례 비포·애프터
   refund: boolean
   process: boolean
+  reviews: boolean    // 고객 후기(실제 후기만)
   trust: boolean
 }
 
 export const DEFAULT_SECTIONS: ProposalSectionToggles = {
+  owner: true,
   investment: true,
+  services: true,
   principles: true,
+  gallery: true,
   refund: true,
   process: true,
+  reviews: true,
   trust: true,
 }
+
+// ── 디자인 템플릿 ───────────────────────────────────────────
+export interface ProposalDesignDef {
+  id: ProposalDesignId
+  name: string
+  desc: string // 사장님용 한 줄 설명(무슨 느낌인지)
+}
+
+export const PROPOSAL_DESIGNS: ProposalDesignDef[] = [
+  { id: 'classic', name: '기본 (정갈한 문서)', desc: '왼쪽에 옅은 색 띠. 어디에 내도 무난한 기본형' },
+  { id: 'photo', name: '사진 강조', desc: '표지를 사진으로 꽉 채워 현장 느낌을 살림' },
+  { id: 'clean', name: '깔끔한 흰색', desc: '색을 최소로 쓴 미니멀. 병원·오피스에 잘 맞음' },
+  { id: 'bold', name: '눈에 띄는 강조', desc: '색과 글자를 크게. 상가·매장 영업에 강함' },
+]
 
 // ── 디자인 테마 ─────────────────────────────────────────────
 export interface ProposalTheme {
@@ -231,6 +266,19 @@ export interface StandardCopy {
   ctaTitle: string
   ctaLead: string
   prepPills: PrepPill[]
+  // 홈페이지 값으로 채우는 페이지들
+  ownerTitle: string
+  ownerSideTitle: string
+  ownerFallbackGreeting: string
+  servicesTitle: string
+  servicesSideTitle: string
+  servicesSideLines: string[]
+  servicesFootTag: string
+  galleryTitle: string
+  galleryLead: string
+  galleryFootTag: string
+  reviewsTitle: string
+  reviewsLead: string
 }
 
 // {업체명} 토큰을 실제 업체명으로 치환
@@ -289,4 +337,21 @@ export const STANDARD_COPY: StandardCopy = {
     { title: '② 대략적인 평수', desc: '예: 약 40평' },
     { title: '③ 원하시는 서비스', desc: '주 2회 정기 / 인테리어 대청소 등' },
   ],
+  ownerTitle: '대표가 직접 인사드립니다',
+  ownerSideTitle: '결국\n사람을\n믿고 맡깁니다',
+  ownerFallbackGreeting:
+    '{업체명}을 맡고 있습니다. 현장에 직접 나가고, 마무리까지 제 눈으로 확인합니다. 맡겨 주신 공간을 제 사업장처럼 관리하겠습니다.',
+  servicesTitle: '제공하는 서비스',
+  servicesSideTitle: '필요한 만큼만\n골라\n맡기세요',
+  servicesSideLines: [
+    '정기 관리부터 1회성 대청소까지, **필요한 항목만** 고르실 수 있습니다.',
+    '공간 상태를 직접 보고 **꼭 필요한 작업**만 제안드립니다.',
+    '없는 항목도 상담해 주시면 가능한지 솔직하게 알려드립니다.',
+  ],
+  servicesFootTag: '가격은 공간을 직접 보고 **정확하게** 말씀드립니다.',
+  galleryTitle: '작업 전 · 후 사례',
+  galleryLead: '말보다 사진이 정확합니다. 실제로 저희가 관리한 현장입니다.',
+  galleryFootTag: '사진은 모두 **직접 작업한 현장**입니다.',
+  reviewsTitle: '고객이 남긴 후기',
+  reviewsLead: '저희가 쓴 문구가 아니라, 실제 맡겨 보신 고객이 남긴 평가입니다.',
 }

@@ -25,6 +25,7 @@ async function getAuthenticatedBusinessId() {
 
 const CATEGORIES = ['general', 'hospital', 'office', 'store', 'interior']
 const THEMES = ['brand', 'emerald', 'gold', 'slate']
+const DESIGNS = ['classic', 'photo', 'clean', 'bold']
 
 const statSchema = z.object({
   value: z.string().max(10),
@@ -32,20 +33,42 @@ const statSchema = z.object({
   label: z.string().max(60),
 })
 
+// 사진은 우리 스토리지/업로드 URL만 받는다(빈 문자열 = 자동 선택으로 되돌리기)
+const photoUrl = z.string().max(600).optional()
+
 const saveProposalSchema = z.object({
   category: z.string().refine((v) => CATEGORIES.includes(v), '유효하지 않은 카테고리입니다'),
   theme: z.string().refine((v) => THEMES.includes(v), '유효하지 않은 테마입니다'),
+  design: z.string().refine((v) => DESIGNS.includes(v), '유효하지 않은 템플릿입니다'),
   headline: z.string().max(120).optional(),
   kicker: z.string().max(60).optional(),
   stats: z.array(statSchema).max(3).optional(),
+  photos: z
+    .object({
+      cover: photoUrl,
+      investment: photoUrl,
+      category: photoUrl,
+      owner: photoUrl,
+    })
+    .optional(),
   sections: z.object({
+    owner: z.boolean(),
     investment: z.boolean(),
+    services: z.boolean(),
     principles: z.boolean(),
+    gallery: z.boolean(),
     refund: z.boolean(),
     process: z.boolean(),
+    reviews: z.boolean(),
     trust: z.boolean(),
   }),
 })
+
+// 사진 값 정리 — 공백만 있으면 저장 안 함(자동 선택으로 복귀)
+function photos_(url: string | undefined): string | undefined {
+  const v = (url ?? '').trim()
+  return v || undefined
+}
 
 // 소개서 설정 저장 — businesses.proposal_settings(jsonb)에 소개서 전용값만 담는다
 export const saveProposalSettingsAction = action
@@ -53,13 +76,25 @@ export const saveProposalSettingsAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getAuthenticatedBusinessId()
 
+    // 빈 문자열은 저장하지 않는다 — 비워두면 홈페이지 사진을 자동으로 쓰는 상태로 돌아간다
+    const photos = parsedInput.photos
+      ? {
+          cover: photos_(parsedInput.photos.cover),
+          investment: photos_(parsedInput.photos.investment),
+          category: photos_(parsedInput.photos.category),
+          owner: photos_(parsedInput.photos.owner),
+        }
+      : undefined
+
     const settings: ProposalSettings = {
       template: 'company',
+      design: parsedInput.design as ProposalSettings['design'],
       category: parsedInput.category as ProposalSettings['category'],
       theme: parsedInput.theme as ProposalSettings['theme'],
       headline: parsedInput.headline?.trim() || undefined,
       kicker: parsedInput.kicker?.trim() || undefined,
       stats: parsedInput.stats,
+      photos,
       sections: parsedInput.sections,
     }
 
