@@ -1,4 +1,5 @@
 import { getAdminMetrics } from '@/lib/admin/metrics'
+import { getRegionCrowding } from '@/lib/admin/region-crowding'
 import { computeNrr, getMrrTrend } from '@/lib/admin/snapshot'
 import { getPaymentFunnel } from '@/lib/admin/payment-funnel'
 import { formatMoney } from '@/lib/format/money'
@@ -36,12 +37,16 @@ function Stat({ label, value, sub, accent }: { label: string; value: string; sub
 }
 
 export default async function AdminMetricsPage() {
-  const [m, nrr, trend, funnel] = await Promise.all([
+  const [m, nrr, trend, funnel, crowding] = await Promise.all([
     getAdminMetrics(),
     computeNrr(),
     getMrrTrend(),
     getPaymentFunnel(),
+    getRegionCrowding(),
   ])
+
+  // 같은 시군구에 3곳 이상 몰리면 그 지역은 뒤쪽 업체가 검색에 안 나온다 — 자체 도메인 안내 시점
+  const crowded = crowding.filter((c) => c.count >= 3)
 
   const maxTrendMrr = Math.max(1, ...trend.map((t) => t.mrr))
 
@@ -174,6 +179,51 @@ export default async function AdminMetricsPage() {
           <Stat key={s.status} label={`리드 · ${s.status}`} value={`${s.count}건`} />
         ))}
       </Section>
+
+      {/* 지역 겹침 — 자체 도메인 안내를 시작해야 하는 시점을 스스로 알린다 */}
+      <section className="mb-8">
+        <div className="mb-3">
+          <h2 className="text-base font-semibold">📍 같은 지역 겹침</h2>
+          <p className="text-xs text-muted-foreground">
+            퀄리오 주소를 함께 쓰는 업체를 시군구로 묶은 것. 한 지역에 3곳이 되면
+            뒤쪽 업체는 페이지를 만들어도 검색 노출이 안 나온다(검색엔진이 한 검색어에 한 도메인 결과를 1~2개만 보여줌).
+            그 지역부터 자체 도메인 안내를 시작할 것.
+          </p>
+        </div>
+
+        {crowding.length === 0 ? (
+          <div className="rounded-lg border bg-background p-4 text-xs text-muted-foreground">
+            아직 겹치는 지역이 없어요. 지금은 자체 도메인을 권유만 해도 충분합니다.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {crowding.map((c) => (
+              <div
+                key={c.region}
+                className={`rounded-lg border p-3 text-xs ${
+                  c.count >= 3 ? 'border-amber-300 bg-amber-50' : 'bg-background'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-foreground">{c.region}</span>
+                  <span className="tabular-nums">{c.count}곳</span>
+                  {c.count >= 3 && (
+                    <span className="rounded bg-amber-200 px-1.5 py-0.5 font-medium text-amber-900">
+                      자체 도메인 안내 필요
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-muted-foreground">{c.names.join(', ')}</p>
+              </div>
+            ))}
+            {crowded.length === 0 && (
+              <p className="text-[11px] text-muted-foreground">
+                아직 3곳이 된 지역은 없어요. 2곳은 정상 범위입니다.
+              </p>
+            )}
+          </div>
+        )}
+      </section>
 
       <p className="mt-6 rounded-lg border border-dashed bg-background p-4 text-xs leading-relaxed text-muted-foreground">
         <strong className="text-foreground">M&amp;A 데이터 안내</strong> · 이 지표들은 실사에서 인수자/투자자가 보는 항목입니다.
