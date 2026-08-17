@@ -130,7 +130,7 @@ export function ProposalEditor({ business, settings, extras, qrDataUrl }: Props)
         </p>
       </div>
 
-      {!business.slug && (
+      {!previewData.bizUrl && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           아직 홈페이지 주소가 없어요. 표지·문의 QR이 비어 보일 수 있어요.{' '}
           <a href="/dashboard/settings" className="font-semibold underline">설정에서 홈페이지 먼저 만들기</a>

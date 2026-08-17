@@ -143,7 +143,10 @@ export default async function BizLandingPage({ params, searchParams }: Props) {
   // 자체 도메인이 살아 있는 업체를 퀄리오 주소로 열면 자체 도메인으로 영구 이동한다.
   // 같은 페이지가 두 주소로 열리면 검색엔진이 둘을 따로 세어 순위가 갈린다.
   if (!viaCustomDomain && hasLiveCustomDomain(business)) {
-    permanentRedirect(`https://${business.custom_domain}`)
+    // 유입 채널(?ch=)은 그대로 들고 간다 — 소개서 QR·명함으로 들어온 손님이
+    // 어디서 왔는지 여기서 끊기면 매출 귀속이 사라진다.
+    const suffix = ch ? `?ch=${encodeURIComponent(ch)}` : ''
+    permanentRedirect(`https://${business.custom_domain}${suffix}`)
   }
 
   // ── 브랜드 테마 ── (CSS 변수 주입, AI 토큰과 무관)

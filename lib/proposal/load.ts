@@ -28,7 +28,7 @@ export async function loadProposalContext(): Promise<ProposalContext | null> {
   const { data } = (await db
     .from('businesses')
     .select(
-      'name, phone, address, slug, logo_url, hero_image_url, brand_color, brand_color_secondary, description, hero_subtitle, strengths, portfolio, owner_photo_url, owner_name, owner_greeting, experience_years, certifications, service_areas, proposal_settings' as never,
+      'name, phone, address, slug, logo_url, hero_image_url, brand_color, brand_color_secondary, description, hero_subtitle, strengths, portfolio, owner_photo_url, owner_name, owner_greeting, experience_years, certifications, service_areas, custom_domain, custom_domain_status, proposal_settings' as never,
     )
     .eq('id', profile.business_id)
     .maybeSingle()) as unknown as {

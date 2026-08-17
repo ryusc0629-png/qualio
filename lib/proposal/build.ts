@@ -1,5 +1,6 @@
 // 소개서 렌더 데이터 조립 — businesses 필드 + proposal_settings 표준문구를 합쳐
 // 인쇄 컴포넌트가 그대로 그릴 수 있는 형태로 만든다.
+import { bizBaseUrl, hasLiveCustomDomain } from '@/lib/domains/resolve'
 import {
   DEFAULT_SECTIONS,
   PROPOSAL_CATEGORIES,
@@ -37,6 +38,9 @@ export interface ProposalBusiness {
   experience_years: number | null
   certifications: string[] | null
   service_areas: string[] | null
+  // 자체 도메인을 붙인 업체는 QR·인쇄 주소가 그 도메인이어야 한다
+  custom_domain: string | null
+  custom_domain_status: string | null
 }
 
 // 홈페이지에서 끌어온 부가 데이터(테이블 조회가 필요한 것들)
@@ -102,8 +106,6 @@ export interface ProposalRenderData {
   bizUrl: string | null
 }
 
-const PUBLIC_ORIGIN = 'https://qualio.co.kr'
-
 // A4 한 장 높이가 고정이라 너무 긴 글은 페이지 밖으로 잘린다. 넘치기 전에 줄여서 담는다.
 function clip(text: string, max: number): string {
   const t = text.trim()
@@ -116,6 +118,8 @@ export function buildProposalData(
   extras: ProposalExtras = EMPTY_EXTRAS,
 ): ProposalRenderData {
   const s = settings ?? {}
+  // 자체 도메인만 붙어 있고 slug가 없는 경우도 홈페이지는 있는 것으로 본다
+  const hasHomepage = !!business.slug || hasLiveCustomDomain(business)
   const categoryId: ProposalCategory = s.category ?? 'general'
   const category = PROPOSAL_CATEGORIES[categoryId] ?? PROPOSAL_CATEGORIES.general
   const theme = resolveTheme(s.theme, business.brand_color, business.brand_color_secondary)
@@ -185,6 +189,7 @@ export function buildProposalData(
     serviceAreas: (business.service_areas ?? []).slice(0, 8),
     phone: business.phone,
     address: business.address,
-    bizUrl: business.slug ? `${PUBLIC_ORIGIN}/biz/${business.slug}?ch=proposal` : null,
+    // QR·인쇄 주소 = 그 업체 홈페이지의 정식 주소. 자체 도메인이 붙어 있으면 그 도메인으로 나간다.
+    bizUrl: hasHomepage ? `${bizBaseUrl(business)}?ch=proposal` : null,
   }
 }
