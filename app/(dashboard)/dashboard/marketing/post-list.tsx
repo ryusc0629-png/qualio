@@ -1022,7 +1022,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
       {/* 오늘 남은 만들기 횟수 + 몰아 쓰지 말아야 하는 이유 */}
       <p className="text-xs text-muted-foreground -mt-1">
         오늘 글을 <span className="font-semibold text-foreground">{draftRemainingToday}편</span> 더 만들 수 있어요.
-        하루에 몰아서 올리면 네이버·구글이 &lsquo;찍어낸 글&rsquo;로 보고 홈페이지 순위를 낮추기 때문에, 하루 한두 편씩 꾸준히 올리는 게 검색에 가장 잘 잡혀요.
+        하루에 몰아서 올리면 네이버·구글이 &lsquo;찍어낸 글&rsquo;로 보고 홈페이지 순위를 낮추기 때문에, 매일 한두 편씩 꾸준히 올리는 게 검색에 가장 잘 잡혀요.
       </p>
 
       {/* 발행 중 안내 — 오래 걸려도 새로고침·재클릭하지 않도록 (중복 발행 방지) */}

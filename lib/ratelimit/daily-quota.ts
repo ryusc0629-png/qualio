@@ -16,9 +16,11 @@ import { checkRateLimit } from './check'
 // (Vercel은 UTC로 도니 날짜 계산은 반드시 toMarketYmd를 거칠 것)
 const WINDOW_SEC = 36 * 60 * 60
 
-// 글 만들기(주제 생성 + 현장 메모 초안)가 함께 쓰는 하루 한도와 카운터 이름
+// 글 만들기(주제 생성 + 현장 메모 초안)가 함께 쓰는 하루 한도와 카운터 이름.
+// 5편은 상한이지 권장량이 아니다 — 검색 노출만 보면 하루 한두 편이 가장 좋다.
+// ★이 숫자를 바꾸면 화면 문구도 같이 바뀐다(서버가 dailyLimit으로 내려보냄).
 export const POST_DRAFT_SCOPE = 'post-draft'
-export const POST_DRAFT_DAILY_LIMIT = 10
+export const POST_DRAFT_DAILY_LIMIT = 5
 
 type Db = SupabaseClient
 

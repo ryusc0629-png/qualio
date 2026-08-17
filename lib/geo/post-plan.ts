@@ -86,12 +86,15 @@ async function buildMonthlyPlan(db: Db, businessId: string, ctx: PlanContext): P
       .eq('is_active', true)
       .is('deleted_at', null)
     try {
+      // ★검색량·경쟁도를 반드시 함께 받아온다(skipKeywordData를 켜지 말 것).
+      //   달력의 '월 N회 / 경쟁 낮음' 배지가 읽는 값이 바로 여기서 채워지는 monthlySearches다.
+      //   계획은 월 1회만 만들어 저장하므로 네이버 API 호출도 업체당 월 1회뿐이고,
+      //   실패하거나 키가 없으면 배지 없이 주제만 남는다(6초 타임아웃·예외 무시).
       const suggestions: TopicSuggestion[] = await generateTopicSuggestions({
         businessName: ctx.businessName,
         services: (services ?? []) as { name: string; base_price: number; unit: string }[],
         currentMonth: ctx.currentMonthNum,
         address: ctx.address,
-        skipKeywordData: true,
       })
       for (const s of suggestions) {
         queue.push({

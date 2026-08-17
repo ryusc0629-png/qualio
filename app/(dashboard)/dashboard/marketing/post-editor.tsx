@@ -36,7 +36,8 @@ interface PostEditorProps {
 // 본문 앞의 JSON 메타 블록(keyPoints/faqs) — 공개 페이지에선 숨겨지므로 편집창에서도 분리
 const META_BLOCK_RE = /^```json\n[\s\S]+?\n```\n/
 
-export function PostEditor({ businessId, post, onClose, onSaved, remainingToday, dailyLimit = 10 }: PostEditorProps) {
+// dailyLimit 기본값은 서버가 못 넘겨준 예외 상황용 폴백 — 진짜 기준은 POST_DRAFT_DAILY_LIMIT(서버)
+export function PostEditor({ businessId, post, onClose, onSaved, remainingToday, dailyLimit = 5 }: PostEditorProps) {
   const rawContent = post?.content ?? ''
   const metaMatch = rawContent.match(META_BLOCK_RE)
   const metaBlock = metaMatch ? metaMatch[0] : ''
@@ -266,10 +267,10 @@ export function PostEditor({ businessId, post, onClose, onSaved, remainingToday,
 
           {/* 한도의 이유를 알려준다 — 막는 장치가 아니라 사장님 손해를 막는 장치라는 걸 알아야 납득한다 */}
           <div className="rounded-md bg-white/70 border border-primary/20 p-3">
-            <p className="text-xs font-semibold">글은 하루 {dailyLimit}편까지, 몰아 쓰지 않는 게 좋아요</p>
+            <p className="text-xs font-semibold">가장 좋은 건 하루 한두 편이에요 (최대 {dailyLimit}편)</p>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
               하루에 글을 몰아서 여러 편 올리면 네이버·구글이 &lsquo;찍어낸 글&rsquo;로 보고 홈페이지 순위를 오히려 낮춥니다.
-              하루 한두 편씩 꾸준히 올리는 쪽이 검색에 훨씬 잘 잡혀요.
+              많이 쓰는 것보다 매일 한두 편씩 꾸준히 올리는 쪽이 검색에 훨씬 잘 잡혀요.
             </p>
           </div>
         </div>
