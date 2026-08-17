@@ -100,6 +100,9 @@ export const generateGeoContentAction = action
         seo_generated_at: new Date().toISOString(),
         // 방금 최신 재료로 다시 만들었으니 '낡음' 표시를 지운다
         seo_stale_at:     null,
+        // 사장님이 직접 '재생성'을 누른 경우다 — 키워드도 새로 만든 값으로 바꿨으므로
+        // '손으로 고침' 표시를 지운다(안 지우면 이후 자동 재생성이 옛 키워드를 계속 지킨다)
+        seo_keywords_edited_at: null,
       } as never)
       .eq('id', profile.business_id)
 
@@ -144,7 +147,11 @@ export const updateGeoKeywordsAction = action
 
     const { error } = await db
       .from('businesses')
-      .update({ seo_keywords: parsedInput.keywords })
+      .update({
+        seo_keywords: parsedInput.keywords,
+        // 손으로 고쳤다고 표시 — 밤에 도는 자동 재생성이 이 키워드는 건드리지 않는다
+        seo_keywords_edited_at: new Date().toISOString(),
+      } as never)
       .eq('id', profile.business_id)
 
     if (error) throw new Error('[APP] 키워드 저장에 실패했어요. 다시 시도해 주세요')

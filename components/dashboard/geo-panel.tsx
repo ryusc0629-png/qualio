@@ -178,10 +178,11 @@ export function GeoPanel({
         <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-3">
           <div>
             <p className="text-sm font-medium text-amber-900">
-              서비스가 바뀌었는데 홈페이지 문구는 예전 그대로예요
+              서비스가 바뀌었어요. 홈페이지 문구를 새로 만들 차례예요
             </p>
             <p className="mt-1 text-xs text-amber-800">
-              지금 검색에 나오는 제목·소개글은 예전에 만든 내용이에요. 아래 버튼을 눌러야 바뀐 서비스로 다시 만들어져요.
+              지금 검색에 나오는 제목·소개글은 바뀌기 전 내용이에요.
+              내일 오전에 저희가 알아서 새로 만들어 드려요. 바로 바꾸고 싶으시면 아래를 눌러주세요.
             </p>
           </div>
           <Button
@@ -191,7 +192,7 @@ export function GeoPanel({
             className="h-12 w-full gap-2"
           >
             <Sparkles className="h-4 w-4" />
-            지금 최신 내용으로 다시 만들기
+            지금 바로 새로 만들기
           </Button>
         </div>
       )}

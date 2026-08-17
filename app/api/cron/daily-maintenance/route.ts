@@ -32,6 +32,9 @@ const SUB_TASKS = [
   'prepare-monthly-reports', // 매월 초 지난달 거래처 리포트 준비 + 대표 푸시(검토 후 발송)
   'geo-measure', // AI 검색 노출률 주기 측정(7일 경과 업체만·상한 내, 키 없으면 휴면)
   'pricing-benchmark', // 객단가 상위 업체의 3단계 플랜 인상률·구성 집계(가격 가이드용)
+  // 서비스·주력고객이 바뀐 업체의 홈페이지 제목·소개글을 다시 만든다.
+  // 사장님이 버튼을 눌러야만 바뀌던 구조라 옛 문구가 그대로 검색에 노출되고 있었다.
+  'refresh-geo-content',
 ] as const
 
 export async function GET(request: NextRequest) {
