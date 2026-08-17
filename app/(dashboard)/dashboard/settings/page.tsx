@@ -8,6 +8,8 @@ import { CopyLinkButton } from '@/components/dashboard/copy-link-button'
 import { PushNotificationToggle } from '@/components/dashboard/push-notification-toggle'
 import { CollapsibleSection } from './collapsible-section'
 import { CustomDomainSection } from '@/components/dashboard/custom-domain-section'
+import { HelpRequestCard } from '@/components/dashboard/help-request-card'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PlanId } from '@/lib/config/plans'
 import Link from 'next/link'
 import { Layers, ChevronRight } from 'lucide-react'
@@ -60,6 +62,16 @@ export default async function SettingsPage() {
 
   const serviceCount = serviceCountResult.count ?? 0
   const publicReportCount = publicReportResult.count ?? 0
+
+  // 대행 요청(도메인 연결·검색 등록) 진행 상태 — 버튼 자리에 "접수됐어요"를 대신 보여준다
+  const looseDb = db as unknown as SupabaseClient
+  const { data: helpRequests } = (await looseDb
+    .from('business_requests')
+    .select('kind, status')
+    .eq('business_id', profile.business_id)
+    .neq('status', 'done')) as unknown as { data: { kind: string; status: string }[] | null }
+
+  const requestStatus = (kind: string) => helpRequests?.find((r) => r.kind === kind)?.status ?? null
 
   if (!businessResult.data) redirect('/onboarding')
 
@@ -206,12 +218,45 @@ export default async function SettingsPage() {
         title="내 인터넷 주소 연결"
         description="가지고 계신 주소가 있으면 홈페이지를 그 주소로 열 수 있어요."
       >
-        <CustomDomainSection
-          domain={(business as { custom_domain?: string | null }).custom_domain ?? null}
-          status={(business as { custom_domain_status?: string | null }).custom_domain_status ?? null}
-          naverVerification={business.naver_site_verification ?? null}
-          googleVerification={business.google_site_verification ?? null}
-        />
+        <div className="space-y-4">
+          <CustomDomainSection
+            domain={(business as { custom_domain?: string | null }).custom_domain ?? null}
+            status={(business as { custom_domain_status?: string | null }).custom_domain_status ?? null}
+            naverVerification={business.naver_site_verification ?? null}
+            googleVerification={business.google_site_verification ?? null}
+          />
+
+          {/* 주소가 없거나 혼자 하기 어려운 사장님용 — 구입부터 연결까지 본사가 대행 */}
+          <HelpRequestCard
+            kind="domain_setup"
+            title="주소 만드는 게 어려우면 대신 해드려요"
+            reasons={[
+              '내 주소로 열면 검색에서 우리 업체 이름으로 쌓여요. 퀄리오 주소를 쓰면 그 점수가 퀄리오에 쌓여요',
+              '명함·현수막에 적기 좋고, 손님이 한 번 보면 기억해요',
+              '나중에 다른 곳으로 옮겨도 주소는 그대로 내 것이에요',
+              '주소값은 보통 1년에 1~2만 원이고, 신청하시면 어떤 주소가 좋은지부터 같이 정해드려요',
+            ]}
+            noteLabel="원하는 주소가 있으면 적어주세요 (필수 아님)"
+            notePlaceholder="예: 다트클린 또는 dartclean.co.kr"
+            buttonLabel="내 인터넷 주소 만들어주세요"
+            pendingLabel="담당자가 어떤 주소가 좋을지 정리해서 하루 이틀 안에 연락드려요."
+            requestStatus={requestStatus('domain_setup')}
+          />
+
+          {/* 네이버·구글 검색 등록 대행 — 계정 만들기·소유확인이 사장님 혼자는 어렵다 */}
+          <HelpRequestCard
+            kind="search_indexing"
+            title="네이버·구글 검색에 빨리 잡히게 해드려요"
+            reasons={[
+              '검색엔진에 "우리 홈페이지 여기 있어요" 하고 알려주는 작업이에요. 안 하면 발견될 때까지 몇 달이 걸리기도 해요',
+              '해두면 새 글을 쓸 때마다 자동으로 같이 알려져요',
+              '네이버·구글 양쪽 다 저희가 대신 등록하고, 끝나면 알려드려요',
+            ]}
+            buttonLabel="검색에 빨리 잡히게 해주세요"
+            pendingLabel="저희가 네이버·구글에 등록하고 있어요. 검색에 실제로 뜨기까지는 보통 2주쯤 걸려요."
+            requestStatus={requestStatus('search_indexing')}
+          />
+        </div>
       </CollapsibleSection>
 
       {/* 업체 정보 */}
