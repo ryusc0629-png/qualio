@@ -8,6 +8,9 @@ import {
   DEFAULT_CONTRACT_DATA,
   type SubcontractorContractData,
 } from '@/lib/contract/subcontractor-contract'
+import { toMarketYmd } from '@/lib/format/datetime'
+import { loadContractorSettlements } from '@/lib/finance/subcontract-load'
+import { SubcontractSettlementCard } from '@/components/dashboard/finance/subcontract-settlement-card'
 
 export const dynamic = 'force-dynamic'
 
@@ -82,6 +85,11 @@ export default async function ContractorContractPage({
 
   const biz = businessResult.data
 
+  // 이번 달 정산 — 계약서를 쓰면 바로 여기서 도급비·내 몫이 계산돼 보인다
+  const thisMonth = toMarketYmd().slice(0, 7)
+  const settlements = (await loadContractorSettlements(db, businessId, thisMonth))
+    .filter((s) => s.workerId === worker.id)
+
   // 저장된 값이 없으면 아는 정보로 빈칸을 미리 채워둔다 (사장님이 다시 타이핑하지 않게)
   const initial: SubcontractorContractData = worker.contract_data ?? {
     ...DEFAULT_CONTRACT_DATA,
@@ -112,6 +120,8 @@ export default async function ContractorContractPage({
           </p>
         </div>
       </div>
+
+      <SubcontractSettlementCard month={thisMonth} items={settlements} />
 
       <ContractForm
         workerId={worker.id}

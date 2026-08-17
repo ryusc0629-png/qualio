@@ -12,6 +12,7 @@ export const REVENUE_CATEGORIES = [
 // 지출(매입) 분류 — 그날그날 나가는 변동비
 export const EXPENSE_CATEGORIES = [
   '인건비',
+  '외주·도급비',
   '자재·소모품',
   '차량·유류비',
   '광고·홍보',

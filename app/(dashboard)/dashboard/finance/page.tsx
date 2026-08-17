@@ -8,11 +8,13 @@ import {
 } from '@/lib/finance/constants'
 import { AddEntryForm } from '@/components/dashboard/finance/add-entry-form'
 import { FixedCostsManager, type FixedCost } from '@/components/dashboard/finance/fixed-costs-manager'
-import { EntryRow } from '@/components/dashboard/finance/entry-row'
+import { EntryRow, type EntryRowData } from '@/components/dashboard/finance/entry-row'
 import { BreakEvenGauge } from '@/components/dashboard/finance/charts'
 import { DailyBarChart } from '@/components/dashboard/finance/daily-bar-chart'
 import { CategoryDonut } from '@/components/dashboard/finance/category-donut'
 import { ReceivablesCard } from '@/components/dashboard/finance/receivables-card'
+import { SubcontractSettlementCard } from '@/components/dashboard/finance/subcontract-settlement-card'
+import { loadContractorSettlements } from '@/lib/finance/subcontract-load'
 
 // 현재 KST 기준 'YYYY-MM'
 function currentMonthKST() {
@@ -85,14 +87,17 @@ export default async function FinancePage({ searchParams }: PageProps) {
     { data: entries },
     { data: prevEntries },
     { data: fixedCostsRaw },
+    settlements,
   ] = await Promise.all([
     db.from('finance_entries')
-      .select('id, entry_date, type, category, amount, memo')
+      .select('id, entry_date, type, category, amount, memo, source' as never)
       .eq('business_id', businessId)
       .gte('entry_date', monthStart)
       .lte('entry_date', monthEnd)
       .order('entry_date', { ascending: false })
-      .order('created_at', { ascending: false }),
+      .order('created_at', { ascending: false }) as unknown as Promise<{
+        data: (EntryRowData & { source: string | null })[] | null
+      }>,
     db.from('finance_entries')
       .select('type, amount')
       .eq('business_id', businessId)
@@ -102,10 +107,17 @@ export default async function FinancePage({ searchParams }: PageProps) {
       .select('id, name, monthly_amount, active')
       .eq('business_id', businessId)
       .order('created_at', { ascending: true }),
+    // 도급 정산 — 계약서 정산 조건 + 그 달 현장 금액으로 도급비·내 몫 계산
+    loadContractorSettlements(db, businessId, month),
   ])
 
   const rows = entries ?? []
   const fixedCosts: FixedCost[] = fixedCostsRaw ?? []
+
+  // 사장님이 직접 넣은 매출만 — 도급 정산 자동 기입분과 중복 경고에 쓴다
+  const manualRevenue = rows
+    .filter((r) => r.type === 'revenue' && r.source !== 'subcontract')
+    .reduce((s, r) => s + r.amount, 0)
 
   // 미수금(못 받은 돈) — 완료된 일회성 예약 중 아직 다 못 받은 건 (선택한 달과 무관하게 전체)
   const { data: receivableRows } = await db
@@ -211,6 +223,9 @@ export default async function FinancePage({ searchParams }: PageProps) {
 
       {/* 못 받은 돈(미수금) — 선택한 달과 무관하게 항상 상단 노출 */}
       {receivables.length > 0 && <ReceivablesCard items={receivables} />}
+
+      {/* 도급 정산 — 장부가 비어 있어도 보여야 한다(여기서 '장부에 넣기'로 첫 기록이 만들어짐) */}
+      <SubcontractSettlementCard month={month} items={settlements} manualRevenue={manualRevenue} />
 
       {!hasAnyData ? (
         /* 완전 빈 상태 — 온보딩 */

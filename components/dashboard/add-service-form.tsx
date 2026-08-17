@@ -6,8 +6,8 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { createServiceItemAction, createServiceItemsAction } from '@/lib/actions/services'
-import { Plus, X, ChevronDown } from 'lucide-react'
+import { createServiceItemsAction } from '@/lib/actions/services'
+import { Plus, X, ChevronDown, Check } from 'lucide-react'
 
 // 자주 쓰는 서비스 — 골라서 한 번에 담는다. 가격은 나중에 넣어도 되므로 이름·단위만 정해 둔다.
 // unit: 고객에게 무엇을 물어볼지와 같은 뜻 ('평당'=평수, '개'=개수, '상담'=안 물어봄)
@@ -59,41 +59,34 @@ export function AddServiceForm() {
     onError: ({ error }) => toast.error(error.serverError ?? '다시 눌러주세요'),
   })
 
-  const single = useAction(createServiceItemAction, {
-    onSuccess: () => {
-      toast.success('서비스가 추가됐어요!')
-      closeAndReset()
-    },
-    onError: ({ error }) => toast.error(error.serverError ?? '다시 눌러주세요'),
-  })
-
-  const isPending = bulk.isPending || single.isPending
+  const isPending = bulk.isPending
 
   const togglePreset = (presetName: string) =>
     setPicked((prev) => (prev.includes(presetName) ? prev.filter((n) => n !== presetName) : [...prev, presetName]))
 
-  const addPicked = () => {
-    const items = PRESETS.filter((p) => picked.includes(p.name)).map((p) => ({
-      name: p.name,
-      category: p.category,
-      unit: p.unit,
-      base_price: 0, // 가격은 나중에 — 그 전까지는 문의가 '상담'으로 접수된다
-    }))
-    if (items.length === 0) return
-    bulk.execute({ items })
-  }
+  // 고른 것 + 직접 적은 것을 합쳐 한 번에 추가한다(버튼 하나).
+  // 가격은 나중에 넣어도 되므로 기본 0 — 그 전까지 문의는 '상담'으로 접수된다.
+  const typedName = name.trim()
+  const pendingCount = picked.length + (typedName ? 1 : 0)
 
-  const addOne = () => {
-    const trimmed = name.trim()
-    if (!trimmed) {
-      toast.error('서비스 이름을 적어주세요 (예: 사무실 정기청소)')
-      return
-    }
-    single.execute({
-      name: trimmed,
-      unit: ask,
-      base_price: showPrice ? Number(price.replace(/[^0-9]/g, '')) || 0 : 0,
-    })
+  const addAll = () => {
+    if (pendingCount === 0) return
+    const items = [
+      ...PRESETS.filter((p) => picked.includes(p.name)).map((p) => ({
+        name: p.name,
+        category: p.category,
+        unit: p.unit,
+        base_price: 0,
+      })),
+      ...(typedName
+        ? [{
+            name: typedName,
+            unit: ask,
+            base_price: showPrice ? Number(price.replace(/[^0-9]/g, '')) || 0 : 0,
+          }]
+        : []),
+    ]
+    bulk.execute({ items })
   }
 
   if (!open) {
@@ -116,8 +109,11 @@ export function AddServiceForm() {
 
       {/* ① 자주 쓰는 서비스 — 눌러서 고르고 한 번에 추가 */}
       <section className="space-y-2">
-        <Label className="text-sm">자주 쓰는 서비스에서 고르기</Label>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex items-baseline justify-between gap-2">
+          <Label className="text-sm">자주 쓰는 서비스에서 고르기</Label>
+          <span className="text-[11px] text-muted-foreground">여러 개 골라도 돼요</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
           {PRESETS.map((p) => {
             const on = picked.includes(p.name)
             return (
@@ -125,34 +121,37 @@ export function AddServiceForm() {
                 key={p.name}
                 type="button"
                 onClick={() => togglePreset(p.name)}
-                className={`rounded-full border px-3 py-2 text-xs font-medium transition-colors ${
+                aria-pressed={on}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-3 text-sm font-medium text-left transition-colors ${
                   on
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-background text-foreground hover:border-primary/40'
                 }`}
               >
-                {on && <span className="mr-1">✓</span>}
-                {p.name}
+                {/* 체크박스 모양 — 눌러 담는 방식이라는 게 눈에 보이게 */}
+                <span
+                  className={`h-5 w-5 shrink-0 rounded border flex items-center justify-center ${
+                    on ? 'border-primary-foreground bg-primary-foreground/20' : 'border-muted-foreground/40'
+                  }`}
+                >
+                  {on && <Check className="h-3.5 w-3.5" />}
+                </span>
+                <span className="min-w-0 truncate">{p.name}</span>
               </button>
             )
           })}
         </div>
-        <Button
-          type="button"
-          className="w-full h-12"
-          disabled={picked.length === 0 || isPending}
-          onClick={addPicked}
-        >
-          {isPending ? '추가 중...' : picked.length > 0 ? `고른 ${picked.length}개 추가하기` : '위에서 골라주세요'}
-        </Button>
       </section>
 
-      {/* ② 직접 적기 — 이름 + 무엇을 물어볼지 */}
+      {/* ② 직접 적기 — 목록에 없을 때만 쓰면 된다(선택) */}
       <section className="space-y-3 border-t pt-4">
-        <Label className="text-sm">직접 적기</Label>
+        <div className="flex items-baseline justify-between gap-2">
+          <Label className="text-sm">목록에 없으면 직접 적기</Label>
+          <span className="text-[11px] text-muted-foreground">선택 사항</span>
+        </div>
 
         <div className="space-y-1">
-          <Label htmlFor="svc-name" className="text-xs text-muted-foreground">서비스 이름 (필수)</Label>
+          <Label htmlFor="svc-name" className="text-xs text-muted-foreground">서비스 이름</Label>
           <Input
             id="svc-name"
             value={name}
@@ -162,6 +161,8 @@ export function AddServiceForm() {
           />
         </div>
 
+        {/* 이름을 적었을 때만 나머지를 물어본다 — 빈 칸이 먼저 쏟아지지 않게 */}
+        {typedName && (
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">고객에게 무엇을 물어볼까요?</Label>
           <div className="grid gap-2">
@@ -180,8 +181,10 @@ export function AddServiceForm() {
             ))}
           </div>
         </div>
+        )}
 
         {/* 가격은 선택 — 접어둔다 */}
+        {typedName && (
         <div className="rounded-lg border border-dashed">
           <button
             type="button"
@@ -206,11 +209,22 @@ export function AddServiceForm() {
             </div>
           )}
         </div>
-
-        <Button type="button" variant="outline" className="w-full h-12" disabled={isPending} onClick={addOne}>
-          {isPending ? '추가 중...' : '이 서비스 추가하기'}
-        </Button>
+        )}
       </section>
+
+      {/* 추가 버튼은 하나 — 고른 것과 직접 적은 것을 함께 담아 올린다 */}
+      <div className="border-t pt-4 space-y-2">
+        <Button type="button" className="w-full h-12 text-base" disabled={pendingCount === 0 || isPending} onClick={addAll}>
+          {isPending
+            ? '추가 중...'
+            : pendingCount > 0
+              ? `${pendingCount}개 추가하기`
+              : '위에서 고르거나 이름을 적어주세요'}
+        </Button>
+        <Button type="button" variant="ghost" className="w-full h-10" onClick={closeAndReset}>
+          취소
+        </Button>
+      </div>
 
       <p className="text-[11px] text-muted-foreground leading-relaxed border-t pt-3">
         가격·플랜은 나중에 목록에서 <span className="font-medium text-foreground">수정</span>을 눌러 언제든 넣을 수 있어요.
