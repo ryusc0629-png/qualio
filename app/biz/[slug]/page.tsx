@@ -50,12 +50,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const column = isDomainIdentifier(slug) ? 'custom_domain' : 'slug'
   const { data: business } = await db
     .from('businesses')
-    .select('name, seo_title, seo_description, seo_keywords, address, slug, custom_domain, custom_domain_status' as never)
+    .select('name, seo_title, seo_description, seo_keywords, address, slug, custom_domain, custom_domain_status, naver_site_verification, google_site_verification' as never)
     .eq(column as never, slug as never)
     .maybeSingle() as unknown as { data: {
       name: string; seo_title: string | null; seo_description: string | null
       seo_keywords: string | null; address: string | null
       slug: string | null; custom_domain: string | null; custom_domain_status: string | null
+      naver_site_verification: string | null; google_site_verification: string | null
     } | null }
 
   if (!business) return { title: '업체를 찾을 수 없습니다' }
@@ -66,7 +67,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // 자체 도메인이 살아 있으면 그쪽이 정식 주소 — 같은 글이 두 주소로 색인되는 걸 막는다
   const base = bizBaseUrl(business)
 
+  // 검색엔진 소유확인 — 네이버 서치어드바이저·구글 서치콘솔이 발급한 코드를 홈 <head>에 그대로 내보낸다.
+  // 업체별 값이라 DB에서 읽는다(다른 업체 도메인에 남의 인증 코드가 나가면 안 됨).
+  const naverCode = business.naver_site_verification?.trim()
+  const googleCode = business.google_site_verification?.trim()
+  const verification = naverCode || googleCode
+    ? {
+        ...(googleCode ? { google: googleCode } : {}),
+        ...(naverCode ? { other: { 'naver-site-verification': naverCode } } : {}),
+      }
+    : undefined
+
   return {
+    ...(verification ? { verification } : {}),
     title,
     description,
     keywords,
