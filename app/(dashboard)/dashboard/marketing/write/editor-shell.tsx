@@ -19,11 +19,13 @@ export interface EditablePost {
 interface EditorShellProps {
   businessId: string
   post?: EditablePost
+  remainingToday: number
+  dailyLimit: number
 }
 
 // '직접 작성'·'수정'을 좁은 인라인 패널 대신 전체 화면에서 편집하도록 감싸는 클라이언트 래퍼.
 // 저장·취소하면 목록으로 되돌아간다(전체 이동이라 새 글이 목록에 바로 반영됨).
-export function EditorShell({ businessId, post }: EditorShellProps) {
+export function EditorShell({ businessId, post, remainingToday, dailyLimit }: EditorShellProps) {
   const backToList = () => window.location.replace('/dashboard/marketing')
 
   return (
@@ -36,7 +38,14 @@ export function EditorShell({ businessId, post }: EditorShellProps) {
         <ArrowLeft className="h-4 w-4" />목록으로 돌아가기
       </button>
 
-      <PostEditor businessId={businessId} post={post} onClose={backToList} onSaved={backToList} />
+      <PostEditor
+        businessId={businessId}
+        post={post}
+        onClose={backToList}
+        onSaved={backToList}
+        remainingToday={remainingToday}
+        dailyLimit={dailyLimit}
+      />
     </div>
   )
 }

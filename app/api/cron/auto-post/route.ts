@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions } from '@/lib/ai/geo-content'
-import { fetchRecentJobCases, fetchRecentCasePhotos } from '@/lib/ai/job-cases'
-import { generatePostImagesSmart, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
+import { fetchRecentJobCases, fetchRecentCasePhotos, POST_PHOTO_COUNT } from '@/lib/ai/job-cases'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
 import { pickWeakGeoTopic } from '@/lib/geo/weak-topics'
@@ -41,7 +40,7 @@ function getDaysInMonth(year: number, month: number): number {
 // 포스트 1건 생성 및 저장
 async function publishOnePost(
   db: ReturnType<typeof createServiceClient>,
-  business: { id: string; name: string; address: string | null; description: string | null; serviceAreas: string[] | null; autoImageGeneration: boolean; slug: string | null },
+  business: { id: string; name: string; address: string | null; description: string | null; serviceAreas: string[] | null; slug: string | null },
   services: { name: string; base_price: number; unit: string }[],
   publishedTitles: string[],
   month: number,
@@ -117,18 +116,12 @@ async function publishOnePost(
     ? `\`\`\`json\n${JSON.stringify({ keyPoints: postContent.keyPoints ?? [], faqs: postContent.faqs ?? [] })}\n\`\`\`\n`
     : ''
 
-  // 이미지 — ①공개 승인된 작업보고의 진짜 비포/애프터 사진을 최우선으로 싣는다(실사례=설득력·해자).
-  //          ②실사진이 없을 때만 AI 이미지 생성으로 폴백(토글 ON 시). 실사진이 있으면 AI 생성 비용도 아낀다.
+  // 이미지 — 공개 승인된 작업보고의 진짜 비포/애프터 사진만 싣는다(실사례=설득력·해자).
+  //          실사진이 없으면 사진 없이 글만 발행한다.
   const casePhotos = await fetchRecentCasePhotos(db, business.id)
-  const realPhotoUrls = [...casePhotos.before, ...casePhotos.after].slice(0, POST_IMAGE_COUNT)
-  const usingRealPhotos = realPhotoUrls.length > 0
-  const imageUrls = usingRealPhotos
-    ? realPhotoUrls
-    : business.autoImageGeneration
-      ? await generatePostImagesSmart(postContent.imagePrompts, postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
-      : []
-  // 대표 이미지(커버)는 '결과'가 드러나는 애프터 사진을 우선(실사진일 때) — 눈길을 끄는 게 애프터라서.
-  const coverUrl = (usingRealPhotos ? casePhotos.after[0] : undefined) ?? imageUrls[0] ?? null
+  const imageUrls = [...casePhotos.before, ...casePhotos.after].slice(0, POST_PHOTO_COUNT)
+  // 대표 이미지(커버)는 '결과'가 드러나는 애프터 사진을 우선 — 눈길을 끄는 게 애프터라서.
+  const coverUrl = casePhotos.after[0] ?? imageUrls[0] ?? null
 
   const fullContent = metaBlock + postContent.content
   const { data: saved, error } = await db.from('biz_posts').insert({
@@ -188,9 +181,9 @@ export async function GET(request: NextRequest) {
 
   const { data: businesses, error: bizError } = await db
     .from('businesses' as never)
-    .select('id, name, address, description, service_areas, monthly_post_target, auto_image_generation, slug' as never)
+    .select('id, name, address, description, service_areas, monthly_post_target, slug' as never)
     .gt('monthly_post_target' as never, 0) as unknown as {
-      data: { id: string; name: string; address: string | null; description: string | null; service_areas: string[] | null; monthly_post_target: number; auto_image_generation: boolean; slug: string | null }[] | null
+      data: { id: string; name: string; address: string | null; description: string | null; service_areas: string[] | null; monthly_post_target: number; slug: string | null }[] | null
       error: { message: string } | null
     }
 
@@ -296,7 +289,7 @@ export async function GET(request: NextRequest) {
       const publishedTitlesThisRun: string[] = []
       for (let i = 0; i < toPublish; i++) {
         const planned = todaySlot ? { topic: todaySlot.topic, keyword: todaySlot.keyword, title: todaySlot.label } : null
-        const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas, autoImageGeneration: business.auto_image_generation ?? true }, services ?? [], publishedTitles, month, model, channelsEnabled, realCases, planned)
+        const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas }, services ?? [], publishedTitles, month, model, channelsEnabled, realCases, planned)
         publishedTitlesThisRun.push(title)
         console.log(`[Cron] 자동 발행 완료 (${i + 1}/${toPublish}): ${business.name} — "${title}"`)
       }

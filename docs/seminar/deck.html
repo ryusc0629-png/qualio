@@ -1,0 +1,869 @@
+<title>청소업, 다음 3년</title>
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     퀄리오 세미나 덱 — 강의실 스크린 촬영용
+     의도적 단일 테마(어두운 강연장 = 하나의 환경)이므로 모든 색을 명시한다.
+     ───────────────────────────────────────────────────────────── */
+  :root {
+    /* 중립색은 브랜드 에메랄드 쪽으로 살짝 기울인 초록빛 무채색 */
+    --ground:        #06100c;
+    --ground-raised: #0b1a14;
+    --ink:           #f2f7f4;
+    --ink-dim:       #9db0a6;
+    --ink-faint:     #5d7168;
+    --rule:          #1b2c24;
+
+    --brand:         #059669; /* 퀄리오 메인 */
+    --brand-bright:  #34e29b; /* 프로젝터에서도 살아남는 밝은 에메랄드 */
+    --alarm:         #e8b04b; /* 폐업 지표 전용 경고색 — 강조를 한 곳에만 */
+
+    --stage-w: 1600px;
+    --stage-h: 900px;
+
+    --font-kr: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo",
+               "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --font-num: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  /* 기본 마진 리셋 — p의 기본 margin은 1em이라 250px 글자에서 500px가 밀린다 */
+  p, h1, h2, h3, h4, ul, ol, figure, table { margin: 0; padding: 0; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-kr);
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    /* 한글은 단어 단위로 끊어야 읽힌다 — 기본값은 글자 단위로 잘린다 */
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    line-break: strict;
+  }
+
+  /* ── 무대: 1600×900 고정 좌표계를 화면에 맞춰 배율만 조정 ──
+     프로젝터·카메라마다 해상도가 달라도 레이아웃이 절대 틀어지지 않게 한다. */
+  #viewport {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: var(--ground);
+  }
+
+  #stage {
+    position: relative;
+    width: var(--stage-w);
+    height: var(--stage-h);
+    transform-origin: center center;
+    background: var(--ground);
+    overflow: hidden;
+  }
+
+  /* ── 슬라이드 ── */
+  .slide {
+    position: absolute;
+    inset: 0;
+    padding: 76px 104px 116px; /* 촬영 세이프 마진 */
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 28px;
+  }
+  .slide.is-active { display: flex; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .slide.is-active > * {
+      animation: rise 420ms cubic-bezier(.22,.72,.24,1) both;
+    }
+    .slide.is-active > *:nth-child(2) { animation-delay: 70ms; }
+    .slide.is-active > *:nth-child(3) { animation-delay: 130ms; }
+    .slide.is-active > *:nth-child(4) { animation-delay: 185ms; }
+    .slide.is-active > *:nth-child(5) { animation-delay: 235ms; }
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  /* ── 타이포 ── */
+  .eyebrow {
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: .2em;
+    color: var(--brand-bright);
+  }
+  .eyebrow.is-alarm { color: var(--alarm); }
+
+  h1 {
+    margin: 0;
+    font-size: 104px;
+    font-weight: 800;
+    letter-spacing: -.035em;
+    line-height: 1.08;
+    text-wrap: balance;
+  }
+  h2 {
+    margin: 0;
+    font-size: 72px;
+    font-weight: 800;
+    letter-spacing: -.03em;
+    line-height: 1.16;
+    text-wrap: balance;
+  }
+  .lede {
+    margin: 0;
+    font-size: 40px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--ink-dim);
+    max-width: 26ch;
+  }
+  .body {
+    margin: 0;
+    font-size: 34px;
+    font-weight: 400;
+    line-height: 1.6;
+    color: var(--ink-dim);
+    max-width: 30ch;
+  }
+  .kicker {
+    margin: 0;
+    font-size: 42px;
+    font-weight: 700;
+    line-height: 1.35;
+    letter-spacing: -.02em;
+    color: var(--brand-bright);
+    max-width: 26ch;
+    text-wrap: balance;
+  }
+  .kicker.is-alarm { color: var(--alarm); }
+
+  .src {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 400;
+    line-height: 1.6;
+    color: var(--ink-faint);
+    letter-spacing: .01em;
+  }
+  .fine {
+    margin: 0;
+    font-size: 22px;
+    color: var(--ink-faint);
+    line-height: 1.6;
+  }
+
+  /* ── 큰 숫자 ── */
+  .stat {
+    font-size: 250px;
+    font-weight: 800;
+    letter-spacing: -.05em;
+    line-height: .92;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+  .stat.is-alarm { color: var(--alarm); }
+  .stat.is-brand { color: var(--brand-bright); }
+  .stat .unit {
+    font-size: .42em;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    margin-left: .06em;
+  }
+  .stat-label {
+    margin: 0;
+    font-size: 36px;
+    font-weight: 600;
+    line-height: 1.45;
+    color: var(--ink);
+    max-width: 28ch;
+    text-wrap: balance;
+  }
+
+  /* ── 표지 ── */
+  .cover { justify-content: flex-end; gap: 34px; padding-bottom: 150px; }
+  .cover h1 { font-size: 148px; }
+  .cover .rule {
+    width: 132px; height: 6px; background: var(--brand); border-radius: 99px;
+  }
+  .byline {
+    display: flex; align-items: baseline; gap: 20px;
+    font-size: 26px; color: var(--ink-dim);
+  }
+  .byline b { font-weight: 700; color: var(--ink); }
+
+  /* ── 챕터 브레이크 ── */
+  .chapter { justify-content: center; gap: 30px; }
+  .chapter .num {
+    font-family: var(--font-num);
+    font-size: 24px;
+    letter-spacing: .24em;
+    color: var(--brand);
+  }
+  .chapter h1 { font-size: 128px; }
+
+  /* ── 목록 ── */
+  .points { display: flex; flex-direction: column; gap: 26px; margin: 0; padding: 0; list-style: none; }
+  .points li {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    align-items: baseline;
+    gap: 22px;
+    font-size: 38px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--ink);
+  }
+  .points li .marker {
+    font-family: var(--font-num);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--brand-bright);
+    letter-spacing: .04em;
+  }
+  .points li .marker.dot { color: var(--brand); }
+
+  /* 할 일 나열 — 압박감을 주는 슬라이드 */
+  .chores {
+    display: flex; flex-wrap: wrap; gap: 16px 18px; margin: 0; padding: 0; list-style: none;
+    max-width: 1240px;
+  }
+  .chores li {
+    font-size: 34px;
+    font-weight: 600;
+    padding: 14px 26px;
+    border: 2px solid var(--rule);
+    border-radius: 999px;
+    color: var(--ink-dim);
+    background: var(--ground-raised);
+  }
+
+  /* ── 3열 ── */
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
+  .col {
+    display: flex; flex-direction: column; gap: 16px;
+    padding-top: 26px;
+    border-top: 3px solid var(--rule);
+  }
+  .col .n {
+    font-family: var(--font-num);
+    font-size: 20px;
+    letter-spacing: .18em;
+    color: var(--alarm);
+  }
+  .col h3 { margin: 0; font-size: 40px; font-weight: 800; letter-spacing: -.02em; line-height: 1.2; }
+  .col p  { margin: 0; font-size: 26px; line-height: 1.55; color: var(--ink-dim); }
+
+  /* ── 비교표 ── */
+  .versus {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 30px;
+    table-layout: fixed;
+  }
+  .versus th, .versus td {
+    padding: 22px 24px;
+    text-align: left;
+    border-bottom: 2px solid var(--rule);
+    vertical-align: top;
+  }
+  .versus thead th { font-size: 34px; font-weight: 800; letter-spacing: -.02em; padding-bottom: 16px; }
+  .versus thead th:nth-child(1) { color: var(--ink-faint); font-size: 22px; font-weight: 600; letter-spacing: .1em; }
+  .versus thead th:nth-child(2) { color: var(--ink-dim); }
+  .versus thead th:nth-child(3) { color: var(--brand-bright); }
+  .versus tbody th { font-size: 24px; font-weight: 600; color: var(--ink-faint); }
+  .versus td { color: var(--ink-dim); font-weight: 500; }
+  .versus td.win { color: var(--ink); font-weight: 700; }
+
+  /* ── 견적 3단계 카드 ── */
+  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+  .tier {
+    padding: 36px 32px 40px;
+    border: 2px solid var(--rule);
+    background: var(--ground-raised);
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .tier.is-pick {
+    border-color: var(--brand);
+    box-shadow: inset 0 0 0 1px var(--brand);
+  }
+  .tier .tag {
+    font-size: 20px; font-weight: 700; letter-spacing: .16em; color: var(--ink-faint);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .tier.is-pick .tag { color: var(--brand-bright); }
+  .tier .price {
+    font-size: 62px; font-weight: 800; letter-spacing: -.04em;
+    font-variant-numeric: tabular-nums;
+  }
+  .tier .price small { font-size: .4em; font-weight: 600; letter-spacing: -.01em; }
+  .tier ul { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+  .tier li { font-size: 24px; color: var(--ink-dim); line-height: 1.4; }
+
+  /* ── 검색 이동 지표 ── */
+  .shift { display: grid; grid-template-columns: repeat(2, 1fr); gap: 26px 56px; }
+  .shift .row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: 20px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--rule);
+  }
+  .shift .name { font-size: 34px; font-weight: 700; }
+  .shift .move {
+    font-size: 34px; font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em;
+  }
+  .shift .move .from { color: var(--ink-faint); font-weight: 500; }
+  .shift .move .arrow { color: var(--ink-faint); margin: 0 10px; font-weight: 400; }
+  .shift .move .to.up   { color: var(--brand-bright); }
+  .shift .move .to.down { color: var(--alarm); }
+
+  /* ── 데모 브레이크 ── */
+  .demo { justify-content: center; gap: 34px; }
+  .demo .badge {
+    align-self: flex-start;
+    font-size: 20px; font-weight: 700; letter-spacing: .18em;
+    color: var(--ground); background: var(--brand-bright);
+    padding: 10px 20px; border-radius: 999px;
+  }
+  .demo h2 { font-size: 84px; }
+  .demo .cue { font-size: 28px; color: var(--ink-faint); }
+
+  /* ── 베타 조건 ── */
+  .offer { display: flex; flex-direction: column; gap: 22px; }
+  .offer .line {
+    display: grid; grid-template-columns: 300px 1fr; gap: 32px; align-items: baseline;
+    padding: 26px 0; border-bottom: 2px solid var(--rule);
+  }
+  .offer .when { font-size: 28px; font-weight: 700; color: var(--brand-bright); letter-spacing: -.01em; }
+  .offer .what { font-size: 36px; font-weight: 600; line-height: 1.4; }
+  .offer .what em { font-style: normal; color: var(--brand-bright); font-weight: 800; }
+
+  /* ── 엔딩 ── */
+  .end { justify-content: center; align-items: flex-start; gap: 40px; }
+  .end h1 { font-size: 120px; }
+  .url {
+    font-size: 56px; font-weight: 800; letter-spacing: -.02em; color: var(--brand-bright);
+  }
+  .qr-slot {
+    width: 200px; height: 200px;
+    border: 3px dashed var(--rule);
+    display: grid; place-items: center;
+    font-size: 18px; color: var(--ink-faint);
+    text-align: center; line-height: 1.4;
+  }
+  .end-row { display: flex; align-items: center; gap: 44px; }
+
+  /* ── 하단 레일 ── */
+  #rail {
+    position: absolute;
+    left: 104px; right: 104px; bottom: 44px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 19px; color: var(--ink-faint);
+    letter-spacing: .06em;
+    pointer-events: none;
+  }
+  #rail .chapter-name { font-weight: 600; }
+  #rail .count { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+  #progress {
+    position: absolute; left: 0; bottom: 0; height: 4px;
+    background: var(--brand);
+    transition: width 300ms cubic-bezier(.22,.72,.24,1);
+  }
+
+  /* ── 개요(O 키) ── */
+  #overview {
+    position: fixed; inset: 0; z-index: 20;
+    background: rgba(6,16,12,.97);
+    padding: 40px;
+    overflow-y: auto; overscroll-behavior: contain;
+    display: none;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    align-content: start;
+  }
+  #overview.is-open { display: grid; }
+  #overview button {
+    aspect-ratio: 16/9;
+    background: var(--ground-raised);
+    border: 2px solid var(--rule);
+    color: var(--ink-dim);
+    font-family: inherit;
+    font-size: 15px; font-weight: 600; line-height: 1.35;
+    padding: 12px; text-align: left; cursor: pointer;
+    display: flex; flex-direction: column; justify-content: space-between; gap: 8px;
+  }
+  #overview button:hover, #overview button:focus-visible {
+    border-color: var(--brand); color: var(--ink); outline: none;
+  }
+  #overview button .idx { font-family: var(--font-num); font-size: 13px; color: var(--brand-bright); }
+
+  /* ── 암전(. 키) ── */
+  #blackout {
+    position: fixed; inset: 0; z-index: 30; background: #000; display: none;
+  }
+  #blackout.is-on { display: block; }
+
+  /* ── 도움말 ── */
+  #help {
+    position: fixed; right: 18px; bottom: 14px; z-index: 15;
+    font-size: 13px; color: var(--ink-faint);
+    letter-spacing: .04em;
+    opacity: 0; transition: opacity 250ms;
+    pointer-events: none;
+  }
+  /* 촬영 중 화면에 남으면 안 되므로 ? 키로만 표시한다 */
+  #help.is-shown { opacity: 1; }
+</style>
+
+<div id="viewport">
+  <div id="stage">
+
+    <!-- ══════════ 0부 · 오프닝 ══════════ -->
+
+    <section class="slide cover" data-chapter="오프닝" data-title="표지">
+      <p class="eyebrow">청소업 사장님을 위한 공개 세미나</p>
+      <h1>청소업,<br>다음 3년</h1>
+      <div class="rule"></div>
+      <p class="lede">견적서 한 장으로 버티는 시대는 끝났습니다</p>
+      <div class="byline"><b>류승찬</b><span>다트클린 대표 · 퀄리오 만든 사람</span></div>
+    </section>
+
+    <section class="slide" data-chapter="오프닝" data-title="팔러 온 거 아닙니다">
+      <h1>오늘, 뭘<br>팔러 온 게 아닙니다</h1>
+      <p class="body">앞의 30분은 퀄리오 없이도 오늘 바로 쓰실 수 있는 이야기입니다.<br>제품은 맨 뒤 10분에만 나옵니다.</p>
+    </section>
+
+    <section class="slide" data-chapter="오프닝" data-title="저는 청소업을 합니다">
+      <p class="eyebrow">먼저 제 소개부터</p>
+      <h2>저는 청소업을 합니다</h2>
+      <ul class="points">
+        <li><span class="marker dot">—</span><span>울산에서 <b>다트클린</b>을 직접 운영합니다</span></li>
+        <li><span class="marker dot">—</span><span>견적 나가고, 현장 뛰고, 대금 못 받아본 사람입니다</span></li>
+        <li><span class="marker dot">—</span><span>퀄리오는 원래 <b>제가 쓰려고</b> 만든 도구입니다</span></li>
+      </ul>
+      <p class="kicker">그래서 오늘 이야기는 이론이 아닙니다</p>
+    </section>
+
+    <!-- ══════════ 1부 · 진단 ══════════ -->
+
+    <section class="slide chapter" data-chapter="1부 진단" data-title="[챕터] 진단">
+      <p class="num">1부</p>
+      <h1>왜 열심히 하는데<br>안 남습니까</h1>
+    </section>
+
+    <section class="slide" data-chapter="1부 진단" data-title="질문">
+      <h1>작년보다 일은 늘었는데,<br>통장은 왜 그대로일까요?</h1>
+    </section>
+
+    <section class="slide" data-chapter="1부 진단" data-title="97.6만 폐업">
+      <p class="eyebrow is-alarm">2025년, 대한민국</p>
+      <p class="stat is-alarm">97<span class="unit">만 6천 개</span></p>
+      <p class="stat-label">한 해 동안 문을 닫은 사업자 수입니다</p>
+      <p class="src">중소벤처기업부 「폐업자 현황 및 폐업 소상공인 실태조사」 (2026.6.30 발표) · 원자료 국세청 폐업자 현황, 2025년 기준</p>
+    </section>
+
+    <section class="slide" data-chapter="1부 진단" data-title="폐업률 11.08%">
+      <p class="eyebrow is-alarm">소상공인 주요 6대 업종 폐업률</p>
+      <p class="stat is-alarm">11.08<span class="unit">%</span></p>
+      <p class="stat-label">전체 평균 8.64%를 크게 웃돕니다. 서비스업은 이 6대 업종에 들어갑니다.</p>
+      <p class="src">중소벤처기업부 (2026.6.30) · 2025년 기준. 6대 업종 = 제조·도매·소매·음식·숙박·서비스업</p>
+    </section>
+
+    <section class="slide" data-chapter="1부 진단" data-title="49.2% — 3년 이상">
+      <h2>그런데 무너진 건<br>‘신참’이 아닙니다</h2>
+      <p class="stat is-alarm">49.2<span class="unit">%</span></p>
+      <p class="stat-label">폐업한 곳 중 <b>3년 이상 버틴 업체</b>의 비중입니다. 2023년 43.9% → 2025년 49.2%로 계속 오르고 있습니다.</p>
+      <p class="src">중소벤처기업부 (2026.6.30) · 존속기간 3~10년 34만 6,105개 + 10년 이상 13만 3,384개</p>
+    </section>
+
+    <section class="slide" data-chapter="1부 진단" data-title="70.9% — 매출 부진">
+      <p class="eyebrow is-alarm">문 닫은 사장님이 직접 꼽은 1순위 이유</p>
+      <p class="stat is-alarm">70.9<span class="unit">%</span></p>
+      <p class="stat-label">“수익성 악화 · 매출 부진”</p>
+      <p class="kicker is-alarm">실력이 없어서가 아니라, 매출이 없어서 닫습니다</p>
+      <p class="src">중소벤처기업부 폐업 소상공인 1,500명 실태조사 (2026.5 실시)</p>
+    </section>
+
+    <section class="slide" data-chapter="1부 진단" data-title="64.4% — 늦은 결심">
+      <p class="eyebrow is-alarm">가장 무서운 숫자는 이겁니다</p>
+      <p class="stat is-alarm">64.4<span class="unit">%</span></p>
+      <p class="stat-label">정상 매출의 <b>40% 이상이 빠진 뒤에야</b> 폐업을 결심합니다</p>
+      <p class="kicker is-alarm">40%가 빠진 다음에 손을 쓰면, 그건 이미 정리 수순입니다</p>
+      <p class="src">중소벤처기업부 폐업 소상공인 1,500명 실태조사 (2026.5 실시)</p>
+    </section>
+
+    <section class="slide" data-chapter="1부 진단" data-title="부채 8,531만원">
+      <p class="eyebrow is-alarm">닫는다고 끝나지 않습니다</p>
+      <div class="cols">
+        <div class="col">
+          <p class="n">부채 보유</p>
+          <h3>68.5%</h3>
+          <p>폐업 사장님 10명 중 7명은 빚을 안고 닫았습니다</p>
+        </div>
+        <div class="col">
+          <p class="n">평균 부채액</p>
+          <h3>8,531만 원</h3>
+          <p>문을 닫은 뒤에도 남는 금액입니다</p>
+        </div>
+        <div class="col">
+          <p class="n">60대 이상</p>
+          <h3>9,897만 원</h3>
+          <p>청소업은 60대 사장님이 많은 업종입니다</p>
+        </div>
+      </div>
+      <p class="src">중소벤처기업부 폐업 소상공인 1,500명 실태조사 (2026.5) · 제2금융권 부채 비중은 60대 이상 22.3%로 타 연령(약 10%)의 두 배</p>
+    </section>
+
+    <section class="slide" data-chapter="1부 진단" data-title="5년 생존율 36.4%">
+      <p class="eyebrow is-alarm">창업 5년 뒤에도 살아있는 비율</p>
+      <p class="stat is-alarm">36.4<span class="unit">%</span></p>
+      <p class="stat-label">10곳 중 6~7곳은 5년을 못 넘깁니다</p>
+      <p class="src">국가데이터처 「2024년 기업생멸행정통계(잠정)」 · 2018년 신생기업 기준 5년 생존율</p>
+    </section>
+
+    <section class="slide" data-chapter="1부 진단" data-title="문제는 구조">
+      <h2>문제는 실력이 아니라 <b style="color:var(--brand-bright)">구조</b>입니다</h2>
+      <div class="cols">
+        <div class="col">
+          <p class="n">구조 1</p>
+          <h3>1회성 중심</h3>
+          <p>일이 끝나는 순간 매출이 0으로 돌아갑니다. 매달 영업을 원점에서 다시 시작합니다.</p>
+        </div>
+        <div class="col">
+          <p class="n">구조 2</p>
+          <h3>단가표 견적</h3>
+          <p>숫자가 하나뿐이면 손님이 할 수 있는 건 비교와 흥정뿐입니다.</p>
+        </div>
+        <div class="col">
+          <p class="n">구조 3</p>
+          <h3>검색에 없음</h3>
+          <p>찾을 수 없는 업체는, 손님 입장에서 존재하지 않는 업체입니다.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ 2부 · 처방 ══════════ -->
+
+    <section class="slide chapter" data-chapter="2부 처방" data-title="[챕터] 처방">
+      <p class="num">2부</p>
+      <h1>살아남는 업체가<br>하는 세 가지</h1>
+    </section>
+
+    <section class="slide" data-chapter="2부 처방" data-title="하나 — 정기로">
+      <p class="eyebrow">하나</p>
+      <h1>1회성을 정기로<br>바꿉니다</h1>
+      <p class="body">1회성 청소는 끝나는 순간 매출이 0입니다. 정기 계약은 다음 달 매출을 미리 압니다.</p>
+      <p class="kicker">다음 달 매출을 알아야 사람을 뽑습니다.<br>사람을 뽑아야 규모가 커집니다.</p>
+    </section>
+
+    <section class="slide" data-chapter="2부 처방" data-title="1회성 vs 정기">
+      <h2>이번 달 매출이 같아도, 내년이 다릅니다</h2>
+      <table class="versus">
+        <thead>
+          <tr><th>비교</th><th>1회성 10건</th><th>정기 거래처 3곳</th></tr>
+        </thead>
+        <tbody>
+          <tr><th>이번 달 매출</th><td>같습니다</td><td class="win">같습니다</td></tr>
+          <tr><th>다음 달</th><td>다시 0에서 시작</td><td class="win">이미 확정</td></tr>
+          <tr><th>영업 비용</th><td>매달 다시 발생</td><td class="win">최초 한 번</td></tr>
+          <tr><th>단가</th><td>매번 비교당함</td><td class="win">관계로 유지</td></tr>
+          <tr><th>사람</th><td>못 뽑음 — 다음 달을 모르니까</td><td class="win">뽑을 수 있음</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="slide" data-chapter="2부 처방" data-title="둘 — 견적 3개">
+      <p class="eyebrow">둘</p>
+      <h1>견적을<br>세 개로 줍니다</h1>
+      <p class="body">숫자가 하나면 손님의 질문은 “할까, 말까”입니다.<br>숫자가 셋이면 “어느 걸 할까”로 바뀝니다.</p>
+      <p class="kicker">깎는 협상이, 고르는 선택으로 바뀝니다</p>
+    </section>
+
+    <section class="slide" data-chapter="2부 처방" data-title="3단계 견적 예시">
+      <p class="eyebrow">같은 현장, 같은 사장님, 견적서만 바꿨을 때</p>
+      <div class="tiers">
+        <div class="tier">
+          <p class="tag">기본</p>
+          <p class="price">80<small>만 원</small></p>
+          <ul>
+            <li>바닥·창틀 기본 청소</li>
+            <li>1회 방문</li>
+          </ul>
+        </div>
+        <div class="tier is-pick">
+          <p class="tag">추천 ✦</p>
+          <p class="price">140<small>만 원</small></p>
+          <ul>
+            <li>기본 전체 포함</li>
+            <li>유리·조명·환기구</li>
+            <li>2주 뒤 무상 재점검</li>
+          </ul>
+        </div>
+        <div class="tier">
+          <p class="tag">프리미엄</p>
+          <p class="price">220<small>만 원</small></p>
+          <ul>
+            <li>추천 전체 포함</li>
+            <li>바닥 왁스·마감 코팅</li>
+            <li>3개월 정기 관리</li>
+          </ul>
+        </div>
+      </div>
+      <p class="src">※ 금액은 설명을 위한 예시입니다. 실제 단가는 업체·현장마다 다릅니다.</p>
+    </section>
+
+    <section class="slide" data-chapter="2부 처방" data-title="셋 — 온라인에 남긴다">
+      <p class="eyebrow">셋</p>
+      <h1>온라인에<br>내 업체를 남깁니다</h1>
+      <p class="body">손님이 업체를 고르는 자리 자체가 지금 옮겨가고 있습니다.</p>
+    </section>
+
+    <section class="slide" data-chapter="2부 처방" data-title="검색이 옮겨가는 중">
+      <h2>9개월 만에 벌어진 일입니다</h2>
+      <div class="shift">
+        <div class="row"><span class="name">챗지피티</span><span class="move"><span class="from">39.6%</span><span class="arrow">→</span><span class="to up">54.5%</span></span></div>
+        <div class="row"><span class="name">네이버</span><span class="move"><span class="from">85.3%</span><span class="arrow">→</span><span class="to down">81.6%</span></span></div>
+        <div class="row"><span class="name">제미나이</span><span class="move"><span class="from">9.5%</span><span class="arrow">→</span><span class="to up">28.9%</span></span></div>
+        <div class="row"><span class="name">유튜브</span><span class="move"><span class="from">78.5%</span><span class="arrow">→</span><span class="to down">72.3%</span></span></div>
+      </div>
+      <p class="src">오픈서베이 「AI 검색 트렌드 리포트 2026」 · 전국 10~50대 남녀 각 1,000명 · 최근 3개월 내 이용률, 2025년 3월 → 2025년 12월 비교</p>
+    </section>
+
+    <section class="slide" data-chapter="2부 처방" data-title="그게 청소업에 무슨 뜻">
+      <h2>이게 청소업에 무슨 뜻이냐면</h2>
+      <p class="body">이제 손님은 “울산 사무실 청소 어디가 잘해?”를 챗지피티에도 물어봅니다.<br><br>그 답을 만드는 건, 내 업체에 대해 인터넷에 쌓여 있는 글입니다.</p>
+      <p class="kicker">글이 없으면, 추천될 수가 없습니다</p>
+    </section>
+
+    <section class="slide" data-chapter="2부 처방" data-title="근데 이걸 다 하려면">
+      <h2>그런데 이 셋을 다 하려면</h2>
+      <ul class="chores">
+        <li>거래처 제안서 쓰고</li>
+        <li>견적서 3개 만들고</li>
+        <li>시방서 뽑고</li>
+        <li>계약서 쓰고</li>
+        <li>매달 리포트 보내고</li>
+        <li>홈페이지 만들고</li>
+        <li>매주 글 쓰고</li>
+        <li>알림톡 보내고</li>
+        <li>직원 배정하고</li>
+        <li>장부 정리하고</li>
+        <li>정산하고</li>
+        <li>재방문 챙기고</li>
+      </ul>
+      <p class="kicker">…현장은 누가 뜁니까?</p>
+    </section>
+
+    <!-- ══════════ 3부 · 퀄리오 ══════════ -->
+
+    <section class="slide chapter" data-chapter="3부 퀄리오" data-title="[챕터] 그래서 만들었습니다">
+      <p class="num">3부</p>
+      <h1>그래서<br>만들었습니다</h1>
+    </section>
+
+    <section class="slide" data-chapter="3부 퀄리오" data-title="퀄리오 정의">
+      <p class="eyebrow">청소업 운영 도구</p>
+      <h1 style="color:var(--brand-bright)">퀄리오</h1>
+      <p class="lede" style="max-width:32ch">견적부터 재방문까지,<br>사장님이 안 해도 굴러가게</p>
+    </section>
+
+    <section class="slide demo" data-chapter="3부 퀄리오" data-title="[시연 1] 견적">
+      <p class="badge">시연 1</p>
+      <h2>손님이 견적을 넣으면,<br>3단계 견적이 자동으로 나갑니다</h2>
+      <p class="cue">→ 화면 전환 · 실제 견적 폼에 평수 입력부터</p>
+    </section>
+
+    <section class="slide demo" data-chapter="3부 퀄리오" data-title="[시연 2] 예약·알림톡">
+      <p class="badge">시연 2</p>
+      <h2>예약이 잡히면,<br>알림톡이 알아서 갑니다</h2>
+      <p class="cue">→ 화면 전환 · 예약 확정 후 사장님 폰에 오는 알림까지</p>
+    </section>
+
+    <section class="slide demo" data-chapter="3부 퀄리오" data-title="[시연 3] 거래처 문서">
+      <p class="badge">시연 3</p>
+      <h2>거래처 문서 네 가지가<br>버튼 하나로 나옵니다</h2>
+      <p class="cue">→ 화면 전환 · 견적서 · 시방서 · 용역계약서 · 월간 리포트</p>
+    </section>
+
+    <section class="slide demo" data-chapter="3부 퀄리오" data-title="[시연 4] 홈페이지·글">
+      <p class="badge">시연 4</p>
+      <h2>홈페이지와 글이<br>매일 알아서 쌓입니다</h2>
+      <p class="cue">→ 화면 전환 · 자동 생성된 홈페이지와 발행된 글 목록</p>
+    </section>
+
+    <section class="slide demo" data-chapter="3부 퀄리오" data-title="[시연 5] 매출·직원">
+      <p class="badge">시연 5</p>
+      <h2>매출 · 직원 · 정산이<br>한 화면에 있습니다</h2>
+      <p class="cue">→ 화면 전환 · 대시보드와 장부</p>
+    </section>
+
+    <section class="slide" data-chapter="3부 퀄리오" data-title="남는 일은 하나">
+      <h2>사장님께 남는 일은 하나입니다</h2>
+      <p class="stat is-brand">현장</p>
+      <p class="kicker">나머지는 퀄리오가 합니다</p>
+    </section>
+
+    <!-- ══════════ 4부 · 클로징 ══════════ -->
+
+    <section class="slide chapter" data-chapter="4부 제안" data-title="[챕터] 제안">
+      <p class="num">4부</p>
+      <h1>같이 만들<br>100팀을 찾습니다</h1>
+    </section>
+
+    <section class="slide" data-chapter="4부 제안" data-title="왜 지금 공짜냐">
+      <h2>왜 지금 공짜로 여느냐</h2>
+      <p class="body">좋은 도구는 잘하는 업체가 같이 만들어야 나옵니다.<br>저희는 지금 그 100팀을 찾고 있습니다.</p>
+      <p class="kicker">파는 게 아니라, 모시는 겁니다</p>
+    </section>
+
+    <section class="slide" data-chapter="4부 제안" data-title="베타 100팀 조건">
+      <p class="eyebrow">베타 100팀 조건</p>
+      <div class="offer">
+        <div class="line">
+          <p class="when">지금 ~ 10월 1일</p>
+          <p class="what">가장 비싼 <b>확장 플랜(월 49만 원)</b>의 모든 기능을 <em>무료</em>로</p>
+        </div>
+        <div class="line">
+          <p class="when">10월 1일 이후</p>
+          <p class="what">정식 요금이 시작돼도 <em>평생 정가의 50%</em>만 내십니다</p>
+        </div>
+        <div class="line">
+          <p class="when">자리</p>
+          <p class="what"><em>선착순 100팀</em> · 베타 번호는 가입하는 순간 확정됩니다</p>
+        </div>
+      </div>
+      <p class="fine">해지 후 재가입하거나 업체를 넘기는 경우에는 할인이 승계되지 않습니다.</p>
+    </section>
+
+    <section class="slide" data-chapter="4부 제안" data-title="현재 몇 번">
+      <p class="eyebrow">오늘 기준</p>
+      <!-- ★ 촬영 직전 /admin 에서 실제 베타 번호를 확인해 아래 숫자 두 개(21 / 79)를 바꿀 것 -->
+      <p class="stat is-brand">21<span class="unit">번</span></p>
+      <p class="stat-label">여기까지 찼습니다. 남은 자리는 <b style="color:var(--brand-bright)">79팀</b>입니다.</p>
+      <p class="src">※ 이 슬라이드는 촬영 직전에 실제 값으로 바꾼 뒤 찍을 것 — 숫자가 안 맞으면 영상을 다시 찍어야 합니다</p>
+    </section>
+
+    <section class="slide end" data-chapter="4부 제안" data-title="엔딩">
+      <h1>3년 뒤에도,<br>하고 계실 겁니까?</h1>
+      <div class="end-row">
+        <div>
+          <p class="url">qualio.co.kr</p>
+          <p class="fine" style="margin-top:12px">가입에 카드 등록 없습니다. 3분이면 끝납니다.</p>
+        </div>
+        <div class="qr-slot">QR 이미지<br>여기 교체</div>
+      </div>
+    </section>
+
+    <div id="rail">
+      <span class="chapter-name"></span>
+      <span class="count"></span>
+    </div>
+    <div id="progress"></div>
+  </div>
+</div>
+
+<div id="overview" role="dialog" aria-label="슬라이드 목록"></div>
+<div id="blackout"></div>
+<p id="help">← → 넘기기 · F 전체화면 · O 목록 · . 암전</p>
+
+<script>
+(function () {
+  var stage = document.getElementById('stage');
+  var slides = Array.prototype.slice.call(stage.querySelectorAll('.slide'));
+  var rail = document.getElementById('rail');
+  var railName = rail.querySelector('.chapter-name');
+  var railCount = rail.querySelector('.count');
+  var progress = document.getElementById('progress');
+  var overview = document.getElementById('overview');
+  var blackout = document.getElementById('blackout');
+  var help = document.getElementById('help');
+  var index = 0;
+
+  // ── 화면 크기에 맞춰 무대 배율 조정 (레이아웃은 절대 안 바뀜) ──
+  function fit() {
+    var scale = Math.min(window.innerWidth / 1600, window.innerHeight / 900);
+    stage.style.transform = 'scale(' + scale + ')';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+
+  function render() {
+    slides.forEach(function (s, i) { s.classList.toggle('is-active', i === index); });
+    var cur = slides[index];
+    var isCover = cur.classList.contains('cover');
+    rail.style.display = isCover ? 'none' : 'flex';
+    railName.textContent = cur.dataset.chapter || '';
+    railCount.textContent = (index + 1) + ' / ' + slides.length;
+    progress.style.width = ((index + 1) / slides.length * 100) + '%';
+    if (location.hash !== '#' + (index + 1)) history.replaceState(null, '', '#' + (index + 1));
+  }
+
+  function go(n) {
+    index = Math.max(0, Math.min(slides.length - 1, n));
+    render();
+  }
+
+  // ── 개요 ──
+  slides.forEach(function (s, i) {
+    var b = document.createElement('button');
+    b.innerHTML = '<span class="idx">' + String(i + 1).padStart(2, '0') + '</span>' +
+                  '<span>' + (s.dataset.title || '') + '</span>';
+    b.addEventListener('click', function () {
+      overview.classList.remove('is-open');
+      go(i);
+    });
+    overview.appendChild(b);
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { overview.classList.remove('is-open'); blackout.classList.remove('is-on'); return; }
+    if (blackout.classList.contains('is-on') && e.key !== '.') { blackout.classList.remove('is-on'); return; }
+
+    switch (e.key) {
+      // 프레젠터 리모컨은 보통 PageUp/PageDown 또는 방향키를 보낸다
+      case 'ArrowRight': case 'ArrowDown': case ' ': case 'PageDown': case 'Enter':
+        e.preventDefault(); go(index + 1); break;
+      case 'ArrowLeft': case 'ArrowUp': case 'PageUp': case 'Backspace':
+        e.preventDefault(); go(index - 1); break;
+      case 'Home': e.preventDefault(); go(0); break;
+      case 'End': e.preventDefault(); go(slides.length - 1); break;
+      case 'f': case 'F':
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.documentElement.requestFullscreen();
+        break;
+      case 'o': case 'O':
+        overview.classList.toggle('is-open'); break;
+      case '.':
+        blackout.classList.toggle('is-on'); break;
+      case '?':
+        help.classList.toggle('is-shown'); break;
+    }
+  });
+
+  // ── 클릭 / 스와이프 ──
+  document.getElementById('viewport').addEventListener('click', function (e) {
+    go(e.clientX < window.innerWidth * 0.25 ? index - 1 : index + 1);
+  });
+  var touchX = null;
+  document.addEventListener('touchstart', function (e) { touchX = e.changedTouches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (touchX === null) return;
+    var dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx) > 50) go(dx < 0 ? index + 1 : index - 1);
+    touchX = null;
+  }, { passive: true });
+
+  var fromHash = parseInt((location.hash || '').slice(1), 10);
+  if (fromHash > 0 && fromHash <= slides.length) index = fromHash - 1;
+  render();
+})();
+</script>

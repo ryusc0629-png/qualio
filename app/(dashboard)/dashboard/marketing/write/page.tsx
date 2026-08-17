@@ -1,6 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { EditorShell, type EditablePost } from './editor-shell'
+import { getDailyUsage, POST_DRAFT_SCOPE, POST_DRAFT_DAILY_LIMIT } from '@/lib/ratelimit/daily-quota'
 
 // 이미지 업로드·저장은 클라이언트에서 처리하므로 페이지 자체는 가볍다.
 export const maxDuration = 60
@@ -40,5 +41,16 @@ export default async function WritePostPage({
     post = data
   }
 
-  return <EditorShell businessId={profile.business_id} post={post} />
+  // 오늘 글을 몇 편 더 만들 수 있는지 (한국 날짜 기준, 자정에 초기화)
+  const usedToday = await getDailyUsage(db, POST_DRAFT_SCOPE, profile.business_id)
+  const remainingToday = Math.max(0, POST_DRAFT_DAILY_LIMIT - usedToday)
+
+  return (
+    <EditorShell
+      businessId={profile.business_id}
+      post={post}
+      remainingToday={remainingToday}
+      dailyLimit={POST_DRAFT_DAILY_LIMIT}
+    />
+  )
 }

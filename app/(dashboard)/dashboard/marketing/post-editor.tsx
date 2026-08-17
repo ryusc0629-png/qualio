@@ -28,12 +28,15 @@ interface PostEditorProps {
   }
   onClose: () => void
   onSaved: () => void
+  // 오늘 글을 몇 편 더 만들 수 있는지 (서버가 계산해 넘겨줌)
+  remainingToday?: number
+  dailyLimit?: number
 }
 
 // 본문 앞의 JSON 메타 블록(keyPoints/faqs) — 공개 페이지에선 숨겨지므로 편집창에서도 분리
 const META_BLOCK_RE = /^```json\n[\s\S]+?\n```\n/
 
-export function PostEditor({ businessId, post, onClose, onSaved }: PostEditorProps) {
+export function PostEditor({ businessId, post, onClose, onSaved, remainingToday, dailyLimit = 10 }: PostEditorProps) {
   const rawContent = post?.content ?? ''
   const metaMatch = rawContent.match(META_BLOCK_RE)
   const metaBlock = metaMatch ? metaMatch[0] : ''
@@ -46,6 +49,8 @@ export function PostEditor({ businessId, post, onClose, onSaved }: PostEditorPro
   const [summary, setSummary] = useState(post?.summary ?? '')
   // 현장 메모(신규 작성 시 사진+메모로 초안 자동 생성)
   const [notes, setNotes] = useState('')
+  // 오늘 남은 만들기 횟수 — 서버 값으로 시작해 만들 때마다 줄어든다
+  const [remaining, setRemaining] = useState(remainingToday ?? dailyLimit)
   const [published, setPublished] = useState(post?.published ?? true)
   const [imageUrls, setImageUrls] = useState<string[]>(post?.image_urls ?? [])
   const [beforeImageUrls, setBeforeImageUrls] = useState<string[]>(post?.before_image_urls ?? [])
@@ -77,6 +82,7 @@ export function PostEditor({ businessId, post, onClose, onSaved }: PostEditorPro
       setTitle(data.title)
       setSummary(data.summary)
       setContent(data.content)
+      setRemaining(data.remainingToday)
       toast.success('글 초안이 만들어졌어요. 내용을 확인하고 저장하세요')
     },
     onError: ({ error }) => {
@@ -215,7 +221,16 @@ export function PostEditor({ businessId, post, onClose, onSaved }: PostEditorPro
       {!post && !isPortfolio && (
         <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
           <div>
-            <h4 className="text-sm font-semibold">현장 메모로 빠르게 만들기</h4>
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-sm font-semibold">현장 메모로 빠르게 만들기</h4>
+              <span
+                className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  remaining > 0 ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                오늘 {remaining}편 남음
+              </span>
+            </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               오늘 한 작업을 편하게 적어주세요. 아래 &lsquo;사진&rsquo; 칸에 현장 사진을 먼저 올리면, 사진까지 보고 읽기 좋은 글로 만들어 드려요. (사진 없이 메모만으로도 됩니다)
             </p>
@@ -231,16 +246,32 @@ export function PostEditor({ businessId, post, onClose, onSaved }: PostEditorPro
           <Button
             type="button"
             onClick={handleGenerateFromNotes}
-            disabled={isGenerating || isPending || !notes.trim()}
-            className="gap-2"
+            disabled={isGenerating || isPending || !notes.trim() || remaining <= 0}
+            className="gap-2 h-12"
           >
             {isGenerating
               ? <><Loader2 className="h-4 w-4 animate-spin" />전문가 데이터로 작성 중이에요...</>
               : <><Sparkles className="h-4 w-4" />이 내용으로 글 만들기</>}
           </Button>
-          <p className="text-xs text-muted-foreground">
-            만든 글은 아래에서 바로 고칠 수 있어요. 마음에 들면 저장하세요.
-          </p>
+
+          {remaining > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              만든 글은 아래에서 바로 고칠 수 있어요. 마음에 들면 저장하세요.
+            </p>
+          ) : (
+            <p className="text-xs font-medium text-muted-foreground">
+              오늘 만들 수 있는 {dailyLimit}편을 다 쓰셨어요. 내일 다시 만들 수 있습니다.
+            </p>
+          )}
+
+          {/* 한도의 이유를 알려준다 — 막는 장치가 아니라 사장님 손해를 막는 장치라는 걸 알아야 납득한다 */}
+          <div className="rounded-md bg-white/70 border border-primary/20 p-3">
+            <p className="text-xs font-semibold">글은 하루 {dailyLimit}편까지, 몰아 쓰지 않는 게 좋아요</p>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              하루에 글을 몰아서 여러 편 올리면 네이버·구글이 &lsquo;찍어낸 글&rsquo;로 보고 홈페이지 순위를 오히려 낮춥니다.
+              하루 한두 편씩 꾸준히 올리는 쪽이 검색에 훨씬 잘 잡혀요.
+            </p>
+          </div>
         </div>
       )}
 

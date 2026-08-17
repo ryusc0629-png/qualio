@@ -170,8 +170,6 @@ export interface PostContent {
   content: string       // 본문 (마크다운)
   faqs: FaqItem[]       // 포스트 전용 FAQ 3개
   slug: string          // URL용 slug
-  imagePrompts?: string[] // 소제목별로 서로 다른 장면 3개 (맥락 맞춤 이미지용)
-  imagePrompt?: string  // (구버전 호환) 단일 장면 프롬프트 — imagePrompts 없을 때 폴백
 }
 
 interface PostInput {
@@ -294,20 +292,6 @@ faqs: 이 주제에서 독자가 실제로 궁금해할 질문 3개 + 명확한 
 
 slug: 제목을 영문 URL slug로 변환 (예: "air-conditioner-cleaning-guide")
 
-imagePrompts: 이 포스트에 넣을 서로 다른 사진 3장의 영문 장면 묘사 배열 (각 1~2문장, 영문만, 정확히 3개)
-  예시: [
-    "a Korean cleaning professional in company uniform and gloves using an electric pressure sprayer to deep-clean a disassembled wall-mounted air conditioner in a Korean apartment, a clear plastic funnel cover catching the wastewater, industrial steam extractor and wet/dry vacuum on the floor",
-    "close-up of a Korean technician's gloved hands scrubbing bathroom window frame grout with a steam cleaner, water droplets, chemical spray bottles nearby",
-    "a Korean cleaning worker wiping the back of a refrigerator pulled from the wall in a Korean kitchen, wet/dry vacuum and tools on protective sheeting"
-  ]
-  규칙:
-  - 반드시 소제목1·2·3(글의 서로 다른 부분) 각각에 어울리는 서로 다른 장면 3개로 구성할 것 — 같은 대상·같은 앵글 반복 금지
-  - ★대부분의 장면은 "청소 전문가가 실제로 작업하는 모습"으로. 반드시 "한국인(Korean)" 작업자 + 한국식 가정(Korean apartment/home)으로 명시할 것(서양인·서양주택 방지)
-  - ★★실제 한국 청소업체 장비를 구체적으로 등장시킬 것(두루뭉술 금지): 에어컨=분해+비닐 물받이 커버·전동 고압분무기·스팀추출기 / 욕실·창틀=스팀 세척기·약품 분무통 / 냉장고=산업용 진공청소기·극세사 천. 바닥 양생·공구 케이스가 보이면 좋음
-  - ⚠️ 곰팡이·오염·벌레·세균 등 혐오/위험 소재를 직접 묘사하지 말 것(이미지 안전필터에 막힘). "전문 세척 작업 중" 또는 "깨끗해진" 상태로
-  - 정면 얼굴 초상 클로즈업은 피하고(측면·뒷모습·손 위주), 글자/간판/로고 없는 장면으로
-  - 사실적 사진 스타일 (style 수식어는 시스템이 자동 추가하므로 장면만 묘사)
-
 === 반드시 아래 JSON 형식으로만 응답 ===
 {
   "title": "...",
@@ -319,8 +303,7 @@ imagePrompts: 이 포스트에 넣을 서로 다른 사진 3장의 영문 장면
     { "question": "...", "answer": "..." },
     { "question": "...", "answer": "..." }
   ],
-  "slug": "...",
-  "imagePrompts": ["...", "...", "..."]
+  "slug": "..."
 }`
 
   // 이미지가 있으면 URL로 직접 전달 (Claude vision)

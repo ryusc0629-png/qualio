@@ -1,0 +1,531 @@
+<title>세미나 촬영 대본</title>
+<style>
+  :root {
+    --paper:    #f6faf8;
+    --panel:    #ffffff;
+    --ink:      #101a15;
+    --ink-mid:  #46564e;
+    --ink-dim:  #74857c;
+    --rule:     #dde7e2;
+    --rule-soft:#eaf1ee;
+    --brand:    #059669;
+    --brand-ink:#046c4e;
+    --brand-wash:#e8f6f0;
+    --alarm:    #a86a12;
+    --alarm-wash:#fbf2e2;
+
+    --font-kr: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo",
+               "Noto Sans KR", "Malgun Gothic", sans-serif;
+    --font-num: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:     #0a1310;
+      --panel:     #101c17;
+      --ink:       #eaf2ee;
+      --ink-mid:   #a4b6ac;
+      --ink-dim:   #78897f;
+      --rule:      #1e2f27;
+      --rule-soft: #172520;
+      --brand:     #34e29b;
+      --brand-ink: #6ff0bb;
+      --brand-wash:#0f2a20;
+      --alarm:     #e8b04b;
+      --alarm-wash:#2a2113;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:     #0a1310;
+    --panel:     #101c17;
+    --ink:       #eaf2ee;
+    --ink-mid:   #a4b6ac;
+    --ink-dim:   #78897f;
+    --rule:      #1e2f27;
+    --rule-soft: #172520;
+    --brand:     #34e29b;
+    --brand-ink: #6ff0bb;
+    --brand-wash:#0f2a20;
+    --alarm:     #e8b04b;
+    --alarm-wash:#2a2113;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-kr);
+    font-size: 17px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    /* 한글은 단어 단위로 끊어야 읽힌다 */
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+
+  .wrap {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 72px 28px 140px;
+    display: flex;
+    flex-direction: column;
+    gap: 56px;
+  }
+
+  /* ── 헤더 ── */
+  header { display: flex; flex-direction: column; gap: 18px; }
+  .eyebrow {
+    font-size: 13px; font-weight: 700; letter-spacing: .18em;
+    color: var(--brand-ink);
+  }
+  h1 {
+    margin: 0;
+    font-size: 46px; font-weight: 800; letter-spacing: -.03em; line-height: 1.15;
+    text-wrap: balance;
+  }
+  .sub { margin: 0; font-size: 19px; color: var(--ink-mid); max-width: 60ch; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 10px 28px;
+    padding-top: 18px; border-top: 2px solid var(--rule);
+    font-size: 14px; color: var(--ink-dim);
+  }
+  .meta b { color: var(--ink); font-weight: 700; }
+
+  /* ── 섹션 ── */
+  section { display: flex; flex-direction: column; gap: 22px; }
+  h2 {
+    margin: 0;
+    font-size: 15px; font-weight: 800; letter-spacing: .14em;
+    color: var(--brand-ink);
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--brand);
+  }
+  h3 {
+    margin: 0;
+    font-size: 25px; font-weight: 800; letter-spacing: -.02em; line-height: 1.3;
+    text-wrap: balance;
+  }
+  p { margin: 0; }
+  .note { color: var(--ink-mid); max-width: 66ch; }
+
+  /* ── 체크리스트 ── */
+  .checks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+  .checks li {
+    display: grid; grid-template-columns: 26px 1fr; gap: 14px; align-items: start;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .checks li::before {
+    content: "";
+    width: 18px; height: 18px; margin-top: 5px;
+    border: 2px solid var(--rule); border-radius: 4px;
+  }
+  .checks li b { font-weight: 700; }
+  .checks li span.hint { display: block; font-size: 15px; color: var(--ink-dim); }
+
+  /* ── 대본 블록 ── */
+  .cue {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 26px;
+    padding: 26px 0;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .cue .slot { display: flex; flex-direction: column; gap: 6px; }
+  .cue .no {
+    font-family: var(--font-num); font-size: 13px; font-weight: 600;
+    letter-spacing: .08em; color: var(--brand-ink);
+  }
+  .cue .time {
+    font-family: var(--font-num); font-size: 12px; color: var(--ink-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .cue .content { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .cue .label { font-size: 14px; font-weight: 700; color: var(--ink-dim); letter-spacing: .04em; }
+  .cue .say {
+    font-size: 18px; line-height: 1.75; color: var(--ink);
+    padding-left: 16px; border-left: 3px solid var(--brand);
+  }
+  .cue .say em { font-style: normal; font-weight: 700; }
+  .cue .dir {
+    font-size: 15px; color: var(--ink-mid);
+    background: var(--rule-soft);
+    padding: 12px 16px; border-radius: 6px;
+  }
+  .cue .dir b { color: var(--ink); font-weight: 700; }
+
+  .chapter-head {
+    margin-top: 18px;
+    padding: 18px 22px;
+    background: var(--brand-wash);
+    border-left: 4px solid var(--brand);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .chapter-head .t { font-size: 20px; font-weight: 800; letter-spacing: -.02em; }
+  .chapter-head .d { font-size: 15px; color: var(--ink-mid); }
+
+  /* ── 경고 박스 ── */
+  .warn {
+    background: var(--alarm-wash);
+    border-left: 4px solid var(--alarm);
+    padding: 18px 22px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .warn .t { font-weight: 800; font-size: 16px; color: var(--alarm); letter-spacing: .02em; }
+  .warn p { font-size: 16px; color: var(--ink-mid); }
+
+  /* ── 표 ── */
+  .table-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 16px; min-width: 520px; }
+  th, td { padding: 13px 14px; text-align: left; border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  thead th {
+    font-size: 13px; font-weight: 700; letter-spacing: .1em; color: var(--ink-dim);
+    border-bottom: 2px solid var(--rule);
+  }
+  td b { font-weight: 700; }
+  td.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; color: var(--ink-mid); white-space: nowrap; }
+
+  /* ── 출처 ── */
+  .sources { display: flex; flex-direction: column; gap: 14px; }
+  .source {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 14px 0; border-bottom: 1px solid var(--rule-soft);
+    font-size: 15px;
+  }
+  .source .claim { font-weight: 700; }
+  .source .from { color: var(--ink-mid); }
+  .source a { color: var(--brand-ink); text-decoration: none; border-bottom: 1px solid var(--rule); word-break: break-all; }
+  .source a:hover, .source a:focus-visible { border-bottom-color: var(--brand); outline: none; }
+
+  @media (max-width: 620px) {
+    .wrap { padding: 44px 18px 100px; gap: 44px; }
+    h1 { font-size: 34px; }
+    .cue { grid-template-columns: 1fr; gap: 12px; }
+    .cue .slot { flex-direction: row; align-items: baseline; gap: 12px; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">퀄리오 공개 세미나 · 촬영용</p>
+    <h1>청소업, 다음 3년 — 촬영 대본</h1>
+    <p class="sub">슬라이드 35장 · 발표 45분 기준. 슬라이드 번호는 덱의 하단 표시와 일치합니다. 토씨 그대로 읽는 대본이 아니라, <b>반드시 나와야 하는 문장</b>과 <b>흐름</b>을 적은 것입니다.</p>
+    <div class="meta">
+      <span><b>발표</b> 류승찬</span>
+      <span><b>길이</b> 본편 45분 / 광고 소재 6컷</span>
+      <span><b>슬라이드</b> 35장</span>
+      <span><b>덱</b> deck.html — F키 전체화면</span>
+    </div>
+  </header>
+
+  <!-- ─────────── 촬영 전 ─────────── -->
+  <section>
+    <h2>촬영 전 체크리스트</h2>
+
+    <div class="warn">
+      <p class="t">가짜 청중 · 가짜 박수는 넣지 않습니다</p>
+      <p>청소업계는 좁습니다. “그날 거기 아무도 없었다”는 말 한 번이면 영상 전체의 신뢰가 무너집니다. 우리가 파는 게 사장님의 신뢰를 대신 만들어주는 도구인데, 우리 신뢰가 조작이면 앞뒤가 안 맞습니다. 카메라는 발표자와 스크린만 잡습니다 — 객석이 안 나와도 전혀 어색하지 않습니다.</p>
+    </div>
+
+    <ul class="checks">
+      <li><span><b>베타 사장님 5~8명 초대</b><span class="hint">진짜 질문이 나옵니다. 그 Q&amp;A가 강의보다 광고 소재로 셉니다. 안 모이면 무관중으로 찍으면 됩니다 — 문제 없습니다.</span></span></li>
+      <li><span><b>슬라이드 34번 숫자 채우기</b><span class="hint">지금은 21 / 79로 임시로 넣어뒀습니다. /admin 에서 실제 베타 번호를 확인해 deck.html 34번 슬라이드의 두 숫자를 바꾼 뒤 촬영하십시오. 숫자가 틀리면 그 컷을 다시 찍어야 합니다.</span></span></li>
+      <li><span><b>시연 계정 미리 세팅</b><span class="hint">실제 고객 정보가 화면에 뜨지 않게 데모용 업체로 로그인. 알림톡 수신 번호는 본인 폰으로.</span></span></li>
+      <li><span><b>노트북 배터리 · 알림 끄기</b><span class="hint">방해금지 모드 필수. 시연 중 카톡 알림이 뜨면 그 컷은 통째로 버립니다.</span></span></li>
+      <li><span><b>덱은 로컬 파일로 열기</b><span class="hint">강의실 와이파이를 믿지 마십시오. deck.html 을 노트북에 저장해서 브라우저로 열고 F키.</span></span></li>
+      <li><span><b>마이크는 핀마이크</b><span class="hint">강의실 울림 때문에 카메라 내장 마이크는 못 씁니다. 이 영상의 성패는 화질이 아니라 음질입니다.</span></span></li>
+      <li><span><b>카메라 2대</b><span class="hint">1번 = 발표자 상반신 고정, 2번 = 전체(스크린+발표자) 와이드. 편집에서 컷 전환할 때 필요합니다. 스크린은 별도로 화면 녹화도 같이 돌리십시오.</span></span></li>
+      <li><span><b>복장 — 작업복 아닌 셔츠</b><span class="hint">“청소하는 사람”이 아니라 “청소업을 설계하는 사람”으로 보여야 합니다. 넥타이는 없어도 됩니다.</span></span></li>
+    </ul>
+  </section>
+
+  <!-- ─────────── 대본 ─────────── -->
+  <section>
+    <h2>대본</h2>
+
+    <div class="chapter-head">
+      <span class="t">0부 · 오프닝</span>
+      <span class="d">슬라이드 1–3 · 약 3분 · 목표 = “이 사람 얘기는 들어볼 만하다”</span>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 01</span><span class="time">00:00</span></div>
+      <div class="content">
+        <p class="label">표지 — 청소업, 다음 3년</p>
+        <p class="say">안녕하십니까. 류승찬입니다.<br>오늘 여기서 45분 동안, 앞으로 3년 동안 청소업에 무슨 일이 벌어질지 말씀드리려고 합니다.</p>
+        <p class="dir"><b>연출</b> 슬라이드 띄운 채로 3초 정적. 급하게 시작하지 말 것. 이 3초가 “준비된 사람”으로 보이게 합니다.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 02</span><span class="time">00:40</span></div>
+      <div class="content">
+        <p class="label">오늘, 뭘 팔러 온 게 아닙니다</p>
+        <p class="say">먼저 하나만 짚고 가겠습니다. <em>오늘 저는 뭘 팔러 온 게 아닙니다.</em><br>앞의 30분은 저희 제품 없이도, 오늘 사무실 돌아가셔서 바로 쓰실 수 있는 이야기입니다. 제품 얘기는 맨 뒤 10분에만 하겠습니다. 그때 나가셔도 됩니다.</p>
+        <p class="dir"><b>왜 이 말이 필요한가</b> 광고로 이 영상을 처음 본 사람이 이탈하는 지점이 바로 여기입니다. “광고구나” 하고 나가려는 사람을 잡는 문장입니다. 반드시 넣으십시오.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 03</span><span class="time">01:20</span></div>
+      <div class="content">
+        <p class="label">저는 청소업을 합니다</p>
+        <p class="say">저는 울산에서 다트클린이라는 청소업체를 직접 운영합니다.<br>견적 나가고, 현장 뛰고, 대금 못 받아서 속 끓여본 사람입니다.<br>오늘 소개할 도구도 원래는 <em>제가 쓰려고</em> 만든 겁니다.<br>그래서 오늘 이야기는 책에서 본 이론이 아닙니다.</p>
+        <p class="dir"><b>이게 이 영상의 최대 무기입니다.</b> 다른 소프트웨어 회사 대표는 청소를 안 해봤습니다. 짧게, 담담하게 말하십시오. 자랑하듯 말하면 힘이 빠집니다.</p>
+      </div>
+    </div>
+
+    <div class="chapter-head">
+      <span class="t">1부 · 진단</span>
+      <span class="d">슬라이드 4–13 · 약 12분 · 목표 = “남 얘기가 아니구나”</span>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 04–05</span><span class="time">03:00</span></div>
+      <div class="content">
+        <p class="label">챕터 브레이크 → 질문</p>
+        <p class="say">여기 계신 분들께 하나 여쭙겠습니다.<br><em>작년보다 일은 늘었는데, 통장은 왜 그대로입니까?</em><br>… 저도 그랬습니다. 3년 동안.</p>
+        <p class="dir"><b>연출</b> 질문 던지고 <b>5초 기다리십시오.</b> 무관중이어도 기다려야 합니다. 편집에서 이 정적이 “찔린 사람의 시간”이 됩니다. 바로 다음 말로 넘어가면 효과가 사라집니다.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 06</span><span class="time">04:00</span></div>
+      <div class="content">
+        <p class="label">97만 6천 개</p>
+        <p class="say">작년 한 해, 우리나라에서 문 닫은 사업자가 97만 6천 개입니다.<br>중소벤처기업부가 국세청 자료로 지난 6월에 발표한 숫자입니다. 제가 만든 숫자가 아닙니다.</p>
+        <p class="dir"><b>중요</b> 통계 슬라이드마다 <b>출처 기관과 발표 시점을 입으로도 말하십시오.</b> 화면 하단에 적혀 있어도 말로 해야 “이 사람 근거 있이 말하는구나”가 됩니다.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 07</span><span class="time">05:00</span></div>
+      <div class="content">
+        <p class="label">11.08%</p>
+        <p class="say">그중에서도 소상공인이 몰려 있는 6대 업종, 폐업률이 11.08%입니다. 전체 평균 8.64%보다 한참 높습니다.<br>그리고 그 6대 업종 안에 <em>서비스업</em>이 들어갑니다. 우리 얘기입니다.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 08</span><span class="time">06:00</span></div>
+      <div class="content">
+        <p class="label">49.2% — 3년 이상 버틴 곳</p>
+        <p class="say">여기서 대부분 이렇게 생각하십니다. “처음 하는 사람들이 망한 거겠지.”<br>아닙니다.<br>문 닫은 곳 중에 <em>3년 이상 버틴 업체가 49.2%</em>입니다. 절반입니다. 2023년에는 43.9%였는데 계속 오르고 있습니다.<br>자리 잡은 업체가 무너지고 있다는 뜻입니다.</p>
+        <p class="dir"><b>이 슬라이드가 1부의 심장입니다.</b> “나는 오래 했으니 괜찮다”는 방어막을 깨는 지점. 여기서 톤을 한 단계 낮추고 천천히.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 09</span><span class="time">07:30</span></div>
+      <div class="content">
+        <p class="label">70.9% — 매출 부진</p>
+        <p class="say">그럼 왜 닫았을까요. 실제로 문 닫은 사장님 1,500분한테 물어봤습니다.<br>1순위가 70.9%로 “수익성 악화, 매출 부진”이었습니다.<br>기술이 모자라서가 아닙니다. 청소를 못해서 닫은 게 아닙니다. <em>매출이 없어서 닫았습니다.</em></p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 10</span><span class="time">08:40</span></div>
+      <div class="content">
+        <p class="label">64.4% — 40% 빠진 뒤에야</p>
+        <p class="say">그런데 저는 이 조사에서 제일 무서웠던 게 이 숫자였습니다.<br>64.4%가, <em>매출이 정상의 40% 이상 빠진 다음에야</em> 폐업을 결심합니다.<br>매출이 40% 빠진 다음에 뭘 해보겠다는 건, 사실 정리 수순입니다. 그때는 이미 늦습니다.<br>그러니까 오늘 이 자리는, 아직 안 빠졌을 때 손을 쓰자는 얘기입니다.</p>
+        <p class="dir"><b>여기가 1부 최고의 광고 컷 후보입니다.</b> 이 대목만 잘라도 30초 소재가 됩니다. 앞뒤로 2초씩 여백 두고 말하십시오.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 11</span><span class="time">10:00</span></div>
+      <div class="content">
+        <p class="label">부채 8,531만 원</p>
+        <p class="say">그리고 닫는다고 끝이 아닙니다.<br>폐업한 사장님 10명 중 7명이 빚을 안고 닫았고, 평균이 8,531만 원입니다.<br>60대 이상은 9,897만 원, 거의 1억입니다.<br>청소업, 60대 사장님 많은 업종입니다.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 12</span><span class="time">11:00</span></div>
+      <div class="content">
+        <p class="label">5년 생존율 36.4%</p>
+        <p class="say">창업하고 5년 뒤에도 살아있는 회사가 36.4%입니다.<br>10곳 중 6곳, 7곳은 5년을 못 넘깁니다.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 13</span><span class="time">12:00</span></div>
+      <div class="content">
+        <p class="label">문제는 실력이 아니라 구조</p>
+        <p class="say">저는 이 숫자들을 보면서 이렇게 정리했습니다.<br><em>문제는 실력이 아니라 구조입니다.</em><br>첫째, 1회성 중심이라 일이 끝나면 매출이 0으로 돌아갑니다. 매달 영업을 처음부터 다시 합니다.<br>둘째, 견적이 단가표라서 손님이 할 수 있는 게 비교하고 깎는 것뿐입니다.<br>셋째, 검색에 안 나옵니다. 손님 입장에서 찾을 수 없는 업체는 없는 업체입니다.<br>이 세 가지를 바꾸면 됩니다. 지금부터 하나씩 말씀드리겠습니다.</p>
+        <p class="dir"><b>연출</b> 1부에서 2부로 넘어가는 다리. 어두웠던 톤을 여기서 한 번 올리십시오. “바꾸면 됩니다”에서 목소리 톤 전환.</p>
+      </div>
+    </div>
+
+    <div class="chapter-head">
+      <span class="t">2부 · 처방</span>
+      <span class="d">슬라이드 14–22 · 약 15분 · 목표 = “오늘 뭘 하나 배웠다” (제품 없이 성립해야 함)</span>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 15–16</span><span class="time">15:00</span></div>
+      <div class="content">
+        <p class="label">하나 — 1회성을 정기로</p>
+        <p class="say">첫째, 1회성을 정기로 바꿔야 합니다.<br>1회성 청소는 끝나는 순간 매출이 0입니다. 다음 달을 모릅니다.<br>다음 달 매출을 모르면 사람을 못 뽑습니다. 사람을 못 뽑으면 사장님 몸이 곧 회사 규모의 한계입니다. 그게 청소업이 안 커지는 진짜 이유입니다.<br>표를 보시면, 이번 달 매출은 1회성 10건이나 정기 3곳이나 같을 수 있습니다. 그런데 <em>다음 달이 완전히 다릅니다.</em></p>
+        <p class="dir"><b>실무 팁 한 개 반드시 주기</b> — “첫 1회성 청소 끝나고 결과 보고할 때가 정기 제안 타이밍입니다. 만족도가 제일 높은 순간이 그때입니다.” 이런 바로 써먹을 조언 하나가 이 세미나의 신뢰를 만듭니다.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 17–18</span><span class="time">21:00</span></div>
+      <div class="content">
+        <p class="label">둘 — 견적을 세 개로</p>
+        <p class="say">둘째, 견적을 세 개로 주십시오.<br>숫자가 하나면 손님이 하는 질문은 “할까 말까”입니다. 그리고 “좀 깎아주세요”입니다.<br>숫자가 셋이면 질문이 바뀝니다. “어느 걸 할까”로.<br><em>깎는 협상이, 고르는 선택으로 바뀝니다.</em><br>화면의 금액은 설명을 위한 예시입니다. 중요한 건 금액이 아니라 <em>구조</em>입니다. 기본이 있고, 가운데 추천이 있고, 위에 하나 더 있어야 합니다.</p>
+        <p class="dir"><b>주의</b> 예시 금액을 “이 정도 받으세요”로 들리게 말하지 마십시오. 반드시 “예시입니다”를 붙이십시오.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 19–21</span><span class="time">26:00</span></div>
+      <div class="content">
+        <p class="label">셋 — 온라인에 남긴다 / 검색이 옮겨가는 중</p>
+        <p class="say">셋째입니다. 온라인에 내 업체를 남겨야 합니다.<br>그런데 이게 예전 얘기랑 좀 다릅니다. 손님이 업체를 고르는 자리 자체가 지금 옮겨가고 있습니다.<br>오픈서베이 조사를 보면, 9개월 만에 챗지피티 이용률이 39.6%에서 54.5%로 올랐습니다. 제미나이는 9.5%에서 28.9%. 반대로 네이버는 85.3%에서 81.6%로 내려왔습니다.<br>이게 우리한테 무슨 뜻이냐면, 이제 손님이 <em>“울산 사무실 청소 어디가 잘해?”를 챗지피티한테도 물어본다</em>는 겁니다.<br>그 답을 만드는 건 뭘까요. 내 업체에 대해 인터넷에 쌓여 있는 글입니다.<br><em>글이 없으면, 추천될 수가 없습니다.</em></p>
+        <p class="dir"><b>주의</b> 여기서 말하는 “AI”는 챗지피티·제미나이 같은 <b>외부 검색 서비스</b>를 가리킵니다. 우리 제품을 설명할 때는 “AI가 써줍니다”라고 하지 마십시오 — 3부 참고.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 22</span><span class="time">29:00</span></div>
+      <div class="content">
+        <p class="label">그런데 이 셋을 다 하려면</p>
+        <p class="say">자, 정리하면 이 세 가지입니다. 정기로 바꾸고, 견적 세 개 주고, 온라인에 글을 쌓는다.<br>그런데 이걸 실제로 하려면 뭘 해야 되냐면 — 거래처 제안서 쓰고, 견적서 세 개 만들고, 시방서 뽑고, 계약서 쓰고, 매달 리포트 보내고, 홈페이지 만들고, 매주 글 쓰고, 알림톡 보내고, 직원 배정하고, 장부 정리하고, 정산하고, 재방문 챙기고…<br>(잠깐 멈춤)<br><em>그럼 현장은 누가 뜁니까?</em></p>
+        <p class="dir"><b>연출</b> 목록을 <b>일부러 숨차게</b> 빠르게 읽으십시오. 그리고 마지막 질문에서 완전히 멈추십시오. 이 대비가 3부로 넘어가는 전환입니다. 여기가 두 번째 광고 컷 후보입니다.</p>
+      </div>
+    </div>
+
+    <div class="chapter-head">
+      <span class="t">3부 · 퀄리오</span>
+      <span class="d">슬라이드 23–30 · 약 12분 · 목표 = “저건 나도 쓸 수 있겠다”</span>
+    </div>
+
+    <div class="warn">
+      <p class="t">3부 화법 규칙 — “AI”라고 말하지 않습니다</p>
+      <p>우리 기능을 설명할 때 “AI가 만들어줍니다”라고 하면 40~60대 사장님께는 “대충 자동으로 딸깍한 것”으로 들립니다. <b>“전문가 데이터를 바탕으로 만들어 드립니다”, “자동으로 나갑니다”</b>로 말하십시오. 반대로 챗지피티·제미나이 같은 외부 검색을 가리킬 때는 “AI 검색”이라고 그대로 말해도 됩니다 (2부).</p>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 24</span><span class="time">31:00</span></div>
+      <div class="content">
+        <p class="label">퀄리오 — 한 줄 정의</p>
+        <p class="say">그래서 만들었습니다. 이름은 퀄리오입니다.<br>한 줄로 말씀드리면, <em>견적부터 재방문까지 사장님이 안 해도 굴러가게</em> 만드는 도구입니다.<br>지금부터 다섯 가지를 실제 화면으로 보여드리겠습니다. 슬라이드 말고 진짜 화면입니다.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 25–29</span><span class="time">32:00</span></div>
+      <div class="content">
+        <p class="label">시연 5가지 — 각 2분</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>순서</th><th>보여줄 것</th><th>반드시 말할 한 문장</th></tr></thead>
+            <tbody>
+              <tr><td class="num">시연 1</td><td>고객 견적 폼에 평수 입력 → 3단계 견적 자동 생성</td><td>“사장님은 아무것도 안 했습니다. 손님이 넣으면 견적이 알아서 나갑니다.”</td></tr>
+              <tr><td class="num">시연 2</td><td>예약 확정 → 고객 알림톡 발송 → 사장님 폰 알림</td><td>“문자 보내는 걸 잊어버려서 놓치는 예약, 이제 없습니다.”</td></tr>
+              <tr><td class="num">시연 3</td><td>거래처 하나 골라 견적서·시방서·용역계약서·월간 리포트 생성</td><td>“법인 거래처가 요구하는 서류가 이 네 가지입니다. 버튼 하나입니다.”</td></tr>
+              <tr><td class="num">시연 4</td><td>자동 생성된 홈페이지 + 발행된 글 목록</td><td>“아까 말씀드린 ‘글이 쌓여야 추천된다’, 그걸 대신 쌓아드립니다.”</td></tr>
+              <tr><td class="num">시연 5</td><td>대시보드 — 매출·직원 근태·정산 한 화면</td><td>“이번 달 얼마 벌었는지, 지금 이 화면에서 바로 보입니다.”</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="dir"><b>시연 원칙</b> 설명하지 말고 <b>해 보이십시오.</b> 클릭하고, 결과가 뜨고, 그다음에 한 문장. 순서 거꾸로 하면 지루해집니다. 로딩이 걸리면 침묵하지 말고 “이거 지금 실제로 돌아가는 겁니다”로 채우십시오.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 30</span><span class="time">42:00</span></div>
+      <div class="content">
+        <p class="label">남는 일은 하나 — 현장</p>
+        <p class="say">이걸 다 쓰시면 사장님께 남는 일은 하나입니다.<br><em>현장.</em><br>사장님이 제일 잘하시는 것, 그것만 하시면 됩니다. 나머지는 퀄리오가 합니다.</p>
+      </div>
+    </div>
+
+    <div class="chapter-head">
+      <span class="t">4부 · 제안</span>
+      <span class="d">슬라이드 31–35 · 약 4분 · 목표 = 지금 가입</span>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 32</span><span class="time">43:00</span></div>
+      <div class="content">
+        <p class="label">왜 지금 공짜로 여느냐</p>
+        <p class="say">여기서 이런 생각 하실 겁니다. “좋아 보이는데 얼마냐.”<br>지금은 안 받습니다. 이유를 솔직하게 말씀드리겠습니다.<br>좋은 도구는 잘하는 업체가 같이 만들어야 나옵니다. 저희는 지금 그런 100팀을 찾고 있습니다.<br><em>파는 게 아니라, 모시는 겁니다.</em></p>
+        <p class="dir"><b>왜 이 순서인가</b> 가격 얘기 전에 “왜 공짜인지”를 먼저 해명해야 합니다. 이유 없는 공짜는 의심을 삽니다.</p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 33</span><span class="time">44:00</span></div>
+      <div class="content">
+        <p class="label">베타 100팀 조건</p>
+        <p class="say">조건은 이렇습니다.<br>지금부터 10월 1일까지, 저희 제일 비싼 확장 플랜, 월 49만 원짜리인데, 그 모든 기능을 무료로 쓰십니다.<br>10월 1일에 정식 요금이 시작돼도, 베타 100팀은 <em>평생 정가의 50%</em>만 내십니다.<br>선착순 100팀이고, 번호는 가입하시는 순간 확정됩니다.<br>다만 해지하고 재가입하시거나 업체를 넘기시면 이 할인은 따라가지 않습니다. 미리 말씀드립니다.</p>
+        <p class="dir"><b>주의</b> 이 조건은 <code>lib/config/beta.ts</code>와 홈페이지 문구에 그대로 걸려 있습니다. 여기서 다르게 말하면 사이트와 말이 어긋납니다. <b>대본대로 말하십시오.</b></p>
+      </div>
+    </div>
+
+    <div class="cue">
+      <div class="slot"><span class="no">S 35</span><span class="time">44:40</span></div>
+      <div class="content">
+        <p class="label">엔딩 — 3년 뒤에도</p>
+        <p class="say">마지막으로 하나만 여쭙고 마치겠습니다.<br><em>3년 뒤에도, 지금 하시는 방식 그대로 하고 계실 겁니까?</em><br>아까 보신 49.2%, 3년 이상 버틴 업체들이 무너진 그 숫자 — 그분들도 3년 전에는 지금 우리처럼 괜찮았습니다.<br>퀄리오 닷 씨오 닷 케이알. 카드 등록 없고, 3분이면 끝납니다.<br>감사합니다.</p>
+        <p class="dir"><b>연출</b> 마지막 인사 후 <b>5초 더 서 있으십시오.</b> 바로 움직이면 엔딩 컷을 못 씁니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────── 편집 ─────────── -->
+  <section>
+    <h2>편집 — 광고 소재 6컷</h2>
+    <p class="note">45분 통짜는 광고가 안 됩니다. 촬영할 때부터 “여기를 자른다”를 알고 찍으십시오. 아래 여섯 군데는 앞뒤로 2초씩 여백을 두고 말해야 잘라 쓸 수 있습니다.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>컷</th><th>구간</th><th>길이</th><th>쓰는 곳</th></tr></thead>
+        <tbody>
+          <tr><td class="num">1</td><td>S10 “매출 40% 빠진 다음에 손 쓰면 정리 수순입니다”</td><td class="num">30초</td><td>메타 · 유튜브 인스트림 훅</td></tr>
+          <tr><td class="num">2</td><td>S22 할 일 12개 속사포 → “현장은 누가 뜁니까?”</td><td class="num">25초</td><td>릴스 · 쇼츠</td></tr>
+          <tr><td class="num">3</td><td>S03 “저는 청소업을 합니다” 자기소개</td><td class="num">20초</td><td>신뢰 소재 · 리타게팅</td></tr>
+          <tr><td class="num">4</td><td>S08 “무너진 건 신참이 아닙니다, 49.2%”</td><td class="num">35초</td><td>카페 · 오픈채팅 삽입</td></tr>
+          <tr><td class="num">5</td><td>시연 1 (견적 자동 생성) 화면 녹화만</td><td class="num">40초</td><td>기능 소개 · 랜딩 임베드</td></tr>
+          <tr><td class="num">6</td><td>S35 엔딩 “3년 뒤에도 하고 계실 겁니까”</td><td class="num">20초</td><td>전환 소재 · CTA</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note"><b>자막은 반드시 넣으십시오.</b> 메타·유튜브는 소리 끄고 보는 사람이 대부분입니다. 숫자가 나오는 대목은 화면에 숫자를 크게 얹으십시오.</p>
+  </section>
+
+  <!-- ─────────── 출처 ─────────── -->
+  <section>
+    <h2>슬라이드에 쓴 숫자의 출처</h2>
+    <p class="note">전부 정부 발표 또는 공개된 전문 조사기관 자료입니다. 세미나 후에 “그 숫자 어디서 났냐”는 질문을 받으면 이 표를 그대로 보여주시면 됩니다.</p>
+    <div class="sources">
+      <div class="source">
+        <span class="claim">폐업 97만 6천 개 · 폐업률 8.64% · 6대 업종 11.08% · 사업부진 50.4% · 3년 이상 49.2% · 실태조사 70.9% / 64.4% · 부채 68.5%, 평균 8,531만 원</span>
+        <span class="from">중소벤처기업부 「폐업자 현황 및 폐업 소상공인 실태조사」 2026.6.30 발표 · 정량은 국세청 폐업자 현황(2025년 기준), 정성은 폐업 소상공인 1,500명 설문(2026.5 실시)</span>
+        <a href="https://eiec.kdi.re.kr/policy/materialView.do?num=283540">KDI 경제정보센터 — 중기부 보도자료 원문</a>
+        <a href="https://www.khan.co.kr/article/202606302210015">경향신문 — 존속연수·부채 상세</a>
+      </div>
+      <div class="source">
+        <span class="claim">창업 5년 생존율 36.4%</span>
+        <span class="from">국가데이터처 「2024년 기업생멸행정통계(잠정)」 · 2018년 신생기업 기준</span>
+        <a href="https://www.kostat.go.kr/board.es?mid=a10301010000&bid=11469&act=view&list_no=438913">국가데이터처 보도자료</a>
+      </div>
+      <div class="source">
+        <span class="claim">챗지피티 39.6%→54.5% · 제미나이 9.5%→28.9% · 네이버 85.3%→81.6% · 유튜브 78.5%→72.3%</span>
+        <span class="from">오픈서베이 「AI 검색 트렌드 리포트 2026」 · 전국 10~50대 남녀 각 1,000명 · 최근 3개월 내 이용률, 2025년 3월 → 2025년 12월</span>
+        <a href="https://blog.opensurvey.co.kr/article/ai-search-2026-2/">오픈서베이 블로그</a>
+      </div>
+      <div class="source">
+        <span class="claim">3단계 견적 예시 금액 (80 / 140 / 220만 원)</span>
+        <span class="from">실제 집계가 아니라 <b>구조 설명을 위한 예시</b>입니다. 슬라이드에도 “예시입니다”라고 표기했고, 발표에서도 반드시 그렇게 말해야 합니다.</span>
+      </div>
+    </div>
+  </section>
+
+</div>

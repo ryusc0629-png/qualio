@@ -4,15 +4,25 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generatePostContent, generateTopicSuggestions, type TopicSuggestion } from '@/lib/ai/geo-content'
-import { generatePostImages, generatePostImagesSmart, POST_IMAGE_COUNT } from '@/lib/ai/image-gen'
 import { revalidatePath } from 'next/cache'
 import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
 import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContentEnabled } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
-import { fetchRecentJobCases, fetchRecentCasePhotos } from '@/lib/ai/job-cases'
+import { fetchRecentJobCases, fetchRecentCasePhotos, POST_PHOTO_COUNT } from '@/lib/ai/job-cases'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 import { getOrCreatePostPlan, pickTodayPlanSlot } from '@/lib/geo/post-plan'
 import { getRelatedKeywords } from '@/lib/keyword/naver-searchad'
+import { consumeDailyQuota, getDailyUsage, POST_DRAFT_SCOPE, POST_DRAFT_DAILY_LIMIT } from '@/lib/ratelimit/daily-quota'
+
+// 한도를 1회 차감하고, 다 썼으면 사장님이 이해할 수 있는 문구로 막는다.
+async function spendPostDraftQuota(db: Parameters<typeof consumeDailyQuota>[0], businessId: string) {
+  const allowed = await consumeDailyQuota(db, POST_DRAFT_SCOPE, businessId, POST_DRAFT_DAILY_LIMIT)
+  if (!allowed) {
+    throw new Error(
+      `[APP] 오늘은 글을 ${POST_DRAFT_DAILY_LIMIT}편까지 만들 수 있어요. 내일 다시 만들 수 있습니다`,
+    )
+  }
+}
 
 // 공통: 현재 유저의 business_id 조회
 async function getBusinessId() {
@@ -41,6 +51,7 @@ export const generatePostAction = action
   }))
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getBusinessId()
+    await spendPostDraftQuota(db, businessId)
 
     // 업체 정보 + 서비스 + 구독 플랜 조회
     const [businessResult, servicesResult, subResult] = await Promise.all([
@@ -120,14 +131,12 @@ export const generatePostAction = action
       : ''
     const fullContent = metaBlock + postContent.content
 
-    // 이미지 — 공개 승인된 작업보고의 진짜 비포/애프터 사진 우선, 없으면 AI 생성 폴백(자동발행과 동일 규칙)
+    // 이미지 — 공개 승인된 작업보고의 진짜 비포/애프터 사진만 싣는다(자동발행과 동일 규칙).
+    // 실사진이 없으면 사진 없이 글만 나간다 — 사진은 글별 '수정'에서 직접 올릴 수 있다.
     const casePhotos = await fetchRecentCasePhotos(db, businessId)
-    const realPhotoUrls = [...casePhotos.before, ...casePhotos.after].slice(0, POST_IMAGE_COUNT)
-    const usingRealPhotos = realPhotoUrls.length > 0
-    const imageUrls = usingRealPhotos
-      ? realPhotoUrls
-      : await generatePostImagesSmart(postContent.imagePrompts, postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
-    const coverUrl = (usingRealPhotos ? casePhotos.after[0] : undefined) ?? imageUrls[0] ?? null
+    const imageUrls = [...casePhotos.before, ...casePhotos.after].slice(0, POST_PHOTO_COUNT)
+    // 대표 이미지(커버)는 '결과'가 드러나는 애프터 사진을 우선 — 눈길을 끄는 게 애프터라서.
+    const coverUrl = casePhotos.after[0] ?? imageUrls[0] ?? null
 
     // DB 저장
     const { data: post, error } = await db
@@ -274,6 +283,7 @@ export const generatePostFromNotesAction = action
   }))
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getBusinessId()
+    await spendPostDraftQuota(db, businessId)
 
     const [businessResult, servicesResult, subResult] = await Promise.all([
       db
@@ -314,11 +324,16 @@ export const generatePostFromNotesAction = action
       model,
     })
 
+    // 남은 횟수를 함께 돌려줘 편집기가 새로고침 없이 "오늘 n번 남음"을 갱신하게 한다
+    const usedToday = await getDailyUsage(db, POST_DRAFT_SCOPE, businessId)
+
     return {
       success: true,
       title: postContent.title,
       summary: postContent.summary,
       content: postContent.content,
+      remainingToday: Math.max(0, POST_DRAFT_DAILY_LIMIT - usedToday),
+      dailyLimit: POST_DRAFT_DAILY_LIMIT,
     }
   })
 
@@ -417,23 +432,6 @@ export const setMonthlyTargetAction = action
 
     revalidatePath('/dashboard/marketing')
     return { success: true, limit }
-  })
-
-// AI 이미지 자동 생성 토글
-export const toggleAutoImageAction = action
-  .schema(z.object({ enabled: z.boolean() }))
-  .action(async ({ parsedInput }) => {
-    const { db, businessId } = await getBusinessId()
-
-    const { error } = await db
-      .from('businesses' as never)
-      .update({ auto_image_generation: parsedInput.enabled } as never)
-      .eq('id' as never, businessId)
-
-    if (error) throw new Error('[APP] 설정 저장에 실패했어요')
-
-    revalidatePath('/dashboard/marketing')
-    return { success: true }
   })
 
 // 오늘 자동 발행 수동 트리거 — "지금 발행" 버튼용
@@ -607,8 +605,9 @@ export const publishTodayAction = action
 
       const fullContent = metaBlock + postContent.content
 
-      // 이미지 자동 생성 (실패해도 포스팅 진행) — 게시물당 1회 N장
-      const imageUrls = await generatePostImagesSmart(postContent.imagePrompts, postContent.imagePrompt || postContent.title, POST_IMAGE_COUNT)
+      // 이미지 — 공개 승인된 작업보고의 진짜 비포/애프터 사진만 싣는다(없으면 사진 없이 발행)
+      const casePhotos = await fetchRecentCasePhotos(db, businessId)
+      const imageUrls = [...casePhotos.before, ...casePhotos.after].slice(0, POST_PHOTO_COUNT)
 
       const { data: savedPost, error } = await db.from('biz_posts').insert({
         business_id: businessId,
@@ -616,7 +615,7 @@ export const publishTodayAction = action
         title: postContent.title,
         content: fullContent,
         summary: postContent.summary,
-        image_url: imageUrls[0] ?? null,
+        image_url: casePhotos.after[0] ?? imageUrls[0] ?? null,
         image_urls: imageUrls,
         ai_generated: true,
         published: true,
@@ -649,42 +648,6 @@ export const publishTodayAction = action
       // 발행 성공/실패와 무관하게 락 해제 (예외 시에도 반드시 풀림)
       await db.from('businesses').update({ auto_post_lock_until: null } as never).eq('id', businessId)
     }
-  })
-
-// 포스트 이미지 생성 액션 — "이미지 생성" 버튼용
-// 게시물당 1회만: 이미 image_urls가 있으면 재생성 거부 (크레딧 중복 차단)
-export const generatePostImagesAction = action
-  .schema(z.object({ id: z.string().uuid() }))
-  .action(async ({ parsedInput }) => {
-    const { db, businessId } = await getBusinessId()
-
-    const { data: post } = await db
-      .from('biz_posts')
-      .select('title, image_urls')
-      .eq('id', parsedInput.id)
-      .eq('business_id', businessId)
-      .maybeSingle()
-
-    if (!post) throw new Error('[APP] 포스트를 찾을 수 없습니다')
-    if ((post.image_urls?.length ?? 0) > 0) {
-      throw new Error('[APP] 이미 이미지가 생성된 글이에요')
-    }
-
-    const imageUrls = await generatePostImages(post.title, POST_IMAGE_COUNT)
-    if (imageUrls.length === 0) {
-      throw new Error('[APP] 이미지를 만들지 못했어요. 잠시 후 다시 시도해주세요')
-    }
-
-    const { error } = await db
-      .from('biz_posts')
-      .update({ image_url: imageUrls[0], image_urls: imageUrls })
-      .eq('id', parsedInput.id)
-      .eq('business_id', businessId)
-
-    if (error) throw new Error('[APP] 이미지 저장에 실패했습니다')
-
-    revalidatePath('/dashboard/marketing')
-    return { success: true, imageUrls }
   })
 
 // 포스트 삭제 액션

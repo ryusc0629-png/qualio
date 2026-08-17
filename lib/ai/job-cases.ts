@@ -40,10 +40,15 @@ export async function fetchRecentJobCases(
     .filter(Boolean)
 }
 
+// 발행 글 한 편에 실을 사진 장수 (네이버 상위노출 균형점: 대표 1 + 본문용 2)
+export const POST_PHOTO_COUNT = 3
+
 // 자동 발행 글에 실을 "진짜 비포/애프터 사진"을 가져온다.
 // ★사장님이 공개로 승인한(is_public) 작업보고의 사진만 사용 — 미승인 고객 현장 사진이
 //   동의 없이 공개되는 것을 막는다(홈 비포/애프터 갤러리와 동일한 승인 기준).
-// AI 생성 이미지보다 실제 시공 사진이 청소업 설득력이 훨씬 크다(실사례=복제 불가 해자).
+// ★글에 실리는 사진은 실제 시공 사진뿐이다(2026-08-17, 자동 이미지 생성 기능 삭제).
+//   실사진이 없는 업체는 글에 사진이 붙지 않는다 — 사진 없이 만든 그림은 설득력이 없고,
+//   실사례가 곧 복제 불가능한 해자라서 의도적으로 그렇게 둔다.
 export async function fetchRecentCasePhotos(
   db: ServiceDb,
   businessId: string,

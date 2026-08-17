@@ -11,6 +11,7 @@ import { GeoShareCard } from '@/components/dashboard/geo-share-card'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { getOrCreatePostPlan } from '@/lib/geo/post-plan'
+import { getDailyUsage, POST_DRAFT_SCOPE, POST_DRAFT_DAILY_LIMIT } from '@/lib/ratelimit/daily-quota'
 
 // '지금 발행'(publishTodayAction)은 이 페이지에서 호출되는 Server Action이라
 // 이 라우트의 제한시간을 따른다. scale 플랜은 심층 글 + SNS 채널 원고까지
@@ -43,9 +44,9 @@ export default async function MarketingPage({
   const [businessResult, postsResult, subResult, pendingPortfolioResult, doneReelsResult] = await Promise.all([
     db
       .from('businesses')
-      .select('slug, name, address, monthly_post_target, auto_image_generation, topic_suggestions, topic_suggestions_month, naver_blog_id, danggeun_business_url' as never)
+      .select('slug, name, address, monthly_post_target, topic_suggestions, topic_suggestions_month, naver_blog_id, danggeun_business_url' as never)
       .eq('id', profile.business_id)
-      .maybeSingle() as unknown as { data: { slug: string | null; name: string | null; address: string | null; monthly_post_target: number; auto_image_generation: boolean; topic_suggestions: { title: string; reason: string; topic: string }[] | null; topic_suggestions_month: string | null; naver_blog_id: string | null; danggeun_business_url: string | null } | null },
+      .maybeSingle() as unknown as { data: { slug: string | null; name: string | null; address: string | null; monthly_post_target: number; topic_suggestions: { title: string; reason: string; topic: string }[] | null; topic_suggestions_month: string | null; naver_blog_id: string | null; danggeun_business_url: string | null } | null },
     db
       .from('biz_posts' as never)
       .select('id, slug, title, content, summary, published, ai_generated, published_at, image_url, image_urls, naver_title, naver_content, naver_tags, daangn_title, daangn_content, instagram_content, instagram_hashtags, post_type, before_image_urls, after_image_urls, channel_posted_at' as never)
@@ -106,6 +107,10 @@ export default async function MarketingPage({
   const planId = ((subResult.data?.plan as PlanId) ?? 'beta')
   const autoPostLimit = getAutoPostLimit(planId)
   const autoDailyPostLimit = getAutoDailyPostLimit(planId)
+
+  // 오늘 글을 몇 편 더 만들 수 있는지 (한국 날짜 기준, 자정에 초기화)
+  const draftUsedToday = await getDailyUsage(db, POST_DRAFT_SCOPE, profile.business_id)
+  const draftRemainingToday = Math.max(0, POST_DRAFT_DAILY_LIMIT - draftUsedToday)
 
   // 오늘 KST 기준 발행 건수 → 일 한도 초과 여부 확인
   // (서버 컴포넌트라 요청마다 서버에서 한 번만 실행 — 브라우저 재렌더와 무관)
@@ -178,7 +183,7 @@ export default async function MarketingPage({
         isTodayComplete={isTodayComplete}
         pendingPortfolios={pendingPortfolios}
         doneReels={doneReels}
-        autoImageGeneration={business?.auto_image_generation ?? true}
+        draftRemainingToday={draftRemainingToday}
         initialSuggestions={initialSuggestions}
         naverBlogId={business?.naver_blog_id ?? null}
         danggeunBusinessUrl={business?.danggeun_business_url ?? null}

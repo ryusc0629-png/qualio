@@ -106,7 +106,8 @@ interface PostListProps {
   isTodayComplete: boolean
   pendingPortfolios?: PendingPortfolio[]
   doneReels?: DoneReel[]
-  autoImageGeneration?: boolean
+  // 오늘 글을 몇 편 더 만들 수 있는지 (하루 한도 — 원가 보호 + 몰아쓰기로 인한 검색 순위 하락 방지)
+  draftRemainingToday: number
   // 서버가 이번 달 저장된 주제를 넘겨줌 — 있으면 재조회·스피너 없이 바로 표시
   initialSuggestions?: TopicSuggestion[] | null
   // 사장님 네이버 블로그 아이디 — '블로그 열기'가 이 블로그 글쓰기로 연결 (없으면 일반 글쓰기)
@@ -396,7 +397,7 @@ function ReelCard({
   )
 }
 
-export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], autoImageGeneration = true, initialSuggestions = null, naverBlogId = null, danggeunBusinessUrl = null, postPlan = null }: PostListProps) {
+export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], draftRemainingToday, initialSuggestions = null, naverBlogId = null, danggeunBusinessUrl = null, postPlan = null }: PostListProps) {
   const [posts] = useState(initialPosts)
   // 오름차순 정렬 (오래된 글 위 → 최신 글 아래) + 오늘 위치로 자동 스크롤
   const sortedPosts = [...posts].sort((a, b) => new Date(a.published_at).getTime() - new Date(b.published_at).getTime())
@@ -538,7 +539,8 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   })
 
   // 사장님이 처리해야 할 작업물 총합
-  // (이미지 미등록은 알리지 않음 — 자동 생성을 끈 건 이미지를 원치 않는다는 뜻. 사진은 글별 '수정'으로 직접 추가)
+  // (이미지 미등록은 알리지 않음 — 글에 실리는 사진은 공개 승인된 작업보고 사진뿐이고,
+  //  그 밖의 사진은 글별 '수정'에서 사장님이 직접 올린다)
   const totalTodos = doneReels.length + pendingPortfolios.length + channelTodos.length
 
   const { execute: fetchSuggestions, isPending: isLoadingSuggestions } = useAction(
@@ -657,7 +659,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           IG
         </button>
       )}
-      {/* 이미지가 있는 글(과거 자동생성분)만 보기 버튼 노출. 자동 생성 기능은 현재 OFF */}
+      {/* 사진이 붙은 글에만 보기 버튼 노출 (작업보고 실사진 또는 사장님이 직접 올린 사진) */}
       {(post.image_urls?.length ?? 0) > 0 && (
         <button
           type="button"
@@ -1016,6 +1018,12 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           </a>
         </Button>
       </div>
+
+      {/* 오늘 남은 만들기 횟수 + 몰아 쓰지 말아야 하는 이유 */}
+      <p className="text-xs text-muted-foreground -mt-1">
+        오늘 글을 <span className="font-semibold text-foreground">{draftRemainingToday}편</span> 더 만들 수 있어요.
+        하루에 몰아서 올리면 네이버·구글이 &lsquo;찍어낸 글&rsquo;로 보고 홈페이지 순위를 낮추기 때문에, 하루 한두 편씩 꾸준히 올리는 게 검색에 가장 잘 잡혀요.
+      </p>
 
       {/* 발행 중 안내 — 오래 걸려도 새로고침·재클릭하지 않도록 (중복 발행 방지) */}
       {isPublishing && (
