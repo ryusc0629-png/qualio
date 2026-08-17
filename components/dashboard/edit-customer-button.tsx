@@ -17,6 +17,7 @@ import { useAutoFocusRef } from '@/lib/hooks/use-auto-focus'
 import { formatPhone } from '@/lib/format/phone'
 import { AddressField } from '@/components/ui/address-field'
 import { FrequencyPicker } from '@/components/dashboard/frequency-picker'
+import { HolidayPolicyField } from '@/components/dashboard/holiday-policy-field'
 import type { EditContractTarget } from '@/components/dashboard/edit-contract-form'
 
 const customerSchema = z.object({
@@ -39,6 +40,7 @@ const contractSchema = z.object({
   start_date: z.string().min(1, '시작일을 입력해주세요'),
   end_date: z.string().optional(),
   contract_notes: z.string().optional(),
+  skip_holidays: z.boolean(),
 })
 
 type FormInput = z.infer<typeof customerSchema> & Partial<z.infer<typeof contractSchema>>
@@ -91,6 +93,7 @@ export function EditCustomerButton({ customer, contract }: EditCustomerButtonPro
       start_date: contract?.start_date ?? '',
       end_date: contract?.end_date ?? '',
       contract_notes: contract?.notes ?? '',
+      skip_holidays: contract?.skip_holidays !== false,
     },
   })
 
@@ -156,6 +159,7 @@ export function EditCustomerButton({ customer, contract }: EditCustomerButtonPro
           start_date: data.start_date ?? '',
           end_date: data.end_date,
           notes: data.contract_notes,
+          skip_holidays: data.skip_holidays,
         })
         if (contractResult?.serverError || contractResult?.validationErrors) {
           toast.error(contractResult.serverError ?? '고객 정보는 저장됐지만 계약은 저장 못 했어요. 다시 눌러주세요')
@@ -303,6 +307,12 @@ export function EditCustomerButton({ customer, contract }: EditCustomerButtonPro
                       error={errors.frequency?.message}
                     />
                   </div>
+
+                  {/* 공휴일에 갈지 말지 — 계약 내용에 맞춰 정하면 일정이 알아서 그렇게 깔린다 */}
+                  <HolidayPolicyField
+                    value={watch('skip_holidays') !== false}
+                    onChange={(v) => setValue('skip_holidays', v, { shouldDirty: true })}
+                  />
 
                   <div className="space-y-1">
                     <Label htmlFor="edit-contract-price">

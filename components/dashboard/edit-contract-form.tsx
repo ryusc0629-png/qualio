@@ -11,8 +11,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { updateContractAction } from '@/lib/actions/contracts'
 import { FrequencyPicker } from '@/components/dashboard/frequency-picker'
-import { Pencil, X, TrendingUp, CalendarOff } from 'lucide-react'
-import { KR_HOLIDAYS } from '@/lib/holidays/kr'
+import { Pencil, X, TrendingUp } from 'lucide-react'
+import { HolidayPolicyField } from '@/components/dashboard/holiday-policy-field'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import { useAutoFocusRef } from '@/lib/hooks/use-auto-focus'
 
@@ -53,15 +53,6 @@ function todayKst(): string {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
 }
 
-// 사장님이 "그래서 언제가 공휴일인데?"를 바로 알 수 있게 앞으로 3개만 보여준다
-function nextHolidayLabels(from: string, limit = 3): string[] {
-  return Object.entries(KR_HOLIDAYS)
-    .filter(([date]) => date >= from)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(0, limit)
-    .map(([date, name]) => `${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일 ${name}`)
-}
-
 export function EditContractForm({ contract, iconOnly, triggerClassName }: EditContractFormProps) {
   const [open, setOpen] = useState(false)
   const focusRef = useAutoFocusRef<HTMLDivElement>()
@@ -93,7 +84,6 @@ export function EditContractForm({ contract, iconOnly, triggerClassName }: EditC
   })
 
   const skipHolidays = watch('skip_holidays')
-  const upcomingHolidays = nextHolidayLabels(todayKst())
   const priceRaw = watch('contract_price')
   const nextPrice = Number(priceRaw)
   const priceChanged = Number.isFinite(nextPrice) && nextPrice > 0 && nextPrice !== contract.contract_price
@@ -175,37 +165,10 @@ export function EditContractForm({ contract, iconOnly, triggerClassName }: EditC
           </div>
 
           {/* 공휴일에 갈지 말지 — 계약 내용에 맞춰 정하면 일정이 알아서 그렇게 깔린다 */}
-          <div className="space-y-1">
-            <Label>공휴일엔 어떻게 하나요? (필수)</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { value: true, title: '쉬어요', desc: '공휴일은 일정에 안 잡혀요' },
-                { value: false, title: '그날도 가요', desc: '공휴일에도 평소처럼 잡혀요' },
-              ].map((o) => {
-                const on = skipHolidays === o.value
-                return (
-                  <button
-                    key={String(o.value)}
-                    type="button"
-                    onClick={() => setValue('skip_holidays', o.value, { shouldDirty: true })}
-                    aria-pressed={on}
-                    className={`rounded-lg border p-3 text-left transition-colors ${
-                      on ? 'border-primary bg-primary/5' : 'hover:border-primary/40'
-                    }`}
-                  >
-                    <p className="text-sm font-semibold">{o.title}</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">{o.desc}</p>
-                  </button>
-                )
-              })}
-            </div>
-            {upcomingHolidays.length > 0 && (
-              <p className="text-xs text-muted-foreground inline-flex items-center gap-1">
-                <CalendarOff className="h-3 w-3 shrink-0" />
-                다가오는 공휴일: {upcomingHolidays.join(', ')}
-              </p>
-            )}
-          </div>
+          <HolidayPolicyField
+            value={skipHolidays}
+            onChange={(v) => setValue('skip_holidays', v, { shouldDirty: true })}
+          />
 
           {/* 월 금액 */}
           <div className="space-y-1">

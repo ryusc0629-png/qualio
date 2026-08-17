@@ -75,6 +75,7 @@ type ContractRow = {
   // 월 금액 변경 이력 — 누적 매출을 구간별로 계산해 과거 소급을 막는다
   price_history: ContractPriceSegment[] | null
   notes: string | null
+  skip_holidays: boolean | null
 }
 
 // 계약 수정 모달에 넘길 값만 추림 (메모까지 넘겨야 저장 시 기존 메모가 지워지지 않는다)
@@ -87,6 +88,7 @@ function contractToEdit(c: ContractRow) {
     start_date: c.start_date,
     end_date: c.end_date,
     notes: c.notes,
+    skip_holidays: c.skip_holidays,
   }
 }
 
@@ -185,7 +187,7 @@ export default async function ClientsPage({
       .eq('business_id', businessId),
 
     db.from('contracts')
-      .select('id, customer_id, service_type, frequency, contract_price, status, start_date, end_date, requires_lockup, expected_duration_minutes, checklist_items, price_history, notes' as never)
+      .select('id, customer_id, service_type, frequency, contract_price, status, start_date, end_date, requires_lockup, expected_duration_minutes, checklist_items, price_history, notes, skip_holidays' as never)
       .eq('business_id', businessId),
 
     db.from('bookings')
