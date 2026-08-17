@@ -69,17 +69,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   // 검색엔진 소유확인 — 네이버 서치어드바이저·구글 서치콘솔이 발급한 코드를 홈 <head>에 그대로 내보낸다.
   // 업체별 값이라 DB에서 읽는다(다른 업체 도메인에 남의 인증 코드가 나가면 안 됨).
+  // (루트 layout이 퀄리오 자체 인증 코드를 넣으므로, 코드가 없는 업체는 빈 값으로 덮어
+  //  퀄리오 코드가 남의 도메인에 딸려 나가지 않게 한다)
   const naverCode = business.naver_site_verification?.trim()
   const googleCode = business.google_site_verification?.trim()
-  const verification = naverCode || googleCode
-    ? {
-        ...(googleCode ? { google: googleCode } : {}),
-        ...(naverCode ? { other: { 'naver-site-verification': naverCode } } : {}),
-      }
-    : undefined
+  const verification = {
+    ...(googleCode ? { google: googleCode } : {}),
+    ...(naverCode ? { other: { 'naver-site-verification': naverCode } } : {}),
+  }
 
   return {
-    ...(verification ? { verification } : {}),
+    verification,
     title,
     description,
     keywords,
