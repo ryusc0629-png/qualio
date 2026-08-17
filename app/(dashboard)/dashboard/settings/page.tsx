@@ -35,7 +35,7 @@ export default async function SettingsPage() {
   const [businessResult, subscriptionResult, serviceCountResult, publicReportResult] = await Promise.all([
     db
       .from('businesses')
-      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, previous_slugs, beta_number, lifetime_discount_rate, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, logo_url, favicon_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, legal_name, payment_account, certifications, portfolio, target_customer, custom_domain, custom_domain_status' as never)
+      .select('id, name, phone, address, description, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, youtube_url, instagram_url, naver_blog_id, danggeun_business_url, service_areas, review_reward_type, review_reward_description, slug, previous_slugs, beta_number, lifetime_discount_rate, seo_title, seo_description, seo_keywords, seo_faqs, seo_generated_at, seo_stale_at, logo_url, favicon_url, hero_image_url, brand_color, brand_color_secondary, hero_style, hero_title, hero_subtitle, strengths, owner_photo_url, owner_name, owner_greeting, owner_video_url, experience_years, business_number, legal_name, payment_account, certifications, portfolio, target_customer, custom_domain, custom_domain_status, naver_site_verification, google_site_verification' as never)
       .eq('id', profile.business_id)
       .maybeSingle(),
     db
@@ -73,6 +73,8 @@ export default async function SettingsPage() {
     beta_number: number | null; lifetime_discount_rate: number | null
     seo_title: string | null; seo_description: string | null
     seo_keywords: string | null; seo_faqs: unknown; seo_generated_at: string | null
+    seo_stale_at: string | null
+    naver_site_verification: string | null; google_site_verification: string | null
     logo_url: string | null; favicon_url: string | null
     hero_image_url: string | null; brand_color: string | null
     brand_color_secondary: string | null; hero_style: string | null
@@ -194,6 +196,7 @@ export default async function SettingsPage() {
         seoKeywords={business.seo_keywords ?? null}
         seoFaqs={(business.seo_faqs as unknown as FaqItem[]) ?? []}
         seoGeneratedAt={business.seo_generated_at ?? null}
+        seoStaleAt={business.seo_stale_at ?? null}
       />
       </div>
       </CollapsibleSection>
@@ -206,6 +209,8 @@ export default async function SettingsPage() {
         <CustomDomainSection
           domain={(business as { custom_domain?: string | null }).custom_domain ?? null}
           status={(business as { custom_domain_status?: string | null }).custom_domain_status ?? null}
+          naverVerification={business.naver_site_verification ?? null}
+          googleVerification={business.google_site_verification ?? null}
         />
       </CollapsibleSection>
 

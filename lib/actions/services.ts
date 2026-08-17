@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { recommendServiceTierItems } from '@/lib/ai/service-tier-items'
+import { markSeoStale } from '@/lib/seo/stale'
 import { revalidatePath } from 'next/cache'
 
 const VALID_UNITS = ['정액', '평당', '시간', '개', '상담'] as const
@@ -165,6 +166,8 @@ export const createServiceItemAction = action
 
     // 서비스 변경 시 번들 캐시 초기화 → 다음 견적 요청 시 AI가 새로 구성
     await invalidateBundleCache(db, profile.business_id)
+    // 홍보 페이지 문구도 이 서비스로 만들어진 것 → 다시 만들라고 표시
+    await markSeoStale(db, profile.business_id)
 
     revalidatePath('/dashboard/services')
     return { success: true }
@@ -276,6 +279,8 @@ export const duplicateServiceItemAction = action
 
     // 서비스 변경 시 번들 캐시 초기화 → 다음 견적 요청 시 AI가 새로 구성
     await invalidateBundleCache(db, profile.business_id)
+    // 홍보 페이지 문구도 이 서비스로 만들어진 것 → 다시 만들라고 표시
+    await markSeoStale(db, profile.business_id)
 
     revalidatePath('/dashboard/services')
     return { success: true }
@@ -309,6 +314,8 @@ export const deleteServiceItemAction = action
 
     // 서비스 변경 시 번들 캐시 초기화 → 다음 견적 요청 시 AI가 새로 구성
     await invalidateBundleCache(db, profile.business_id)
+    // 홍보 페이지 문구도 이 서비스로 만들어진 것 → 다시 만들라고 표시
+    await markSeoStale(db, profile.business_id)
 
     revalidatePath('/dashboard/services')
     return { success: true }

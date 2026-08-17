@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateSlug } from '@/lib/ai/geo-content'
+import { markSeoStale } from '@/lib/seo/stale'
 import { revalidatePath } from 'next/cache'
 
 // 한국 전화번호 검증 (빈 문자열 허용 — 선택 입력)
@@ -92,9 +93,12 @@ export const updateBusinessAction = action
     // slug가 없으면 미리보기가 홈페이지 대신 견적 폼(/q/...)으로 빠지는 문제 방지.
     const { data: bizRow } = await db
       .from('businesses')
-      .select('slug')
+      .select('slug, address, target_customer, service_areas' as never)
       .eq('id', profile.business_id)
-      .maybeSingle()
+      .maybeSingle() as unknown as { data: {
+        slug: string | null; address: string | null
+        target_customer: string | null; service_areas: string[] | null
+      } | null }
 
     let newSlug: string | null = null
     if (!bizRow?.slug) {
@@ -186,6 +190,17 @@ export const updateBusinessAction = action
         throw new Error('[APP] 대표님 성함을 저장하지 못했어요. 다시 눌러주세요')
       }
     }
+
+    // 홍보 페이지 문구를 만들 때 쓰는 재료(주력 고객·지역)가 바뀌었으면 다시 만들라고 표시.
+    // 특히 주력 고객을 상가·사무실로 바꿔도 옛 제목("입주청소·에어컨청소")이 그대로 나가던 문제.
+    const areas = parsedInput.service_areas
+      ? parsedInput.service_areas.split(',').map((s) => s.trim()).filter(Boolean)
+      : []
+    const seoInputChanged =
+      (parsedInput.target_customer || 'b2c') !== (bizRow?.target_customer ?? 'b2c') ||
+      (parsedInput.address || null) !== (bizRow?.address ?? null) ||
+      areas.join(',') !== (bizRow?.service_areas ?? []).join(',')
+    if (seoInputChanged) await markSeoStale(db, profile.business_id)
 
     revalidatePath('/dashboard/settings')
     revalidatePath('/dashboard', 'layout')

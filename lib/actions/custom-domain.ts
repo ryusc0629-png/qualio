@@ -180,3 +180,45 @@ export const disconnectCustomDomainAction = action
     revalidatePath('/dashboard/settings')
     return { success: true }
   })
+
+// 네이버·구글 검색 등록용 소유확인 코드 저장
+//
+// 네이버 서치어드바이저·구글 서치콘솔에 자기 도메인을 등록하려면 "이 사이트가 내 것"임을
+// 증명해야 하고, 그 방법이 홈페이지 <head>에 발급받은 코드를 넣는 것이다.
+// 사장님이 붙여넣는 값은 <meta ... content="여기"> 통째일 수도, content 값만일 수도 있어
+// 어느 쪽이든 받아 content 값만 뽑아 저장한다(안 그러면 태그가 태그 안에 들어가 깨진다).
+const verificationSchema = z.object({
+  naver: z.string().trim().max(500).optional(),
+  google: z.string().trim().max(500).optional(),
+})
+
+function extractVerificationCode(raw: string | undefined): string | null {
+  const v = (raw ?? '').trim()
+  if (!v) return null
+  // <meta name="naver-site-verification" content="abc123" /> 통째로 붙여넣은 경우
+  const fromTag = v.match(/content\s*=\s*["']([^"']+)["']/i)
+  return (fromTag ? fromTag[1] : v).trim() || null
+}
+
+export const updateSiteVerificationAction = action
+  .schema(verificationSchema)
+  .action(async ({ parsedInput }) => {
+    const { businessId } = await requireBusiness()
+
+    const db = createServiceClient()
+    const { error } = await db
+      .from('businesses')
+      .update({
+        naver_site_verification: extractVerificationCode(parsedInput.naver),
+        google_site_verification: extractVerificationCode(parsedInput.google),
+      } as never)
+      .eq('id', businessId)
+
+    if (error) {
+      console.error('[CustomDomain] 소유확인 코드 저장 실패:', error)
+      throw new Error('[APP] 저장 못 했어요. 다시 눌러주세요')
+    }
+
+    revalidatePath('/dashboard/settings')
+    return { success: true }
+  })

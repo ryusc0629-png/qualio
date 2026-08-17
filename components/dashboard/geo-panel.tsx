@@ -28,6 +28,7 @@ interface Props {
   seoKeywords: string | null
   seoFaqs: FaqItem[]
   seoGeneratedAt: string | null
+  seoStaleAt: string | null   // 서비스·주력고객이 마지막으로 바뀐 시각 — 생성 시각보다 나중이면 문구가 낡은 것
 }
 
 // 업체명을 주소(slug)로 변환 — 영문 소문자/숫자/하이픈만(한글·특수문자 제거).
@@ -57,6 +58,7 @@ export function GeoPanel({
   seoKeywords: initialKeywords,
   seoFaqs: initialFaqs,
   seoGeneratedAt,
+  seoStaleAt,
 }: Props) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
   const suggestedSlug = slugify(businessName ?? '')
@@ -89,6 +91,14 @@ export function GeoPanel({
   // (slug는 저장 시 자동 생성돼 있을 수 있어, slug로 판단하면 생성 전인데 '재생성'으로 잘못 뜸)
   const hasGenerated = !!seoGeneratedAt || !!seoTitle
 
+  // 만들어 둔 홈페이지 문구가 지금 서비스와 어긋나 있는지.
+  // 제목·소개글은 '만들기'를 누른 그 순간의 스냅샷이라, 서비스나 주력 고객을 바꿔도
+  // 저절로 따라오지 않는다. 그래서 검색에 옛 문구가 계속 걸리는 일이 실제로 있었다.
+  const [isStale, setIsStale] = useState(
+    hasGenerated && !!seoStaleAt &&
+    (!seoGeneratedAt || new Date(seoStaleAt) > new Date(seoGeneratedAt)),
+  )
+
   // AI GEO 콘텐츠 생성
   const router = useRouter()
 
@@ -103,6 +113,7 @@ export function GeoPanel({
       setDraftKeywords(data.geoContent.seoKeywords)
       setEditingKeywords(false)
       setFaqs(data.geoContent.faqs)
+      setIsStale(false)
       toast.success('홈페이지 내용을 만들었어요!')
       // 생성 완료 → 설정 페이지 서버 데이터 새로고침(seo_generated_at 갱신)
       // → 미리보기 체크리스트의 '홈페이지 내용 만들기'가 즉시 ✅로 바뀜
@@ -161,6 +172,29 @@ export function GeoPanel({
           {isGenerating ? '생성 중...' : (hasGenerated ? '재생성' : '생성하기')}
         </Button>
       </div>
+
+      {/* 서비스·주력고객을 바꾼 뒤 다시 안 만들면 검색에 옛 문구가 그대로 걸린다 */}
+      {isStale && !isGenerating && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-3">
+          <div>
+            <p className="text-sm font-medium text-amber-900">
+              서비스가 바뀌었는데 홈페이지 문구는 예전 그대로예요
+            </p>
+            <p className="mt-1 text-xs text-amber-800">
+              지금 검색에 나오는 제목·소개글은 예전에 만든 내용이에요. 아래 버튼을 눌러야 바뀐 서비스로 다시 만들어져요.
+            </p>
+          </div>
+          <Button
+            type="button"
+            onClick={() => generate({})}
+            disabled={!canGenerate}
+            className="h-12 w-full gap-2"
+          >
+            <Sparkles className="h-4 w-4" />
+            지금 최신 내용으로 다시 만들기
+          </Button>
+        </div>
+      )}
 
       {/* 공개 페이지 URL */}
       {slug && (

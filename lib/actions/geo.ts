@@ -29,12 +29,13 @@ export const generateGeoContentAction = action
     const [businessResult, servicesResult] = await Promise.all([
       db
         .from('businesses')
-        .select('id, name, address, description, slug, service_areas' as never)
+        .select('id, name, address, description, slug, service_areas, target_customer' as never)
         .eq('id', profile.business_id)
         .maybeSingle() as unknown as Promise<{ data: {
           id: string; name: string; address: string | null; description: string | null
           slug: string | null
           service_areas: string[] | null
+          target_customer: string | null
         } | null }>,
       db
         .from('service_items')
@@ -66,6 +67,7 @@ export const generateGeoContentAction = action
       description: business.description,
       services,
       serviceAreas: business.service_areas,
+      targetCustomer: business.target_customer,
     })
 
     // slug가 없으면 자동 생성
@@ -96,7 +98,9 @@ export const generateGeoContentAction = action
         seo_keywords:    geoContent.seoKeywords,
         seo_faqs:        geoContent.faqs as unknown as import('@/lib/types/database').Json,
         seo_generated_at: new Date().toISOString(),
-      })
+        // 방금 최신 재료로 다시 만들었으니 '낡음' 표시를 지운다
+        seo_stale_at:     null,
+      } as never)
       .eq('id', profile.business_id)
 
     if (error) throw new Error('[APP] GEO 콘텐츠 저장에 실패했습니다')

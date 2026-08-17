@@ -10,6 +10,7 @@ import {
   connectCustomDomainAction,
   checkCustomDomainAction,
   disconnectCustomDomainAction,
+  updateSiteVerificationAction,
 } from '@/lib/actions/custom-domain'
 import { Globe, Loader2, CheckCircle2, Copy, ExternalLink, AlertCircle } from 'lucide-react'
 
@@ -18,6 +19,10 @@ interface Props {
   domain: string | null
   /** 'none' | 'pending' | 'active' */
   status: string | null
+  /** 네이버 서치어드바이저 소유확인 코드 */
+  naverVerification?: string | null
+  /** 구글 서치콘솔 소유확인 코드 */
+  googleVerification?: string | null
 }
 
 interface DnsGuide {
@@ -26,10 +31,17 @@ interface DnsGuide {
   recordValue: string
 }
 
-export function CustomDomainSection({ domain, status }: Props) {
+export function CustomDomainSection({
+  domain,
+  status,
+  naverVerification,
+  googleVerification,
+}: Props) {
   const router = useRouter()
   const [input, setInput] = useState('')
   const [dns, setDns] = useState<DnsGuide | null>(null)
+  const [naverCode, setNaverCode]   = useState(naverVerification ?? '')
+  const [googleCode, setGoogleCode] = useState(googleVerification ?? '')
 
   const isLive = status === 'active' && !!domain
   const isPending = status === 'pending' && !!domain
@@ -61,6 +73,16 @@ export function CustomDomainSection({ domain, status }: Props) {
     },
     onError: ({ error }) => {
       toast.error(error.serverError ?? '확인하지 못했어요. 잠시 후 다시 눌러주세요')
+    },
+  })
+
+  const saveVerification = useAction(updateSiteVerificationAction, {
+    onSuccess: () => {
+      toast.success('저장했어요. 이제 네이버·구글에서 소유확인을 눌러주세요')
+      router.refresh()
+    },
+    onError: ({ error }) => {
+      toast.error(error.serverError ?? '저장 못 했어요. 다시 눌러주세요')
     },
   })
 
@@ -103,6 +125,51 @@ export function CustomDomainSection({ domain, status }: Props) {
         <p className="text-xs text-muted-foreground leading-relaxed">
           검색에 잡히기까지는 보통 2~4주 걸려요. 그동안 퀄리오 주소로 들어온 손님도 자동으로 이 주소로 옮겨져요.
         </p>
+
+        {/* 네이버·구글에 내 사이트 등록하기 —
+            등록해야 검색에 훨씬 빨리 잡힌다. 두 곳 다 "이 사이트가 내 것"임을 증명하라며
+            코드를 하나 주는데, 그걸 여기 붙여넣으면 홈페이지에 자동으로 심어준다. */}
+        <div className="space-y-3 rounded-lg border p-4">
+          <div>
+            <p className="text-sm font-medium">네이버·구글 검색에 등록하기</p>
+            <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+              네이버 서치어드바이저와 구글 서치콘솔에서 내 주소를 등록하면 검색에 훨씬 빨리 잡혀요.
+              등록할 때 &quot;사이트 소유확인&quot; 화면에서 주는 코드를 아래에 붙여넣고 저장하면 돼요.
+              태그 통째로 복사해서 붙여넣어도 알아서 처리해요.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-medium" htmlFor="naver-verification">네이버 코드</label>
+            <Input
+              id="naver-verification"
+              value={naverCode}
+              onChange={(e) => setNaverCode(e.target.value)}
+              placeholder="b131690bc142418aa08bca8fe0a5f4f9534be2fc"
+              className="h-12"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-medium" htmlFor="google-verification">구글 코드</label>
+            <Input
+              id="google-verification"
+              value={googleCode}
+              onChange={(e) => setGoogleCode(e.target.value)}
+              placeholder="google-site-verification=... 의 뒷부분"
+              className="h-12"
+            />
+          </div>
+
+          <Button
+            type="button"
+            className="h-12 w-full"
+            disabled={saveVerification.isPending}
+            onClick={() => saveVerification.execute({ naver: naverCode, google: googleCode })}
+          >
+            {saveVerification.isPending ? '저장 중...' : '검색 등록 코드 저장하기'}
+          </Button>
+        </div>
 
         <Button
           type="button"

@@ -58,6 +58,8 @@ interface GeoInput {
   description: string | null
   services: ServiceItem[]
   serviceAreas?: string[] | null // 추가 출장 지역 (주소 사다리 외 더 넓은 지역)
+  // 주력 고객('b2b' 상가·사무실 / 'b2c' 가정집). 제목·키워드에 어떤 서비스를 앞세울지 가른다
+  targetCustomer?: string | null
 }
 
 interface FaqItem {
@@ -94,6 +96,16 @@ export async function generateGeoContent(input: GeoInput): Promise<GeoContent> {
   // 지역 사다리 — 핵심 동/구에 집중하되 상위 지역(시·도·권역)을 가끔 언급해 검색 범위 확장
   const regionHint = buildRegionPromptHint(input.address, input.serviceAreas)
 
+  // 주력 고객 — 서비스 목록에 주거·상업이 섞여 있어도 사장님이 고른 쪽을 앞세운다.
+  // (이게 없으면 등록 순서나 개수에 따라 엉뚱한 서비스가 제목에 박힌다)
+  const audienceRule = input.targetCustomer === 'b2b'
+    ? `[주력 고객: 상가·사무실 등 사업장(B2B)]
+- seoTitle과 seoKeywords 앞쪽에는 반드시 사업장 대상 서비스(사무실·상가·공장·병원·학원 정기청소, 상업시설 대청소 등)를 앞세우세요.
+- 입주·이사청소나 가전청소 같은 가정집 대상 서비스는 실제로 제공하더라도 제목에 넣지 말고, 키워드 뒤쪽에 1~2개까지만 넣으세요.`
+    : `[주력 고객: 가정집(B2C)]
+- seoTitle과 seoKeywords 앞쪽에는 가정집 대상 서비스(입주·이사청소, 가전청소 등)를 앞세우세요.
+- 사업장 대상 정기청소는 실제로 제공하더라도 키워드 뒤쪽에 1~2개까지만 넣으세요.`
+
   const message = await client.messages.create({
     // GEO 콘텐츠는 업체당 가끔 1회 생성 — 품질이 곧 검색 노출이라 상위 모델 사용
     model: 'claude-sonnet-4-6',
@@ -112,10 +124,12 @@ ${regionHint}
 제공 서비스(카테고리별):
 ${serviceList}
 
+${audienceRule}
+
 중요: 위에 주어진 실제 정보(서비스·가격·지역·후기)만 사용하세요. 없는 사실을 지어내지 마세요.
 
 GEO 콘텐츠 생성 규칙:
-- seoTitle: 핵심 지역명 + 업체명 + 핵심 서비스 (60자 이내, 예: "강남 스파클 | 입주청소·정기청소 전문업체"). 제목에는 가장 좁은 핵심 지역(동/구)을 넣을 것.
+- seoTitle: 핵심 지역명 + 업체명 + 핵심 서비스 (60자 이내, 예: "강남 스파클 | 사무실·상가 정기청소 전문업체"). 제목에는 가장 좁은 핵심 지역(동/구)을 넣고, 서비스는 위 [주력 고객] 규칙을 따를 것.
 - seoDescription: 실제 서비스·가격대·지역을 녹인 핵심 가치 설명 (150자 이내, AI가 직접 인용할 수 있는 명확한 문장). 후기가 있으면 신뢰 요소를 자연스럽게 반영.
 - seoKeywords: 지역+서비스 조합 키워드 8개 (콤마 구분, 예: "강남 입주청소, 서초 정기청소, ..."). 핵심 지역(동/구)을 중심으로 하되, 키워드 2~3개는 상위 지역(시·도·권역)+서비스 조합으로 만들어 넓은 검색도 잡을 것. 추가 출장 지역이 있으면 1~2개 포함. 제공하지 않는 서비스는 넣지 말 것.
 - faqs: AI 검색엔진이 자주 답하는 질문 5개 + 명확한 답변 (각 답변 100자 이내). 가격 질문은 위 실제 가격을 근거로 답할 것.
