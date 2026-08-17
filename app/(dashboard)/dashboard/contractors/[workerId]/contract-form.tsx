@@ -27,6 +27,44 @@ function formatPhone(v: string): string {
   return `${n.slice(0, 3)}-${n.slice(3, 7)}-${n.slice(7)}`
 }
 
+// 넣을지 뺄지 고르는 조항 — 끄면 계약서에서 그 조가 통째로 빠지고 뒤 번호가 당겨진다
+function ToggleClause({
+  checked,
+  onToggle,
+  title,
+  hint,
+}: {
+  checked: boolean
+  onToggle: () => void
+  title: string
+  hint: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={checked}
+      className={[
+        'w-full rounded-lg border p-3 text-left transition-colors',
+        checked ? 'border-primary bg-primary/5' : 'border-border',
+      ].join(' ')}
+    >
+      <span className="flex items-center gap-2">
+        <span
+          className={[
+            'w-4 h-4 rounded border flex items-center justify-center shrink-0',
+            checked ? 'bg-primary border-primary' : 'border-muted-foreground/40',
+          ].join(' ')}
+        >
+          {checked && <CheckCircle2 className="h-3 w-3 text-white" />}
+        </span>
+        <span className="text-sm font-medium">{title}</span>
+      </span>
+      <span className="block text-xs text-muted-foreground mt-1 pl-6">{hint}</span>
+    </button>
+  )
+}
+
 const SETTLEMENT_OPTIONS: { value: SettlementMode; label: string; hint: string }[] = [
   { value: 'revenue_share', label: '매출 나누기', hint: '매출의 몇 %를 내 몫으로' },
   { value: 'per_job',       label: '건당 단가',   hint: '한 건 끝낼 때마다 얼마' },
@@ -46,7 +84,11 @@ export function ContractForm({
   signedAt: string | null
   hasSaved: boolean
 }) {
-  const [d, setD] = useState<SubcontractorContractData>(initial)
+  // 이 옵션이 생기기 전에 저장된 계약서에는 값이 없다 — '넣음'으로 채워 서버 검증에 걸리지 않게 한다
+  const [d, setD] = useState<SubcontractorContractData>({
+    ...initial,
+    includeGrowthSupport: initial.includeGrowthSupport !== false,
+  })
   const [saved, setSaved] = useState(hasSaved)
 
   const set = <K extends keyof SubcontractorContractData>(k: K, v: SubcontractorContractData[K]) =>
@@ -78,7 +120,7 @@ export function ContractForm({
     onError: ({ error }) => toast.error(error.serverError ?? '처리 못 했어요. 다시 눌러주세요'),
   })
 
-  const payload = { workerId, ...d }
+  const payload = { workerId, ...d, includeGrowthSupport: d.includeGrowthSupport !== false }
 
   return (
     <div className="space-y-4 pb-28">
@@ -311,29 +353,19 @@ export function ContractForm({
           <p className="text-xs text-muted-foreground">비워두면 계약서에 빈칸으로 나와 손으로 적을 수 있어요</p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => set('includeTransferOption', !d.includeTransferOption)}
-          className={[
-            'w-full rounded-lg border p-3 text-left transition-colors',
-            d.includeTransferOption ? 'border-primary bg-primary/5' : 'border-border',
-          ].join(' ')}
-        >
-          <span className="flex items-center gap-2">
-            <span
-              className={[
-                'w-4 h-4 rounded border flex items-center justify-center shrink-0',
-                d.includeTransferOption ? 'bg-primary border-primary' : 'border-muted-foreground/40',
-              ].join(' ')}
-            >
-              {d.includeTransferOption && <CheckCircle2 className="h-3 w-3 text-white" />}
-            </span>
-            <span className="text-sm font-medium">영업권 넘기기 조항 넣기</span>
-          </span>
-          <span className="block text-xs text-muted-foreground mt-1 pl-6">
-            나중에 이 도급사에게 거래처를 통째로 넘길 수 있는 우선권과 권리금 조항이에요. 필요 없으면 꺼두세요.
-          </span>
-        </button>
+        <ToggleClause
+          checked={d.includeGrowthSupport !== false}
+          onToggle={() => set('includeGrowthSupport', d.includeGrowthSupport === false)}
+          title="영업 노하우 알려주기 조항 넣기"
+          hint={`우리 영업·마케팅 자료와 방법을 ${workerName}에 아낌없이 알려주고, 혼자서도 할 수 있게 키워주겠다는 약속이에요. 부담되면 꺼두세요 — 끄면 '용역에 필요한 정보는 주되, 나머지는 그때그때 협의한다'로 바뀝니다.`}
+        />
+
+        <ToggleClause
+          checked={d.includeTransferOption}
+          onToggle={() => set('includeTransferOption', !d.includeTransferOption)}
+          title="영업권 넘기기 조항 넣기"
+          hint="나중에 이 도급사에게 거래처를 통째로 넘길 수 있는 우선권과 권리금 조항이에요. 필요 없으면 꺼두세요."
+        />
 
         <div className="space-y-1">
           <Label className="text-xs">특약 사항</Label>

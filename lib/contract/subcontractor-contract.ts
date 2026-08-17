@@ -24,6 +24,7 @@ export interface SubcontractorContractData {
   lossSplitPercent: number       // 공동 비용·손해의 갑 분담율(%) — 5:5면 50
   termMonths: number             // 계약 기간(개월)
   includeTransferOption: boolean // 영업권 이전 옵션 조항 포함 여부
+  includeGrowthSupport?: boolean // 영업 노하우 전수·자생 지원 조항 포함 여부(옛 저장분은 없음 → 포함으로 본다)
   specialTerms: string | null    // 특약 사항
   contractDate: string | null    // 계약 체결일 'YYYY-MM-DD'
 }
@@ -50,6 +51,7 @@ export const DEFAULT_CONTRACT_DATA: SubcontractorContractData = {
   lossSplitPercent: 50,
   termMonths: 12,
   includeTransferOption: true,
+  includeGrowthSupport: true,
   specialTerms: null,
   contractDate: null,
 }
@@ -200,24 +202,38 @@ export function buildSubcontractorContract(d: SubcontractorContractData): Contra
     ],
   })
 
-  sections.push({
-    title: '영업 · 마케팅 자료의 제공과 자생 지원',
-    items: [
-      '갑은 을이 스스로 영업과 운영을 할 수 있는 역량을 갖추도록, 자신이 보유한 영업 및 마케팅에 관한 자료와 노하우를 아낌없이 제공한다. 여기에는 견적·시방·계약 양식, 홍보 자료, 고객 응대 방법, 마케팅 전략, 채널 운영 방법 등이 포함된다.',
-      '갑은 자신이 진행하는 영업 활동의 내용과 진행 상황을 을에게 투명하게 공유하며, 을의 성장에 필요하다고 판단되는 정보를 지속적으로 전달한다.',
-      '본 조는 을의 자립을 촉진하기 위한 것으로, 을은 제공받은 자료를 본 계약의 목적과 양 당사자의 공동 이익을 위해 성실히 활용한다.',
-      '갑이 자신의 몫을 판촉과 마케팅에 재투자하는 것은 을에게 안정적인 거래처와 물량을 공급하기 위함이며, 을의 안정적 실행과 품질 유지는 다시 갑의 영업 기반을 강화한다. 양 당사자는 이러한 선순환이 본 파트너십의 근간임을 확인하고, 각자의 재투자와 노력이 상대방의 성장으로 이어지도록 협력한다.',
-    ],
-  })
+  // 노하우 전수·자생 지원은 파트너십 색이 짙은 조항이라 뺄 수 있게 한다.
+  // (옛 저장분에는 이 필드가 없으므로 undefined는 '포함'으로 본다)
+  const withGrowthSupport = d.includeGrowthSupport !== false
 
-  sections.push({
-    title: '상호 협력 의무',
-    items: [
-      '갑은 을의 사업 운영과 업무 수행에 도움이 필요할 경우, 요청이 있으면 언제든 함께 참여하여 협력할 의무를 진다.',
-      '갑은 을의 성장에 필요한 정보, 자료, 노하우를 전부 제공하며, 이를 이유로 별도의 대가를 청구하지 아니한다. 다만 상당한 비용이 수반되는 경우 앞 조에 따라 분담할 수 있다.',
-      '을 또한 갑의 영업 활동에 필요한 현장 정보와 실적 자료를 성실히 제공하여 상호 협력한다.',
-    ],
-  })
+  if (withGrowthSupport) {
+    sections.push({
+      title: '영업 · 마케팅 자료의 제공과 자생 지원',
+      items: [
+        '갑은 을이 스스로 영업과 운영을 할 수 있는 역량을 갖추도록, 자신이 보유한 영업 및 마케팅에 관한 자료와 노하우를 아낌없이 제공한다. 여기에는 견적·시방·계약 양식, 홍보 자료, 고객 응대 방법, 마케팅 전략, 채널 운영 방법 등이 포함된다.',
+        '갑은 자신이 진행하는 영업 활동의 내용과 진행 상황을 을에게 투명하게 공유하며, 을의 성장에 필요하다고 판단되는 정보를 지속적으로 전달한다.',
+        '본 조는 을의 자립을 촉진하기 위한 것으로, 을은 제공받은 자료를 본 계약의 목적과 양 당사자의 공동 이익을 위해 성실히 활용한다.',
+        '갑이 자신의 몫을 판촉과 마케팅에 재투자하는 것은 을에게 안정적인 거래처와 물량을 공급하기 위함이며, 을의 안정적 실행과 품질 유지는 다시 갑의 영업 기반을 강화한다. 양 당사자는 이러한 선순환이 본 파트너십의 근간임을 확인하고, 각자의 재투자와 노력이 상대방의 성장으로 이어지도록 협력한다.',
+      ],
+    })
+  }
+
+  // 노하우 전수를 뺐으면 '노하우를 전부 제공한다'는 항도 함께 빠져야 앞뒤가 맞는다
+  const cooperationItems = [
+    '갑은 을의 사업 운영과 업무 수행에 도움이 필요할 경우, 요청이 있으면 언제든 함께 참여하여 협력할 의무를 진다.',
+  ]
+  if (withGrowthSupport) {
+    cooperationItems.push(
+      '갑은 을의 성장에 필요한 정보, 자료, 노하우를 전부 제공하며, 이를 이유로 별도의 대가를 청구하지 아니한다. 다만 상당한 비용이 수반되는 경우 앞 조에 따라 분담할 수 있다.'
+    )
+  } else {
+    cooperationItems.push(
+      '갑은 을이 맡은 용역을 수행하는 데 필요한 정보와 자료를 제공한다. 그 밖에 갑이 보유한 영업·마케팅 자료와 노하우의 제공 범위는 양 당사자가 그때그때 협의하여 정한다.'
+    )
+  }
+  cooperationItems.push('을 또한 갑의 영업 활동에 필요한 현장 정보와 실적 자료를 성실히 제공하여 상호 협력한다.')
+
+  sections.push({ title: '상호 협력 의무', items: cooperationItems })
 
   if (d.includeTransferOption) {
     sections.push({

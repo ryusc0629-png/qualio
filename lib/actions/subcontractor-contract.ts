@@ -61,6 +61,7 @@ const contractSchema = z.object({
   lossSplitPercent: z.number().int().min(0).max(100),
   termMonths:    z.number().int().min(1).max(120),
   includeTransferOption: z.boolean(),
+  includeGrowthSupport: z.boolean(),
   specialTerms:  z.string().max(3000).nullable(),
   contractDate:  z.string().max(10).nullable(),
 })
@@ -84,6 +85,7 @@ export const saveSubcontractorContractAction = action
       lossSplitPercent: rest.lossSplitPercent,
       termMonths: rest.termMonths,
       includeTransferOption: rest.includeTransferOption,
+      includeGrowthSupport: rest.includeGrowthSupport,
       specialTerms: rest.specialTerms,
       contractDate: rest.contractDate,
     }
