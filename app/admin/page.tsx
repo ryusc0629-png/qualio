@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { getAdminMetrics } from '@/lib/admin/metrics'
 import { getRegionCrowding } from '@/lib/admin/region-crowding'
 import { computeNrr, getMrrTrend } from '@/lib/admin/snapshot'
@@ -187,7 +188,10 @@ export default async function AdminMetricsPage() {
           <p className="text-xs text-muted-foreground">
             퀄리오 주소를 함께 쓰는 업체를 시군구로 묶은 것. 한 지역에 3곳이 되면
             뒤쪽 업체는 페이지를 만들어도 검색 노출이 안 나온다(검색엔진이 한 검색어에 한 도메인 결과를 1~2개만 보여줌).
-            그 지역부터 자체 도메인 안내를 시작할 것.
+            그 지역부터 자체 도메인 안내를 시작할 것.{' '}
+            <Link href="/admin/domain-outreach" className="text-foreground underline hover:text-primary">
+              연락 명단 보기 →
+            </Link>
           </p>
         </div>
 

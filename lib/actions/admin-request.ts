@@ -42,3 +42,30 @@ export const updateBusinessRequestAction = action
     revalidatePath('/admin/requests')
     return { success: true }
   })
+
+// 자체 도메인 권유 연락을 남긴다 — 같은 사장님께 반복 전화하는 걸 막기 위한 기록
+const pitchSchema = z.object({
+  businessId: z.string().uuid(),
+  /** true면 방금 연락함, false면 기록을 지워 다시 명단 위로 올린다 */
+  contacted: z.boolean(),
+})
+
+export const markDomainPitchAction = action
+  .schema(pitchSchema)
+  .action(async ({ parsedInput }) => {
+    await assertAdmin()
+
+    const db = createServiceClient()
+    const { error } = await db
+      .from('businesses')
+      .update({ domain_pitch_at: parsedInput.contacted ? new Date().toISOString() : null } as never)
+      .eq('id', parsedInput.businessId)
+
+    if (error) {
+      console.error('[AdminRequest] 도메인 권유 기록 실패:', error)
+      throw new Error('[APP] 기록하지 못했어요. 다시 눌러주세요')
+    }
+
+    revalidatePath('/admin/domain-outreach')
+    return { success: true }
+  })
