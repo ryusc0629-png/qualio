@@ -1,7 +1,7 @@
 import 'server-only'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getReviewSummary } from '@/lib/reviews/get-reviews'
-import type { ProposalBusiness, ProposalExtras, ProposalBeforeAfter } from './build'
+import type { ProposalBusiness, ProposalExtras } from './build'
 import type { ProposalSettings } from './content'
 
 export interface ProposalContext {
@@ -68,43 +68,35 @@ async function loadProposalExtras(
       .limit(12),
   ])
 
-  // 시공 사례 — ① 직접 등록한 비포·애프터 ② 홈 공개한 작업 보고의 첫 비포·애프터 (홈페이지와 같은 규칙)
-  const manual: ProposalBeforeAfter[] = (business.portfolio ?? [])
-    .filter((p) => p.before?.trim() && p.after?.trim())
-    .map((p) => ({ before: p.before as string, after: p.after as string }))
-
   const reportRows =
     (reportResult as unknown as {
       data: { id: string; report_photos: { url: string; type: string; sort_order: number }[] | null }[] | null
     }).data ?? []
 
-  const fromReports: ProposalBeforeAfter[] = reportRows
-    .map((r) => {
-      const photos = r.report_photos ?? []
-      const pick = (type: string) =>
-        photos.filter((p) => p.type === type).sort((a, b) => a.sort_order - b.sort_order)[0]?.url ?? null
-      return { before: pick('before'), after: pick('after') }
-    })
-    .filter((p): p is ProposalBeforeAfter => !!p.before && !!p.after)
+  // 작업 포트폴리오 후보 — 소개서에서는 '전/후'를 따지지 않고 잘 나온 현장 사진으로 쓴다.
+  // 결과가 드러나는 완료(after) 사진을 앞세우고, 그 뒤에 나머지를 붙인다.
+  const manualAfter = (business.portfolio ?? []).map((p) => p.after ?? '')
+  const manualBefore = (business.portfolio ?? []).map((p) => p.before ?? '')
+  const reportPhotos = reportRows.flatMap((r) =>
+    (r.report_photos ?? []).slice().sort((a, b) => a.sort_order - b.sort_order),
+  )
+  const reportAfter = reportPhotos.filter((p) => p.type === 'after').map((p) => p.url)
+  const reportRest = reportPhotos.filter((p) => p.type !== 'after').map((p) => p.url)
 
-  const beforeAfter = [...manual, ...fromReports].slice(0, 6)
+  const clean = (list: string[]) => list.filter((url) => !!url && url.trim())
+  const galleryPhotos = [...new Set(clean([...manualAfter, ...reportAfter, ...manualBefore, ...reportRest]))].slice(0, 12)
 
-  // 사진 고르기 후보 — 시공사례 애프터/비포, 작업 보고 사진 전부, 히어로 이미지
-  const pool: string[] = [
-    ...beforeAfter.flatMap((p) => [p.after, p.before]),
-    ...reportRows.flatMap((r) => (r.report_photos ?? []).map((p) => p.url)),
-    business.hero_image_url ?? '',
-    business.owner_photo_url ?? '',
-  ].filter((url) => !!url && url.trim())
-
-  const photoPool = [...new Set(pool)].slice(0, 24)
+  // 사진 고르기 후보 — 포트폴리오 사진 + 히어로 이미지 + 대표 사진
+  const photoPool = [
+    ...new Set(clean([...galleryPhotos, business.hero_image_url ?? '', business.owner_photo_url ?? ''])),
+  ].slice(0, 24)
 
   const services = ((serviceResult.data ?? []) as { name: string }[])
     .map((s) => s.name)
     .filter((n) => n && n.trim())
 
   return {
-    beforeAfter,
+    galleryPhotos,
     photoPool,
     reviews: reviewSummary.items
       .filter((r) => r.comment && r.comment.trim())

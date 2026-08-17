@@ -44,11 +44,6 @@ export interface ProposalBusiness {
 }
 
 // 홈페이지에서 끌어온 부가 데이터(테이블 조회가 필요한 것들)
-export interface ProposalBeforeAfter {
-  before: string
-  after: string
-}
-
 export interface ProposalReview {
   rating: number
   comment: string
@@ -56,7 +51,7 @@ export interface ProposalReview {
 }
 
 export interface ProposalExtras {
-  beforeAfter: ProposalBeforeAfter[] // 시공 사례(직접 등록 + 홈 공개한 작업 보고)
+  galleryPhotos: string[]            // 작업 포트폴리오 후보(홈페이지 시공 사례 + 홈 공개한 작업 보고)
   photoPool: string[]                // 사진 고르기용 후보(중복 제거)
   reviews: ProposalReview[]          // 실제 공개 후기만
   reviewCount: number
@@ -65,7 +60,7 @@ export interface ProposalExtras {
 }
 
 export const EMPTY_EXTRAS: ProposalExtras = {
-  beforeAfter: [],
+  galleryPhotos: [],
   photoPool: [],
   reviews: [],
   reviewCount: 0,
@@ -95,7 +90,7 @@ export interface ProposalRenderData {
   investmentPhoto: string | null
   categoryPhoto: string | null
   owner: ProposalOwnerBlock | null
-  beforeAfter: ProposalBeforeAfter[]
+  gallery: string[]
   reviews: ProposalReview[]
   reviewCount: number
   reviewAvg: number
@@ -181,7 +176,8 @@ export function buildProposalData(
     investmentPhoto,
     categoryPhoto,
     owner,
-    beforeAfter: extras.beforeAfter.slice(0, 4),
+    // 포트폴리오 사진 — 사장님이 고른 게 있으면 그것만, 없으면 홈페이지 사진에서 자동
+    gallery: (photos.gallery && photos.gallery.length > 0 ? photos.gallery : extras.galleryPhotos).slice(0, 6),
     reviews: extras.reviews.slice(0, 4).map((r) => ({ ...r, comment: clip(r.comment, 150) })),
     reviewCount: extras.reviewCount,
     reviewAvg: extras.reviewAvg,

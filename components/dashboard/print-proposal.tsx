@@ -49,7 +49,7 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
   // 데이터가 없으면 그 페이지는 자동으로 빠진다(빈 페이지 방지)
   const showOwner = sections.owner && !!owner
   const showServices = sections.services && data.services.length > 0
-  const showGallery = sections.gallery && data.beforeAfter.length > 0
+  const showGallery = sections.gallery && data.gallery.length > 0
   const showReviews = sections.reviews && data.reviews.length > 0
 
   const QrBlock = ({ small }: { small?: boolean }) =>
@@ -274,18 +274,9 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
             <div className="body full">
               <h2>{C.galleryTitle}<span className="u" /></h2>
               <p className="para wide">{C.galleryLead}</p>
-              <div className={`ba-grid ${data.beforeAfter.length <= 2 ? 'big' : ''}`}>
-                {data.beforeAfter.map((p, i) => (
-                  <div className="ba-pair" key={i}>
-                    <figure className="ba-item">
-                      <img src={p.before} alt="작업 전" />
-                      <figcaption className="ba-cap before">작업 전</figcaption>
-                    </figure>
-                    <figure className="ba-item">
-                      <img src={p.after} alt="작업 후" />
-                      <figcaption className="ba-cap after">작업 후</figcaption>
-                    </figure>
-                  </div>
+              <div className={`gal g${Math.min(data.gallery.length, 6)}`}>
+                {data.gallery.map((url, i) => (
+                  <img className="gal-item" src={url} alt="작업 현장" key={i} />
                 ))}
               </div>
               <div className="foot-tag"><RichPoint text={C.galleryFootTag} /></div>
@@ -529,14 +520,16 @@ const proposalCss = `
 .proposal-doc .areas-t { font-size: 13px; font-weight: 900; color: var(--primary-dark); }
 .proposal-doc .areas-d { font-size: 15px; color: var(--ink-soft); margin-top: 4px; }
 
-/* 시공 사례 비포·애프터 */
-.proposal-doc .ba-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px; }
-.proposal-doc .ba-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.proposal-doc .ba-item { position: relative; margin: 0; }
-.proposal-doc .ba-item img { width: 100%; height: 46mm; object-fit: cover; border-radius: 10px; display: block; }
-.proposal-doc .ba-grid.big .ba-item img { height: 74mm; }
-.proposal-doc .ba-cap { position: absolute; left: 8px; bottom: 8px; font-size: 11.5px; font-weight: 900; color: #fff; padding: 3px 9px; border-radius: 20px; background: rgba(31,42,36,.78); }
-.proposal-doc .ba-cap.after { background: var(--primary-dark); }
+/* 작업 포트폴리오 — 장수에 따라 칸을 나눠 한 장이어도 허전하지 않게 */
+.proposal-doc .gal { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 20px; }
+.proposal-doc .gal-item { width: 100%; height: 52mm; object-fit: cover; border-radius: 10px; display: block; }
+.proposal-doc .gal.g1 { grid-template-columns: 1fr; }
+.proposal-doc .gal.g1 .gal-item { height: 108mm; }
+.proposal-doc .gal.g2 { grid-template-columns: repeat(2, 1fr); }
+.proposal-doc .gal.g2 .gal-item { height: 100mm; }
+.proposal-doc .gal.g3 .gal-item { height: 78mm; }
+.proposal-doc .gal.g4 { grid-template-columns: repeat(2, 1fr); }
+.proposal-doc .gal.g4 .gal-item { height: 52mm; }
 
 /* 고객 후기 */
 .proposal-doc .rv-summary { display: flex; align-items: baseline; gap: 12px; margin-top: 14px; }

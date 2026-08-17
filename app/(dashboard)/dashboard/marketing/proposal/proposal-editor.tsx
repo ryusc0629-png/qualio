@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PrintProposal } from '@/components/dashboard/print-proposal'
 import { ProposalPhotoPicker } from './photo-picker'
+import { GalleryPicker } from './gallery-picker'
 import { buildProposalData, type ProposalBusiness, type ProposalExtras } from '@/lib/proposal/build'
 import { saveProposalSettingsAction } from '@/lib/actions/proposal'
 import {
@@ -69,7 +70,7 @@ export function ProposalEditor({ business, settings, extras, qrDataUrl }: Props)
   const missing = {
     owner: !previewData.owner,
     services: extras.services.length === 0,
-    gallery: extras.beforeAfter.length === 0,
+    gallery: previewData.gallery.length === 0,
     reviews: extras.reviews.length === 0,
   }
 
@@ -79,7 +80,7 @@ export function ProposalEditor({ business, settings, extras, qrDataUrl }: Props)
     { key: 'investment', label: '청소는 투자입니다 (설득)' },
     { key: 'services', label: '제공하는 서비스', missing: missing.services, missingHint: '서비스 항목을 등록하면 나와요' },
     { key: 'principles', label: '우리의 3원칙' },
-    { key: 'gallery', label: '작업 전·후 사례 사진', missing: missing.gallery, missingHint: '설정 > 시공 사례에 사진을 올리면 나와요' },
+    { key: 'gallery', label: '작업 포트폴리오 사진', missing: missing.gallery, missingHint: '위에서 사진을 고르거나 올리면 나와요' },
     { key: 'refund', label: '100% 환불 약속' },
     { key: 'process', label: '진행 프로세스' },
     { key: 'reviews', label: '고객 후기 (실제 후기만)', missing: missing.reviews, missingHint: '공개 후기가 쌓이면 나와요' },
@@ -202,6 +203,14 @@ export function ProposalEditor({ business, settings, extras, qrDataUrl }: Props)
               />
             </div>
           </section>
+
+          {/* 작업 포트폴리오 사진 */}
+          <GalleryPicker
+            value={photos.gallery ?? []}
+            autoUrls={extras.galleryPhotos}
+            pool={extras.photoPool}
+            onChange={(next) => setPhotos((prev) => ({ ...prev, gallery: next.length > 0 ? next : undefined }))}
+          />
 
           {/* 대상 공간 */}
           <section className="rounded-xl border p-4 space-y-3">

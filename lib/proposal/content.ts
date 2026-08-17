@@ -21,6 +21,7 @@ export interface ProposalPhotos {
   investment?: string // '청소는 투자입니다' 페이지
   category?: string   // '이런 공간을 관리합니다' 페이지
   owner?: string      // 대표 인사말(비면 홈페이지 대표 사진)
+  gallery?: string[]  // 작업 포트폴리오 페이지(비면 홈페이지 사진에서 자동)
 }
 
 export interface ProposalSettings {
@@ -502,8 +503,8 @@ export const STANDARD_COPY: StandardCopy = {
     '없는 항목도 상담해 주시면 가능한지 솔직하게 알려드립니다.',
   ],
   servicesFootTag: '가격은 공간을 직접 보고 **정확하게** 말씀드립니다.',
-  galleryTitle: '작업 전 · 후 사례',
-  galleryLead: '말보다 사진이 정확합니다. 실제로 저희가 관리한 현장입니다.',
+  galleryTitle: '작업 포트폴리오',
+  galleryLead: '말보다 사진이 정확합니다. 실제로 저희가 다녀온 현장입니다.',
   galleryFootTag: '사진은 모두 **직접 작업한 현장**입니다.',
   reviewsTitle: '고객이 남긴 후기',
   reviewsLead: '저희가 쓴 문구가 아니라, 실제 맡겨 보신 고객이 남긴 평가입니다.',

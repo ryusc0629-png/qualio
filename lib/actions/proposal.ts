@@ -49,6 +49,7 @@ const saveProposalSchema = z.object({
       investment: photoUrl,
       category: photoUrl,
       owner: photoUrl,
+      gallery: z.array(z.string().max(600)).max(6).optional(),
     })
     .optional(),
   sections: z.object({
@@ -84,6 +85,7 @@ export const saveProposalSettingsAction = action
           investment: photos_(parsedInput.photos.investment),
           category: photos_(parsedInput.photos.category),
           owner: photos_(parsedInput.photos.owner),
+          gallery: parsedInput.photos.gallery?.map((u) => u.trim()).filter(Boolean),
         }
       : undefined
 
