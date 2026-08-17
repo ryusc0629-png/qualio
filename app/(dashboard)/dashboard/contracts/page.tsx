@@ -4,8 +4,19 @@ import { RefreshCw } from 'lucide-react'
 import { AddContractForm } from '@/components/dashboard/add-contract-form'
 import { ContractStatusSelect } from '@/components/dashboard/contract-status-select'
 import { ContractLockupCell } from '@/components/dashboard/contract-lockup-cell'
-import { EditContractForm } from '@/components/dashboard/edit-contract-form'
+import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { formatFrequency } from '@/lib/utils/frequency'
+
+// 수정 창(고객·계약 수정)이 고객 정보까지 함께 고치므로 계약 조인에 고객 칸을 다 실어 온다
+type CustomerForEdit = {
+  id: string
+  name: string
+  phone: string | null
+  address: string | null
+  category: string | null
+  type: string
+  notes: string | null
+}
 
 const STATUS_META: Record<string, { label: string; className: string }> = {
   active:     { label: '활성',  className: 'bg-green-100 text-green-700' },
@@ -30,7 +41,7 @@ export default async function ContractsPage() {
   // 계약 목록 (고객 정보 조인)
   const { data: contracts } = await db
     .from('contracts')
-    .select('id, customer_id, service_type, frequency, contract_price, start_date, end_date, status, notes, requires_lockup, expected_duration_minutes, checklist_items, price_history, skip_holidays, customers!contracts_customer_id_fkey(name, phone)' as never)
+    .select('id, customer_id, service_type, frequency, contract_price, start_date, end_date, status, notes, requires_lockup, expected_duration_minutes, checklist_items, price_history, skip_holidays, customers!contracts_customer_id_fkey(id, name, phone, address, category, type, notes)' as never)
     .eq('business_id', profile.business_id)
     .order('created_at', { ascending: false }) as unknown as {
       data: {
@@ -47,7 +58,7 @@ export default async function ContractsPage() {
         expected_duration_minutes: number | null
         checklist_items: { id: string; label: string }[] | null
         skip_holidays: boolean | null
-        customers: { name: string; phone: string | null } | { name: string; phone: string | null }[] | null
+        customers: CustomerForEdit | CustomerForEdit[] | null
       }[] | null
     }
 
@@ -158,6 +169,8 @@ export default async function ContractsPage() {
                   ? contract.customers[0]
                   : contract.customers
                 const visits = visitInfo.get(contract.id)
+                // 수정 창에 넘길 고객 값 (연락처는 필수 칸이라 빈 문자열로 맞춘다)
+                const customerForEdit = customer && { ...customer, phone: customer.phone ?? '' }
 
                 return (
                   <tr key={contract.id} className="border-b last:border-0 hover:bg-muted/30">
@@ -209,8 +222,9 @@ export default async function ContractsPage() {
                       />
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <EditContractForm
-                        iconOnly
+                      {customerForEdit && (
+                      <EditCustomerButton
+                        customer={customerForEdit}
                         contract={{
                           id: contract.id,
                           service_type: contract.service_type,
@@ -222,6 +236,7 @@ export default async function ContractsPage() {
                           skip_holidays: contract.skip_holidays,
                         }}
                       />
+                      )}
                     </td>
                   </tr>
                 )

@@ -18,7 +18,18 @@ import { formatPhone } from '@/lib/format/phone'
 import { AddressField } from '@/components/ui/address-field'
 import { FrequencyPicker } from '@/components/dashboard/frequency-picker'
 import { HolidayPolicyField } from '@/components/dashboard/holiday-policy-field'
-import type { EditContractTarget } from '@/components/dashboard/edit-contract-form'
+
+// 이 창에서 함께 고치는 정기계약 값 (계약 수정 창을 따로 두지 않고 여기 하나로 합쳤다)
+export interface EditContractTarget {
+  id: string
+  service_type: string | null
+  frequency: string
+  contract_price: number
+  start_date: string
+  end_date: string | null
+  notes?: string | null
+  skip_holidays?: boolean | null // 공휴일엔 방문 안 함 (기본 true)
+}
 
 const customerSchema = z.object({
   customerId: z.string().uuid(),
@@ -60,13 +71,15 @@ interface EditCustomerButtonProps {
   // 진행 중인 계약이 있으면 같은 창에서 계약 내용까지 한 번에 고친다
   // (수정 버튼이 두 개로 나뉘어 있으면 어느 쪽을 눌러야 할지 헷갈림)
   contract?: EditContractTarget | null
+  // 아이콘만으로는 뭘 고치는지 모르는 자리에서 쓰는 글자 버튼 (예: '계약 수정')
+  triggerLabel?: string
 }
 
 function todayKst(): string {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
 }
 
-export function EditCustomerButton({ customer, contract }: EditCustomerButtonProps) {
+export function EditCustomerButton({ customer, contract, triggerLabel }: EditCustomerButtonProps) {
   const [open, setOpen] = useState(false)
   const focusRef = useAutoFocusRef<HTMLDivElement>()
 
@@ -169,7 +182,14 @@ export function EditCustomerButton({ customer, contract }: EditCustomerButtonPro
 
       toast.success('수정했어요!')
       setOpen(false)
-      window.location.replace(isCompany ? '/dashboard/clients?type=company' : '/dashboard/clients?type=individual')
+      // 고객 목록에서 열었으면 바뀐 구분(개인/법인) 탭으로 보내 방금 고친 고객이 눈에 보이게 하고,
+      // 거래처 상세·계약 목록에서 열었으면 보던 화면을 그대로 새로 받는다
+      const onClientsList = window.location.pathname === '/dashboard/clients'
+      window.location.replace(
+        onClientsList
+          ? (isCompany ? '/dashboard/clients?type=company' : '/dashboard/clients?type=individual')
+          : window.location.href,
+      )
     } catch {
       toast.error('저장 못 했어요. 다시 눌러주세요')
     } finally {
@@ -177,16 +197,31 @@ export function EditCustomerButton({ customer, contract }: EditCustomerButtonPro
     }
   }
 
+  const triggerTitle = contract ? '고객·계약 수정' : '수정'
+
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-        title={contract ? '고객·계약 수정' : '수정'}
-        aria-label={contract ? '고객·계약 수정' : '수정'}
-      >
-        <Pencil className="h-3.5 w-3.5" />
-      </button>
+      {triggerLabel ? (
+        // 글자 버튼 — 아이콘만 있으면 뭘 고치는 버튼인지 모르는 자리(계약 카드 등)
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="inline-flex items-center gap-1 shrink-0 text-xs font-medium text-emerald-700 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 rounded-md px-2 py-1 transition-colors"
+        >
+          <Pencil className="h-3 w-3 shrink-0" />
+          {triggerLabel}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          title={triggerTitle}
+          aria-label={triggerTitle}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+      )}
 
       {open && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">

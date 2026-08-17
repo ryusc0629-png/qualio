@@ -16,7 +16,6 @@ import { B2bQuoteList } from '@/components/dashboard/b2b-quote-list'
 import { DeleteActivityButton } from '@/components/dashboard/delete-activity-button'
 import { EditableActivityContent } from '@/components/dashboard/editable-activity-content'
 import { contractAccruedRevenue, contractPriceSegments, type ContractLike } from '@/lib/utils/ltv'
-import { EditContractForm } from '@/components/dashboard/edit-contract-form'
 import { getNextQuoteNumber } from '@/lib/utils/quote-number'
 import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
 
@@ -301,6 +300,8 @@ export default async function CustomerDetailPage({ params }: Props) {
     contractVisits.set(b.contract_id, cur)
   }
   const contractList = customerContracts ?? []
+  // 수정 창은 하나뿐이라, 이름 옆 연필로 열어도 진행 중인 계약까지 같이 고칠 수 있어야 한다
+  const activeContract = contractList.find((c) => c.status === 'active') ?? null
 
   // 서비스 이력에는 '정기계약 자동생성 예정 방문'을 숨긴다.
   // 정기 방문은 미래 날짜로 수십 건 쌓여 스크롤만 길어지고, 이미 위 '정기계약' 요약(다음 방문·예정 횟수)과
@@ -405,7 +406,19 @@ export default async function CustomerDetailPage({ params }: Props) {
               </span>
             ))}
             {customer.phone && (
-              <EditCustomerButton customer={{ ...customer, phone: customer.phone, notes: customer.notes }} />
+              <EditCustomerButton
+                customer={{ ...customer, phone: customer.phone, notes: customer.notes }}
+                contract={activeContract && {
+                  id: activeContract.id,
+                  service_type: activeContract.service_type,
+                  frequency: activeContract.frequency,
+                  contract_price: activeContract.contract_price,
+                  start_date: activeContract.start_date,
+                  end_date: activeContract.end_date,
+                  notes: activeContract.notes,
+                  skip_holidays: activeContract.skip_holidays,
+                }}
+              />
             )}
           </div>
         </div>
@@ -497,7 +510,9 @@ export default async function CustomerDetailPage({ params }: Props) {
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-1.5">
                       <p className="font-bold tabular-nums text-emerald-700">{contract.contract_price.toLocaleString('ko-KR')}<span className="text-xs font-normal text-muted-foreground ml-0.5">원/월</span></p>
-                      <EditContractForm
+                      <EditCustomerButton
+                        triggerLabel="계약 수정"
+                        customer={{ ...customer, phone: customer.phone ?? '', notes: customer.notes }}
                         contract={{
                           id: contract.id,
                           service_type: contract.service_type,
