@@ -621,6 +621,23 @@ export function EditServiceButton({
               </div>
             </div>
 
+            {/* 현장 견적(상담) — 가격 대신 안내만 */}
+            {currentUnit === '상담' && (
+              <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+                현장 방문 후 견적이라 미리 가격을 넣지 않아도 돼요. 고객이 고르면 연락처를 받아
+                &lsquo;상담 요청&rsquo;으로 접수돼요.
+              </p>
+            )}
+
+            {/* 기본가 — 에어컨/항목별 단가/현장견적 모드에서는 숨김 */}
+            {!isAcByName && !isUnitByName && currentUnit !== '상담' && (
+              <div className="space-y-1">
+                <Label>기본 가격 (원) *</Label>
+                <Input type="number" {...register('base_price')} />
+                {errors.base_price && <p className="text-xs text-destructive">{errors.base_price.message}</p>}
+              </div>
+            )}
+
             {/* 항목별 단가 토글 (에어컨이 아닐 때만) */}
             {!isAcByName && (
               <button
@@ -695,23 +712,6 @@ export function EditServiceButton({
                     </div>
                   )
                 })}
-              </div>
-            )}
-
-            {/* 현장 견적(상담) — 가격 대신 안내만 */}
-            {currentUnit === '상담' && (
-              <p className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
-                현장 방문 후 견적이라 미리 가격을 넣지 않아도 돼요. 고객이 고르면 연락처를 받아
-                &lsquo;상담 요청&rsquo;으로 접수돼요.
-              </p>
-            )}
-
-            {/* 기본가 — 에어컨/항목별 단가/현장견적 모드에서는 숨김 */}
-            {!isAcByName && !isUnitByName && currentUnit !== '상담' && (
-              <div className="space-y-1">
-                <Label>기본 가격 (원) *</Label>
-                <Input type="number" {...register('base_price')} />
-                {errors.base_price && <p className="text-xs text-destructive">{errors.base_price.message}</p>}
               </div>
             )}
 

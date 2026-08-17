@@ -343,85 +343,6 @@ export function AddServiceForm() {
           {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
         </div>
 
-        {/* 항목별 단가 토글 (가전 유형별 단가가 아닐 때만 표시) */}
-        {!isAppliance && (
-          <button
-            type="button"
-            onClick={() => setShowUnitPrices((v) => !v)}
-            className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors ${
-              showUnitPrices
-                ? 'border-primary/40 bg-primary/5 text-primary'
-                : 'border-dashed text-muted-foreground hover:text-foreground hover:border-border'
-            }`}
-          >
-            <ListPlus className="h-3.5 w-3.5 shrink-0" />
-            {showUnitPrices ? '항목별 단가 설정 중 (클릭하면 해제)' : '항목별 단가 설정하기 (예: 화장실 1곳 얼마, 주방 얼마)'}
-          </button>
-        )}
-
-        {/* 항목별 단가 입력 */}
-        {isUnit && (
-          <div className="space-y-3">
-            <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-1">
-              <div className="flex items-center gap-1.5">
-                <ListPlus className="h-3.5 w-3.5 text-primary shrink-0" />
-                <p className="text-xs font-bold text-primary">항목별 단가를 설정하면 자동으로 계산됩니다</p>
-              </div>
-              <p className="text-xs text-primary/80 leading-relaxed">
-                고객이 견적 폼에서 항목·수량을 선택하면, 아래 단가를 기준으로 자동 합산됩니다.
-              </p>
-            </div>
-
-            {/* 구분(신축/구축 등) 설정 */}
-            <VariantSelector variants={unitVariants} onChange={setUnitVariants} onAdd={addVariant} newInput={newVariantInput} onNewInputChange={setNewVariantInput} onRemove={removeVariant} />
-
-            {/* 구분이 없으면 단일 항목 목록, 있으면 구분별 항목 목록 */}
-            {(unitVariants.length > 0 ? unitVariants : ['']).map((variantKey) => {
-              const items = unitItemsByVariant[variantKey] ?? []
-              return (
-                <div key={variantKey} className="space-y-2">
-                  {variantKey && (
-                    <p className="text-xs font-semibold text-foreground border-b pb-1">{variantKey}</p>
-                  )}
-                  {items.map((item, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <Input
-                        placeholder="항목명 (예: 화장실)"
-                        value={item.name}
-                        onChange={(e) => updateUnitItem(variantKey, idx, 'name', e.target.value)}
-                        className="h-9 text-sm flex-1"
-                      />
-                      <div className="relative w-36 shrink-0">
-                        <Input
-                          type="text"
-                          inputMode="numeric"
-                          placeholder="50,000"
-                          value={item.price ? Number(item.price).toLocaleString('ko-KR') : ''}
-                          onChange={(e) => updateUnitItem(variantKey, idx, 'price', e.target.value.replace(/[^0-9]/g, ''))}
-                          className="h-9 text-sm pr-6"
-                        />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
-                      </div>
-                      {items.length > 1 && (
-                        <button type="button" onClick={() => removeUnitItem(variantKey, idx)} className="text-muted-foreground hover:text-destructive transition-colors">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addUnitItem(variantKey)}
-                    className="flex items-center gap-1.5 text-xs text-primary hover:underline"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> 항목 추가
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
         {/* 가전(에어컨·냉장고 등) 안내 + 유형별 단가 입력 */}
         {isAppliance && applianceTypes && (
           <div className="space-y-3">
@@ -526,6 +447,85 @@ export function AddServiceForm() {
             {errors.base_price && (
               <p className="text-xs text-destructive">{errors.base_price.message}</p>
             )}
+          </div>
+        )}
+
+        {/* 항목별 단가 토글 (가전 유형별 단가가 아닐 때만 표시) */}
+        {!isAppliance && (
+          <button
+            type="button"
+            onClick={() => setShowUnitPrices((v) => !v)}
+            className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors ${
+              showUnitPrices
+                ? 'border-primary/40 bg-primary/5 text-primary'
+                : 'border-dashed text-muted-foreground hover:text-foreground hover:border-border'
+            }`}
+          >
+            <ListPlus className="h-3.5 w-3.5 shrink-0" />
+            {showUnitPrices ? '항목별 단가 설정 중 (클릭하면 해제)' : '항목별 단가 설정하기 (예: 화장실 1곳 얼마, 주방 얼마)'}
+          </button>
+        )}
+
+        {/* 항목별 단가 입력 */}
+        {isUnit && (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-1">
+              <div className="flex items-center gap-1.5">
+                <ListPlus className="h-3.5 w-3.5 text-primary shrink-0" />
+                <p className="text-xs font-bold text-primary">항목별 단가를 설정하면 자동으로 계산됩니다</p>
+              </div>
+              <p className="text-xs text-primary/80 leading-relaxed">
+                고객이 견적 폼에서 항목·수량을 선택하면, 아래 단가를 기준으로 자동 합산됩니다.
+              </p>
+            </div>
+
+            {/* 구분(신축/구축 등) 설정 */}
+            <VariantSelector variants={unitVariants} onChange={setUnitVariants} onAdd={addVariant} newInput={newVariantInput} onNewInputChange={setNewVariantInput} onRemove={removeVariant} />
+
+            {/* 구분이 없으면 단일 항목 목록, 있으면 구분별 항목 목록 */}
+            {(unitVariants.length > 0 ? unitVariants : ['']).map((variantKey) => {
+              const items = unitItemsByVariant[variantKey] ?? []
+              return (
+                <div key={variantKey} className="space-y-2">
+                  {variantKey && (
+                    <p className="text-xs font-semibold text-foreground border-b pb-1">{variantKey}</p>
+                  )}
+                  {items.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Input
+                        placeholder="항목명 (예: 화장실)"
+                        value={item.name}
+                        onChange={(e) => updateUnitItem(variantKey, idx, 'name', e.target.value)}
+                        className="h-9 text-sm flex-1"
+                      />
+                      <div className="relative w-36 shrink-0">
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="50,000"
+                          value={item.price ? Number(item.price).toLocaleString('ko-KR') : ''}
+                          onChange={(e) => updateUnitItem(variantKey, idx, 'price', e.target.value.replace(/[^0-9]/g, ''))}
+                          className="h-9 text-sm pr-6"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">원</span>
+                      </div>
+                      {items.length > 1 && (
+                        <button type="button" onClick={() => removeUnitItem(variantKey, idx)} className="text-muted-foreground hover:text-destructive transition-colors">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => addUnitItem(variantKey)}
+                    className="flex items-center gap-1.5 text-xs text-primary hover:underline"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> 항목 추가
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
 
