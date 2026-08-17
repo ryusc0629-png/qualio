@@ -3,12 +3,22 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { ContractForm } from './contract-form'
+import { formatPhone } from '@/lib/format/phone'
 import {
   DEFAULT_CONTRACT_DATA,
   type SubcontractorContractData,
 } from '@/lib/contract/subcontractor-contract'
 
 export const dynamic = 'force-dynamic'
+
+// 계약서 '대표' 칸에는 이름만 들어간다 — 칸 이름이 이미 '대표'라 직함이 겹친다.
+// businesses.owner_name은 홈페이지 인사말용이라 '류승찬 대표'처럼 직함이 붙어 저장된다.
+const TITLE_SUFFIX = /[\s]*(대표이사|대표님|대표|사장님|사장|원장님|원장|소장님|소장|팀장|실장)$/
+function stripTitle(name: string): string {
+  const stripped = name.trim().replace(TITLE_SUFFIX, '').trim()
+  // '대표'처럼 직함만 적혀 있으면 지우지 않는다(빈 칸이 되면 더 헷갈림)
+  return stripped.length >= 2 ? stripped : name.trim()
+}
 
 type WorkerRow = {
   id: string
@@ -77,15 +87,15 @@ export default async function ContractorContractPage({
     ...DEFAULT_CONTRACT_DATA,
     partyA: {
       company: biz?.legal_name || biz?.name || '',
-      ceo:     biz?.owner_name || '',
+      ceo:     biz?.owner_name ? stripTitle(biz.owner_name) : '',
       address: biz?.address || '',
-      phone:   biz?.phone || '',
+      phone:   biz?.phone ? formatPhone(biz.phone) : '',
     },
     partyB: {
       company: worker.name,
       ceo:     '',
       address: '',
-      phone:   worker.phone || '',
+      phone:   worker.phone ? formatPhone(worker.phone) : '',
     },
   }
 
