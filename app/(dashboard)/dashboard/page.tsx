@@ -52,7 +52,6 @@ export default async function DashboardPage() {
   todayKSTStart.setUTCHours(0, 0, 0, 0)
   const todayStartUTC = new Date(todayKSTStart.getTime() - 9 * 60 * 60 * 1000)
   const todayEndUTC   = new Date(todayStartUTC.getTime() + 24 * 60 * 60 * 1000)
-  const weekEndUTC    = new Date(todayStartUTC.getTime() + 7 * 24 * 60 * 60 * 1000)
 
   // 월 경계는 KST 기준으로 계산 — Vercel은 UTC라 로컬 생성자(new Date(y,m,1))를 쓰면 경계가 9시간 밀림
   const KST_OFFSET     = 9 * 60 * 60 * 1000
@@ -72,7 +71,6 @@ export default async function DashboardPage() {
     { data: bookingsLastMonth },
     { data: activeContracts },
     { data: todayBookings },
-    { data: upcomingBookings },
     { count: pendingQuoteCount },
     { data: completedBookingIds },
     { data: reportedBookings },
@@ -80,7 +78,6 @@ export default async function DashboardPage() {
     { data: last7DaysCompleted },
     { count: totalCustomers },
     { count: newCustomersThisMonth },
-    { data: pipelineBookings },
     { count: unassignedCount },
     { data: allLeads },
     { data: todayFollowUps },
@@ -95,18 +92,24 @@ export default async function DashboardPage() {
     // 이번 달 예약 전체 — 청소일(scheduled_at) 기준, 취소·노쇼만 제외.
     // 완료분만 세면 월초·월중엔 금액이 너무 작게 보여, 이번 달에 잡힌 일감 전체를 매출로 보여준다.
     // updated_at은 담당자 배정·정기방문 생성 등 어떤 수정에도 갱신돼, 과거 건이 이번 달로 잘못 잡힘
-    db.from('bookings').select('final_price, status')
+    // contract_id로 일회성/정기 방문을 갈라야 한다 — 정기 방문은 건별 금액이 0이라
+    // 섞어서 평균을 내면 객단가가 실제의 몇 분의 일로 찍힌다(아래 계산부 주석 참고)
+    db.from('bookings').select('final_price, status, contract_id' as never)
       .eq('business_id', businessId)
       .not('status', 'in', '("cancelled","no_show")')
       .is('deleted_at', null)
-      .gte('scheduled_at', thisMonthStart).lt('scheduled_at', nextMonthStart),
+      .gte('scheduled_at', thisMonthStart).lt('scheduled_at', nextMonthStart) as unknown as Promise<{
+        data: { final_price: number | null; status: string; contract_id: string | null }[] | null
+      }>,
 
     // 지난달 예약 전체 — 청소일 기준 (전월 대비 비교용, 같은 기준으로 맞춤)
-    db.from('bookings').select('final_price, status')
+    db.from('bookings').select('final_price, status, contract_id' as never)
       .eq('business_id', businessId)
       .not('status', 'in', '("cancelled","no_show")')
       .is('deleted_at', null)
-      .gte('scheduled_at', lastMonthStart).lt('scheduled_at', thisMonthStart),
+      .gte('scheduled_at', lastMonthStart).lt('scheduled_at', thisMonthStart) as unknown as Promise<{
+        data: { final_price: number | null; status: string; contract_id: string | null }[] | null
+      }>,
 
     // 활성 정기 계약 (매출 합산 + 방문 누락 감지용 날짜 + 정기계약 거래처 수 집계용 customer_id)
     db.from('contracts').select('id, customer_id, contract_price, start_date, end_date')
@@ -120,15 +123,6 @@ export default async function DashboardPage() {
       .lt('scheduled_at', todayEndUTC.toISOString())
       .not('status', 'in', '("cancelled","completed")')
       .order('scheduled_at', { ascending: true }),
-
-    // 이번 주 예정 예약
-    db.from('bookings')
-      .select('id, customer_name, scheduled_at, selected_tier, final_price, status')
-      .eq('business_id', businessId).is('deleted_at', null)
-      .gte('scheduled_at', todayEndUTC.toISOString())
-      .lt('scheduled_at', weekEndUTC.toISOString())
-      .not('status', 'in', '("cancelled","completed")')
-      .order('scheduled_at', { ascending: true }).limit(5),
 
     // 미답변 견적 수 — 테스트 견적(대표 본인 번호로 넣어본 것)은 제외.
     // 목록을 보여주는 고객 관리(clients/page.tsx)가 is_test를 걸러내므로 여기서도 같은 기준이라야 한다.
@@ -171,12 +165,6 @@ export default async function DashboardPage() {
     // 이번 달 신규 고객
     db.from('customers').select('id', { count: 'exact', head: true })
       .eq('business_id', businessId).gte('created_at', thisMonthStart),
-
-    // 예약 파이프라인 (확정·진행 중)
-    db.from('bookings').select('id, status')
-      .eq('business_id', businessId)
-      .in('status', ['confirmed', 'in_progress'])
-      .is('deleted_at', null),
 
     // 미배정 확정 예약
     db.from('bookings' as never).select('id', { count: 'exact', head: true })
@@ -250,18 +238,29 @@ export default async function DashboardPage() {
   ])
 
   // ── 계산 ──────────────────────────────────────────────
-  // 이번 달 매출 = 취소·노쇼를 뺀 이번 달 일정 전체 금액 (완료분 + 남은 일정)
+  // ★건수·객단가는 '일회성'만 센다. 정기계약 방문(contract_id 있음)은 건별 금액이 0이고
+  //   월 단위로 contract_price에 잡히기 때문에, 섞으면 두 지표가 다 망가진다.
+  //   실제로 다트클린 8월은 29건 중 23건이 정기 방문이라, 섞어 계산한 평균 단가가
+  //   34만원으로 찍혔다(일회성만 보면 166만원). 정기가 늘수록 객단가가 0에 수렴한다.
+  //   정기계약은 옆의 '정기 계약 매출/월' 카드가 따로 담당한다.
   const monthBookings      = bookingsThisMonth ?? []
-  const monthRevenue       = monthBookings.reduce((s, b) => s + (b.final_price ?? 0), 0)
-  const monthBookingCount  = monthBookings.length
-  const monthCompleted     = monthBookings.filter((b) => b.status === 'completed')
+  const monthOneOff        = monthBookings.filter((b) => !b.contract_id)
+  const monthContractVisits = monthBookings.length - monthOneOff.length
+  // 정기 방문 건수까지 적으면 숫자가 두 개라 오히려 헷갈린다 — 이 카드에 안 들어간다는 사실만 알린다
+  const contractAside      = monthContractVisits > 0 ? ' · 정기 계약은 별도' : ''
+
+  // 매출은 전체를 더해도 같다(정기 방문은 final_price가 0) — 기준을 맞추려고 일회성으로 통일
+  const monthRevenue       = monthOneOff.reduce((s, b) => s + (b.final_price ?? 0), 0)
+  const monthBookingCount  = monthOneOff.length
+  const monthCompleted     = monthOneOff.filter((b) => b.status === 'completed')
   const monthCompletedCount = monthCompleted.length
   const monthCompletedRevenue = monthCompleted.reduce((s, b) => s + (b.final_price ?? 0), 0)
   const monthRemainingCount = monthBookingCount - monthCompletedCount
 
-  const lastMonthBookings  = bookingsLastMonth ?? []
-  const lastMonthRevenue   = lastMonthBookings.reduce((s, b) => s + (b.final_price ?? 0), 0)
-  const lastMonthCount     = lastMonthBookings.length
+  // 전월 대비 배지도 같은 기준(일회성)이라야 의미가 있다
+  const lastMonthOneOff    = (bookingsLastMonth ?? []).filter((b) => !b.contract_id)
+  const lastMonthRevenue   = lastMonthOneOff.reduce((s, b) => s + (b.final_price ?? 0), 0)
+  const lastMonthCount     = lastMonthOneOff.length
   const avgDealSize        = monthBookingCount > 0 ? Math.round(monthRevenue / monthBookingCount) : 0
   const monthlyContractRevenue = (activeContracts ?? []).reduce((s, c) => s + (c.contract_price ?? 0), 0)
 
@@ -284,8 +283,6 @@ export default async function DashboardPage() {
   const reportedSet    = new Set((reportedBookings ?? []).map((r) => r.booking_id))
   const unreportedCount = (completedBookingIds ?? []).filter((b) => !reportedSet.has(b.id)).length
 
-  const confirmedCount  = (pipelineBookings ?? []).filter((b) => b.status === 'confirmed').length
-  const inProgressCount = (pipelineBookings ?? []).filter((b) => b.status === 'in_progress').length
 
   // B2B 거래처 지표 — 거래처(company)만, 보관(archived)·거절(rejected)은 제외
   const companyLeads      = (allLeads ?? []).filter((l) => l.customer_type === 'company')
@@ -300,6 +297,8 @@ export default async function DashboardPage() {
   // 거래처 현황 '월 예상'은 상담 단계의 추정 예산(leads.monthly_budget)이 아니라
   // 실제 체결된 정기 계약 매출(monthlyContractRevenue)을 그대로 사용해 KPI 카드와 값이 일치하도록 한다
   const todayFollowUpCount = (todayFollowUps ?? []).length
+  // 아직 손 안 댄 새 문의 — 목록은 5건까지, 개수는 전체 기준으로 보여준다
+  const newLeadCount = (allLeads ?? []).filter((l) => l.status === 'new').length
 
   // 주간 매출 차트 데이터 (최근 7일, KST 기준)
   const weeklyData = Array.from({ length: 7 }, (_, i) => {
@@ -358,8 +357,21 @@ export default async function DashboardPage() {
     (pendingMonthlyReportCount ?? 0) > 0 || (pendingReengagementCount ?? 0) > 0 ||
     missingVisitContractCount > 0
 
-  // 오늘 현장 문단속 카드 — 미마감(확인 필요)이 있으면 상단(돈 지표 위)에 빨갛게 노출,
-  // 정상(확인 필요 0)이면 핵심 지표 아래로 내려 조용히 보여준다. (문제 있을 때만 위로)
+  // 오늘 현장 문단속 — 미마감이 있으면 상단에 빨간 카드로 크게, 정상이면 아래에 한 줄로만.
+  // 아무 문제 없는 날까지 큰 카드가 자리를 차지하면 정작 봐야 할 돈·문의 지표가 아래로 밀린다.
+  const lockupStrip = lockup.total > 0 ? (
+    <Link href="/dashboard/attendance">
+      <div className="flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 hover:border-primary/40 transition-colors">
+        <Lock className="h-3.5 w-3.5 text-primary shrink-0" />
+        <span className="text-xs text-muted-foreground">오늘 현장 문단속</span>
+        <span className="text-xs font-semibold">
+          {lockup.total}곳 중 <span className="text-emerald-600">{lockup.done}곳 마감</span>
+        </span>
+        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 ml-auto shrink-0" />
+      </div>
+    </Link>
+  ) : null
+
   const lockupCard = lockup.total > 0 ? (
     <Link href="/dashboard/attendance">
       <div className={`rounded-xl border p-4 hover:shadow-sm transition-all ${lockup.overdue > 0 ? 'bg-red-50 border-red-200 hover:border-red-300' : 'bg-white border-border hover:border-primary/40'}`}>
@@ -462,20 +474,7 @@ export default async function DashboardPage() {
               </div>
             </Link>
           )}
-          {(openClaimCount ?? 0) > 0 && (
-            <Link href="/dashboard/claims">
-              <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 hover:bg-rose-100 transition-colors">
-                <ShieldAlert className="h-4 w-4 text-rose-500 shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-rose-800">
-                    미해결 클레임이 {openClaimCount}건 있어요
-                  </p>
-                  <p className="text-xs text-rose-600 mt-0.5">고객 불만이 쌓이기 전에 눌러서 해결하세요</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-rose-400 shrink-0" />
-              </div>
-            </Link>
-          )}
+          {/* 미해결 클레임도 '오늘 할 일' 타일에 있다 */}
           {(needsReviewCount ?? 0) > 0 && (
             <Link href="/dashboard/schedule">
               <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 hover:bg-amber-100 transition-colors">
@@ -569,32 +568,8 @@ export default async function DashboardPage() {
               </div>
             </Link>
           )}
-          {(pendingQuoteCount ?? 0) > 0 && (
-            <Link href="/dashboard/clients?type=individual">
-              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 hover:bg-amber-100 transition-colors">
-                <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-amber-800">확인 안 된 견적이 {pendingQuoteCount}건 있어요</p>
-                  <p className="text-xs text-amber-600 mt-0.5">고객 관리에서 예약으로 확정해주세요</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-amber-500 shrink-0" />
-              </div>
-            </Link>
-          )}
-          {unreportedCount > 0 && (
-            <Link href="/dashboard/alimtalk-todo">
-              <div className="flex items-center gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 hover:bg-orange-100 transition-colors">
-                <ClipboardList className="h-4 w-4 text-orange-600 shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-orange-800">
-                    작업 보고서를 안 보낸 고객이 {unreportedCount}명이에요
-                  </p>
-                  <p className="text-xs text-orange-600 mt-0.5">눌러서 바로 발송하세요</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-orange-500 shrink-0" />
-              </div>
-            </Link>
-          )}
+          {/* 견적 대기도 '오늘 할 일' 타일에 있다 */}
+          {/* 작업 보고서 미발송은 아래 '오늘 할 일' 타일에서 본다 — 같은 내용을 두 번 띄우지 않는다 */}
           {(unreviewedCount ?? 0) > 0 && (
             <Link href="/dashboard/alimtalk-todo">
               <div className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 hover:bg-yellow-100 transition-colors">
@@ -636,7 +611,7 @@ export default async function DashboardPage() {
               <p className="text-xl font-bold tabular-nums leading-tight">
                 {monthRevenue > 0 ? `${monthRevenue.toLocaleString('ko-KR')}원` : '—'}
               </p>
-              <p className="text-xs font-medium text-muted-foreground mt-1">{monthLabel} 매출</p>
+              <p className="text-xs font-medium text-muted-foreground mt-1">{monthLabel} 일회성 매출</p>
               <p className="text-[11px] text-muted-foreground/70 mt-0.5">
                 {monthRemainingCount > 0
                   ? `완료 ${Math.round(monthCompletedRevenue / 10000).toLocaleString('ko-KR')}만원 · 남은 일정 ${monthRemainingCount}건`
@@ -661,13 +636,15 @@ export default async function DashboardPage() {
                 )}
               </div>
               <p className="text-xl font-bold tabular-nums leading-tight">{monthBookingCount}건</p>
-              <p className="text-xs font-medium text-muted-foreground mt-1">{monthLabel} 일정</p>
+              <p className="text-xs font-medium text-muted-foreground mt-1">{monthLabel} 일회성 청소</p>
               <p className="text-[11px] text-muted-foreground/70 mt-0.5">
                 {monthBookingCount === 0
-                  ? '아직 잡힌 일정이 없어요'
+                  ? monthContractVisits > 0
+                    ? '아직 없어요 · 정기 계약은 별도'
+                    : '아직 잡힌 일정이 없어요'
                   : monthRemainingCount > 0
-                    ? `완료 ${monthCompletedCount}건 · 남은 일정 ${monthRemainingCount}건`
-                    : '모두 완료했어요'}
+                    ? `완료 ${monthCompletedCount}건 · 남은 ${monthRemainingCount}건${contractAside}`
+                    : `모두 완료했어요${contractAside}`}
               </p>
             </div>
           </Link>
@@ -683,7 +660,7 @@ export default async function DashboardPage() {
               {avgDealSize > 0 ? `${avgDealSize.toLocaleString('ko-KR')}원` : '—'}
             </p>
             <p className="text-xs font-medium text-muted-foreground mt-1">평균 단가</p>
-            <p className="text-[11px] text-muted-foreground/70 mt-0.5">{monthLabel} 예약 {monthBookingCount}건 기준</p>
+            <p className="text-[11px] text-muted-foreground/70 mt-0.5">{monthLabel} 일회성 {monthBookingCount}건 기준</p>
           </div>
 
           {/* 정기 계약 */}
@@ -712,6 +689,22 @@ export default async function DashboardPage() {
 
       {/* 오늘 할 일 KPI */}
       <div className="grid grid-cols-2 gap-3">
+        {/* 새 문의 — 손대기 전 단계라 견적 대기보다 앞에 온다(문의 → 견적 → 예약 순서) */}
+        <Link href="/dashboard/clients">
+          <div className={`rounded-xl border p-4 hover:shadow-sm transition-all h-full ${newLeadCount > 0 ? 'bg-primary/5 border-primary/30 hover:border-primary/50' : 'bg-white border-border hover:border-primary/40'}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <Send className={`h-4 w-4 ${newLeadCount > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+              <span className="text-xs font-medium text-muted-foreground">새 문의</span>
+            </div>
+            <p className={`text-2xl font-bold tabular-nums ${newLeadCount > 0 ? 'text-primary' : 'text-foreground'}`}>
+              {newLeadCount}<span className="text-sm font-normal text-muted-foreground ml-0.5">건</span>
+            </p>
+            <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+              {newLeadCount > 0 ? '아직 연락 안 했어요' : '새로 들어온 문의 없음'}
+            </p>
+          </div>
+        </Link>
+
         <Link href="/dashboard/clients?type=individual">
           <div className={`rounded-xl border p-4 hover:shadow-sm transition-all h-full ${(pendingQuoteCount ?? 0) > 0 ? 'bg-amber-50 border-amber-200 hover:border-amber-300' : 'bg-white border-border hover:border-primary/40'}`}>
             <div className="flex items-center gap-2 mb-2">
@@ -741,10 +734,26 @@ export default async function DashboardPage() {
             </p>
           </div>
         </Link>
+
+        {/* 작업 보고 — 문의·견적·사고 다음에 오는 마지막 단계. 보고가 나가야 후기·재계약으로 이어진다 */}
+        <Link href="/dashboard/alimtalk-todo">
+          <div className={`rounded-xl border p-4 hover:shadow-sm transition-all h-full ${unreportedCount > 0 ? 'bg-orange-50 border-orange-200 hover:border-orange-300' : 'bg-white border-border hover:border-primary/40'}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <ClipboardList className={`h-4 w-4 ${unreportedCount > 0 ? 'text-orange-500' : 'text-muted-foreground'}`} />
+              <span className="text-xs font-medium text-muted-foreground">작업 보고 대기</span>
+            </div>
+            <p className={`text-2xl font-bold tabular-nums ${unreportedCount > 0 ? 'text-orange-700' : 'text-foreground'}`}>
+              {unreportedCount}<span className="text-sm font-normal text-muted-foreground ml-0.5">건</span>
+            </p>
+            <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+              {unreportedCount > 0 ? '고객에게 보낼 보고서가 있어요' : '보낼 보고서 없음'}
+            </p>
+          </div>
+        </Link>
       </div>
 
-      {/* 오늘 현장 문단속(정상) — 미마감이 없을 땐 여기(핵심 지표 아래)에서 조용히 상태만 */}
-      {lockup.overdue === 0 && lockupCard}
+      {/* 오늘 현장 문단속(정상) — 문제가 없으면 한 줄로만. 자세한 건 근태·문단속 화면에서 */}
+      {lockup.overdue === 0 && lockupStrip}
 
       {/* 운영 현황 — 2컬럼 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -754,50 +763,10 @@ export default async function DashboardPage() {
           <WeeklyChart data={weeklyData} maxRevenue={maxWeeklyRevenue} total={weeklyTotal} />
         </div>
 
-        {/* 예약 파이프라인 + 고객 현황 */}
+        {/* 거래처 + 고객 현황 */}
+        {/* '예약 파이프라인'(확정·진행 중 막대)은 뺐다(2026-08-18) — 숫자를 봐도 사장님이 오늘
+            다르게 할 행동이 없어 실제로 안 보던 카드였다. 예약 현황은 일정·배정에서 본다. */}
         <div className="bg-white rounded-xl border border-border p-5 space-y-4">
-          {/* 파이프라인 */}
-          <div>
-            <p className="text-sm font-semibold mb-3">예약 파이프라인</p>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-primary" />
-                  <span className="text-xs text-muted-foreground">예약 확정</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="h-1.5 rounded-full bg-primary/20 overflow-hidden" style={{ width: '80px' }}>
-                    <div
-                      className="h-full bg-primary rounded-full transition-all"
-                      style={{ width: `${Math.min((confirmedCount / Math.max(confirmedCount + inProgressCount, 1)) * 100, 100)}%` }}
-                    />
-                  </div>
-                  <span className="text-sm font-bold tabular-nums w-8 text-right">{confirmedCount}건</span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-amber-500" />
-                  <span className="text-xs text-muted-foreground">진행 중</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="h-1.5 rounded-full bg-amber-100 overflow-hidden" style={{ width: '80px' }}>
-                    <div
-                      className="h-full bg-amber-500 rounded-full transition-all"
-                      style={{ width: `${Math.min((inProgressCount / Math.max(confirmedCount + inProgressCount, 1)) * 100, 100)}%` }}
-                    />
-                  </div>
-                  <span className="text-sm font-bold tabular-nums w-8 text-right">{inProgressCount}건</span>
-                </div>
-              </div>
-            </div>
-            {confirmedCount === 0 && inProgressCount === 0 && (
-              <p className="text-xs text-muted-foreground/60 mt-2">진행 중인 예약이 없어요</p>
-            )}
-          </div>
-
-          <div className="border-t border-border" />
-
           {/* B2B 거래처 현황 */}
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -985,51 +954,8 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* 이번 주 예정 */}
-      {upcomingBookings && upcomingBookings.length > 0 && (
-        <div className="bg-white rounded-xl border border-border overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <h2 className="font-semibold text-sm">이번 주 예정</h2>
-              <span className="text-xs text-muted-foreground">({upcomingBookings.length}건)</span>
-            </div>
-            <Link
-              href="/dashboard/schedule"
-              className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-0.5"
-            >
-              일정에서 보기 <ChevronRight className="h-3 w-3" />
-            </Link>
-          </div>
-          <div className="divide-y divide-border">
-            {upcomingBookings.map((booking) => {
-              const status = STATUS_LABEL[booking.status] ?? { text: booking.status, className: 'bg-gray-100 text-gray-600' }
-              const scheduledDate = booking.scheduled_at
-                ? new Date(booking.scheduled_at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short', timeZone: 'Asia/Seoul' })
-                : '—'
-              const scheduledTime = booking.scheduled_at
-                ? new Date(booking.scheduled_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul' })
-                : '—'
-              return (
-                <div key={booking.id} className="flex items-center px-5 py-3.5 hover:bg-muted/20 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{booking.customer_name}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{scheduledDate} · {scheduledTime}</p>
-                  </div>
-                  <div className="flex items-center gap-3 ml-4 shrink-0">
-                    <p className="text-sm font-semibold tabular-nums hidden sm:block">
-                      {booking.final_price ? `${booking.final_price.toLocaleString('ko-KR')}원` : '—'}
-                    </p>
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${status.className}`}>
-                      {status.text}
-                    </span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
+      {/* '이번 주 예정' 박스는 뺐다(2026-08-18) — 일정·배정 화면에 같은 내용이 더 잘 나와 있어
+          홈에 또 두면 사장님이 어느 화면을 봐야 하는지 헷갈린다. 홈은 '오늘'까지만 보여준다. */}
 
     </div>
   )
