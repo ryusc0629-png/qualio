@@ -17,12 +17,13 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { addDays, format, getDaysInMonth } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2, Smartphone, CalendarDays, FileText } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2, Smartphone, CalendarDays, FileText, CalendarOff } from 'lucide-react'
+import { getHolidayName } from '@/lib/holidays/kr'
 import Link from 'next/link'
 import { formatPhone } from '@/lib/format/phone'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
-import { assignBookingAction, assignBookingAndPropagateAction, addWorkerAction, deleteWorkerAction, updateBookingWorkersAction } from '@/lib/actions/workers'
+import { assignBookingAction, assignBookingAndPropagateAction, addWorkerAction, deleteWorkerAction, updateBookingWorkersAction, clearHolidayVisitsAction } from '@/lib/actions/workers'
 import { BookingDetailSheet } from '@/components/dashboard/booking-detail-sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -478,6 +479,15 @@ export function ScheduleBoard({
     },
   })
 
+  // 공휴일에 남아 있는 정기 방문 정리 — 계약에 '공휴일엔 쉬어요'를 켜기 전에 이미 깔린 방문용
+  const { execute: clearHolidayVisits, isPending: isClearingHoliday } = useAction(clearHolidayVisitsAction, {
+    onSuccess: ({ data }) => {
+      toast.success(`쉬는 날 방문 ${data?.clearedCount ?? 0}건을 일정에서 뺐어요`)
+      window.location.replace(window.location.href)
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '정리 못 했어요. 다시 눌러주세요'),
+  })
+
   // 뷰에 따라 날짜 열 생성
   // weekStart는 'yyyy-MM-dd'(한국 달력 날짜). new Date('2026-08-17')로 읽으면
   // UTC 자정으로 파싱돼 하루 밀릴 수 있으므로 연·월·일을 직접 넣어 만든다.
@@ -496,6 +506,7 @@ export function ScheduleBoard({
         ? format(d, 'd일 (EEE)', { locale: ko })
         : format(d, 'M/d (EEE)', { locale: ko }),
       isToday: format(d, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd'),
+      holiday: getHolidayName(format(d, 'yyyy-MM-dd')), // 공휴일이면 이름, 아니면 null
     }
   })
 
@@ -792,17 +803,49 @@ export function ScheduleBoard({
                 className="bg-background"
                 style={STICKY_LABEL_COL}
               />
-              {days.map((day) => (
-                <div
-                  key={day.date}
-                  className={[
-                    'text-center text-xs font-semibold py-2 rounded-lg',
-                    day.isToday ? 'bg-primary/10 text-primary' : 'text-muted-foreground',
-                  ].join(' ')}
-                >
-                  {day.label}
-                </div>
-              ))}
+              {days.map((day) => {
+                // 공휴일에 아직 남아 있는 정기 방문(시작 전) — 있으면 한 번에 뺄 수 있게 버튼을 띄운다
+                const leftoverVisits = day.holiday
+                  ? bookings.filter(
+                      (b) =>
+                        format(new Date(b.scheduled_at), 'yyyy-MM-dd') === day.date &&
+                        b.status === 'confirmed' &&
+                        b.contract_id,
+                    ).length
+                  : 0
+                return (
+                  <div
+                    key={day.date}
+                    className={[
+                      'text-center text-xs font-semibold py-2 rounded-lg',
+                      day.holiday
+                        ? 'bg-rose-50 text-rose-700'
+                        : day.isToday ? 'bg-primary/10 text-primary' : 'text-muted-foreground',
+                    ].join(' ')}
+                  >
+                    {day.label}
+                    {day.holiday && (
+                      <p className="text-[10px] font-medium leading-tight truncate px-1" title={day.holiday}>
+                        {day.holiday}
+                      </p>
+                    )}
+                    {day.holiday && leftoverVisits > 0 && view !== 'month' && (
+                      <button
+                        type="button"
+                        disabled={isClearingHoliday}
+                        onClick={() => {
+                          if (!confirm(`${day.holiday} — 이 날 정기 방문 ${leftoverVisits}건을 일정에서 뺄까요?\n(이미 진행·완료한 방문은 그대로 남아요)`)) return
+                          clearHolidayVisits({ date: day.date })
+                        }}
+                        className="mt-1 inline-flex items-center gap-1 rounded-md border border-rose-200 bg-white px-1.5 py-1 text-[10px] font-medium text-rose-700 hover:bg-rose-100 transition-colors disabled:opacity-50"
+                      >
+                        <CalendarOff className="h-3 w-3 shrink-0" />
+                        {isClearingHoliday ? '빼는 중...' : `방문 ${leftoverVisits}건 빼기`}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
 
             {/* 데이터 행: worker × day — 담당자별 구분선으로 누구 일정인지 한눈에 */}

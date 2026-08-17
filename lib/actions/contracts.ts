@@ -131,6 +131,7 @@ const updateContractSchema = z.object({
   start_date: z.string().min(1, '시작일을 입력해주세요'),
   end_date: z.string().optional(),
   notes: z.string().max(2000).optional(),
+  skip_holidays: z.boolean().optional(), // 공휴일엔 방문 안 함 (미전달 시 기존 값 유지)
 })
 
 interface ContractPriceSegment {
@@ -146,7 +147,7 @@ export const updateContractAction = action
 
     const { data: current } = await db
       .from('contracts')
-      .select('id, contract_price, frequency, start_date, end_date, status, price_history' as never)
+      .select('id, contract_price, frequency, start_date, end_date, status, price_history, skip_holidays' as never)
       .eq('id', parsedInput.contractId)
       .eq('business_id', businessId)
       .maybeSingle() as unknown as {
@@ -158,6 +159,7 @@ export const updateContractAction = action
           end_date: string | null
           status: string
           price_history: ContractPriceSegment[] | null
+          skip_holidays: boolean | null
         } | null
       }
 
@@ -198,6 +200,10 @@ export const updateContractAction = action
       }
     }
 
+    // 공휴일 방문 여부 — 안 넘어오면 기존 값 유지(기본 true = 공휴일엔 안 감)
+    const currentSkipHolidays = current.skip_holidays !== false
+    const nextSkipHolidays = parsedInput.skip_holidays ?? currentSkipHolidays
+
     const { error } = await db
       .from('contracts')
       .update({
@@ -208,6 +214,7 @@ export const updateContractAction = action
         end_date: newEndDate,
         notes: parsedInput.notes?.trim() || null,
         price_history: priceHistory.length > 0 ? priceHistory : null,
+        skip_holidays: nextSkipHolidays,
       } as never)
       .eq('id', parsedInput.contractId)
       .eq('business_id', businessId)
@@ -219,7 +226,8 @@ export const updateContractAction = action
     const scheduleChanged =
       parsedInput.frequency !== current.frequency ||
       parsedInput.start_date !== current.start_date ||
-      newEndDate !== current.end_date
+      newEndDate !== current.end_date ||
+      nextSkipHolidays !== currentSkipHolidays
 
     if (scheduleChanged) {
       const nowIso = new Date().toISOString()
@@ -242,7 +250,7 @@ export const updateContractAction = action
       if (current.status === 'active') {
         const { data: fresh } = await db
           .from('contracts')
-          .select('id, business_id, customer_id, service_type, frequency, start_date, end_date, status, last_generated_until, default_worker_id, visit_time' as never)
+          .select('id, business_id, customer_id, service_type, frequency, start_date, end_date, status, last_generated_until, default_worker_id, visit_time, skip_holidays' as never)
           .eq('id', parsedInput.contractId)
           .eq('business_id', businessId)
           .maybeSingle() as unknown as { data: import('@/lib/recurring/generate').ContractForGen | null }
@@ -297,7 +305,7 @@ export const updateContractStatusAction = action
       // 다시 활성화 → 향후 방문 재생성
       const { data: contract } = await db
         .from('contracts')
-        .select('id, business_id, customer_id, service_type, frequency, start_date, end_date, status, last_generated_until, default_worker_id, visit_time' as never)
+        .select('id, business_id, customer_id, service_type, frequency, start_date, end_date, status, last_generated_until, default_worker_id, visit_time, skip_holidays' as never)
         .eq('id', parsedInput.contractId)
         .eq('business_id', businessId)
         .maybeSingle() as unknown as { data: import('@/lib/recurring/generate').ContractForGen | null }

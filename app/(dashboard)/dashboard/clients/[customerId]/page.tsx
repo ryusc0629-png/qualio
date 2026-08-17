@@ -168,7 +168,7 @@ export default async function CustomerDetailPage({ params }: Props) {
   // price_history: 범위 추가로 월 금액이 바뀐 이력. 누적 매출을 구간별로 계산해 과거 소급을 막는다.
   const { data: customerContracts } = await db
     .from('contracts')
-    .select('id, service_type, frequency, contract_price, start_date, end_date, status, notes, price_history' as never)
+    .select('id, service_type, frequency, contract_price, start_date, end_date, status, notes, price_history, skip_holidays' as never)
     .eq('business_id', profile.business_id)
     .eq('customer_id', customerId)
     .order('created_at', { ascending: false }) as unknown as {
@@ -179,6 +179,7 @@ export default async function CustomerDetailPage({ params }: Props) {
           frequency: string
           status: string
           notes: string | null
+          skip_holidays: boolean | null
         }
       > | null
     }
@@ -505,6 +506,7 @@ export default async function CustomerDetailPage({ params }: Props) {
                           start_date: contract.start_date,
                           end_date: contract.end_date,
                           notes: contract.notes,
+                          skip_holidays: contract.skip_holidays,
                         }}
                       />
                     </div>

@@ -5,6 +5,8 @@ import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { getWorkerLimit, type PlanId } from '@/lib/config/plans'
+import { isHoliday } from '@/lib/holidays/kr'
+import { marketDayRange } from '@/lib/format/datetime'
 
 async function getBusinessId() {
   const authClient = await createClient()
@@ -277,6 +279,39 @@ export const deleteBookingFromScheduleAction = action
     revalidatePath('/dashboard/schedule')
     revalidatePath('/dashboard/work')
     return { success: true }
+  })
+
+// 공휴일 하루치 정기 방문을 한 번에 치운다 — "그날 다 쉬었는데 일정엔 그대로 남아 있는" 상황용.
+//
+// 계약에 '공휴일엔 쉬어요'를 켜두면 앞으로의 일정은 애초에 안 깔리지만, 그 전에 이미
+// 깔려 있던 방문은 남는다. 그걸 사장님이 캘린더에서 한 번에 지울 수 있게 한다.
+// 아직 시작 안 한(confirmed) 정기 방문만 지운다 — 진행중·완료 방문은 실제로 일한 이력이라 보존.
+export const clearHolidayVisitsAction = action
+  .schema(z.object({ date: z.string().min(10).max(10) })) // 'YYYY-MM-DD' (KST)
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    if (!isHoliday(parsedInput.date)) throw new Error('[APP] 공휴일이 아닌 날이에요')
+
+    const { from, to } = marketDayRange(parsedInput.date)
+
+    const { data: cleared, error } = await db
+      .from('bookings')
+      .update({ deleted_at: new Date().toISOString() } as never)
+      .eq('business_id', businessId)
+      .eq('status', 'confirmed')
+      .not('contract_id', 'is', null)
+      .gte('scheduled_at', from)
+      .lte('scheduled_at', to)
+      .is('deleted_at', null)
+      .select('id')
+
+    if (error) throw new Error('[APP] 일정을 정리하지 못했어요. 다시 눌러주세요')
+
+    revalidatePath('/dashboard/schedule')
+    revalidatePath('/dashboard/work')
+    revalidatePath('/dashboard')
+    return { success: true, clearedCount: cleared?.length ?? 0 }
   })
 
 // 예약 드래그앤드롭 — 날짜 + 담당자(단일) 동시 변경

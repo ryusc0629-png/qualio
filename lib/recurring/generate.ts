@@ -1,6 +1,7 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { computeVisitDates } from './visit-dates'
+import { isHoliday } from '@/lib/holidays/kr'
 
 // 정기계약 → 미래 방문(bookings) 자동 생성. 계약 등록 시 + 매일 크론에서 호출한다.
 // last_generated_until 커서로 멱등 보장 — 이미 생성한 날짜 이후만 새로 만들어,
@@ -30,6 +31,7 @@ export interface ContractForGen {
   last_generated_until: string | null
   default_worker_id?: string | null // 거래처 고정 담당자 — 있으면 새 방문을 이 사람에게 바로 배정
   visit_time?: string | null // 방문 기본 시각(KST "HH:mm"). 없으면 09:00
+  skip_holidays?: boolean | null // 공휴일엔 방문 안 함(기본 true) — 그날은 일정에 아예 안 깔린다
 }
 
 function ymd(d: Date): string {
@@ -69,7 +71,12 @@ export async function generateVisitsForContract(
 
   if (fromStr > toStr) return 0
 
-  const dates = computeVisitDates(contract.frequency, fromStr, toStr)
+  // 공휴일엔 안 가는 계약이면(기본값) 그날은 아예 만들지 않는다 — 나중에 지우는 것보다 안 만드는 게 확실하다.
+  // 커서는 그대로 전진하므로, 건너뛴 공휴일이 다음 실행에서 되살아나지 않는다.
+  const skipHolidays = contract.skip_holidays !== false
+  const dates = computeVisitDates(contract.frequency, fromStr, toStr).filter(
+    (d) => !(skipHolidays && isHoliday(d)),
+  )
   if (dates.length === 0) {
     // 생성할 날짜가 없어도 커서는 전진시켜 다음 실행에서 같은 구간을 재검토하지 않게 함
     await db.from('contracts').update({ last_generated_until: toStr }).eq('id', contract.id)
