@@ -573,12 +573,14 @@ export const createBookingAction = publicAction
           businessId:     quote.business_id,
         })
 
-        // 발송 성공 시 reports 테이블에 기록
-        await db.from('reports').insert({
-          booking_id:    newBooking.id,
-          business_id:   quote.business_id,
-          kakao_sent_at: new Date().toISOString(),
-        })
+        // 발송 성공 시 예약에 기록 — 사장님이 예약 상세에서 '보냈는지' 확인할 수 있게.
+        // ⚠️ 예전엔 reports.kakao_sent_at 에 적었는데, 그 칸은 '작업 보고서 알림톡'
+        //    발송 시각이다. 예약을 확정하는 순간 보고서를 보낸 걸로 기록돼서
+        //    그 예약이 '알림톡 발송' 대기 목록에서 통째로 빠졌다. 되돌리지 말 것.
+        await db
+          .from('bookings')
+          .update({ confirm_alimtalk_sent_at: new Date().toISOString() } as never)
+          .eq('id', newBooking.id)
 
         console.log('[Alimtalk] 예약 확정 알림톡 발송 완료:', newBooking.id)
       } catch (e) {
@@ -881,11 +883,11 @@ export const confirmBookingFromQuoteAction = authAction
             businessId:     quote.business_id,
           })
 
-          await db.from('reports').insert({
-            booking_id:    newBooking.id,
-            business_id:   quote.business_id,
-            kakao_sent_at: new Date().toISOString(),
-          })
+          // ⚠️ reports.kakao_sent_at 이 아니라 예약에 기록한다(위 확정 경로와 같은 이유).
+          await db
+            .from('bookings')
+            .update({ confirm_alimtalk_sent_at: new Date().toISOString() } as never)
+            .eq('id', newBooking.id)
         } catch (e) {
           console.error('[Alimtalk] 예약 확정 알림톡 발송 실패 — 예약은 정상 완료됨', e)
         }

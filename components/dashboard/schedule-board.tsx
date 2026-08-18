@@ -24,7 +24,7 @@ import { formatPhone } from '@/lib/format/phone'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
 import { assignBookingAction, assignBookingAndPropagateAction, addWorkerAction, deleteWorkerAction, updateBookingWorkersAction, clearHolidayVisitsAction } from '@/lib/actions/workers'
-import { BookingDetailSheet } from '@/components/dashboard/booking-detail-sheet'
+import { BookingDetailSheet, type AlimtalkSentAt } from '@/components/dashboard/booking-detail-sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -71,6 +71,8 @@ interface Booking {
   reviewReason?: string | null
   isRecurring?: boolean
   cancellation_reason?: string | null
+  /** 고객에게 나간 카카오 알림톡 발송 시각 — 예약 상세의 '고객에게 보낸 카톡'에 표시 */
+  alimtalk?: AlimtalkSentAt
 }
 
 interface Props {

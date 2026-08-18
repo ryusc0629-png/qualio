@@ -85,7 +85,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
 
     db
       .from('bookings' as never)
-      .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, worker_id, cancellation_reason, needs_review, review_reason, reschedule_requested_at, reschedule_requested_for, reschedule_note, contract_id, quotes!quote_id(cleaning_type)')
+      .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, worker_id, cancellation_reason, needs_review, review_reason, reschedule_requested_at, reschedule_requested_for, reschedule_note, contract_id, confirm_alimtalk_sent_at, reminder_sent_at, on_my_way_sent_at, quotes!quote_id(cleaning_type)')
       .eq('business_id' as never, businessId)
       .in('status' as never, ['confirmed', 'in_progress', 'completed', 'cancelled'])
       .gte('scheduled_at' as never, rangeFrom)
@@ -141,6 +141,10 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     needs_review: boolean | null; review_reason: string | null
     reschedule_requested_at: string | null; reschedule_requested_for: string | null; reschedule_note: string | null
     contract_id: string | null
+    // 고객에게 나간 알림톡 발송 시각 — 예약 상세의 '고객에게 보낸 카톡'에 표시
+    confirm_alimtalk_sent_at: string | null
+    reminder_sent_at: string | null
+    on_my_way_sent_at: string | null
     quotes: { cleaning_type: string | null } | null
   }
   const bookings = ((bookingsResult as unknown as { data: RawBooking[] | null }).data) ?? []
@@ -161,17 +165,26 @@ export default async function SchedulePage({ searchParams }: PageProps) {
 
   // 완료된 예약의 보고서 상태 조회 (알림톡 발송 여부 표시용)
   const completedIds = bookings.filter(b => b.status === 'completed').map(b => b.id)
-  type ReportRow = { id: string; booking_id: string; review_request_sent_at: string | null }
-  const reportMap = new Map<string, { id: string; reviewSent: boolean }>()
+  type ReportRow = {
+    id: string; booking_id: string
+    review_request_sent_at: string | null
+    kakao_sent_at: string | null
+  }
+  const reportMap = new Map<string, { id: string; reviewSent: boolean; reportSentAt: string | null; reviewSentAt: string | null }>()
 
   if (completedIds.length > 0) {
     const { data: reportRows } = await db
       .from('reports' as never)
-      .select('id, booking_id, review_request_sent_at' as never)
+      .select('id, booking_id, review_request_sent_at, kakao_sent_at' as never)
       .in('booking_id' as never, completedIds) as unknown as { data: ReportRow[] | null }
 
     for (const r of reportRows ?? []) {
-      reportMap.set(r.booking_id, { id: r.id, reviewSent: !!r.review_request_sent_at })
+      reportMap.set(r.booking_id, {
+        id: r.id,
+        reviewSent: !!r.review_request_sent_at,
+        reportSentAt: r.kakao_sent_at,
+        reviewSentAt: r.review_request_sent_at,
+      })
     }
   }
 
@@ -253,6 +266,13 @@ export default async function SchedulePage({ searchParams }: PageProps) {
           reviewReason:     b.review_reason ?? null,
           isRecurring:      !!b.contract_id,
           contract_id:      b.contract_id ?? null,
+          alimtalk: {
+            confirm:  b.confirm_alimtalk_sent_at ?? null,
+            reminder: b.reminder_sent_at ?? null,
+            onMyWay:  b.on_my_way_sent_at ?? null,
+            report:   reportMap.get(b.id)?.reportSentAt ?? null,
+            review:   reportMap.get(b.id)?.reviewSentAt ?? null,
+          },
         }))}
         weekStart={startYmd}
         weekLabel={rangeLabel}

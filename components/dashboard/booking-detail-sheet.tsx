@@ -7,7 +7,9 @@ import Link from 'next/link'
 import {
   Phone, Clock, User, ChevronRight,
   Pencil, Check, X, CalendarDays, CheckCircle2, Send, Star, Users, PhoneCall, Trash2,
+  MessageCircle,
 } from 'lucide-react'
+import { formatDateTime } from '@/lib/format/datetime'
 import { MapNavButton } from '@/components/dashboard/map-nav-button'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
@@ -50,6 +52,18 @@ interface Worker {
   phone: string | null
 }
 
+/**
+ * 고객에게 나간 카카오 알림톡의 발송 시각 모음.
+ * 값이 있으면 '보냄', 없으면 아직 안 나간 것 — 사장님 화면에서 둘 다 보여준다.
+ */
+export interface AlimtalkSentAt {
+  confirm:    string | null // 예약 확정 안내
+  reminder:   string | null // 방문 전날 안내
+  onMyWay:    string | null // 곧 도착해요
+  report:     string | null // 작업 보고서
+  review:     string | null // 후기 요청
+}
+
 interface Booking {
   id: string
   customer_name: string
@@ -70,6 +84,7 @@ interface Booking {
   needsReview?: boolean
   reviewReason?: string | null
   cancellation_reason?: string | null
+  alimtalk?: AlimtalkSentAt
 }
 
 interface Props {
@@ -122,6 +137,101 @@ function Row({ icon, label, children }: {
         <p className="text-[11px] text-muted-foreground mb-0.5">{label}</p>
         <div className="text-sm">{children}</div>
       </div>
+    </div>
+  )
+}
+
+// ── 고객에게 보낸 카톡 ───────────────────────────────────
+//
+// 사장님이 가장 자주 묻는 것: "고객한테 카톡이 나갔나요?"
+// 지금까지는 이걸 확인할 화면이 한 곳도 없어서, 나가고도 안 나간 줄 알거나
+// 직접 고객에게 전화해 물어보는 일이 생겼다. 예약 상세에 항상 보이게 둔다.
+//
+// 아직 안 나간 것도 '언제 나갈지'를 함께 적는다 — 그래야 기다리면 되는 건지
+// 내가 눌러야 하는 건지 사장님이 스스로 판단할 수 있다.
+
+/** 알림톡 한 줄이 지금 어떤 상태인지 */
+type AlimtalkRow = {
+  label: string
+  sentAt: string | null
+  /** 아직 안 나갔을 때 보여줄 안내 — 자동 발송이면 언제 나가는지, 수동이면 무엇을 눌러야 하는지 */
+  pending: string
+  /** 이 예약에선 아예 해당 없는 항목이면 목록에서 뺀다 (예: 취소된 예약의 후기 요청) */
+  hide?: boolean
+}
+
+function AlimtalkHistory({ booking }: { booking: Booking }) {
+  const a = booking.alimtalk
+  if (!a) return null
+
+  const isCancelled = booking.status === 'cancelled'
+  const isDone      = booking.status === 'completed'
+
+  const rows: AlimtalkRow[] = [
+    {
+      label: '예약 확정 안내',
+      sentAt: a.confirm,
+      pending: '예약을 확정하면 바로 나가요',
+    },
+    {
+      label: '방문 전날 안내',
+      sentAt: a.reminder,
+      pending: isCancelled ? '취소된 예약이라 안 나가요' : '방문 하루 전 오전 10시에 자동으로 나가요',
+    },
+    {
+      label: '곧 도착해요',
+      sentAt: a.onMyWay,
+      pending: '방문 당일 출발할 때 직접 눌러서 보내요',
+      hide: isCancelled,
+    },
+    {
+      label: '작업 보고서',
+      sentAt: a.report,
+      pending: isDone ? '보고서를 작성해서 보내면 기록돼요' : '작업이 끝난 뒤에 보내요',
+      hide: isCancelled,
+    },
+    {
+      label: '후기 요청',
+      sentAt: a.review,
+      pending: '보고서를 보낸 뒤에 보낼 수 있어요',
+      hide: isCancelled,
+    },
+  ]
+
+  const visible = rows.filter((r) => !r.hide)
+  const sentCount = visible.filter((r) => r.sentAt).length
+
+  return (
+    <div className="rounded-xl border border-border p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <MessageCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+        <p className="text-sm font-semibold">고객에게 보낸 카톡</p>
+        <span className="text-[11px] text-muted-foreground ml-auto">{sentCount}건 발송</span>
+      </div>
+
+      <ul className="space-y-1.5">
+        {visible.map((r) => (
+          <li key={r.label} className="flex items-start gap-2 text-sm">
+            {r.sentAt ? (
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+            ) : (
+              <Clock className="h-4 w-4 text-muted-foreground/50 shrink-0 mt-0.5" />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className={r.sentAt ? 'font-medium' : 'text-muted-foreground'}>{r.label}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {r.sentAt
+                  ? `${formatDateTime(r.sentAt, { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}에 보냄`
+                  : r.pending}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <p className="text-[11px] text-muted-foreground mt-2.5 pt-2.5 border-t border-border">
+        고객 카카오톡으로 발송돼요. 고객이 카카오톡을 쓰지 않으면 도착하지 않을 수 있어요.
+      </p>
     </div>
   )
 }
@@ -729,6 +839,23 @@ export function BookingDetailSheet({
                 bookingId={booking.id}
                 fallbackTotal={booking.final_price}
                 onTotalChange={setLiveTotal}
+              />
+            </div>
+          )}
+
+          {/* 고객에게 나간 카톡 — "보냈나?"를 여기서 바로 확인 */}
+          {booking && (
+            <div className="mb-4">
+              <AlimtalkHistory
+                booking={{
+                  ...booking,
+                  alimtalk: booking.alimtalk && {
+                    ...booking.alimtalk,
+                    // 이 시트에서 방금 보낸 건 새로고침 없이 즉시 반영한다
+                    onMyWay: booking.alimtalk.onMyWay ?? (onMyWaySent ? new Date().toISOString() : null),
+                    review:  booking.alimtalk.review  ?? (currentReviewSent ? new Date().toISOString() : null),
+                  },
+                }}
               />
             </div>
           )}
