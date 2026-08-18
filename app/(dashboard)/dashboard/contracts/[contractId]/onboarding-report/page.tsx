@@ -3,7 +3,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { OnboardingReportEditor } from '@/components/dashboard/onboarding-report-editor'
-import type { OnboardingItem } from '@/lib/onboarding/types'
+import { newOnboardingItem, type OnboardingItem } from '@/lib/onboarding/types'
 
 interface PageProps {
   params: Promise<{ contractId: string }>
@@ -62,6 +62,66 @@ export default async function OnboardingReportPage({ params }: PageProps) {
     } | null
   }
 
+  // ── 첫 방문 보고서에서 초안 끌어오기 ──────────────────────────
+  //
+  // 초도 리포트는 전부 손으로 쓰는 구조였다. 그런데 현장 직원이 첫 방문에서
+  // 이미 작업 내용·특이사항·전후 사진을 앱에 적어둔다. 그걸 그대로 초안으로 깔아주면
+  // 사장님은 손보기만 하면 된다. (저장된 리포트가 있으면 절대 덮어쓰지 않는다)
+  let draft: { beforeNote: string; items: OnboardingItem[] } | null = null
+
+  if (!existing) {
+    // 이 계약의 가장 이른 완료 방문 1건
+    const { data: firstVisit } = (await db
+      .from('bookings')
+      .select('id' as never)
+      .eq('business_id' as never, businessId)
+      .eq('contract_id' as never, contractId)
+      .eq('status' as never, 'completed')
+      .is('deleted_at' as never, null)
+      .order('scheduled_at' as never, { ascending: true })
+      .limit(1)
+      .maybeSingle()) as unknown as { data: { id: string } | null }
+
+    if (firstVisit) {
+      const { data: fieldReport } = (await db
+        .from('reports')
+        .select('id, notes, preventive_note')
+        .eq('booking_id', firstVisit.id)
+        .maybeSingle()) as unknown as {
+        data: { id: string; notes: string | null; preventive_note: string | null } | null
+      }
+
+      if (fieldReport) {
+        const { data: photos } = (await db
+          .from('report_photos')
+          .select('url, type, sort_order')
+          .eq('report_id', fieldReport.id)
+          .order('sort_order', { ascending: true })) as unknown as {
+          data: { url: string; type: string; sort_order: number }[] | null
+        }
+
+        const before = (photos ?? []).filter((p) => p.type === 'before').map((p) => p.url)
+        const after  = (photos ?? []).filter((p) => p.type === 'after').map((p) => p.url)
+
+        // 전/후 사진을 짝지어 항목으로 깐다 — 짝이 안 맞으면 있는 쪽만 채운다
+        const pairCount = Math.max(before.length, after.length)
+        const items: OnboardingItem[] = Array.from({ length: pairCount }, (_, i) => ({
+          ...newOnboardingItem(),
+          // 공간 이름은 현장에서 안 받으므로 비워둔다 — 사장님이 채우는 유일한 칸
+          space: '',
+          problem: i === 0 ? (fieldReport.preventive_note ?? '') : '',
+          beforeUrl: before[i] ?? null,
+          afterUrl: after[i] ?? null,
+        }))
+
+        const beforeNote = fieldReport.notes ?? ''
+        if (beforeNote || items.length > 0) {
+          draft = { beforeNote, items }
+        }
+      }
+    }
+  }
+
   return (
     <div className="max-w-xl mx-auto px-4 py-5 space-y-4">
       <Link
@@ -86,12 +146,13 @@ export default async function OnboardingReportPage({ params }: PageProps) {
         initial={{
           reportId: existing?.id ?? null,
           publicToken: existing?.public_token ?? null,
-          beforeNote: existing?.before_note ?? '',
+          beforeNote: existing?.before_note ?? draft?.beforeNote ?? '',
           specNote: existing?.spec_note ?? '',
           managementNote: existing?.management_note ?? '',
-          items: existing?.items ?? [],
+          items: existing?.items ?? draft?.items ?? [],
           status: existing?.status ?? 'draft',
           alimtalkSentAt: existing?.alimtalk_sent_at ?? null,
+          prefilled: !existing && !!draft,
         }}
       />
     </div>

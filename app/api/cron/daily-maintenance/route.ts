@@ -30,6 +30,8 @@ const SUB_TASKS = [
   'generate-recurring-visits', // 정기계약 → 향후 방문 자동 생성(롤링 60일)
   'metrics-snapshot', // 본사 지표 월별 스냅샷(NRR/코호트 기반)
   'prepare-monthly-reports', // 매월 초 지난달 거래처 리포트 준비 + 대표 푸시(검토 후 발송)
+  // 첫 작업이 끝났는데 초도 리포트를 안 보낸 정기계약을 대표에게 알린다(계약당 1회)
+  'onboarding-report-reminder',
   'geo-measure', // AI 검색 노출률 주기 측정(7일 경과 업체만·상한 내, 키 없으면 휴면)
   'pricing-benchmark', // 객단가 상위 업체의 3단계 플랜 인상률·구성 집계(가격 가이드용)
   // 서비스·주력고객이 바뀐 업체의 홈페이지 제목·소개글을 다시 만든다.

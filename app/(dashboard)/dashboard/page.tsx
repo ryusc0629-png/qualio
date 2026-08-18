@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { countPendingOnboardingReports } from '@/lib/onboarding/pending-reports'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { QuoteLinkShare } from '@/components/dashboard/quote-link-share'
@@ -338,6 +339,15 @@ export default async function DashboardPage() {
     .eq('business_id', businessId)
     .eq('status', 'pending')
 
+  // 첫 작업은 끝났는데 초도 리포트를 아직 안 보낸 정기계약
+  //
+  // 정기 거래처와의 첫 인상을 만드는 문서인데, 진입점이 고객 상세 안쪽 링크뿐이라
+  // 사장님이 기억해서 찾아 들어가야 했다. 홈에서 먼저 알려준다.
+  const pendingOnboardingReports = await countPendingOnboardingReports(
+    db as unknown as SupabaseClient,
+    businessId,
+  )
+
   // 검토 대기 중인 재방문 유도 건 (마지막 방문 90일 경과 단골 대상, 개인화 문구 준비됨)
   const { count: pendingReengagementCount } = await (db as unknown as SupabaseClient)
     .from('reengagement_dispatches')
@@ -355,6 +365,7 @@ export default async function DashboardPage() {
     (doneReelCount ?? 0) > 0 || (pendingPortfolioCount ?? 0) > 0 || (pendingChannelCount ?? 0) > 0 ||
     fieldPriceChangedCount > 0 || (openClaimCount ?? 0) > 0 || (needsReviewCount ?? 0) > 0 ||
     (pendingMonthlyReportCount ?? 0) > 0 || (pendingReengagementCount ?? 0) > 0 ||
+    pendingOnboardingReports.length > 0 ||
     missingVisitContractCount > 0
 
   // 오늘 현장 문단속 — 미마감이 있으면 상단에 빨간 카드로 크게, 정상이면 아래에 한 줄로만.
@@ -443,6 +454,24 @@ export default async function DashboardPage() {
                   <p className="text-xs text-red-600 mt-0.5">계약은 진행 중인데 앞으로 잡힌 방문이 없어요 — 눌러서 일정을 확인해주세요</p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-red-400 shrink-0" />
+              </div>
+            </Link>
+          )}
+          {pendingOnboardingReports.length > 0 && (
+            <Link href={`/dashboard/contracts/${pendingOnboardingReports[0].contractId}/onboarding-report`}>
+              <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 hover:bg-blue-100 transition-colors">
+                <FileText className="h-4 w-4 text-blue-600 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-blue-800">
+                    {pendingOnboardingReports.length === 1
+                      ? `${pendingOnboardingReports[0].customerName} 첫 작업 리포트를 보낼 차례예요`
+                      : `첫 작업 리포트를 보낼 거래처가 ${pendingOnboardingReports.length}곳 있어요`}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-0.5">
+                    현장에서 쓴 기록을 미리 넣어뒀어요. 손보고 보내면 첫인상이 달라져요
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-blue-400 shrink-0" />
               </div>
             </Link>
           )}

@@ -31,6 +31,8 @@ interface Props {
     items: OnboardingItem[]
     status: string
     alimtalkSentAt: string | null
+    /** 현장 직원이 쓴 첫 방문 보고서에서 초안을 끌어왔는지 — 안내 문구용 */
+    prefilled: boolean
   }
 }
 
@@ -121,6 +123,17 @@ export function OnboardingReportEditor({ contractId, businessId, customerName, s
 
   return (
     <div className="space-y-6">
+      {/* 현장에서 끌어온 초안이면 먼저 알려준다 — 내가 안 쓴 내용이 왜 있는지 */}
+      {initial.prefilled && (
+        <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 text-sm text-blue-900">
+          <p className="font-semibold">현장 직원이 쓴 첫 방문 기록을 미리 넣어뒀어요</p>
+          <p className="text-xs text-blue-800/80 mt-1">
+            사진과 메모는 그대로 가져왔어요. 어디를 작업했는지(공간 이름)만 채우고,
+            문장은 자유롭게 고치신 다음 저장하세요.
+          </p>
+        </div>
+      )}
+
       {/* 안내 */}
       <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-sm text-emerald-800">
         <p className="font-semibold">{customerName} 초도(첫) 작업 리포트</p>
