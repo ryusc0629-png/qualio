@@ -4,8 +4,13 @@
 // 브라우저·검색엔진이 자동으로 찾는 /favicon.ico 는 proxy가 여기로 넘긴다(proxy.ts).
 //
 // 우선순위: 업체가 올린 파비콘 → 로고 → 업체명 첫 글자로 만든 브랜드색 아이콘
+import sharp from 'sharp'
 import { createServiceClient } from '@/lib/supabase/server'
 import { isDomainIdentifier } from '@/lib/domains/resolve'
+
+// 탭 아이콘으로 내보낼 크기. 업체가 올린 원본(수천 픽셀·수백 KB)을 그대로 쓰면
+// 브라우저가 눌러 그려 찌그러지고 무겁다.
+const ICON_SIZE = 64
 
 // 1시간 캐시 — 업체가 아이콘을 바꿨을 때 하루씩 옛 아이콘이 남지 않게 짧게 잡는다.
 // (그 뒤 일주일은 낡은 것을 먼저 보여주고 뒤에서 새로 받아오므로 크롤러 부담은 없다)
@@ -29,6 +34,46 @@ function fallbackIcon(name: string, color: string): Response {
 /** 6자리 hex만 통과 — DB 값을 그대로 SVG에 넣지 않기 위한 방어 */
 function safeColor(value: string | null): string {
   return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : DEFAULT_BRAND_COLOR
+}
+
+/**
+ * 업체가 올린 이미지를 탭 아이콘 크기의 정사각형으로 다듬는다.
+ *
+ * 로고는 대부분 가로로 길고(다트클린 1381×1209) 용량도 크다(아찌클린 158KB).
+ * 그대로 내보내면 탭에서 눌린 채로 작게 보인다. 그래서
+ *  - 둘레의 '투명한' 여백만 잘라내 그림이 최대한 크게 차지하게 하고
+ *  - 비율은 유지한 채 정사각형 안에 담는다(잘라내지 않으므로 로고가 짤리지 않는다)
+ *  - 남는 자리는 투명으로 둔다(업체 브랜드 색을 임의로 칠하지 않기 위해)
+ *
+ * ⚠️ 자를 색을 지정하지 않으면 sharp가 '가장자리 색'을 기준으로 잘라낸다.
+ * 그러면 빨간 배경에 글자를 얹은 정사각 아이콘 같은 경우 배경째 깎여나가
+ * 업체가 만든 아이콘이 망가진다. 반드시 투명색만 대상으로 삼을 것.
+ *
+ * 어떤 이유로든 변환에 실패하면 null을 돌려주고 호출부가 원본을 그대로 내보낸다.
+ */
+async function toSquareIcon(input: Buffer): Promise<Buffer | null> {
+  const fit = (img: sharp.Sharp) =>
+    img
+      .resize(ICON_SIZE, ICON_SIZE, {
+        fit: 'contain',
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .png()
+      .toBuffer()
+
+  const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 }
+
+  try {
+    // 여백 잘라내기는 온통 투명한 이미지 등에서 실패할 수 있어 따로 시도한다
+    return await fit(sharp(input).trim({ background: TRANSPARENT }))
+  } catch {
+    try {
+      return await fit(sharp(input))
+    } catch (error) {
+      console.error('[BizFavicon] 아이콘 이미지를 다듬지 못했습니다:', error)
+      return null
+    }
+  }
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
@@ -55,11 +100,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ slu
   // 리디렉트를 따라가지 않는 크롤러(네이버·카카오 등)에서도 아이콘이 보인다.
   try {
     const upstream = await fetch(source, { cache: 'no-store' })
-    if (!upstream.ok || !upstream.body) return fallbackIcon(business.name, color)
+    if (!upstream.ok) return fallbackIcon(business.name, color)
 
-    return new Response(upstream.body, {
+    const original = Buffer.from(await upstream.arrayBuffer())
+    const icon = await toSquareIcon(original)
+
+    return new Response(new Uint8Array(icon ?? original), {
       headers: {
-        'Content-Type': upstream.headers.get('content-type') ?? 'image/png',
+        'Content-Type': icon ? 'image/png' : upstream.headers.get('content-type') ?? 'image/png',
         'Cache-Control': CACHE_CONTROL,
       },
     })
