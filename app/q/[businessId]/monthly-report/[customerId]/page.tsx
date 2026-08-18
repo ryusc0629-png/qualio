@@ -1,6 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import { CheckCircle2, ClipboardCheck, CircleAlert, Camera, CalendarClock } from 'lucide-react'
+import { ClipboardCheck, CircleAlert, Camera, CalendarClock } from 'lucide-react'
 import { ReportPhotoSection } from '../../report/[reportId]/report-photos'
 import { PrintReportButton } from './print-button'
 import { DocPage, DocHeader, DocMeta, DocLede, DocSignature } from '@/components/report/document'
@@ -8,7 +8,6 @@ import { formatFrequency } from '@/lib/utils/frequency'
 import {
   buildMonthlySummary,
   buildHeadline,
-  formatDuration,
   type VisitLike,
   type ReportLike,
   type ChecklistItem,
@@ -30,13 +29,6 @@ function monthRange(month: string | undefined): { key: string; label: string; st
   return { key, label: `${year}년 ${mon}월`, startISO, endISO }
 }
 
-function kstParts(iso: string): { day: number; weekday: string } {
-  const d = new Date(iso)
-  return {
-    day: Number(d.toLocaleDateString('ko-KR', { day: 'numeric', timeZone: 'Asia/Seoul' }).replace('일', '')),
-    weekday: d.toLocaleDateString('ko-KR', { weekday: 'short', timeZone: 'Asia/Seoul' }),
-  }
-}
 
 function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ko-KR', {
@@ -214,19 +206,6 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
       .map((b) => ({ booking_id: b.id, scheduled_at: b.scheduled_at, request: b.customer_request! })),
   })
 
-  // 다음 달 예정 방문 — '익월 작업 계획'의 근거
-  const nextMonthStart = new Date(range.endISO)
-  const nextMonthEnd = new Date(Date.UTC(nextMonthStart.getUTCFullYear(), nextMonthStart.getUTCMonth() + 1, 1))
-  const { count: nextMonthVisits } = (await db
-    .from('bookings')
-    .select('id', { count: 'exact', head: true })
-    .eq('business_id', businessId)
-    .or(orFilter)
-    .gte('scheduled_at', nextMonthStart.toISOString())
-    .lt('scheduled_at', nextMonthEnd.toISOString())
-    .is('deleted_at' as never, null)
-    .not('status', 'in', '("cancelled","no_show")')) as unknown as { count: number | null }
-
   // 다음에 손봐야 할 것 — 보고서에 적어둔 관리 소견 중 아직 안 지난 것
   const { data: careRows } = (reportRows.length > 0
     ? await db
@@ -290,10 +269,11 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
           )}
         </section>
 
-        {/* ── 핵심 숫자 ── */}
-        {/* 핵심 숫자 — 담당자가 먼저 보는 것부터.
-            방문 횟수·체류 시간은 뒤로 뺐다(사장님 지적 2026-08-18): 그건 우리 사정이고,
-            거래처가 궁금한 건 '문제가 있었나, 처리됐나'다. */}
+        {/* ── 핵심 숫자 — 전부 '문제와 처리'에 대한 것만 둔다 ──
+             방문 횟수·이행률·체류 시간·사진 장수·다음 달 예정 회차는 전부 뺐다
+             (사장님 지적 2026-08-18): 그건 우리 사정이거나 계약서에 이미 있는 값이고,
+             거래처 담당자가 궁금한 건 '문제가 있었나, 처리됐나'다.
+             ⛔ 회차 지표를 다시 넣지 말 것. */}
         <section className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-px overflow-hidden border border-slate-200 bg-slate-200 break-inside-avoid">
           <Metric value={`${summary.issueCount}건`} label="접수된 요청" />
           <Metric value={`${summary.issueResolvedCount}건`} label="처리 완료" />
@@ -302,14 +282,8 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
             label="처리율"
             accent
           />
-          <Metric value={`${nextMonthVisits ?? 0}회`} label="다음 달 예정" />
+          <Metric value={`${summary.siteNotes.length}건`} label="미리 발견해 조치" />
         </section>
-        <p className="mt-2 text-[12px] text-slate-400">
-          {summary.completedCount}회 방문 완료
-          {summary.onTimeRate !== null && ` · 일정 이행률 ${summary.onTimeRate}%`}
-          {summary.totalMinutes > 0 && ` · 현장 체류 ${formatDuration(summary.totalMinutes)}`}
-          {summary.upcomingCount > 0 && ` · 이번 달 남은 방문 ${summary.upcomingCount}회`}
-        </p>
 
         {/* ── 요청 · 처리 내역 — 이 보고서에서 제일 먼저 읽히는 부분 ── */}
         {(summary.issues.length > 0 || summary.requests.length > 0) && (
@@ -425,20 +399,9 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
 
         {/* ── 익월 작업 계획 — 보고서를 '지난달 정산'이 아니라 '관리 계약'으로 읽히게 한다.
              지어내지 않고 실제 데이터만 엮는다: 예정 방문 수 · 이월된 미해결 건 · 적어둔 관리 소견 ── */}
-        {((nextMonthVisits ?? 0) > 0 || summary.carriedOver.length > 0 || carePlans.length > 0) && (
+        {(summary.carriedOver.length > 0 || carePlans.length > 0) && (
           <Section icon={<CalendarClock className="h-4 w-4" />} title="다음 달 작업 계획">
             <ul className="space-y-3">
-              {(nextMonthVisits ?? 0) > 0 && (
-                <li className="flex gap-3">
-                  <span className="mt-0.5 shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-semibold text-slate-600">
-                    방문
-                  </span>
-                  <p className="text-[14px] leading-[1.65] text-slate-700">
-                    계약대로 <b className="font-semibold text-slate-900">{nextMonthVisits}회</b> 방문이 예정되어 있습니다
-                    {cycleLabel && cycleLabel !== '—' && ` (${cycleLabel})`}.
-                  </p>
-                </li>
-              )}
               {summary.carriedOver.map((c, i) => (
                 <li key={`carry-${i}`} className="flex gap-3">
                   <span className="mt-0.5 shrink-0 rounded-md bg-amber-50 px-2 py-0.5 text-[12px] font-semibold text-amber-700">
@@ -458,41 +421,6 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
                 </li>
               ))}
             </ul>
-          </Section>
-        )}
-
-        {/* ── 방문 일자 — 날짜별 카드 대신 달력형으로 압축 ── */}
-        {bookings.length > 0 && (
-          <Section icon={<CheckCircle2 className="h-4 w-4" />} title="방문 일자">
-            <p className="text-[12px] text-slate-500 mb-3">
-              <span className="inline-flex items-center gap-1.5 mr-3">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 print:bg-emerald-500" />완료
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full border border-slate-300 bg-white" />예정
-              </span>
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {bookings.map((b) => {
-                const { day, weekday } = kstParts(b.scheduled_at)
-                const done = b.status === 'completed'
-                return (
-                  <div
-                    key={b.id}
-                    className={`flex w-[52px] flex-col items-center rounded-xl border py-2 ${
-                      done
-                        ? 'border-emerald-200 bg-emerald-50 print:bg-emerald-50'
-                        : 'border-slate-200 bg-white'
-                    }`}
-                  >
-                    <span className={`text-[15px] font-bold tabular-nums ${done ? 'text-emerald-700' : 'text-slate-400'}`}>
-                      {day}
-                    </span>
-                    <span className={`text-[11px] ${done ? 'text-emerald-600' : 'text-slate-400'}`}>{weekday}</span>
-                  </div>
-                )
-              })}
-            </div>
           </Section>
         )}
 
