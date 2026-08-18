@@ -1,6 +1,7 @@
 import 'server-only'
 import type { createServiceClient } from '@/lib/supabase/server'
-import { buildGeoQuestions, toSearchArea, type GeoQuestionInput } from '@/lib/geo/questions'
+import { buildGeoQuestions, type GeoQuestionInput } from '@/lib/geo/questions'
+import { parseKoreanRegion } from '@/lib/address/parse-region'
 import { measureGeoShareOfVoice, type GeoMeasureResult, type GeoQuestionResult } from '@/lib/geo/measure'
 import { measureGeoShareOfVoiceGemini } from '@/lib/geo/measure-gemini'
 import { measureGeoShareOfVoiceOpenAI } from '@/lib/geo/measure-openai'
@@ -144,12 +145,21 @@ export async function runGeoCheck(
     .filter((v): v is string => !!v && v.trim().length >= 2)
     .map((v) => v.trim())
 
+  // 검색에 함께 넘길 위치 — 손님은 그 지역에서 묻는데 API 호출엔 위치가 안 실렸다.
+  // "울산 울주군"이라고 글로만 말할 뿐 검색 쪽엔 지역 신호가 없어, 웹 챗지피티에선
+  // 나오는 업체가 우리 측정에선 빠지곤 했다.
+  const region = parseKoreanRegion(biz.address)
+  const identity = {
+    needles,
+    location: { region: region.sido, city: region.si ?? region.gu ?? region.gun },
+  }
+
   // 사용 가능한 엔진 모두로 측정(있는 키만) — Perplexity(검색결과)+Gemini(답변 그라운딩).
   // 엔진끼리도 동시에 돌린다 — 하나씩 기다리면 엔진 수만큼 시간이 곱해진다.
   const engineJobs: { engine: string; run: () => Promise<GeoMeasureResult> }[] = []
-  if (perplexityKey) engineJobs.push({ engine: 'perplexity', run: () => measureGeoShareOfVoice(perplexityKey, questions, { needles }) })
-  if (geminiKey) engineJobs.push({ engine: 'gemini', run: () => measureGeoShareOfVoiceGemini(geminiKey, questions, { needles }) })
-  if (openaiKey) engineJobs.push({ engine: 'openai', run: () => measureGeoShareOfVoiceOpenAI(openaiKey, questions, { needles }) })
+  if (perplexityKey) engineJobs.push({ engine: 'perplexity', run: () => measureGeoShareOfVoice(perplexityKey, questions, identity) })
+  if (geminiKey) engineJobs.push({ engine: 'gemini', run: () => measureGeoShareOfVoiceGemini(geminiKey, questions, identity) })
+  if (openaiKey) engineJobs.push({ engine: 'openai', run: () => measureGeoShareOfVoiceOpenAI(openaiKey, questions, identity) })
 
   const startedAt = Date.now()
   const settled = await Promise.all(

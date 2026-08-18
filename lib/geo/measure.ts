@@ -11,6 +11,11 @@ const PPLX_SEARCH_URL = 'https://api.perplexity.ai/search'
 export interface GeoIdentity {
   // 업체 식별 신호(소문자 부분일치) — 업체명·slug·도메인 등. 하나라도 결과에 있으면 '노출'로 판정
   needles: string[]
+  /**
+   * 검색에 쓸 위치. 손님은 그 지역에서 물어보는데 API 호출엔 위치가 안 실려,
+   * 웹에서 챗지피티에 물으면 나오는 업체가 우리 측정에선 안 나오던 원인 중 하나였다.
+   */
+  location?: { region?: string | null; city?: string | null }
 }
 
 export interface GeoQuestionResult {
