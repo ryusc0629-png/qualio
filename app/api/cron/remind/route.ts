@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
 
   let sent = 0
   let failed = 0
+  let skipped = 0 // 다른 실행이 이미 가져간 건(중복 발송 방지로 건너뜀)
 
   for (const booking of bookings) {
     const biz = Array.isArray(booking.businesses) ? booking.businesses[0] : booking.businesses
@@ -48,6 +49,21 @@ export async function GET(req: NextRequest) {
 
     if (!booking.customer_phone || !booking.scheduled_at || !biz) {
       failed++
+      continue
+    }
+
+    // 보내기 '전에' 먼저 발송 기록을 선점한다(reminder_sent_at 이 비어 있을 때만 갱신).
+    // 발송 후에 기록하면, 이 크론이 동시에 두 번 호출될 때 둘 다 "아직 안 보냄"으로 읽어
+    // 고객이 같은 안내를 2통 받는다. 선점에 실패한 쪽(=이미 다른 실행이 가져감)은 건너뛴다.
+    const { data: claimed } = await db
+      .from('bookings')
+      .update({ reminder_sent_at: new Date().toISOString() } as never)
+      .eq('id', booking.id)
+      .is('reminder_sent_at', null)
+      .select('id')
+
+    if (!claimed || claimed.length === 0) {
+      skipped++
       continue
     }
 
@@ -61,17 +77,18 @@ export async function GET(req: NextRequest) {
         scheduledAt:    booking.scheduled_at,
         serviceAddress: booking.service_address ?? '',
       })
-      await db
-        .from('bookings')
-        .update({ reminder_sent_at: new Date().toISOString() } as never)
-        .eq('id', booking.id)
       sent++
     } catch (err) {
       console.error(`[Cron] remind 발송 실패 booking=${booking.id}:`, err)
+      // 실제로 못 보냈으니 선점을 풀어 다음 실행에서 다시 시도하게 한다
+      await db
+        .from('bookings')
+        .update({ reminder_sent_at: null } as never)
+        .eq('id', booking.id)
       failed++
     }
   }
 
-  console.log(`[Cron] remind 완료: 발송 ${sent}건, 실패 ${failed}건`)
-  return NextResponse.json({ sent, failed, rangeStart: rangeStart.toISOString(), rangeEnd: rangeEnd.toISOString() })
+  console.log(`[Cron] remind 완료: 발송 ${sent}건, 실패 ${failed}건, 건너뜀 ${skipped}건`)
+  return NextResponse.json({ sent, failed, skipped, rangeStart: rangeStart.toISOString(), rangeEnd: rangeEnd.toISOString() })
 }
