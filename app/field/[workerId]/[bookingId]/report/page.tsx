@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { FieldReportClient } from './field-report-client'
 import { isFirstVisitOfContract } from '@/lib/onboarding/draft-from-field'
+import { monthsUntil } from '@/lib/reports/care-due'
 
 // workers 테이블 타입 (Supabase 타입 아직 미생성)
 interface WorkerRow {
@@ -53,10 +54,11 @@ export default async function FieldReportPage({ params }: Props) {
   // 기존 보고서 + 사진 + 릴스 정보 조회
   const { data: report } = await db
     .from('reports')
-    .select('id, notes, preventive_note, kakao_sent_at, ai_report_data, work_clip_urls, reel_status, reel_url, report_photos(url, type, sort_order, caption)' as never)
+    .select('id, notes, preventive_note, care_advice, care_due_at, kakao_sent_at, ai_report_data, work_clip_urls, reel_status, reel_url, report_photos(url, type, sort_order, caption)' as never)
     .eq('booking_id', bookingId)
     .maybeSingle() as { data: {
-      id: string; notes: string | null; preventive_note: string | null; kakao_sent_at: string | null
+      id: string; notes: string | null; preventive_note: string | null
+      care_advice: string | null; care_due_at: string | null; kakao_sent_at: string | null
       ai_report_data: { beforeStatus: string; workDetails: string; afterResult: string; additionalNotes: string; recommendedServices: string[] } | null
       work_clip_urls: string[] | null
       reel_status: string | null
@@ -115,6 +117,9 @@ export default async function FieldReportPage({ params }: Props) {
         id: report.id,
         notes: report.notes,
         preventiveNote: report.preventive_note,
+        careAdvice: report.care_advice,
+        // 저장된 기한에서 몇 개월짜리였는지 되짚는다. 기록이 없으면 기본 6개월
+        careMonths: monthsUntil(report.care_due_at) ?? 6,
         sentAt: report.kakao_sent_at,
         beforeUrls: existingBefore,
         afterUrls: existingAfter,

@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { CareAdviceField } from '@/components/dashboard/care-advice-field'
 import { createClient } from '@/lib/supabase/client'
 import { fieldSaveReportAction, fieldSendReportAction, fieldGenerateAiReportAction, fieldSaveWorkClipsAction, fieldRequestReelAction, fieldGetReelStatusAction } from '@/lib/actions/field'
 import {
@@ -46,6 +47,8 @@ interface ExistingReport {
   id: string
   notes: string | null
   preventiveNote: string | null
+  careAdvice: string | null
+  careMonths: number
   sentAt: string | null
   beforeUrls: { url: string; caption: string }[]
   afterUrls: { url: string; caption: string }[]
@@ -86,6 +89,9 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   const [after, setAfter] = useState<PhotoSlot[]>(
     existingReport?.afterUrls.map((p) => ({ url: p.url, caption: p.caption, uploading: false })) ?? []
   )
+  // 앞으로 손봐야 할 것 — 그 시점이 되면 사장님께 알림이 간다
+  const [careAdvice, setCareAdvice] = useState(existingReport?.careAdvice ?? '')
+  const [careMonths, setCareMonths] = useState(existingReport?.careMonths ?? 6)
   const [savedReportId, setSavedReportId] = useState<string | null>(existingReport?.id ?? null)
   const [alreadySent, setAlreadySent] = useState(!!existingReport?.sentAt)
   const [aiReport, setAiReport] = useState<AiReportData | null>(existingReport?.aiReportData ?? null)
@@ -384,6 +390,8 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       afterPhotoUrls: after.filter(withCaption).map((p) => p.url),
       beforePhotoCaptions: before.filter(withCaption).map((p) => (p.caption ?? '').trim()),
       afterPhotoCaptions: after.filter(withCaption).map((p) => (p.caption ?? '').trim()),
+      careAdvice,
+      careMonths,
       aiReportData: aiReport ? {
         ...aiReport,
         // 선택된 서비스만 저장
@@ -956,6 +964,17 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             value={preventiveNote}
             onChange={(e) => setPreventiveNote(e.target.value)}
             rows={3}
+          />
+        </div>
+
+        {/* 앞으로 손봐야 할 것 — 그 시점이 되면 사장님께 알림이 간다.
+            판촉 배너 대신 이걸 남긴다: 근거가 그 현장 기록이라 설득력이 다르다. */}
+        <div className="rounded-xl bg-white border p-4">
+          <CareAdviceField
+            advice={careAdvice}
+            months={careMonths}
+            onAdviceChange={setCareAdvice}
+            onMonthsChange={setCareMonths}
           />
         </div>
 

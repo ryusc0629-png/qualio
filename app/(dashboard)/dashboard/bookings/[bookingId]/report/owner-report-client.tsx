@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { CareAdviceField } from '@/components/dashboard/care-advice-field'
 import { createClient } from '@/lib/supabase/client'
 import { saveReportAction, ownerSendReportAction, ownerGenerateAiReportAction, skipReportSendAction } from '@/lib/actions/reports'
 import { canSendReport } from '@/lib/utils/report-send-guard'
@@ -51,6 +52,8 @@ interface ExistingReport {
   id: string
   notes: string | null
   preventiveNote: string | null
+  careAdvice: string | null
+  careMonths: number
   sentAt: string | null
   beforeUrls: string[]
   afterUrls: string[]
@@ -84,6 +87,9 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
   const [after, setAfter] = useState<PhotoSlot[]>(
     existingReport?.afterUrls.map((url) => ({ url, uploading: false })) ?? []
   )
+  // 앞으로 손봐야 할 것 — 그 시점이 되면 알림이 온다
+  const [careAdvice, setCareAdvice] = useState(existingReport?.careAdvice ?? '')
+  const [careMonths, setCareMonths] = useState(existingReport?.careMonths ?? 6)
   const [savedReportId, setSavedReportId] = useState<string | null>(existingReport?.id ?? null)
   const [alreadySent, setAlreadySent] = useState(!!existingReport?.sentAt)
   // 아직 시작 안 한 일정에는 보고서를 못 보낸다(서버에서도 막지만, 눌러보고 실패하기 전에 알려준다)
@@ -156,6 +162,8 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
           beforePhotoUrls: before.filter((p) => !p.uploading && p.url).map((p) => p.url),
           afterPhotoUrls:  after.filter((p) => !p.uploading && p.url).map((p) => p.url),
           sendAlimtalk:    false,
+          careAdvice,
+          careMonths,
           isPublic,
           aiReportData:    data.report,
         })
@@ -217,6 +225,8 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
       beforePhotoUrls: before.filter((p) => !p.uploading && p.url).map((p) => p.url),
       afterPhotoUrls:  after.filter((p) => !p.uploading && p.url).map((p) => p.url),
       sendAlimtalk:    false,
+      careAdvice,
+      careMonths,
       isPublic,
       aiReportData: aiReport ? {
         ...aiReport,
@@ -621,6 +631,17 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
             value={preventiveNote}
             onChange={(e) => setPreventiveNote(e.target.value)}
             rows={3}
+          />
+        </div>
+
+        {/* 앞으로 손봐야 할 것 — 그 시점이 되면 알림이 온다.
+            판촉 배너 대신 이걸 남긴다: 근거가 그 현장 기록이라 설득력이 다르다. */}
+        <div className="rounded-xl bg-white border p-4">
+          <CareAdviceField
+            advice={careAdvice}
+            months={careMonths}
+            onAdviceChange={setCareAdvice}
+            onMonthsChange={setCareMonths}
           />
         </div>
 

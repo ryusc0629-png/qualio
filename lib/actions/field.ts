@@ -12,6 +12,7 @@ import {
 } from '@/lib/kakao/alimtalk'
 import { sendOnMyWayForBooking } from '@/lib/kakao/on-my-way'
 import { ensureOnboardingDraft } from '@/lib/onboarding/draft-from-field'
+import { addMonths } from '@/lib/reports/care-due'
 import { generateAiReport } from '@/lib/ai/report-writer'
 import { geocodeAddress } from '@/lib/roadmap/geo'
 import { postBookingRevenue } from '@/lib/finance/post-booking-revenue'
@@ -453,6 +454,9 @@ export const fieldSaveReportAction = action
     // 사장님은 현장에 안 가므로 이 값이 없으면 초도 보고서를 만들 수 없다.
     beforePhotoCaptions: z.array(z.string().max(100)).max(5).optional(),
     afterPhotoCaptions:  z.array(z.string().max(100)).max(5).optional(),
+    // 앞으로 손봐야 할 것 + 몇 달 뒤에 사장님께 알릴지(0이면 알림 없음)
+    careAdvice:      z.string().max(2000).optional(),
+    careMonths:      z.number().int().min(0).max(24).optional(),
     aiReportData:    z.object({
       beforeStatus: z.string(),
       workDetails: z.string(),
@@ -477,6 +481,15 @@ export const fieldSaveReportAction = action
     }
     if (parsedInput.aiReportData) {
       upsertData.ai_report_data = parsedInput.aiReportData
+    }
+    // 향후 관리 안내 — 비우면 알림도 함께 지운다
+    if (parsedInput.careAdvice !== undefined) {
+      const advice = parsedInput.careAdvice.trim()
+      upsertData.care_advice = advice || null
+      upsertData.care_due_at =
+        advice && parsedInput.careMonths && parsedInput.careMonths > 0
+          ? addMonths(parsedInput.careMonths)
+          : null
     }
 
     const { data: report, error: reportError } = await db

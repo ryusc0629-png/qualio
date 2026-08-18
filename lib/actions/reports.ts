@@ -10,6 +10,7 @@ import { createPortfolioDraft } from '@/lib/actions/portfolio'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { assertReportSendable } from '@/lib/utils/report-send-guard'
 import { ensureOnboardingDraft } from '@/lib/onboarding/draft-from-field'
+import { addMonths } from '@/lib/reports/care-due'
 import { revalidatePath } from 'next/cache'
 
 const aiReportDataSchema = z.object({
@@ -27,6 +28,9 @@ const saveReportSchema = z.object({
   beforePhotoUrls: z.array(z.string().min(1)).max(5),
   afterPhotoUrls:  z.array(z.string().min(1)).max(5),
   sendAlimtalk:    z.boolean(),
+  // 앞으로 손봐야 할 것 + 몇 달 뒤에 알릴지(0이면 알림 없음)
+  careAdvice:      z.string().max(2000).optional(),
+  careMonths:      z.number().int().min(0).max(24).optional(),
   isPublic:        z.boolean().optional(), // 홈페이지 시공 사례 갤러리 공개 여부
   aiReportData:    aiReportDataSchema.optional(),
 })
@@ -48,7 +52,7 @@ export const saveReportAction = action
 
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
-    const { bookingId, notes, preventiveNote, beforePhotoUrls, afterPhotoUrls, sendAlimtalk, isPublic, aiReportData } = parsedInput
+    const { bookingId, notes, preventiveNote, beforePhotoUrls, afterPhotoUrls, sendAlimtalk, isPublic, aiReportData, careAdvice, careMonths } = parsedInput
 
     // 예약이 이 업체 소속인지 확인
     const { data: booking } = await db
@@ -91,6 +95,12 @@ export const saveReportAction = action
     // 홈 공개 토글 — 값이 전달된 경우에만 반영(부분 저장 시 기존값 보존)
     if (isPublic !== undefined) upsertData.is_public = isPublic
     if (aiReportData) upsertData.ai_report_data = aiReportData
+    // 향후 관리 안내 — 비우면 알림도 함께 지운다
+    if (careAdvice !== undefined) {
+      const advice = careAdvice.trim()
+      upsertData.care_advice = advice || null
+      upsertData.care_due_at = advice && careMonths && careMonths > 0 ? addMonths(careMonths) : null
+    }
     // ⚠️ 여기서 kakao_sent_at을 미리 넣지 않는다.
     //    예전엔 발송 시도 전에 찍어놓고 실패는 catch로 삼켜서, 고객은 아무것도 못 받았는데
     //    사장님 화면은 '발송 완료'로 잠겼다(2026-08-17 채널 불일치 기간에 실제로 발생).

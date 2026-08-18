@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { ReportPhotoSection } from './report-photos'
 import { formatDate } from '@/lib/format/datetime'
 import {
-  DocPage, DocHeader, DocMeta, DocLede, DocSection, DocText, DocRows, DocSignature,
+  DocPage, DocHeader, DocMeta, DocLede, DocSection, DocText, DocSignature,
 } from '@/components/report/document'
 
 function formatKoreanDate(iso: string) {
@@ -132,22 +132,19 @@ export default async function ReportPage({
     ? parseAiReportNotes(report.notes as string)
     : null
 
-  // 추천 서비스가 있으면 해당 서비스 정보 조회
-  const recommendedNames = reportNotes?.recommendedServiceNames ?? []
-  let recommendedServices: { name: string; basePrice: number }[] = []
-  if (recommendedNames.length > 0) {
-    const { data: svcItems } = await db
-      .from('service_items')
-      .select('name, base_price')
-      .eq('business_id', businessId)
-      .eq('is_active', true)
-      .is('deleted_at', null)
-    if (svcItems) {
-      recommendedServices = svcItems
-        .filter((s) => recommendedNames.includes(s.name))
-        .map((s) => ({ name: s.name, basePrice: s.base_price }))
-    }
+  // 향후 관리 안내 — '언제쯤 무엇이 필요해질지'. 판촉 대신 이걸 남긴다.
+  // (추천 서비스 + 가격 배너는 뺐다 — 거래처에 보내는 서류에 판촉이 박히면 격이 떨어진다)
+  const { data: careRow } = (await db
+    .from('reports')
+    .select('care_advice, care_due_at' as never)
+    .eq('id', reportId)
+    .maybeSingle()) as unknown as {
+    data: { care_advice: string | null; care_due_at: string | null } | null
   }
+  const careAdvice = careRow?.care_advice ?? null
+  const careDueLabel = careRow?.care_due_at
+    ? formatDate(careRow.care_due_at, { year: 'numeric', month: 'long' })
+    : null
 
   // 문서 머리말 항목 — 값이 없는 줄은 DocMeta가 알아서 뺀다
   const meta = [
@@ -229,22 +226,14 @@ export default async function ReportPage({
         </DocSection>
       )}
 
-      {/* 추가 권장 관리 — 문서 톤이라 판촉 배너가 아니라 표로 적는다 */}
-      {recommendedServices.length > 0 && (
-        <DocSection
-          no={nextNo()}
-          title="추가로 권해드리는 관리"
-          lead="현장 상태를 확인한 결과, 아래 항목은 별도로 관리하시길 권해드립니다"
-        >
-          <DocRows
-            items={recommendedServices.map((svc) => ({
-              k: svc.name,
-              v: <span className="tabular-nums">{svc.basePrice.toLocaleString()}원~</span>,
-            }))}
-          />
-          {bizInfo?.phone && (
+      {/* 향후 관리 안내 — 판촉이 아니라 관리 소견.
+          여기 적힌 시점이 되면 사장님에게 알림이 가서 다시 연락하게 된다. */}
+      {careAdvice && careAdvice.trim() && (
+        <DocSection no={nextNo()} title="향후 관리 안내">
+          <DocText>{careAdvice}</DocText>
+          {careDueLabel && (
             <p className="text-[12px] text-slate-500 mt-3">
-              자세한 견적은 {bizInfo.phone} 으로 문의해 주세요.
+              {careDueLabel}쯤 다시 점검해 보시길 권해드립니다. 그때 저희가 먼저 연락드리겠습니다.
             </p>
           )}
         </DocSection>

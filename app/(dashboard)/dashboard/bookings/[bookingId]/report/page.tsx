@@ -1,6 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { OwnerReportClient } from './owner-report-client'
+import { monthsUntil } from '@/lib/reports/care-due'
 
 interface Props {
   params: Promise<{ bookingId: string }>
@@ -46,13 +47,15 @@ export default async function OwnerReportPage({ params }: Props) {
   // 기존 보고서 + 사진 + 릴스 정보 조회
   const { data: report } = await db
     .from('reports')
-    .select('id, notes, preventive_note, kakao_sent_at, is_public, ai_report_data, reel_status, reel_url, report_photos(url, type, sort_order)' as never)
+    .select('id, notes, preventive_note, care_advice, care_due_at, kakao_sent_at, is_public, ai_report_data, reel_status, reel_url, report_photos(url, type, sort_order)' as never)
     .eq('booking_id', bookingId)
     .maybeSingle() as {
       data: {
         id: string
         notes: string | null
         preventive_note: string | null
+        care_advice: string | null
+        care_due_at: string | null
         kakao_sent_at: string | null
         is_public: boolean | null
         ai_report_data: {
@@ -103,6 +106,8 @@ export default async function OwnerReportPage({ params }: Props) {
         id: report.id,
         notes: report.notes,
         preventiveNote: report.preventive_note ?? null,
+        careAdvice: report.care_advice,
+        careMonths: monthsUntil(report.care_due_at) ?? 6,
         sentAt: report.kakao_sent_at,
         beforeUrls: existingBefore,
         afterUrls: existingAfter,
