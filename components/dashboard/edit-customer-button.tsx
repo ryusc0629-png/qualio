@@ -17,6 +17,7 @@ import { useAutoFocusRef } from '@/lib/hooks/use-auto-focus'
 import { formatPhone } from '@/lib/format/phone'
 import { AddressField } from '@/components/ui/address-field'
 import { FrequencyPicker } from '@/components/dashboard/frequency-picker'
+import { VisitReminderField } from '@/components/dashboard/visit-reminder-field'
 import { HolidayPolicyField } from '@/components/dashboard/holiday-policy-field'
 
 // 이 창에서 함께 고치는 정기계약 값 (계약 수정 창을 따로 두지 않고 여기 하나로 합쳤다)
@@ -29,6 +30,7 @@ export interface EditContractTarget {
   end_date: string | null
   notes?: string | null
   skip_holidays?: boolean | null // 공휴일엔 방문 안 함 (기본 true)
+  send_visit_reminder?: boolean | null // 방문 전날 안내 카톡 (기본 false = 안 보냄)
 }
 
 const customerSchema = z.object({
@@ -52,6 +54,7 @@ const contractSchema = z.object({
   end_date: z.string().optional(),
   contract_notes: z.string().optional(),
   skip_holidays: z.boolean(),
+  send_visit_reminder: z.boolean(),
 })
 
 type FormInput = z.infer<typeof customerSchema> & Partial<z.infer<typeof contractSchema>>
@@ -107,6 +110,7 @@ export function EditCustomerButton({ customer, contract, triggerLabel }: EditCus
       end_date: contract?.end_date ?? '',
       contract_notes: contract?.notes ?? '',
       skip_holidays: contract?.skip_holidays !== false,
+      send_visit_reminder: contract?.send_visit_reminder === true,
     },
   })
 
@@ -173,6 +177,7 @@ export function EditCustomerButton({ customer, contract, triggerLabel }: EditCus
           end_date: data.end_date,
           notes: data.contract_notes,
           skip_holidays: data.skip_holidays,
+          send_visit_reminder: data.send_visit_reminder,
         })
         if (contractResult?.serverError || contractResult?.validationErrors) {
           toast.error(contractResult.serverError ?? '고객 정보는 저장됐지만 계약은 저장 못 했어요. 다시 눌러주세요')
@@ -347,6 +352,12 @@ export function EditCustomerButton({ customer, contract, triggerLabel }: EditCus
                   <HolidayPolicyField
                     value={watch('skip_holidays') !== false}
                     onChange={(v) => setValue('skip_holidays', v, { shouldDirty: true })}
+                  />
+
+                  {/* 방문 전날 고객에게 안내 카톡을 보낼지 — 자주 가는 현장은 꺼두는 게 기본 */}
+                  <VisitReminderField
+                    value={watch('send_visit_reminder') === true}
+                    onChange={(v) => setValue('send_visit_reminder', v, { shouldDirty: true })}
                   />
 
                   <div className="space-y-1">

@@ -132,6 +132,7 @@ const updateContractSchema = z.object({
   end_date: z.string().optional(),
   notes: z.string().max(2000).optional(),
   skip_holidays: z.boolean().optional(), // 공휴일엔 방문 안 함 (미전달 시 기존 값 유지)
+  send_visit_reminder: z.boolean().optional(), // 방문 전날 안내 카톡 (미전달 시 기존 값 유지)
 })
 
 interface ContractPriceSegment {
@@ -147,7 +148,7 @@ export const updateContractAction = action
 
     const { data: current } = await db
       .from('contracts')
-      .select('id, contract_price, frequency, start_date, end_date, status, price_history, skip_holidays' as never)
+      .select('id, contract_price, frequency, start_date, end_date, status, price_history, skip_holidays, send_visit_reminder' as never)
       .eq('id', parsedInput.contractId)
       .eq('business_id', businessId)
       .maybeSingle() as unknown as {
@@ -160,6 +161,7 @@ export const updateContractAction = action
           status: string
           price_history: ContractPriceSegment[] | null
           skip_holidays: boolean | null
+          send_visit_reminder: boolean | null
         } | null
       }
 
@@ -204,6 +206,9 @@ export const updateContractAction = action
     const currentSkipHolidays = current.skip_holidays !== false
     const nextSkipHolidays = parsedInput.skip_holidays ?? currentSkipHolidays
 
+    // 방문 전날 안내 카톡 — 안 넘어오면 기존 값 유지(기본 false = 정기 현장엔 안 보냄)
+    const nextSendVisitReminder = parsedInput.send_visit_reminder ?? (current.send_visit_reminder === true)
+
     const { error } = await db
       .from('contracts')
       .update({
@@ -215,6 +220,7 @@ export const updateContractAction = action
         notes: parsedInput.notes?.trim() || null,
         price_history: priceHistory.length > 0 ? priceHistory : null,
         skip_holidays: nextSkipHolidays,
+        send_visit_reminder: nextSendVisitReminder,
       } as never)
       .eq('id', parsedInput.contractId)
       .eq('business_id', businessId)
