@@ -428,7 +428,10 @@ export async function sendBookingConfirmAlimtalk(params: BookingConfirmParams): 
   const templateIdV2     = process.env.SOLAPI_TEMPLATE_ID_BOOKING_CONFIRM_V2
   const templateId       = process.env.SOLAPI_TEMPLATE_ID_BOOKING_CONFIRM
   const useV2            = !!templateIdV2
-  const activeTemplateId = templateIdV2 ?? templateId
+  // ⚠️ ?? 가 아니라 || 여야 한다. 환경변수를 빈 문자열('')로 두면 ?? 는 그걸 '값 있음'으로
+  //    보고 templateId=''로 발송을 시도 → 아래 가드에 걸려 예약 확정 알림톡이 통째로
+  //    '조용히 생략'된다(V1으로 내려가지도 않음). useV2는 이미 truthy 판정이라 기준도 어긋났다.
+  const activeTemplateId = templateIdV2 || templateId
 
   if (!apiKey || !apiSecret || !sender || !activeTemplateId || !pfId) {
     console.warn('[Alimtalk] 환경변수 미설정 — 발송 생략')
