@@ -174,7 +174,7 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
   const { data: issueRows } = (bookingIds.length > 0
     ? await db
         .from('claims' as never)
-        .select('id, title, content, status, resolution, created_at, resolved_at')
+        .select('id, title, content, status, resolution, created_at, resolved_at, photo_urls, resolution_photo_urls')
         .eq('business_id' as never, businessId)
         .in('booking_id' as never, bookingIds)
     : { data: [] }) as unknown as {
@@ -187,6 +187,8 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
           resolution: string | null
           created_at: string
           resolved_at: string | null
+          photo_urls: string[] | null
+          resolution_photo_urls: string[] | null
         }>
       | null
   }
@@ -308,10 +310,21 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
                   {it.detail && (
                     <p className="text-[13px] leading-[1.7] text-slate-600 mt-1.5 whitespace-pre-wrap">{it.detail}</p>
                   )}
+                  {it.photos.length > 0 && (
+                    <div className="mt-2.5 max-w-[420px]">
+                      <ReportPhotoSection photos={it.photos.map((u) => ({ url: u, caption: '요청 접수' }))} />
+                    </div>
+                  )}
                   {it.resolution && (
                     <p className="text-[13px] leading-[1.7] text-slate-700 mt-1.5 pl-3 border-l-2 border-emerald-300 whitespace-pre-wrap">
                       <span className="font-semibold">처리</span> · {it.resolution}
                     </p>
+                  )}
+                  {it.resolutionPhotos.length > 0 && (
+                    <div className="mt-2.5 max-w-[420px]">
+                      <p className="text-[11px] font-semibold text-emerald-600 mb-1.5">처리 후</p>
+                      <ReportPhotoSection photos={it.resolutionPhotos.map((u) => ({ url: u, caption: '처리 후' }))} />
+                    </div>
                   )}
                 </li>
               ))}

@@ -28,6 +28,9 @@ export interface IssueLike {
   resolution: string | null
   created_at: string
   resolved_at: string | null
+  /** 접수 사진(어디가 문제인지) / 처리 후 사진 — 위치와 결과는 사진이 문장보다 빠르다 */
+  photo_urls?: string[] | null
+  resolution_photo_urls?: string[] | null
 }
 
 /** 현장에서 고객이 추가로 요청한 것 — 방문에 붙어 있다 */
@@ -58,7 +61,15 @@ export interface MonthlySummary {
   /** 처리율(%) — 접수가 없으면 null(0%로 보이면 안 된다) */
   issueResolveRate: number | null
   /** 접수·처리 내역 — 날짜 순 */
-  issues: { date: string; title: string; detail: string | null; resolution: string | null; resolved: boolean }[]
+  issues: {
+    date: string
+    title: string
+    detail: string | null
+    resolution: string | null
+    resolved: boolean
+    photos: string[]
+    resolutionPhotos: string[]
+  }[]
   /** 현장에서 고객이 추가로 요청한 것 */
   requests: { date: string; note: string }[]
   /** 달을 넘긴 미해결 건 — 다음 달 계획에 그대로 올린다 */
@@ -124,6 +135,8 @@ export function buildMonthlySummary(input: {
     detail: i.content?.trim() || null,
     resolution: i.resolution?.trim() || null,
     resolved: isResolved(i),
+    photos: i.photo_urls ?? [],
+    resolutionPhotos: i.resolution_photo_urls ?? [],
   }))
 
   const requests = requestRows

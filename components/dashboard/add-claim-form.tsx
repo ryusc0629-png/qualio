@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createClaimAction } from '@/lib/actions/claims'
+import { PhotoPicker } from '@/components/dashboard/photo-picker'
 import { Plus, X, Search, Check, UserPlus } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import { useAutoFocusRef } from '@/lib/hooks/use-auto-focus'
@@ -82,6 +83,8 @@ export function AddClaimForm({
     return base.slice(0, 8)
   }, [search, customers])
 
+  const [photoUrls, setPhotoUrls] = useState<string[]>([])
+
   const { execute, isPending } = useAction(createClaimAction, {
     onSuccess: () => {
       toast.success('클레임을 등록했어요')
@@ -137,7 +140,7 @@ export function AddClaimForm({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit((data) => execute({ ...data, booking_id: presetBookingId ?? undefined }))} className="space-y-3">
+        <form onSubmit={handleSubmit((data) => execute({ ...data, booking_id: presetBookingId ?? undefined, photo_urls: photoUrls }))} className="space-y-3">
           {/* 고객 선택 — 기존 고객에서 고르기 */}
           <div className="space-y-1">
             <Label>어느 고객인가요? (필수)</Label>
@@ -252,6 +255,15 @@ export function AddClaimForm({
               className="w-full min-h-20 rounded-lg border border-border bg-background px-2.5 py-2 text-sm"
             />
           </div>
+
+          {/* 문제 사진 — 어디가 문제인지 사진 한 장이 문단 셋보다 빠르다.
+              월간 보고서의 '요청 · 처리 내역'에 그대로 실린다. */}
+          <PhotoPicker
+            label="문제 사진"
+            hint="어디가 문제인지 찍어두면 거래처 보고서에 그대로 들어가요 (선택)"
+            urls={photoUrls}
+            onChange={setPhotoUrls}
+          />
 
           {/* 긴급 여부 */}
           <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2.5 cursor-pointer">

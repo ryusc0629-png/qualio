@@ -126,6 +126,8 @@ const createClaimSchema = z.object({
   content:        z.string().optional(),
   is_urgent:      z.boolean().optional(),
   booking_id:     z.string().uuid().optional(), // 예약 상세에서 등록하면 그 작업과 연결
+  // 어디가 문제인지 보여주는 사진 — 월간 보고서에 그대로 실린다
+  photo_urls: z.array(z.string().min(1)).max(4).optional(),
 })
 
 export const createClaimAction = action
@@ -141,6 +143,7 @@ export const createClaimAction = action
       content:        parsedInput.content ?? null,
       is_urgent:      parsedInput.is_urgent ?? false,
       booking_id:     parsedInput.booking_id ?? null,
+      photo_urls:     parsedInput.photo_urls ?? [],
       status:         'open',
     } as never)
 
@@ -159,6 +162,8 @@ export const createClaimAction = action
 const resolveClaimSchema = z.object({
   claimId:    z.string().uuid(),
   resolution: z.string().optional(),
+  // 처리 후 사진 — '요청 → 처리'가 눈으로 확인된다
+  resolution_photo_urls: z.array(z.string().min(1)).max(4).optional(),
 })
 
 export const resolveClaimAction = action
@@ -171,6 +176,7 @@ export const resolveClaimAction = action
       .update({
         status:      'resolved',
         resolution:  parsedInput.resolution ?? null,
+        resolution_photo_urls: parsedInput.resolution_photo_urls ?? [],
         resolved_at: new Date().toISOString(),
       } as never)
       .eq('id' as never, parsedInput.claimId)

@@ -5,6 +5,7 @@ import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import { CheckCircle2, RotateCcw, Trash2 } from 'lucide-react'
 import { resolveClaimAction, reopenClaimAction, deleteClaimAction } from '@/lib/actions/claims'
+import { PhotoPicker } from '@/components/dashboard/photo-picker'
 
 interface Props {
   claimId: string
@@ -16,9 +17,11 @@ interface Props {
 export function ClaimActions({ claimId, status, onChanged }: Props) {
   const [resolving, setResolving] = useState(false)
   const [note, setNote] = useState('')
+  // 처리 후 사진 — '요청 → 처리'가 눈으로 확인된다. 월간 보고서에 함께 실린다.
+  const [donePhotos, setDonePhotos] = useState<string[]>([])
 
   const resolve = useAction(resolveClaimAction, {
-    onSuccess: () => { toast.success('해결로 표시했어요'); setResolving(false); setNote(''); onChanged?.() },
+    onSuccess: () => { toast.success('해결로 표시했어요'); setResolving(false); setNote(''); setDonePhotos([]); onChanged?.() },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
   const reopen = useAction(reopenClaimAction, {
@@ -41,18 +44,24 @@ export function ClaimActions({ claimId, status, onChanged }: Props) {
             placeholder="어떻게 해결했는지 적어두세요 (선택)"
             className="w-full min-h-16 rounded-lg border border-border bg-background px-2.5 py-2 text-sm"
           />
+          <PhotoPicker
+            label="처리 후 사진"
+            hint="해결된 모습을 찍어두면 거래처 보고서에 함께 나가요 (선택)"
+            urls={donePhotos}
+            onChange={setDonePhotos}
+          />
           <div className="flex gap-2">
             <button
               type="button"
               disabled={resolve.isPending}
-              onClick={() => resolve.execute({ claimId, resolution: note || undefined })}
+              onClick={() => resolve.execute({ claimId, resolution: note || undefined, resolution_photo_urls: donePhotos })}
               className="flex-1 h-10 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50"
             >
               {resolve.isPending ? '처리 중...' : '해결 완료'}
             </button>
             <button
               type="button"
-              onClick={() => { setResolving(false); setNote('') }}
+              onClick={() => { setResolving(false); setNote(''); setDonePhotos([]) }}
               className="h-10 px-3 rounded-lg border border-border text-sm text-muted-foreground hover:bg-muted transition-colors"
             >
               취소
