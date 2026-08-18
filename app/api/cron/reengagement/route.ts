@@ -33,6 +33,9 @@ export async function GET(request: NextRequest) {
     .from('bookings')
     .select('id, customer_phone, customer_name, business_id, customer_id, memo, scheduled_at, quotes!quote_id(cleaning_type), businesses!business_id(name)')
     .eq('status', 'completed')
+    // 정기계약 방문은 제외 — 계속 오고 있는 거래처에 '재방문 유도'는 성립하지 않는다.
+    // (재방문 유도는 일회성 고객을 다시 부르기 위한 것이다)
+    .is('contract_id', null)
     .gte('scheduled_at', d90Start.toISOString())
     .lt('scheduled_at', d90End.toISOString())
     .not('customer_phone', 'is', null)) as unknown as {

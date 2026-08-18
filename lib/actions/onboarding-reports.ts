@@ -5,6 +5,8 @@ import { revalidatePath } from 'next/cache'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { action } from '@/lib/safe-action'
 import { generateOnboardingNotes } from '@/lib/ai/onboarding-note'
+import { sendOnboardingReportAlimtalk } from '@/lib/kakao/alimtalk'
+import { formatDate } from '@/lib/format/datetime'
 
 // 공통 인증 — 로그인 사용자의 business_id 확보
 async function getAuthedBusiness() {
@@ -124,6 +126,63 @@ export const saveOnboardingReportAction = action
     revalidatePath(`/dashboard/clients/${contract.customer_id}`)
 
     return { success: true, id, publicToken }
+  })
+
+// 초도 보고서를 거래처에 카톡으로 보낸다 — 사장님이 검토한 뒤 직접 누르는 버튼.
+//
+// 정기 거래처에 나가는 알림톡은 세 가지뿐이다: 방문 전날 안내(계약에서 켠 경우),
+// 초도 보고서, 월간 보고서. 나머지(후기 요청·재방문 유도 등)는 일회성 고객을
+// 재구매로 이어가려는 것이라 정기 거래처에는 보내지 않는다.
+//
+// 템플릿이 아직 심사 중이면 sendOnboardingReportAlimtalk가 false를 돌려준다.
+// 그때는 '보냈다'고 거짓으로 표시하지 않고, 사장님이 링크를 직접 전달하도록 안내한다.
+export const sendOnboardingReportAction = action
+  .schema(z.object({ contractId: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuthedBusiness()
+    const contract = await loadContractContext(db, businessId, parsedInput.contractId)
+
+    const { data: report } = (await db
+      .from('onboarding_reports' as never)
+      .select('id, public_token, alimtalk_sent_at')
+      .eq('business_id' as never, businessId)
+      .eq('contract_id' as never, parsedInput.contractId)
+      .maybeSingle()) as unknown as {
+      data: { id: string; public_token: string; alimtalk_sent_at: string | null } | null
+    }
+
+    if (!report) throw new Error('[APP] 먼저 리포트를 저장해주세요')
+    if (report.alimtalk_sent_at) throw new Error('[APP] 이미 보낸 리포트예요')
+
+    const [{ data: business }, { data: customer }] = await Promise.all([
+      db.from('businesses').select('name').eq('id', businessId).maybeSingle(),
+      db.from('customers').select('name, phone').eq('id', contract.customer_id).maybeSingle(),
+    ])
+
+    if (!customer?.phone) throw new Error('[APP] 거래처 연락처가 없어 보낼 수 없어요')
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+    const sent = await sendOnboardingReportAlimtalk({
+      customerPhone: customer.phone,
+      customerName:  customer.name ?? '고객',
+      businessName:  business?.name ?? '',
+      // 오늘 날짜(KST)를 '8월 18일' 형태로
+      workDate:      formatDate(new Date(), { month: 'long', day: 'numeric' }),
+      reportUrl:     `${appUrl}/q/${businessId}/onboarding-report/${report.public_token}`,
+    })
+
+    // 실제로 나간 뒤에만 기록한다 — 심사 중이라 못 보냈는데 '보냄'으로 잠기면 안 된다
+    if (sent) {
+      await db
+        .from('onboarding_reports' as never)
+        .update({ alimtalk_sent_at: new Date().toISOString(), status: 'shared' } as never)
+        .eq('id' as never, report.id)
+    }
+
+    revalidatePath(`/dashboard/contracts/${parsedInput.contractId}/onboarding-report`)
+    revalidatePath(`/dashboard/clients/${contract.customer_id}`)
+
+    return { success: true, sent }
   })
 
 const generateSchema = z.object({

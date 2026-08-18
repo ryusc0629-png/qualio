@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
-import { Plus, Trash2, ImagePlus, Sparkles, Loader2, ExternalLink } from 'lucide-react'
+import { Plus, Trash2, ImagePlus, Sparkles, Loader2, ExternalLink, Send, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -15,7 +15,7 @@ import {
   type ResolutionKind,
   type ResultKind,
 } from '@/lib/onboarding/types'
-import { saveOnboardingReportAction, generateOnboardingNotesAction } from '@/lib/actions/onboarding-reports'
+import { saveOnboardingReportAction, generateOnboardingNotesAction, sendOnboardingReportAction } from '@/lib/actions/onboarding-reports'
 
 interface Props {
   contractId: string
@@ -30,6 +30,7 @@ interface Props {
     managementNote: string
     items: OnboardingItem[]
     status: string
+    alimtalkSentAt: string | null
   }
 }
 
@@ -51,6 +52,8 @@ export function OnboardingReportEditor({ contractId, businessId, customerName, s
   const [specNote, setSpecNote] = useState(initial.specNote)
   const [managementNote, setManagementNote] = useState(initial.managementNote)
   const [publicToken, setPublicToken] = useState(initial.publicToken)
+  // 이미 보냈는지 — 보낸 뒤엔 버튼을 '보냈어요'로 바꿔 두 번 눌러 두 번 가지 않게 한다
+  const [alimtalkSentAt, setAlimtalkSentAt] = useState(initial.alimtalkSentAt)
   const [uploadingId, setUploadingId] = useState<string | null>(null)
 
   const patchItem = (id: string, patch: Partial<OnboardingItem>) =>
@@ -93,6 +96,26 @@ export function OnboardingReportEditor({ contractId, businessId, customerName, s
 
   const doSave = (status: 'draft' | 'shared') =>
     save({ contractId, beforeNote, specNote, managementNote, items, status })
+
+  const { execute: sendReport, isPending: isSending } = useAction(sendOnboardingReportAction, {
+    onSuccess: ({ data }) => {
+      if (data?.sent) {
+        setAlimtalkSentAt(new Date().toISOString())
+        toast.success('거래처에 카톡으로 보냈어요!')
+      } else {
+        // 템플릿 심사 중 — 거짓으로 '보냈다'고 하지 않는다
+        toast.error('아직 카톡으로는 못 보내요. 아래 미리보기 링크를 복사해 직접 보내주세요')
+      }
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '보내지 못했어요. 다시 눌러주세요'),
+  })
+
+  // 저장하지 않은 내용이 그대로 나가지 않게, 보내기 전에 항상 한 번 저장한다
+  const doSend = () => {
+    if (!confirm('리포트를 검토하셨나요?\n\n거래처에 카카오톡으로 리포트가 발송됩니다.')) return
+    save({ contractId, beforeNote, specNote, managementNote, items, status: 'shared' })
+    sendReport({ contractId })
+  }
 
   const previewUrl = publicToken ? `/q/${businessId}/onboarding-report/${publicToken}` : null
 
@@ -242,9 +265,16 @@ export function OnboardingReportEditor({ contractId, businessId, customerName, s
         <Button type="button" variant="outline" className="flex-1 h-12" onClick={() => doSave('draft')} disabled={isSaving}>
           {isSaving ? '저장 중...' : '임시 저장'}
         </Button>
-        <Button type="button" className="flex-1 h-12" onClick={() => doSave('shared')} disabled={isSaving}>
-          {isSaving ? '저장 중...' : '완성 · 저장하기'}
-        </Button>
+        {alimtalkSentAt ? (
+          <div className="flex-1 h-12 flex items-center justify-center gap-1.5 text-sm font-medium text-emerald-600">
+            <CheckCircle2 className="h-4 w-4" /> 거래처에 보냈어요
+          </div>
+        ) : (
+          <Button type="button" className="flex-1 h-12 gap-1.5" onClick={doSend} disabled={isSaving || isSending}>
+            <Send className="h-4 w-4" />
+            {isSending ? '보내는 중...' : '검토 후 거래처에 보내기'}
+          </Button>
+        )}
       </div>
 
       {previewUrl && (

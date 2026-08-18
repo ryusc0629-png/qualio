@@ -338,12 +338,22 @@ export const rescheduleBookingAction = action
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
     // 현재 예약 조회 (변경 전 일시 + 고객 연락처 확보)
+    // contract_id 는 database.ts 타입에 아직 없어 as never + 결과 단언으로 받는다
     const { data: booking } = await db
       .from('bookings')
-      .select('id, customer_phone, scheduled_at, quote_id, status')
+      .select('id, customer_phone, scheduled_at, quote_id, status, contract_id' as never)
       .eq('id', parsedInput.booking_id)
       .eq('business_id', profile.business_id)
-      .maybeSingle()
+      .maybeSingle() as unknown as {
+        data: {
+          id: string
+          customer_phone: string | null
+          scheduled_at: string
+          quote_id: string | null
+          status: string
+          contract_id: string | null
+        } | null
+      }
 
     if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
     if (['completed', 'cancelled', 'no_show'].includes(booking.status)) {
@@ -363,7 +373,13 @@ export const rescheduleBookingAction = action
     if (error) throw new Error('[APP] 일정 변경에 실패했습니다')
 
     // 고객 알림톡 발송 (연락처 있는 경우만, 실패해도 변경은 유지)
-    if (booking.customer_phone) {
+    //
+    // 정기계약 방문은 제외한다. 정기 거래처에 나가는 알림톡은 방문 전날 안내(계약에서 켠 경우)·
+    // 초도 보고서·월간 보고서 세 가지뿐이다. 나머지는 일회성 고객을 재구매로 이어가려는
+    // 것이라 정기 거래처에는 소음이 된다. (시간 일괄 변경 시 방문 수만큼 나가는 문제도 있다)
+    const isRecurringVisit = !!booking.contract_id
+
+    if (booking.customer_phone && !isRecurringVisit) {
       try {
         const { data: business } = await db
           .from('businesses')

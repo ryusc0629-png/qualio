@@ -166,35 +166,43 @@ function AlimtalkHistory({ booking }: { booking: Booking }) {
 
   const isCancelled = booking.status === 'cancelled'
   const isDone      = booking.status === 'completed'
+  // 정기계약 방문이면 방문 단위 카톡을 보내지 않는다 — 목록에서 아예 빼서
+  // "왜 안 보냈지?" 하고 사장님이 헷갈리지 않게 한다.
+  const isRecurring = !!booking.contract_id
 
   const rows: AlimtalkRow[] = [
     {
       label: '예약 확정 안내',
       sentAt: a.confirm,
       pending: '예약을 확정하면 바로 나가요',
+      hide: isRecurring,
     },
     {
       label: '방문 전날 안내',
       sentAt: a.reminder,
-      pending: isCancelled ? '취소된 예약이라 안 나가요' : '방문 하루 전 오전 10시에 자동으로 나가요',
+      pending: isCancelled
+        ? '취소된 예약이라 안 나가요'
+        : isRecurring
+          ? '계약에서 켜면 방문 하루 전 오전 10시에 나가요'
+          : '방문 하루 전 오전 10시에 자동으로 나가요',
     },
     {
       label: '곧 도착해요',
       sentAt: a.onMyWay,
       pending: '방문 당일 출발할 때 직접 눌러서 보내요',
-      hide: isCancelled,
+      hide: isCancelled || isRecurring,
     },
     {
       label: '작업 보고서',
       sentAt: a.report,
       pending: isDone ? '보고서를 작성해서 보내면 기록돼요' : '작업이 끝난 뒤에 보내요',
-      hide: isCancelled,
+      hide: isCancelled || isRecurring,
     },
     {
       label: '후기 요청',
       sentAt: a.review,
       pending: '보고서를 보낸 뒤에 보낼 수 있어요',
-      hide: isCancelled,
+      hide: isCancelled || isRecurring,
     },
   ]
 
@@ -230,7 +238,9 @@ function AlimtalkHistory({ booking }: { booking: Booking }) {
       </ul>
 
       <p className="text-[11px] text-muted-foreground mt-2.5 pt-2.5 border-t border-border">
-        고객 카카오톡으로 발송돼요. 고객이 카카오톡을 쓰지 않으면 도착하지 않을 수 있어요.
+        {isRecurring
+          ? '정기 거래처엔 방문마다 보내지 않아요. 첫 작업 리포트와 월간 보고서로 안내해요.'
+          : '고객 카카오톡으로 발송돼요. 고객이 카카오톡을 쓰지 않으면 도착하지 않을 수 있어요.'}
       </p>
     </div>
   )
@@ -288,6 +298,10 @@ export function BookingDetailSheet({
 
   const isCancelled = !booking ||
     ['cancelled', 'no_show'].includes(booking.status)
+
+  // 정기계약 방문 — 거래처에 나가는 카톡은 방문 전날 안내(계약에서 켠 경우)·초도 보고서·
+  // 월간 보고서 세 가지뿐이라, 방문 단위 발송 버튼은 아예 보여주지 않는다.
+  const isRecurringVisit = !!booking?.contract_id
 
   // 시간 변경 액션
   const { execute: saveTime, isPending: timePending } = useAction(updateBookingTimeAction, {
@@ -899,8 +913,14 @@ export function BookingDetailSheet({
         {/* 하단 — 상태 변경 + 취소 */}
         {!isCancelled && (
           <div className="px-5 pb-5 pt-3 border-t border-border space-y-2">
-            {/* 기사 출발 알림 — 방문 전(확정/진행) + 연락처 있을 때 */}
-            {booking && booking.customer_phone && ['confirmed', 'in_progress'].includes(booking.status) && (
+            {/* 정기 거래처엔 방문마다 카톡을 보내지 않는다 — 왜 버튼이 없는지 한 줄로 설명 */}
+            {isRecurringVisit && ['confirmed', 'in_progress', 'completed'].includes(booking?.status ?? '') && (
+              <p className="text-xs text-muted-foreground text-center py-1.5">
+                정기 거래처라 방문마다 카톡을 보내지 않아요 · 월간 보고서로 한 번에 안내해요
+              </p>
+            )}
+            {/* 기사 출발 알림 — 방문 전(확정/진행) + 연락처 있을 때. 정기 방문은 제외 */}
+            {booking && !isRecurringVisit && booking.customer_phone && ['confirmed', 'in_progress'].includes(booking.status) && (
               onMyWaySent ? (
                 <div className="flex items-center justify-center gap-1.5 text-sm text-emerald-600 font-medium py-1.5">
                   <CheckCircle2 className="h-4 w-4" />
@@ -942,8 +962,8 @@ export function BookingDetailSheet({
             )}
             {booking?.status === 'completed' && (
               <>
-                {/* 작업완료 알림톡 미발송 → 보고서 페이지로 이동 */}
-                {!currentReportId && (
+                {/* 작업완료 알림톡 미발송 → 보고서 페이지로 이동. 정기 방문은 보고서·리뷰 요청을 보내지 않는다 */}
+                {!isRecurringVisit && !currentReportId && (
                   <Link href={`/dashboard/bookings/${booking?.id}/report`}>
                     <Button
                       className="w-full h-12 font-semibold gap-2 bg-blue-600 hover:bg-blue-700"
@@ -955,7 +975,7 @@ export function BookingDetailSheet({
                 )}
 
                 {/* 알림톡 발송 완료 → 리뷰 요청 확인창 열기 */}
-                {currentReportId && !currentReviewSent && (
+                {!isRecurringVisit && currentReportId && !currentReviewSent && (
                   <>
                     <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium px-1">
                       <CheckCircle2 className="h-3.5 w-3.5" />
@@ -973,7 +993,7 @@ export function BookingDetailSheet({
                 )}
 
                 {/* 리뷰 요청까지 완료 */}
-                {currentReportId && currentReviewSent && (
+                {!isRecurringVisit && currentReportId && currentReviewSent && (
                   <div className="flex items-center justify-center gap-1.5 text-sm text-emerald-600 font-medium py-3">
                     <CheckCircle2 className="h-4 w-4" />
                     작업 보고서 · 리뷰 요청 모두 발송 완료

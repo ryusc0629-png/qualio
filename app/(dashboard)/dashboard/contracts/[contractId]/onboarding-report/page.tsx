@@ -46,7 +46,7 @@ export default async function OnboardingReportPage({ params }: PageProps) {
   // 기존 리포트(있으면 이어서 작성)
   const { data: existing } = (await db
     .from('onboarding_reports' as never)
-    .select('id, public_token, before_note, spec_note, management_note, items, status')
+    .select('id, public_token, before_note, spec_note, management_note, items, status, alimtalk_sent_at')
     .eq('business_id' as never, businessId)
     .eq('contract_id' as never, contractId)
     .maybeSingle()) as unknown as {
@@ -58,6 +58,7 @@ export default async function OnboardingReportPage({ params }: PageProps) {
       management_note: string | null
       items: OnboardingItem[] | null
       status: string
+      alimtalk_sent_at: string | null
     } | null
   }
 
@@ -73,7 +74,7 @@ export default async function OnboardingReportPage({ params }: PageProps) {
       <div>
         <h1 className="text-xl font-bold">초도 진단 리포트</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          첫 작업에서 확인한 것과 앞으로의 관리를 정리해 고객께 직접 전해요
+          첫 작업에서 확인한 것과 앞으로의 관리를 정리해, 검토한 뒤 거래처에 카톡으로 보내요
         </p>
       </div>
 
@@ -90,6 +91,7 @@ export default async function OnboardingReportPage({ params }: PageProps) {
           managementNote: existing?.management_note ?? '',
           items: existing?.items ?? [],
           status: existing?.status ?? 'draft',
+          alimtalkSentAt: existing?.alimtalk_sent_at ?? null,
         }}
       />
     </div>
