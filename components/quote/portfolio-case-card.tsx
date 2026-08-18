@@ -34,7 +34,7 @@ export function PortfolioCaseCard({
             className="w-full aspect-[16/10] object-cover"
           />
 
-          {/* Before/After 토글 */}
+          {/* 작업 전·후 토글 — 고객에게 보이는 라벨은 항상 한글(영문 혼용 금지) */}
           <div className="absolute bottom-3 left-3 flex gap-1.5">
             <button
               type="button"
@@ -45,7 +45,7 @@ export function PortfolioCaseCard({
                   : 'bg-black/40 text-white backdrop-blur-sm'
               }`}
             >
-              Before
+              작업 전
             </button>
             <button
               type="button"
@@ -56,7 +56,7 @@ export function PortfolioCaseCard({
                   : 'bg-black/40 text-white backdrop-blur-sm'
               }`}
             >
-              After
+              작업 후
             </button>
           </div>
 
