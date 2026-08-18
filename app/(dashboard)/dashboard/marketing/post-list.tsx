@@ -7,7 +7,7 @@ import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/por
 import { dismissReelAction } from '@/lib/actions/reports'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Sparkles, Plus, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send, SkipForward, Save, ChevronUp } from 'lucide-react'
+import { FileText, Plus, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send, SkipForward, Save, ChevronUp } from 'lucide-react'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import type { PostPlan } from '@/lib/geo/post-plan'
 import { copyRichText, markdownToPlain } from '@/lib/utils/rich-text'
@@ -798,7 +798,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                           <img src={post.image_url} alt="" className="w-9 h-9 rounded-lg object-cover border shrink-0" />
                         ) : (
                           <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                            <Sparkles className="h-4 w-4 text-primary" />
+                            <FileText className="h-4 w-4 text-primary" />
                           </div>
                         )}
                         <div className="min-w-0">
@@ -1073,11 +1073,6 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                       {post.post_type === 'portfolio' && (
                         <Badge variant="secondary" className="text-xs shrink-0 bg-amber-100 text-amber-700">
                           <Camera className="h-3 w-3 mr-1" />시공사례
-                        </Badge>
-                      )}
-                      {post.ai_generated && post.post_type !== 'portfolio' && (
-                        <Badge variant="secondary" className="text-xs shrink-0">
-                          <Sparkles className="h-3 w-3 mr-1" />AI
                         </Badge>
                       )}
                       {!post.published && <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">비공개</Badge>}
