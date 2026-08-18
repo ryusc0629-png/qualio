@@ -24,7 +24,10 @@ import {
   Loader2,
 } from 'lucide-react'
 
-type PhotoSlot = { url: string; uploading: boolean }
+// caption = 이 사진이 '어디'인지. 초도(첫) 방문에서는 직원이 반드시 적는다 —
+// 사장님은 현장에 안 가므로 위치를 알 방법이 없고, 위치가 없으면 거래처에 보낼
+// 초도 보고서를 만들 수 없다.
+type PhotoSlot = { url: string; uploading: boolean; caption?: string }
 type VideoSlot = { url: string; uploading: boolean; thumbnailUrl?: string }
 
 interface BookingInfo {
@@ -44,8 +47,8 @@ interface ExistingReport {
   notes: string | null
   preventiveNote: string | null
   sentAt: string | null
-  beforeUrls: string[]
-  afterUrls: string[]
+  beforeUrls: { url: string; caption: string }[]
+  afterUrls: { url: string; caption: string }[]
   aiReportData: AiReportData | null
   workClipUrls: string[]
   reelStatus: string
@@ -78,10 +81,10 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   // 현장 특이사항 — 오늘 눈에 띈 것. 월말에 거래처 보고서로 자동으로 모인다.
   const [preventiveNote, setPreventiveNote] = useState(existingReport?.preventiveNote ?? '')
   const [before, setBefore] = useState<PhotoSlot[]>(
-    existingReport?.beforeUrls.map((url) => ({ url, uploading: false })) ?? []
+    existingReport?.beforeUrls.map((p) => ({ url: p.url, caption: p.caption, uploading: false })) ?? []
   )
   const [after, setAfter] = useState<PhotoSlot[]>(
-    existingReport?.afterUrls.map((url) => ({ url, uploading: false })) ?? []
+    existingReport?.afterUrls.map((p) => ({ url: p.url, caption: p.caption, uploading: false })) ?? []
   )
   const [savedReportId, setSavedReportId] = useState<string | null>(existingReport?.id ?? null)
   const [alreadySent, setAlreadySent] = useState(!!existingReport?.sentAt)
@@ -344,18 +347,43 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   const removePhoto = (url: string, setSlots: React.Dispatch<React.SetStateAction<PhotoSlot[]>>) =>
     setSlots((prev) => prev.filter((p) => p.url !== url))
 
+  const setCaption = (
+    url: string,
+    caption: string,
+    setSlots: React.Dispatch<React.SetStateAction<PhotoSlot[]>>,
+  ) => setSlots((prev) => prev.map((p) => (p.url === url ? { ...p, caption } : p)))
+
+  // 초도 방문인데 위치를 안 적은 사진 — 저장 전에 직원에게 알려준다
+  const missingCaptions = booking.isFirstVisit
+    ? [...before, ...after].filter((p) => !p.uploading && p.url && !(p.caption ?? '').trim()).length
+    : 0
+
   const handleSave = () => {
     if (!hasPhotos) {
       const confirmed = window.confirm('사진을 업로드하지 않고 저장하시겠습니까?')
       if (!confirmed) return
     }
+    // 위치가 비면 거래처 보고서를 만들 수 없다. 막지는 않되(작업 기록은 남아야 한다)
+    // 왜 필요한지 분명히 알리고 한 번 더 확인받는다.
+    if (missingCaptions > 0) {
+      const confirmed = window.confirm(
+        `위치를 안 적은 사진이 ${missingCaptions}장 있어요.\n\n` +
+        '위치가 없으면 거래처에 보낼 첫 작업 보고서를 만들 수 없어요.\n' +
+        '지금 적어주시면 사장님이 바로 보낼 수 있습니다.\n\n' +
+        '그래도 이대로 저장할까요?'
+      )
+      if (!confirmed) return
+    }
+    const withCaption = (p: PhotoSlot) => !p.uploading && p.url
     saveReport({
       workerId,
       bookingId: booking.id,
       notes: notes.trim() || undefined,
       preventiveNote: preventiveNote.trim(), // 빈 문자열도 보냄 — 지웠을 때 반영되게
-      beforePhotoUrls: before.filter((p) => !p.uploading && p.url).map((p) => p.url),
-      afterPhotoUrls: after.filter((p) => !p.uploading && p.url).map((p) => p.url),
+      beforePhotoUrls: before.filter(withCaption).map((p) => p.url),
+      afterPhotoUrls: after.filter(withCaption).map((p) => p.url),
+      beforePhotoCaptions: before.filter(withCaption).map((p) => (p.caption ?? '').trim()),
+      afterPhotoCaptions: after.filter(withCaption).map((p) => (p.caption ?? '').trim()),
       aiReportData: aiReport ? {
         ...aiReport,
         // 선택된 서비스만 저장
@@ -404,10 +432,61 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
         <Label className="text-sm font-medium">{label}</Label>
         <p className="text-xs text-muted-foreground">{hint}</p>
       </div>
+      {/* 초도(첫) 방문에서는 사진마다 '어디'를 받는다.
+          사장님은 현장에 안 가므로 위치를 알 수 없고, 위치가 없으면 거래처 보고서를 못 만든다.
+          평소 방문에서는 예전처럼 썸네일만 나란히 — 직원 부담을 늘리지 않는다. */}
+      {booking.isFirstVisit ? (
+        <div className="space-y-2">
+          {slots.map((p, i) =>
+            p.uploading ? (
+              <div key={`uploading-${type}-${i}`} className="h-16 rounded-xl bg-muted flex items-center justify-center animate-pulse">
+                <Upload className="h-4 w-4 text-muted-foreground" />
+              </div>
+            ) : (
+              <div key={p.url} className="flex items-center gap-2.5">
+                <div className="relative w-16 h-16 shrink-0 rounded-xl overflow-hidden border">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={p.url} alt="" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(p.url, setSlots)}
+                    className="absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5"
+                  >
+                    <X className="h-3 w-3 text-white" />
+                  </button>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <input
+                    value={p.caption ?? ''}
+                    onChange={(e) => setCaption(p.url, e.target.value, setSlots)}
+                    placeholder="어디예요? (예: 처치실 바닥)"
+                    className={`w-full h-11 rounded-lg border px-3 text-sm outline-none focus:border-primary ${
+                      (p.caption ?? '').trim() ? 'border-input' : 'border-red-300 bg-red-50/50'
+                    }`}
+                  />
+                  {!(p.caption ?? '').trim() && (
+                    <p className="text-[11px] text-red-600 mt-1">위치를 적어야 보고서에 들어가요</p>
+                  )}
+                </div>
+              </div>
+            )
+          )}
+          {slots.length < 5 && (
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="w-full h-12 rounded-xl border-2 border-dashed flex items-center justify-center gap-2 hover:border-primary/50 hover:bg-muted/30 transition-colors"
+            >
+              <Camera className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">사진 추가</span>
+            </button>
+          )}
+        </div>
+      ) : (
       <div className="flex flex-wrap gap-2">
-        {slots.map((p) =>
+        {slots.map((p, i) =>
           p.uploading ? (
-            <div key={`uploading-${type}-${Math.random()}`} className="w-20 h-20 rounded-xl bg-muted flex items-center justify-center animate-pulse">
+            <div key={`uploading-${type}-${i}`} className="w-20 h-20 rounded-xl bg-muted flex items-center justify-center animate-pulse">
               <Upload className="h-4 w-4 text-muted-foreground" />
             </div>
           ) : (
@@ -435,6 +514,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           </button>
         )}
       </div>
+      )}
       <input
         ref={inputRef}
         type="file"
@@ -649,10 +729,15 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             평소대로 사진 찍고 메모만 쓰면 되고, 이 안내는 '왜 신경 써야 하는지'만 알려준다. */}
         {booking.isFirstVisit && (
           <div className="rounded-xl bg-blue-50 border border-blue-200 p-4">
-            <p className="text-sm font-semibold text-blue-900">이 현장 첫 방문이에요</p>
-            <p className="text-xs text-blue-800/80 mt-1 leading-relaxed">
-              오늘 찍은 사진과 메모가 거래처에 보낼 <b>첫 작업 리포트</b>로 정리돼요.
-              사진은 <b>작업 전·후를 같은 자리에서</b> 찍어주시면 제일 좋아요. 한 장만 있어도 괜찮아요.
+            <p className="text-sm font-semibold text-blue-900">이 현장 첫 방문이에요 · 위치 기재 필수</p>
+            <p className="text-xs text-blue-800/90 mt-1.5 leading-relaxed">
+              오늘 찍은 사진과 메모는 그대로 <b>거래처에 보내는 첫 작업 보고서</b>가 됩니다.
+              사진마다 <b>어디인지</b>를 꼭 적어주세요. 현장을 본 사람은 기사님뿐이라,
+              이걸 안 적으면 보고서를 만들 수 없어요.
+            </p>
+            <p className="text-xs text-blue-800/90 mt-2 leading-relaxed">
+              첫 보고서는 거래처가 우리를 계속 쓸지 판단하는 자료예요.
+              오늘 한 번만 신경 써주시면 다음 방문부터는 안 물어봅니다.
             </p>
           </div>
         )}
@@ -972,6 +1057,13 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           </>
         ) : (
           <>
+            {missingCaptions > 0 && (
+              <p className="text-xs text-red-700 text-center bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                위치를 안 적은 사진이 <b>{missingCaptions}장</b> 있어요.
+                <br />
+                위치가 있어야 거래처 보고서가 만들어져요.
+              </p>
+            )}
             {/* 정기 거래처엔 방문마다 보내지 않는다 — 쓴 내용은 월간 보고서로 모인다 */}
             {booking.contractId ? (
               <p className="text-sm text-muted-foreground text-center bg-muted/40 border border-border rounded-lg px-3 py-3">

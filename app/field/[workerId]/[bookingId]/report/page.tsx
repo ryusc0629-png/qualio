@@ -53,7 +53,7 @@ export default async function FieldReportPage({ params }: Props) {
   // 기존 보고서 + 사진 + 릴스 정보 조회
   const { data: report } = await db
     .from('reports')
-    .select('id, notes, preventive_note, kakao_sent_at, ai_report_data, work_clip_urls, reel_status, reel_url, report_photos(url, type, sort_order)' as never)
+    .select('id, notes, preventive_note, kakao_sent_at, ai_report_data, work_clip_urls, reel_status, reel_url, report_photos(url, type, sort_order, caption)' as never)
     .eq('booking_id', bookingId)
     .maybeSingle() as { data: {
       id: string; notes: string | null; preventive_note: string | null; kakao_sent_at: string | null
@@ -61,20 +61,22 @@ export default async function FieldReportPage({ params }: Props) {
       work_clip_urls: string[] | null
       reel_status: string | null
       reel_url: string | null
-      report_photos: { url: string; type: string; sort_order: number }[]
+      report_photos: { url: string; type: string; sort_order: number; caption: string | null }[]
     } | null }
 
   const photos = report?.report_photos ?? []
 
+  // 사진마다 '어디'(caption)도 함께 넘긴다 — 초도 방문에서 직원이 적은 위치가
+  // 다시 열었을 때 그대로 보여야 한다
   const existingBefore = photos
     .filter((p) => p.type === 'before')
     .sort((a, b) => a.sort_order - b.sort_order)
-    .map((p) => p.url)
+    .map((p) => ({ url: p.url, caption: p.caption ?? '' }))
 
   const existingAfter = photos
     .filter((p) => p.type === 'after')
     .sort((a, b) => a.sort_order - b.sort_order)
-    .map((p) => p.url)
+    .map((p) => ({ url: p.url, caption: p.caption ?? '' }))
 
   // 업체 서비스 항목 조회 (AI 추천용)
   const { data: services } = await db

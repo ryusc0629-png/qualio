@@ -449,6 +449,10 @@ export const fieldSaveReportAction = action
     preventiveNote:  z.string().max(2000).optional(), // 현장 특이사항 — 월말 거래처 보고서에 자동으로 모임
     beforePhotoUrls: z.array(z.string().min(1)).max(5),
     afterPhotoUrls:  z.array(z.string().min(1)).max(5),
+    // 사진마다 '어디'인지 — 사진 배열과 같은 순서. 초도(첫) 방문에서만 받는다.
+    // 사장님은 현장에 안 가므로 이 값이 없으면 초도 보고서를 만들 수 없다.
+    beforePhotoCaptions: z.array(z.string().max(100)).max(5).optional(),
+    afterPhotoCaptions:  z.array(z.string().max(100)).max(5).optional(),
     aiReportData:    z.object({
       beforeStatus: z.string(),
       workDetails: z.string(),
@@ -492,12 +496,14 @@ export const fieldSaveReportAction = action
         url,
         type:       'before' as const,
         sort_order: i,
+        caption:    parsedInput.beforePhotoCaptions?.[i]?.trim() || null,
       })),
       ...parsedInput.afterPhotoUrls.map((url, i) => ({
         report_id:  report.id,
         url,
         type:       'after' as const,
         sort_order: i,
+        caption:    parsedInput.afterPhotoCaptions?.[i]?.trim() || null,
       })),
     ]
 
