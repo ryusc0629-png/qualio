@@ -42,9 +42,22 @@ const MAX_EXTRA_AREAS = 5
 /** 질문의 성격 — 카드에서 묶어 보여주고, 승패를 해석할 때 쓴다. */
 export type GeoQuestionKind = 'brand' | 'price' | 'local' | 'broad'
 
-// 지역 문자열에서 광역 단위명만 남긴다. "울산광역시"→"울산", "경기도"→"경기"
+// 광역 단위 정식명 → 사람들이 실제로 쓰는 약칭.
+// 접미사만 떼면 "경상북도"가 "경상북"이 된다(실제로 "경상북 경주시" 질문이 만들어졌다).
+const METRO_SHORT: Record<string, string> = {
+  서울특별시: '서울', 인천광역시: '인천', 경기도: '경기',
+  부산광역시: '부산', 울산광역시: '울산', 경상남도: '경남',
+  대구광역시: '대구', 경상북도: '경북', 광주광역시: '광주',
+  전라남도: '전남', 전북특별자치도: '전북', 대전광역시: '대전',
+  세종특별자치시: '세종', 충청남도: '충남', 충청북도: '충북',
+  강원특별자치도: '강원', 제주특별자치도: '제주',
+}
+
+// 지역 문자열에서 광역 단위명만 남긴다. "울산광역시"→"울산", "경상북도"→"경북"
 function shortMetro(raw: string | null | undefined): string {
   const first = (raw ?? '').trim().split(/\s+/)[0] ?? ''
+  if (METRO_SHORT[first]) return METRO_SHORT[first]
+  // 표에 없는 형태(이미 줄인 이름 등)는 접미사만 떼서 쓴다
   return first.replace(/(특별자치도|특별자치시|특별시|광역시|자치도|도|시)$/, '') || first
 }
 
@@ -64,7 +77,9 @@ function normalizeService(name: string): string {
 export function toSearchArea(raw: string | null | undefined): string | null {
   const parts = parseKoreanRegion(raw)
   const metro = parts.sido ? shortMetro(parts.sido) : null
-  const local = parts.gu ?? parts.gun ?? parts.si ?? null
+  // 도 소속이면 '시'가 먼저다 — "경기 성남시"라고 하지 "경기 분당구"라고 하지 않는다.
+  // 광역시·특별시는 si가 비어 있어 자연히 구(區)가 쓰인다("울산 남구").
+  const local = parts.si ?? parts.gu ?? parts.gun ?? null
   if (metro && local) return `${metro} ${local}`
   if (metro) return metro
   // 파서가 못 읽는 짧은 형태("울산 남구")는 앞 두 토큰만 살려 그대로 쓴다

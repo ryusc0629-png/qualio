@@ -125,7 +125,27 @@ export async function runGeoCheck(
     if (!area || !area.includes(' ')) continue // 광역만 나온 주소는 신호가 약해 제외
     areaCount.set(area, (areaCount.get(area) ?? 0) + 1)
   }
+
+  // 영업권 밖에서 어쩌다 한 번 간 곳은 공략 지역이 아니다.
+  //
+  // 다트클린은 울산 업체인데 '경기 오산시' 질문이 만들어진 적이 있다. 예약 주소에
+  // 오산 1건, 성남 1건이 있었고 그걸 "실제로 일한 지역"으로 그대로 받아서다.
+  // 한 번 간 곳은 영업권이 아니라 우연이고, 그 지역 질문은 물어봐야 답이 없다.
+  //
+  // 그렇다고 출장 지역 설정만 믿을 수도 없다. 다트클린은 경주에서 11건을 했는데
+  // 출장 지역에 '경북'이 없다(설정이 현실을 못 따라간 경우). 그래서 두 갈래로 본다.
+  //   - 사장님이 정한 영업권(출장 지역·사업장 광역) 안이면 → 한 건만 있어도 인정
+  //   - 영업권 밖이면 → 여러 번 갔을 때만 인정(우연 한 건을 걸러낸다)
+  const MIN_JOBS_OUTSIDE_TERRITORY = 3
+  const territory = new Set(
+    (biz.service_areas ?? []).map((a) => toSearchArea(a)).filter((a): a is string => !!a),
+  )
+  const homeMetro = (toSearchArea(biz.address) ?? '').split(' ')[0]
+  const inTerritory = (area: string) =>
+    territory.has(area) || (!!homeMetro && area.startsWith(`${homeMetro} `))
+
   const activeAreas = [...areaCount.entries()]
+    .filter(([area, count]) => inTerritory(area) || count >= MIN_JOBS_OUTSIDE_TERRITORY)
     .sort((a, b) => b[1] - a[1])
     .map(([area]) => area)
 

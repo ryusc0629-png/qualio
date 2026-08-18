@@ -101,6 +101,21 @@ describe('주소 → 검색용 지역명', () => {
   it('이미 짧은 형태는 그대로 쓴다', () => {
     expect(toSearchArea('울산 남구')).toBe('울산 남구')
   })
+
+  it('도 이름은 사람들이 쓰는 약칭으로 줄인다', () => {
+    // 접미사만 떼면 "경상북도"가 "경상북"이 된다 — 실제로 그런 질문이 만들어졌다
+    expect(toSearchArea('경상북도 경주시')).toBe('경북 경주시')
+    expect(toSearchArea('충청남도 천안시 서북구')).toBe('충남 천안시')
+    expect(toSearchArea('경상남도 김해시')).toBe('경남 김해시')
+  })
+
+  it('도 소속은 구가 아니라 시로 부른다', () => {
+    // "경기 분당구"가 아니라 "경기 성남시"라고 검색한다
+    expect(toSearchArea('경기 성남시 분당구 고기로 25')).toBe('경기 성남시')
+    expect(toSearchArea('경기도 수원시 영통구')).toBe('경기 수원시')
+    // 광역시는 그대로 구를 쓴다
+    expect(toSearchArea('서울특별시 강서구 공항대로 525')).toBe('서울 강서구')
+  })
 })
 
 describe('질문 성격 분류', () => {
