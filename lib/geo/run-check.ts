@@ -26,7 +26,7 @@ export async function ensureGeoQuestions(
   db: Db,
   businessId: string,
   input: Omit<GeoQuestionInput, 'activeAreas'> & { activeAreas?: string[] | null },
-): Promise<string[]> {
+): Promise<{ questions: string[]; changed: boolean }> {
   const month = currentMonthKey()
 
   const { data: existing } = (await db
@@ -42,12 +42,12 @@ export async function ensureGeoQuestions(
   const desired = buildGeoQuestions(input)
 
   // 생성이 불가능하면(지역·서비스 없음) 기존 질문이라도 있으면 그대로 사용
-  if (desired.length === 0) return current
+  if (desired.length === 0) return { questions: current, changed: false }
 
   // 저장된 질문이 원하는 세트와 동일하면 재생성 없이 그대로 사용(멱등)
   const same =
     current.length === desired.length && desired.every((q) => current.includes(q))
-  if (rows.length > 0 && same) return current
+  if (rows.length > 0 && same) return { questions: current, changed: false }
 
   // 다르면 교체: 기존 활성 질문 비활성화 후 새 세트 삽입
   // (추세 기록은 geo_checks에 남으므로 질문 교체는 안전)
@@ -68,18 +68,22 @@ export async function ensureGeoQuestions(
     })) as never,
   )
 
-  return desired
+  return { questions: desired, changed: true }
 }
 
 export interface RunGeoCheckResult {
-  skipped?: 'no-key' | 'no-questions'
+  skipped?: 'no-key' | 'no-questions' | 'too-soon'
   result?: GeoMeasureResult
 }
 
 // 한 업체의 GEO 노출을 측정하고 결과를 저장한다.
 // - PERPLEXITY_API_KEY 없으면 skipped:'no-key' (측정 안 함)
 // - 지역·서비스 부족으로 질문이 없으면 skipped:'no-questions'
-export async function runGeoCheck(db: Db, businessId: string): Promise<RunGeoCheckResult> {
+export async function runGeoCheck(
+  db: Db,
+  businessId: string,
+  { minIntervalHours = 0 }: { minIntervalHours?: number } = {},
+): Promise<RunGeoCheckResult> {
   const perplexityKey = process.env.PERPLEXITY_API_KEY
   const geminiKey = process.env.GEMINI_API_KEY
   const openaiKey = process.env.OPENAI_API_KEY
@@ -133,8 +137,21 @@ export async function runGeoCheck(db: Db, businessId: string): Promise<RunGeoChe
     activeAreas,
   }
 
-  const questions = await ensureGeoQuestions(db, businessId, questionInput)
+  const { questions, changed } = await ensureGeoQuestions(db, businessId, questionInput)
   if (questions.length === 0) return { skipped: 'no-questions' }
+
+  // 너무 자주 재는 것만 막는다. 단 질문 세트가 바뀌었으면 '다른 측정'이므로 통과시킨다 —
+  // 검색어 규칙을 고치거나 지역·서비스를 채운 직후엔 바로 결과를 봐야 한다.
+  if (!changed && minIntervalHours > 0) {
+    const since = new Date(Date.now() - minIntervalHours * 60 * 60 * 1000).toISOString()
+    const { data: recent } = (await db
+      .from('geo_checks' as never)
+      .select('id' as never)
+      .eq('business_id' as never, businessId)
+      .gte('checked_at' as never, since)
+      .limit(1)) as unknown as { data: { id: string }[] | null }
+    if (recent && recent.length > 0) return { skipped: 'too-soon' }
+  }
 
   // 식별 신호(needles) — 업체명·slug가 검색결과/답변/인용에 있으면 "노출"로 판정.
   // 2자 미만은 오탐 위험이 커서 제외.

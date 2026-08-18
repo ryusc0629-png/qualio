@@ -22,12 +22,28 @@ describe('GEO 질문 세트', () => {
     expect(broadOnly.length).toBeLessThanOrEqual(1)
   })
 
-  it('실제로 일한 지역을 출장 지역보다 먼저 공략한다', () => {
-    const qs = buildGeoQuestions(다트클린)
-    const 남구 = qs.findIndex((q) => q.includes('울산 남구'))
-    const 동구 = qs.findIndex((q) => q.includes('울산 동구'))
-    expect(남구).toBeGreaterThan(-1)
-    expect(남구).toBeLessThan(동구)
+  it('실제로 일한 지역은 출장 지역이 많아도 공략 대상에서 안 잘린다', () => {
+    // 출장 지역을 잔뜩 넣어둔 업체라도, 실제로 일한 곳은 반드시 물어봐야 한다
+    // (시공 사례라는 근거가 있는 지역이라 인용될 확률이 가장 높다)
+    const 많은출장 = {
+      address: '울산광역시 울주군 삼남읍',
+      serviceAreas: ['부산 사하구', '부산 금정구', '대구 수성구', '대구 북구', '울산 남구'],
+      serviceNames: ['사무실 정기청소'],
+      activeAreas: ['울산 남구'],
+    }
+    const weeks = ['2026-W30', '2026-W31', '2026-W32', '2026-W33', '2026-W34', '2026-W35']
+    const 남구주 = weeks.filter((w) => buildGeoQuestions(많은출장, w).some((q) => q.includes('울산 남구')))
+    const 대구북구주 = weeks.filter((w) => buildGeoQuestions(많은출장, w).some((q) => q.includes('대구 북구')))
+    expect(남구주.length).toBeGreaterThan(0)
+    expect(남구주.length).toBeGreaterThanOrEqual(대구북구주.length)
+  })
+
+  it('주가 바뀌면 다른 질문을 돌려 묻는다 (넓게 훑기)', () => {
+    const a = buildGeoQuestions(다트클린, '2026-W33')
+    const b = buildGeoQuestions(다트클린, '2026-W34')
+    expect(a).not.toEqual(b)
+    // 앞 3개는 추세가 끊기지 않도록 고정
+    expect(a.slice(0, 3)).toEqual(b.slice(0, 3))
   })
 
   it('가격형 질문을 포함한다 (숫자로 답하는 페이지가 인용되므로)', () => {
@@ -58,8 +74,8 @@ describe('GEO 질문 세트', () => {
     expect(qs.length).toBeLessThanOrEqual(12)
   })
 
-  it('같은 입력이면 같은 질문이 나온다 (추세 비교가 유효하도록)', () => {
-    expect(buildGeoQuestions(다트클린)).toEqual(buildGeoQuestions(다트클린))
+  it('같은 주에는 같은 질문이 나온다 (추세 비교가 유효하도록)', () => {
+    expect(buildGeoQuestions(다트클린, '2026-W34')).toEqual(buildGeoQuestions(다트클린, '2026-W34'))
   })
 
   it('서비스를 아직 안 넣은 업체도 지역만 있으면 측정한다', () => {

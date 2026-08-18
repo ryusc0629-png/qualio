@@ -101,24 +101,68 @@ export function classifyGeoQuestion(question: string, businessName?: string | nu
   return 'broad'
 }
 
+/** 이번 주 키 — 'YYYY-Www'(KST). 같은 주엔 같은 질문이 나오게 하는 씨앗. */
+export function currentWeekKey(now: Date = new Date()): string {
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000)
+  const year = kst.getUTCFullYear()
+  // 그 해 1월 1일부터 몇 번째 주인지 (정확한 ISO 주차까지 갈 필요는 없다 — 씨앗이면 충분)
+  const start = Date.UTC(year, 0, 1)
+  const week = Math.floor((kst.getTime() - start) / (7 * 24 * 60 * 60 * 1000)) + 1
+  return `${year}-W${String(week).padStart(2, '0')}`
+}
+
+/** 문자열 → 정수 (회전 시작점 결정용). 같은 입력이면 항상 같은 값. */
+function seedOf(text: string): number {
+  let h = 5381
+  for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0
+  return h
+}
+
+// 손님이 실제로 던지는 문형 — 의도별로 모아 둔다.
+//
+// 왜 이렇게 많이 두나: 사람들은 생각지도 못한 방식으로 묻는다. 몇 개만 반복해서 재면
+// 그 몇 개에서만 이기고 나머지는 영영 모른다. 넓게 물어야 어디서 새고 있는지 보인다.
+// 다만 매번 전부 돌리면 비용이 감당이 안 되므로, 큰 풀을 만들어 두고 주마다 돌려 뽑는다.
+const QUESTION_TEMPLATES: ((area: string, svc: string, cond: string) => string)[] = [
+  (a, s, c) => `${a}에 ${s} 맡길 업체 추천해주세요. ${c} 잘하는 곳으로 알려주세요.`,
+  (a, s) => `${a}에서 ${s} 맡기면 비용이 얼마나 드나요? 대략적인 가격대를 알려주세요.`,
+  (a, s) => `${a}에서 ${s} 업체를 고를 때 뭘 확인해야 하나요? 괜찮은 곳도 같이 추천해주세요.`,
+  (a, s) => `${a} ${s} 업체 중에 후기 좋은 곳 알려주세요.`,
+  (a, s) => `${a}에서 ${s} 잘하는 곳 있나요? 믿고 맡길 만한 데로 알려주세요.`,
+  (a, s) => `${a}에 ${s} 급하게 맡겨야 하는데 바로 와줄 수 있는 업체 있을까요?`,
+  (a, s) => `${a} ${s} 가격 비교해주세요. 어디가 합리적인가요?`,
+  (a, s) => `${a}에서 ${s} 처음 맡겨보는데 어떻게 진행되나요? 업체도 추천해주세요.`,
+  (a, s) => `${a} ${s} 업체 두세 곳만 비교해서 알려주세요.`,
+  (a, s) => `${a}에서 ${s} 계약하려는데 주의할 점이 뭔가요?`,
+  (a, s) => `${a} ${s} 저렴하면서 꼼꼼하게 해주는 곳 있을까요?`,
+  (a, s) => `${a}에 ${s} 전문으로 하는 업체 어디가 있나요?`,
+  (a, s) => `${a}에서 ${s} 견적 받아보고 싶은데 어디에 문의하면 되나요?`,
+  (a, s) => `${a} ${s} 업체 중에 사업자 등록되고 보험 있는 곳으로 추천해주세요.`,
+  (a, s, c) => `${a}에 ${s} 맡길 곳을 찾고 있어요. ${c} 어디가 좋을까요?`,
+  (a, s) => `${a}에서 ${s} 오래 맡길 만한 업체 추천해주세요. 자주 바꾸고 싶지 않아요.`,
+]
+
 /**
  * 소비자 질문 세트 생성.
  * 지역이 없으면 빈 배열(측정 불가) — 호출부에서 게이트 처리한다.
  *
  * ── 왜 '문장'인가 (2026-08-19) ──
  * 처음엔 "울산 울주군 사무실 정기청소 업체"처럼 검색창에 치는 키워드로 물었다.
- * 그런데 사람들은 AI에 그렇게 묻지 않는다. 말하듯이, 조건을 붙여서 묻는다.
- *   "울산에 사무실 청소하는 업체 추천해주세요. 정기적인 관리를 받고 싶어요.
- *    영업 외 시간에 했으면 좋겠어요. 잘하는 곳으로 알려주세요."
+ * 그런데 사람들은 AI에 그렇게 묻지 않는다. 말하듯이, 사정을 붙여서 묻는다.
+ * 짧은 키워드형 질문은 AI가 구글 지도에서 답을 고르지만, 길고 조건이 붙은 질문은
+ * 블로그·홈페이지 글을 읽고 답한다. 우리 무기가 콘텐츠라 문장형으로 물어야
+ * 우리가 이길 수 있는 판에서 재게 된다.
  *
- * 이 차이가 결과를 가른다. 짧은 키워드형 질문은 AI가 구글 지도에서 답을 고르지만,
- * 길고 조건이 붙은 질문은 블로그·홈페이지 글을 읽고 답한다. 우리 무기가 콘텐츠라
- * 문장형으로 물어야 우리가 이길 수 있는 판에서 재게 된다.
+ * ── 왜 '돌려가며' 묻나 (2026-08-19) ──
+ * 같은 12개만 매주 재면 그 12개 안에서만 성적을 안다. 손님은 생각지도 못한 방식으로
+ * 묻기 때문에, 넓게 물어야 어디서 새고 있는지 드러난다. 그래서 지역×서비스×문형으로
+ * 큰 풀(수십~수백 개)을 만들어 두고 주마다 다른 조합을 뽑는다.
+ * 단 앞의 3개(대표 지역·대표 서비스)는 고정이다 — 추세 그래프가 끊기면 안 되므로.
+ * 같은 주엔 항상 같은 질문이 나온다(멱등).
  *
- * 브랜드 질문("○○ 후기")은 뺐다. 손님은 우리 이름을 모르는 상태로 찾는다 —
- * 이름을 아는 사람만 던지는 질문은 실제 유입과 무관하고 승률만 부풀린다.
+ * 브랜드 질문("○○ 후기")은 뺐다. 손님은 우리 이름을 모르는 채로 찾는다.
  */
-export function buildGeoQuestions(input: GeoQuestionInput): string[] {
+export function buildGeoQuestions(input: GeoQuestionInput, weekKey = currentWeekKey()): string[] {
   const { address, serviceAreas, serviceNames, activeAreas } = input
 
   // ── 서비스 정리 ──
@@ -154,13 +198,12 @@ export function buildGeoQuestions(input: GeoQuestionInput): string[] {
   const svc0 = services[0]
 
   const out: string[] = []
-  const push = (q: string) => {
-    const t = q.replace(/\s+/g, ' ').trim()
+  const push = (q: string | null | undefined) => {
+    const t = (q ?? '').replace(/\s+/g, ' ').trim()
     if (t && !out.includes(t) && out.length < MAX_QUESTIONS) out.push(t)
   }
 
   // 서비스 성격에 맞는 '조건 한 줄' — 손님이 실제로 덧붙이는 사정을 담는다.
-  // 조건이 붙어야 AI가 목록이 아니라 글을 읽고 답한다.
   const conditionFor = (svc: string): string => {
     if (/정기|관리/.test(svc)) return '정기적으로 관리받고 싶어요. 영업 시간 끝난 뒤에 와주면 좋겠어요.'
     if (/입주|이사|준공|인테리어/.test(svc)) return '입주 전에 마무리로 깨끗하게 하고 싶어요.'
@@ -170,26 +213,22 @@ export function buildGeoQuestions(input: GeoQuestionInput): string[] {
     return '꼼꼼하게 해주는 곳이면 좋겠어요.'
   }
 
-  // 1) 대표 서비스 — 추천 요청 + 조건 (가장 많이 던지는 형태)
-  push(`${home}에 ${svc0} 맡길 업체 추천해주세요. ${conditionFor(svc0)} 잘하는 곳으로 알려주세요.`)
+  // ── 고정 3개 — 추세 그래프가 끊기지 않도록 매주 같은 자리를 지킨다 ──
+  push(QUESTION_TEMPLATES[0](home, svc0, conditionFor(svc0)))
+  push(QUESTION_TEMPLATES[1](home, svc0, ''))
+  push(QUESTION_TEMPLATES[2](home, svc0, ''))
 
-  // 2) 가격 — AI는 숫자로 답할 수 있는 글을 인용한다. 우리가 이길 수 있는 자리.
-  push(`${home}에서 ${svc0} 맡기면 비용이 얼마나 드나요? 대략적인 가격대를 알려주세요.`)
-
-  // 3) 고르는 기준 — 계약 전에 실제로 많이 묻는 질문. 안내형 글이 인용되는 자리.
-  push(`${home}에서 ${svc0} 업체를 고를 때 뭘 확인해야 하나요? 괜찮은 곳도 같이 추천해주세요.`)
-
-  // 4) 실제로 일한 지역·출장 지역 — 시공 사례라는 근거가 있는 곳부터
-  for (const a of areas.slice(1, 1 + MAX_EXTRA_AREAS)) {
-    push(`${a}에서 ${svc0} 잘하는 업체 있을까요? 추천해주세요.`)
+  // ── 회전 풀 — 지역 × 서비스 × 문형 전부 조합 ──
+  const pool: string[] = []
+  const usableAreas = areas.slice(0, 1 + MAX_EXTRA_AREAS)
+  for (const area of usableAreas) {
+    for (const svc of services) {
+      const cond = conditionFor(svc)
+      for (const tpl of QUESTION_TEMPLATES) pool.push(tpl(area, svc, cond))
+    }
   }
 
-  // 5) 나머지 서비스 — 서비스마다 사정이 다르므로 조건도 그에 맞게
-  for (const s of services.slice(1)) {
-    push(`${home}에 ${s} 맡길 곳을 찾고 있어요. ${conditionFor(s)} 어디가 좋을까요?`)
-  }
-
-  // 6) 문제 축 — 손님은 서비스명보다 겪는 문제로 묻는다
+  // 문제 축 — 손님은 서비스명보다 겪는 문제로 묻는다. 이것도 풀에 넣어 돌린다.
   const svcJoined = services.join(' ')
   const SYMPTOM_RULES: { re: RegExp; q: (h: string) => string }[] = [
     { re: /에어컨/, q: (h) => `${h}인데 에어컨에서 곰팡이 냄새가 나요. 청소 맡길 업체 추천해주세요.` },
@@ -197,18 +236,31 @@ export function buildGeoQuestions(input: GeoQuestionInput): string[] {
     { re: /욕실|화장실/, q: (h) => `${h}인데 욕실 곰팡이가 심해요. 청소 업체 추천해주세요.` },
     { re: /준공|인테리어/, q: (h) => `${h}에서 인테리어 공사가 끝났는데 먼지 청소를 맡길 곳이 필요해요.` },
     { re: /사무실|정기|상업|매장/, q: (h) => `${h}에서 사업장을 운영하는데 청소를 정기적으로 맡기고 싶어요. 어떻게 알아보면 되나요?` },
+    { re: /공장|창고/, q: (h) => `${h} 공장 위생 관리를 맡기려는데 산업 현장 경험 있는 업체로 추천해주세요.` },
   ]
-  for (const rule of SYMPTOM_RULES) {
-    if (rule.re.test(svcJoined)) {
-      push(rule.q(home))
-      break
+  for (const area of usableAreas) {
+    for (const rule of SYMPTOM_RULES) {
+      if (rule.re.test(svcJoined)) pool.push(rule.q(area))
     }
   }
 
-  // 7) 광역 벤치마크 1개 — 플랫폼이 이기는 판이지만 추세를 보려고 남긴다
-  if (homeMetro && homeMetro !== home) {
-    push(`${homeMetro}에서 ${svc0} 잘하는 업체 추천해주세요.`)
+  // 광역 벤치마크 — 플랫폼이 이기는 판이지만 추세를 보려고 하나 남긴다(회전 대상 아님)
+  const broad = homeMetro && homeMetro !== home
+    ? `${homeMetro}에서 ${svc0} 잘하는 업체 추천해주세요.`
+    : null
+
+  // 이번 주 시작점부터 풀을 훑어 남은 자리를 채운다.
+  // 업체마다 다른 지점에서 시작하도록 씨앗에 지역·서비스를 섞는다(모든 업체가 같은 주에
+  // 같은 문형만 도는 걸 막는다).
+  const reserved = broad ? 1 : 0
+  if (pool.length > 0) {
+    const seed = seedOf(`${weekKey}|${home}|${svc0}`)
+    for (let i = 0; i < pool.length && out.length < MAX_QUESTIONS - reserved; i++) {
+      push(pool[(seed + i) % pool.length])
+    }
   }
+
+  push(broad)
 
   return out.slice(0, MAX_QUESTIONS)
 }

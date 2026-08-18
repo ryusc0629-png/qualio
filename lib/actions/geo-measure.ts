@@ -23,20 +23,14 @@ export const runGeoCheckAction = action
 
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
-    // 비용 안전장치 — 최근 12시간 내 측정이 있으면 유료 호출 없이 막는다.
-    // (평소 측정은 매주 자동 cron이 담당. 수동은 첫 측정·간헐 확인용)
-    const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
-    const { data: recent } = (await db
-      .from('geo_checks' as never)
-      .select('id' as never)
-      .eq('business_id' as never, profile.business_id)
-      .gte('checked_at' as never, twelveHoursAgo)
-      .limit(1)) as unknown as { data: { id: string }[] | null }
-    if (recent && recent.length > 0) {
-      throw new Error('[APP] 방금 측정했어요. 노출률은 천천히 바뀌니 매주 자동 측정 결과를 기다려 주세요')
+    // 비용 안전장치 — 같은 질문으로 반복해 재는 것만 막는다.
+    // 질문 세트가 바뀌었으면(검색어 규칙 개선·지역/서비스 추가) 바로 다시 잴 수 있어야 한다.
+    const { skipped, result } = await runGeoCheck(db, profile.business_id, { minIntervalHours: 1 })
+
+    if (skipped === 'too-soon') {
+      throw new Error('[APP] 방금 측정했어요. 잠시 후에 다시 눌러주세요')
     }
 
-    const { skipped, result } = await runGeoCheck(db, profile.business_id)
 
     if (skipped === 'no-key') {
       // 측정 엔진 키 미설정 — 사용자에겐 기술용어 없이 "준비 중"으로 안내
