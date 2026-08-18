@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Noto_Sans_KR, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { ScrollReset } from "@/components/ui/scroll-reset";
+import { DeploymentSkewRecovery } from "@/components/ui/deployment-skew-recovery";
 import "./globals.css";
 
 const notoSansKR = Noto_Sans_KR({
@@ -64,6 +65,8 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <ScrollReset />
+        {/* 새 버전 배포로 열어둔 화면이 먹통이 되면 알려주고 새로 불러온다 */}
+        <DeploymentSkewRecovery />
         {children}
         <Toaster richColors position="bottom-right" />
       </body>

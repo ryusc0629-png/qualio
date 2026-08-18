@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { loginAction } from '@/lib/actions/auth'
+import { handledAsDeploymentSkew } from '@/components/ui/deployment-skew-recovery'
 
 // 로그인 화면에서는 '몇 자 이상' 같은 가입 규칙을 검사하지 않는다.
 // 여기서 필요한 건 빈칸인지 아닌지뿐이고, 맞고 틀리고는 서버가 판단한다.
@@ -42,6 +43,9 @@ function LoginForm() {
       if (data?.redirectTo) window.location.replace(data.redirectTo)
     },
     onError: ({ error }) => {
+      // 서버가 이유를 안 준 실패 = 배포가 바뀌어 서버 동작을 못 찾은 것.
+      // 비밀번호 문제로 오해하지 않도록 여기서 걸러 자동으로 새로 불러온다.
+      if (handledAsDeploymentSkew(error)) return
       toast.error(error.serverError ?? '로그인에 실패했습니다')
     },
   })
