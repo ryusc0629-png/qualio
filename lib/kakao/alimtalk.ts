@@ -40,6 +40,8 @@ export interface QuoteSentParams {
   businessPhone: string | null
   cleaningType: string
   spaceSize?: number
+  // ⚠️ 아래 4개는 승인된 '견적 발송 v2' 템플릿이 쓰지 않는다(금액·희망일은 견적 페이지에서 보여준다).
+  //    호출부 호환을 위해 필드는 남겨두되, 템플릿에 없는 변수는 보내지 않는다.
   preferredDate?: string
   goodPrice: number
   betterPrice: number
@@ -64,12 +66,6 @@ export async function sendQuoteAlimtalk(params: QuoteSentParams): Promise<boolea
 
   const service = new SolapiMessageService(apiKey, apiSecret)
 
-  const preferredDateKr = params.preferredDate
-    ? new Date(params.preferredDate + 'T00:00:00').toLocaleDateString('ko-KR', {
-        year: 'numeric', month: 'long', day: 'numeric',
-      })
-    : '미정'
-
   try {
     await service.sendOne({
       to:   params.customerPhone,
@@ -82,12 +78,12 @@ export async function sendQuoteAlimtalk(params: QuoteSentParams): Promise<boolea
           '#{고객명}':     params.customerName,
           '#{업체명}':     params.businessName,
           '#{서비스명}':   params.cleaningType,
-          '#{평수}':       params.spaceSize ? ` ${params.spaceSize}평` : '',
-          '#{희망날짜}':   preferredDateKr,
-          '#{기본가}':     params.goodPrice.toLocaleString('ko-KR'),
-          '#{추천가}':     params.betterPrice.toLocaleString('ko-KR'),
-          '#{프리미엄가}': params.bestPrice.toLocaleString('ko-KR'),
+          // 평수를 안 받은 견적은 공백 한 칸으로 채운다 — 빈 문자열은 변수 미치환으로 발송이 거부된다
+          '#{평수}':       params.spaceSize ? `${params.spaceSize}평` : ' ',
           '#{업체연락처}': params.businessPhone ?? '업체에 문의해 주세요',
+          // ⚠️ 이 템플릿(견적 발송 v2)은 버튼이 없고 링크를 본문에 그대로 노출한다.
+          //    따라서 다른 템플릿과 달리 qPathVar로 자르지 말고 전체 주소를 보내야 한다.
+          //    버튼도 붙이면 안 된다(템플릿에 없는 버튼을 실으면 발송이 거부된다).
           '#{예약링크}':   params.quoteUrl,
         },
       },
