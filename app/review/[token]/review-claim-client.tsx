@@ -8,9 +8,19 @@ interface ReviewClaimClientProps {
   claimId: string
   reviewUrl: string | null
   hasReward: boolean
+  /** 후기를 남길 곳 이름 — '구글'·'네이버' 등. 채널이 바뀌어도 문구가 따라오게 밖에서 받는다 */
+  platformLabel?: string
+  /** 후기에 들어가면 좋은 말 — 예: "울산 남구 사무실 청소". 검색어가 담긴 후기가 훨씬 강하다 */
+  keywordHint?: string | null
 }
 
-export function ReviewClaimClient({ claimId, reviewUrl, hasReward }: ReviewClaimClientProps) {
+export function ReviewClaimClient({
+  claimId,
+  reviewUrl,
+  hasReward,
+  platformLabel = '네이버',
+  keywordHint,
+}: ReviewClaimClientProps) {
   // rating(별점 입력) → external(공개 리뷰 유도) / private(비공개 감사) / done
   const [step, setStep] = useState<'rating' | 'external' | 'private' | 'done'>('rating')
   const [rating, setRating] = useState(0)
@@ -44,8 +54,17 @@ export function ReviewClaimClient({ claimId, reviewUrl, hasReward }: ReviewClaim
         <p className="text-2xl">🙏</p>
         <p className="text-sm font-medium text-emerald-700">소중한 후기 감사합니다!</p>
         <p className="text-sm text-muted-foreground">
-          같은 후기를 <b>네이버</b>에도 남겨주시면 저희에게 큰 힘이 돼요
+          같은 후기를 <b>{platformLabel}</b>에도 남겨주시면 저희에게 큰 힘이 돼요
         </p>
+        {/* 어떤 청소를 어디서 받았는지 한 줄 들어간 후기가 압도적으로 강하다.
+            검색·AI가 그 문장을 근거로 우리를 찾아낸다(실제로 리뷰 2개로 지도 2위에 오른 업체가 있다).
+            부담이 되지 않게 '이렇게 적어달라'가 아니라 예시 한 줄만 보여준다. */}
+        {keywordHint && (
+          <div className="rounded-lg border bg-slate-50 px-3 py-2.5 text-left">
+            <p className="text-xs text-muted-foreground">이런 한 줄이 들어가면 큰 도움이 돼요</p>
+            <p className="text-sm text-foreground mt-1">“{keywordHint} 맡겼는데 만족했어요”</p>
+          </div>
+        )}
         {/* 위에서 저장한 작업 전·후 사진을 붙이도록 한 번 더 짚어준다 —
             사진이 붙은 후기가 훨씬 잘 읽히고 오래 남는다 */}
         <p className="text-xs text-muted-foreground">
@@ -55,7 +74,7 @@ export function ReviewClaimClient({ claimId, reviewUrl, hasReward }: ReviewClaim
           className="w-full h-12"
           onClick={() => { window.open(reviewUrl!, '_blank'); setStep('done') }}
         >
-          네이버에 후기 남기기 →
+          {platformLabel}에 후기 남기기 →
         </Button>
         <button
           type="button"

@@ -1,5 +1,15 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import { resolveReviewPlatform, countGoogleClaims } from '@/lib/review/resolve-platform'
+import { toSearchArea } from '@/lib/geo/questions'
+
+// 후기 채널 표시명 — 손님에게 보이는 이름
+const PLATFORM_LABELS: Record<string, string> = {
+  naver: '네이버',
+  google: '구글',
+  danggeun: '당근',
+  kakao: '카카오맵',
+}
 import { ReviewClaimClient } from './review-claim-client'
 import { ReviewPhotos } from './review-photos'
 
@@ -14,10 +24,10 @@ export default async function ReviewClaimPage({ params }: Props) {
   // 토큰 조회 + 업체/예약 정보
   const { data: claim } = await db
     .from('review_claims' as never)
-    .select('id, claimed_at, booking_id, businesses!business_id(name, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description), bookings!booking_id(customer_name)' as never)
+    .select('id, claimed_at, booking_id, business_id, businesses!business_id(name, address, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_google_first, review_reward_type, review_reward_description), bookings!booking_id(customer_name, service_label, service_address)' as never)
     .eq('token' as never, token)
     .maybeSingle() as unknown as {
-      data: { id: string; claimed_at: string | null; booking_id: string | null; businesses: unknown; bookings: unknown } | null
+      data: { id: string; claimed_at: string | null; booking_id: string | null; business_id: string; businesses: unknown; bookings: unknown } | null
     }
 
   if (!claim) notFound()
@@ -27,25 +37,34 @@ export default async function ReviewClaimPage({ params }: Props) {
 
   const bizInfo = biz as {
     name: string
+    address: string | null
     google_place_url: string | null
     naver_place_url: string | null
     danggeun_review_url: string | null
     kakao_place_url: string | null
     active_review_platform: string
+    review_google_first: boolean | null
     review_reward_type: string
     review_reward_description: string | null
   } | null
 
   if (!bizInfo) notFound()
 
-  // 활성 채널 기준 리뷰 URL 결정
-  const platformUrlMap: Record<string, string | null> = {
-    naver: bizInfo.naver_place_url,
-    google: bizInfo.google_place_url,
-    danggeun: bizInfo.danggeun_review_url,
-    kakao: bizInfo.kakao_place_url,
-  }
-  const reviewUrl = platformUrlMap[bizInfo.active_review_platform] ?? bizInfo.google_place_url ?? bizInfo.naver_place_url ?? null
+  // 후기 채널 결정 — 구글 리뷰 5개를 채울 때까지는 구글로 보낸다(AI 검색 후보 진입 조건).
+  // 판단은 resolveReviewPlatform 한 곳에서만 한다 — 화면과 저장(API)이 갈라지면
+  // 손님에겐 구글을 보여주고 기록은 네이버로 남는다.
+  const googleClaimed = await countGoogleClaims(db, claim.business_id)
+  const resolved = resolveReviewPlatform(bizInfo, googleClaimed)
+  const reviewUrl = resolved.url
+
+  // 후기에 넣어달라고 보여줄 예시 한 줄 — "지역 + 받은 서비스".
+  // 검색어가 담긴 후기가 지도·AI 노출에 훨씬 크게 작용한다(리뷰 2개로 지도 2위에 오른 사례가 있다).
+  // 업체 주소는 사장님 사무실이라 손님 현장과 다를 수 있어, 현장 주소가 있으면 그쪽을 쓴다.
+  const serviceLabel = (booking as { service_label?: string | null } | null)?.service_label?.trim()
+  const hintArea = toSearchArea(
+    (booking as { service_address?: string | null } | null)?.service_address ?? bizInfo.address,
+  )
+  const keywordHint = hintArea ? `${hintArea} ${serviceLabel || '청소'}` : null
   const customerName = (booking as { customer_name: string | null } | null)?.customer_name ?? '고객'
   const alreadyClaimed = !!claim.claimed_at
 
@@ -135,6 +154,8 @@ export default async function ReviewClaimPage({ params }: Props) {
             claimId={claim.id}
             reviewUrl={reviewUrl}
             hasReward={!!rewardText}
+            platformLabel={PLATFORM_LABELS[resolved.platform ?? 'naver']}
+            keywordHint={keywordHint}
           />
         )}
 

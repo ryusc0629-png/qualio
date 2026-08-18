@@ -9,6 +9,7 @@ import { ChannelPerformanceCard } from './channel-performance-card'
 import { MarketingPeriodSelector } from './period-selector'
 import { GeoShareCard } from '@/components/dashboard/geo-share-card'
 import { AiCrawlerCard } from '@/components/dashboard/ai-crawler-card'
+import { GoogleProfileCard } from '@/components/dashboard/google-profile-card'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { getOrCreatePostPlan } from '@/lib/geo/post-plan'
@@ -218,6 +219,15 @@ export default async function MarketingPage({
           </div>
         }>
           <ChannelPerformanceCard businessId={profile.business_id} months={months} />
+        </Suspense>
+
+        {/* 짧은 '추천' 질문은 블로그가 아니라 구글 지도가 답한다 — 콘텐츠로 안 닿는 영역이라 맨 위에 둔다 */}
+        <Suspense fallback={
+          <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
+            구글 지도 조건을 확인하는 중...
+          </div>
+        }>
+          <GoogleProfileCard businessId={profile.business_id} />
         </Suspense>
 
         {/* 크롤러 방문이 노출률보다 먼저 움직이므로 위에 둔다 — 노출률이 0인 동안에도 볼 게 있어야 한다 */}

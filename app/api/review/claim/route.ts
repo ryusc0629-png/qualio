@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendReviewClaimedAlimtalk } from '@/lib/kakao/alimtalk'
 import { sendPushToBusiness } from '@/lib/push/web-push'
+import { resolveReviewPlatform, countGoogleClaims } from '@/lib/review/resolve-platform'
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
   // 클레임 + 업체 + 예약 정보 조회
   const { data: claim } = await db
     .from('review_claims')
-    .select('id, claimed_at, business_id, booking_id, customer_phone, businesses!business_id(name, phone, review_reward_type, review_reward_description), bookings!booking_id(customer_name)')
+    .select('id, claimed_at, business_id, booking_id, customer_phone, businesses!business_id(name, phone, review_reward_type, review_reward_description, active_review_platform, review_google_first, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url), bookings!booking_id(customer_name)')
     .eq('id', body.claimId)
     .maybeSingle()
 
@@ -38,15 +39,29 @@ export async function POST(request: NextRequest) {
 
   const biz = Array.isArray(claim.businesses) ? claim.businesses[0] : claim.businesses
   const booking = Array.isArray(claim.bookings) ? claim.bookings[0] : claim.bookings
-  const bizInfo = biz as { name: string; phone: string | null; review_reward_type: string; review_reward_description: string | null } | null
+  const bizInfo = biz as unknown as {
+    name: string; phone: string | null; review_reward_type: string; review_reward_description: string | null
+    active_review_platform: string | null; review_google_first: boolean | null
+    google_place_url: string | null; naver_place_url: string | null
+    danggeun_review_url: string | null; kakao_place_url: string | null
+  } | null
   const customerName = (booking as { customer_name: string | null } | null)?.customer_name ?? '고객'
 
   const isPublic = rating !== null ? rating >= 4 : true
 
+  // 어느 채널로 보냈는지 함께 기록한다 — 구글 리뷰가 몇 개 모였는지 세는 근거이고,
+  // 그 수가 '구글 먼저' 모드를 언제 끌지 결정한다. 화면(/review)과 똑같은 함수로 판단해
+  // 둘이 어긋나지 않게 한다.
+  const googleClaimed = await countGoogleClaims(db, claim.business_id)
+  const routed = resolveReviewPlatform(
+    bizInfo as unknown as Parameters<typeof resolveReviewPlatform>[0],
+    googleClaimed,
+  )
+
   // 인증 시각 기록
   await db
     .from('review_claims')
-    .update({ claimed_at: new Date().toISOString() })
+    .update({ claimed_at: new Date().toISOString(), platform: routed.platform } as never)
     .eq('id', claim.id)
 
   // 다음 이용 할인 자동 적립 — 사장님이 따로 할 일이 없어야 오래 간다.
