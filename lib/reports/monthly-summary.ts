@@ -55,9 +55,6 @@ export interface MonthlySummary {
   issueResolvedCount: number
   /** 처리율(%) — 접수가 없으면 null(0%로 보이면 안 된다) */
   issueResolveRate: number | null
-  /** 접수부터 처리까지 평균 며칠 걸렸는지 — 처리된 건이 없으면 null.
-   *  담당자가 재계약을 판단할 때 '얼마나 빨리 대응하나'가 건수보다 중요하다. */
-  avgResolveDays: number | null
   /** 접수·처리 내역 — 날짜 순 */
   issues: {
     date: string
@@ -131,17 +128,6 @@ export function buildMonthlySummary(input: {
     .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
     .map((r) => ({ date: r.scheduled_at, note: r.request.trim() }))
 
-  // 접수 → 처리까지 걸린 평균 일수(소수 한 자리). 처리된 건만 센다.
-  const resolvedWithTime = issuesSorted.filter((i) => isResolved(i) && i.resolved_at)
-  const avgResolveDays = resolvedWithTime.length > 0
-    ? Math.round(
-        (resolvedWithTime.reduce(
-          (sum, i) => sum + (new Date(i.resolved_at!).getTime() - new Date(i.created_at).getTime()),
-          0,
-        ) / resolvedWithTime.length / (24 * 60 * 60 * 1000)) * 10,
-      ) / 10
-    : null
-
   const carriedOver = issuesSorted
     .filter((i) => !isResolved(i))
     .map((i) => ({ date: i.created_at, title: (i.title ?? '').trim() || '요청 접수' }))
@@ -155,7 +141,6 @@ export function buildMonthlySummary(input: {
     issueCount: issues.length,
     issueResolvedCount: resolvedCount,
     issueResolveRate: issues.length > 0 ? Math.round((resolvedCount / issues.length) * 100) : null,
-    avgResolveDays,
     issues,
     requests,
     carriedOver,
@@ -200,15 +185,9 @@ export function buildHeadline(input: {
   }
 
   if (summary.siteNotes.length > 0) {
-    parts.push(`문제가 되기 전에 미리 챙긴 것 ${summary.siteNotes.length}건은 아래에 정리했습니다.`)
+    parts.push(`현장에서 확인한 특이사항 ${summary.siteNotes.length}건은 아래에 정리했습니다.`)
   }
 
   return parts.join(' ')
 }
 
-/** 평균 처리 소요를 사람이 읽는 말로 — 하루 안이면 '당일', 그 외엔 'N일' */
-export function formatResolveDays(days: number): string {
-  if (days < 1) return '당일'
-  if (days < 1.5) return '1일'
-  return `${days % 1 === 0 ? days : days.toFixed(1)}일`
-}
