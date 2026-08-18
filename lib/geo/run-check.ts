@@ -160,19 +160,30 @@ export async function runGeoCheck(
     .map((v) => v.trim())
 
   // 사용 가능한 엔진 모두로 측정(있는 키만) — Perplexity(검색결과)+Gemini(답변 그라운딩).
-  const engineResults: { engine: string; results: GeoQuestionResult[] }[] = []
-  if (perplexityKey) {
-    const r = await measureGeoShareOfVoice(perplexityKey, questions, { needles })
-    engineResults.push({ engine: 'perplexity', results: r.results })
-  }
-  if (geminiKey) {
-    const r = await measureGeoShareOfVoiceGemini(geminiKey, questions, { needles })
-    engineResults.push({ engine: 'gemini', results: r.results })
-  }
-  if (openaiKey) {
-    const r = await measureGeoShareOfVoiceOpenAI(openaiKey, questions, { needles })
-    engineResults.push({ engine: 'openai', results: r.results })
-  }
+  // 엔진끼리도 동시에 돌린다 — 하나씩 기다리면 엔진 수만큼 시간이 곱해진다.
+  const engineJobs: { engine: string; run: () => Promise<GeoMeasureResult> }[] = []
+  if (perplexityKey) engineJobs.push({ engine: 'perplexity', run: () => measureGeoShareOfVoice(perplexityKey, questions, { needles }) })
+  if (geminiKey) engineJobs.push({ engine: 'gemini', run: () => measureGeoShareOfVoiceGemini(geminiKey, questions, { needles }) })
+  if (openaiKey) engineJobs.push({ engine: 'openai', run: () => measureGeoShareOfVoiceOpenAI(openaiKey, questions, { needles }) })
+
+  const startedAt = Date.now()
+  const settled = await Promise.all(
+    engineJobs.map(async (job) => {
+      try {
+        return { engine: job.engine, results: (await job.run()).results }
+      } catch (e) {
+        console.error(`[GEO] ${job.engine} 엔진 실패:`, e instanceof Error ? e.message : e)
+        return { engine: job.engine, results: [] as GeoQuestionResult[] }
+      }
+    }),
+  )
+  const engineResults = settled
+
+  // 비용·시간을 눈으로 볼 수 있게 남긴다 — 질문 수를 올릴지 판단하는 근거가 된다
+  console.log(
+    `[GEO] 측정 완료 business=${businessId} 질문=${questions.length} 엔진=${engineJobs.length} ` +
+    `호출=${questions.length * engineJobs.length} 소요=${Math.round((Date.now() - startedAt) / 1000)}초`,
+  )
 
   // 질문별 엔진 통합 — 어느 엔진에서든 잡히면 노출(union), 인용 도메인은 합집합.
   // detail에 엔진별 결과(engines)도 남겨 대시보드에서 "엔진별" 표시에 활용.

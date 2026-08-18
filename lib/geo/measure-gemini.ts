@@ -1,5 +1,6 @@
 import 'server-only'
 import type { GeoIdentity, GeoQuestionResult, GeoMeasureResult } from '@/lib/geo/measure'
+import { mapWithConcurrency, GEO_CONCURRENCY } from '@/lib/geo/run-parallel'
 import { extractBusinessNames } from '@/lib/geo/extract-names'
 
 // Gemini(구글 검색 그라운딩)로 GEO 노출 측정 — 실제 웹을 검색해 답하므로 '현재 지역 업체 현실'을 반영.
@@ -57,23 +58,22 @@ async function measureOne(apiKey: string, model: string, query: string, needles:
   return { query, mentioned, matchedUrl: null, topDomains, names: extractBusinessNames(answer) }
 }
 
-// 여러 질문 측정 — 레이트리밋 보호 위해 순차 + 지연. 개별 실패는 미노출로 처리(전체 중단 방지).
+// 여러 질문 측정 — 동시 실행(레이트리밋 보호용 상한 있음). 개별 실패는 미노출로 처리(전체 중단 방지).
 export async function measureGeoShareOfVoiceGemini(
   apiKey: string,
   queries: string[],
   identity: GeoIdentity,
   model = DEFAULT_MODEL,
 ): Promise<GeoMeasureResult> {
-  const results: GeoQuestionResult[] = []
-  for (const q of queries) {
+  // 동시에 던진다 — 하나씩 물으면 질문을 늘릴수록 함수 제한시간에 걸린다.
+  const results = await mapWithConcurrency(queries, GEO_CONCURRENCY, async (q) => {
     try {
-      results.push(await measureOne(apiKey, model, q, identity.needles))
+      return await measureOne(apiKey, model, q, identity.needles)
     } catch (e) {
       console.error('[GEO/Gemini] 측정 실패:', q, e instanceof Error ? e.message : e)
-      results.push({ query: q, mentioned: false, matchedUrl: null, topDomains: [] })
+      return { query: q, mentioned: false, matchedUrl: null, topDomains: [] } as GeoQuestionResult
     }
-    await new Promise((r) => setTimeout(r, 400))
-  }
+  })
   const cited = results.filter((r) => r.mentioned).length
   const total = results.length
   return { results, cited, total, sharePct: total ? Math.round((cited / total) * 100) : 0 }

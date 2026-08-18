@@ -63,7 +63,7 @@ describe('GEO 질문 세트', () => {
     expect(qs.every((q) => q.length >= 20)).toBe(true)
   })
 
-  it('질문 수 상한을 넘지 않는다 (검색 API 비용 가드)', () => {
+  it('질문 수 상한을 넘지 않는다 (호출 수 = 질문 × 엔진)', () => {
     const qs = buildGeoQuestions({
       businessName: '큰업체',
       address: '경기도 수원시',
@@ -71,7 +71,7 @@ describe('GEO 질문 세트', () => {
       serviceNames: ['입주청소', '사무실청소', '에어컨청소', '준공청소'],
       activeAreas: [],
     })
-    expect(qs.length).toBeLessThanOrEqual(12)
+    expect(qs.length).toBeLessThanOrEqual(30)
   })
 
   it('같은 주에는 같은 질문이 나온다 (추세 비교가 유효하도록)', () => {

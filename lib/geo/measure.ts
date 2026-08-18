@@ -4,6 +4,8 @@ import 'server-only'
 // 검색 API(/search)는 저렴·결정적이라 다수 업체×질문을 주기적으로 돌리기에 적합(답변 API보다 비용↓).
 // "AI 답변에 인용되려면 먼저 검색 결과에 잡혀야 한다" — 노출률은 GEO의 선행 지표.
 
+import { mapWithConcurrency, GEO_CONCURRENCY } from '@/lib/geo/run-parallel'
+
 const PPLX_SEARCH_URL = 'https://api.perplexity.ai/search'
 
 export interface GeoIdentity {
@@ -68,22 +70,21 @@ async function measureOne(apiKey: string, query: string, needles: string[]): Pro
   return { query, mentioned: matchedUrl !== null, matchedUrl, topDomains }
 }
 
-// 여러 질문 측정 — 레이트리밋 보호 위해 순차 실행 + 소폭 지연. 개별 실패는 미노출로 처리(전체 중단 방지).
+// 여러 질문 측정 — 동시 실행(레이트리밋 보호용 상한 있음). 개별 실패는 미노출로 처리(전체 중단 방지).
 export async function measureGeoShareOfVoice(
   apiKey: string,
   queries: string[],
   identity: GeoIdentity,
 ): Promise<GeoMeasureResult> {
-  const results: GeoQuestionResult[] = []
-  for (const q of queries) {
+  // 동시에 던진다 — 하나씩 물으면 질문을 늘릴수록 함수 제한시간에 걸린다.
+  const results = await mapWithConcurrency(queries, GEO_CONCURRENCY, async (q) => {
     try {
-      results.push(await measureOne(apiKey, q, identity.needles))
+      return await measureOne(apiKey, q, identity.needles)
     } catch (e) {
       console.error('[GEO] 측정 실패:', q, e instanceof Error ? e.message : e)
-      results.push({ query: q, mentioned: false, matchedUrl: null, topDomains: [] })
+      return { query: q, mentioned: false, matchedUrl: null, topDomains: [] } as GeoQuestionResult
     }
-    await new Promise((r) => setTimeout(r, 300))
-  }
+  })
   const cited = results.filter((r) => r.mentioned).length
   const total = results.length
   return { results, cited, total, sharePct: total ? Math.round((cited / total) * 100) : 0 }
