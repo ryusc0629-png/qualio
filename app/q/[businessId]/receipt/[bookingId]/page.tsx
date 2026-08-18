@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase/server'
-import { Phone, MapPin, Calendar, CreditCard, Receipt } from 'lucide-react'
-import { BusinessAvatar } from '@/components/biz/business-avatar'
+import {
+  DocPage, DocHeader, DocMeta, DocLede, DocSignature,
+} from '@/components/report/document'
 
 interface PageProps {
   params: Promise<{ businessId: string; bookingId: string }>
@@ -63,114 +64,46 @@ export default async function ReceiptPage({ params }: PageProps) {
   const receiptNo  = `${bookingId.slice(0, 8).toUpperCase()}`
 
   return (
-    <div className="min-h-screen bg-[#F9F8F6]">
+    <DocPage>
+      <DocHeader
+        businessName={business.name}
+        businessPhone={business.phone}
+        title="영수증"
+        docNo={`RC-${receiptNo}`}
+      />
+      <DocMeta
+        items={[
+          { k: '고객', v: booking.customer_name ?? '' },
+          { k: '작업일', v: workedAtKr },
+          { k: '서비스', v: `${serviceName} (${tierLabel})` },
+          { k: '현장', v: booking.service_address ?? '' },
+        ]}
+      />
 
-      {/* 헤더 */}
-      <header className="bg-white sticky top-0 z-10 border-b border-border">
-        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BusinessAvatar name={business.name} logoUrl={business.logo_url} faviconUrl={business.favicon_url} />
-            <div>
-              <p className="font-bold text-sm leading-tight">{business.name}</p>
-              <p className="text-[11px] text-zinc-400">영수증</p>
-            </div>
-          </div>
-          {business.phone && (
-            <a href={`tel:${business.phone}`} className="flex items-center gap-1.5 text-primary text-sm font-semibold">
-              <Phone className="h-3.5 w-3.5" />
-              {business.phone}
-            </a>
-          )}
+      <DocLede>
+        {booking.customer_name ? `${booking.customer_name}님, ` : ''}결제가 정상적으로 처리되었습니다.
+        아래와 같이 영수증을 발행해 드립니다.
+      </DocLede>
+
+      {/* 금액 — 이 문서의 결론이라 유일하게 크게 쓴다 */}
+      <div className="mt-8 border-y-2 border-slate-900 py-5 flex items-end justify-between gap-4">
+        <span className="text-[13px] font-semibold text-slate-600">결제 금액</span>
+        <div className="text-right">
+          <p className="text-[28px] leading-none font-bold text-slate-900 tabular-nums">{amountKr}원</p>
+          <p className="text-[11px] text-slate-400 mt-1.5">부가세 포함</p>
         </div>
-      </header>
+      </div>
 
-      <main className="max-w-lg mx-auto px-4 pb-16 pt-6 space-y-4">
+      <p className="text-[12px] text-slate-500 mt-4">
+        발행일 {formatIssuedDate()}
+        {business.phone && <> · 문의 {business.phone}</>}
+      </p>
 
-        {/* 영수증 상단 */}
-        <div className="bg-white rounded-3xl px-5 py-6 shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <Receipt className="h-5 w-5 text-primary" />
-            <p className="font-extrabold text-lg text-zinc-900">영수증</p>
-          </div>
-
-          <div className="flex items-center justify-between text-xs text-zinc-400 mb-5 pb-4 border-b border-dashed border-zinc-200">
-            <span>발행번호 {receiptNo}</span>
-            <span>발행일 {formatIssuedDate()}</span>
-          </div>
-
-          <div className="space-y-0 divide-y divide-zinc-100">
-            <Row icon={<span className="text-xs font-bold text-zinc-400 w-4">공급자</span>} value={business.name} />
-            <Row icon={<span className="text-xs font-bold text-zinc-400 w-4">고객</span>} value={booking.customer_name} />
-            <Row
-              icon={<Calendar className="h-4 w-4 text-zinc-400" />}
-              label="작업일시"
-              value={workedAtKr}
-            />
-            {booking.service_address && (
-              <Row
-                icon={<MapPin className="h-4 w-4 text-zinc-400" />}
-                label="작업주소"
-                value={booking.service_address}
-              />
-            )}
-            <Row
-              icon={<span className="text-xs text-zinc-400 w-4">플랜</span>}
-              label="서비스"
-              value={`${serviceName} (${tierLabel})`}
-            />
-          </div>
-
-          {/* 결제 금액 강조 */}
-          <div className="mt-5 pt-4 border-t-2 border-dashed border-zinc-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-zinc-400" />
-                <span className="text-sm font-semibold text-zinc-600">결제 금액</span>
-              </div>
-              <span className="text-2xl font-extrabold text-primary tabular-nums">
-                {amountKr}원
-              </span>
-            </div>
-            <p className="text-[11px] text-zinc-400 mt-2 text-right">부가세 포함</p>
-          </div>
-        </div>
-
-        {/* 업체 연락처 */}
-        {business.phone && (
-          <a
-            href={`tel:${business.phone}`}
-            className="flex items-center justify-between bg-white rounded-2xl px-4 py-4 shadow-sm"
-          >
-            <div>
-              <p className="font-bold text-sm text-zinc-900">문의하기</p>
-              <p className="text-xs text-zinc-500 mt-0.5">{business.name} · {business.phone}</p>
-            </div>
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shrink-0">
-              <Phone className="h-4 w-4 text-white" />
-            </div>
-          </a>
-        )}
-
-        <p className="text-center text-xs text-zinc-400 pt-2">Powered by 퀄리오</p>
-      </main>
-    </div>
-  )
-}
-
-function Row({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode
-  label?: string
-  value: string
-}) {
-  return (
-    <div className="flex items-start gap-3 py-3">
-      <span className="mt-0.5 shrink-0">{icon}</span>
-      {label && <span className="text-xs text-zinc-500 w-16 shrink-0 mt-0.5">{label}</span>}
-      <span className="text-sm font-semibold text-zinc-900 break-keep flex-1">{value}</span>
-    </div>
+      <DocSignature
+        businessName={business.name}
+        businessPhone={business.phone}
+        issuedLabel={formatIssuedDate()}
+      />
+    </DocPage>
   )
 }

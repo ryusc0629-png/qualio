@@ -1,7 +1,10 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import { CheckCircle } from 'lucide-react'
 import { ReportPhotoSection } from './report-photos'
+import { formatDate } from '@/lib/format/datetime'
+import {
+  DocPage, DocHeader, DocMeta, DocLede, DocSection, DocText, DocRows, DocSignature,
+} from '@/components/report/document'
 
 function formatKoreanDate(iso: string) {
   return new Date(iso).toLocaleString('ko-KR', {
@@ -146,183 +149,129 @@ export default async function ReportPage({
     }
   }
 
+  // 문서 머리말 항목 — 값이 없는 줄은 DocMeta가 알아서 뺀다
+  const meta = [
+    { k: '고객', v: bookingInfo?.customer_name ?? '' },
+    { k: '작업일', v: bookingInfo?.scheduled_at ? formatKoreanDate(bookingInfo.scheduled_at) : '' },
+    {
+      k: '서비스',
+      v: quoteInfo?.cleaning_type
+        ? `${quoteInfo.cleaning_type}${quoteInfo.space_size ? ` ${quoteInfo.space_size}평` : ''}${
+            bookingInfo?.selected_tier ? ` (${TIER_LABEL[bookingInfo.selected_tier] ?? bookingInfo.selected_tier})` : ''
+          }`
+        : '',
+    },
+    { k: '현장', v: bookingInfo?.service_address ?? '' },
+  ]
+
+  const docNo = `WR-${report.created_at.slice(2, 4)}${report.created_at.slice(5, 7)}${report.created_at.slice(8, 10)}-${reportId.slice(0, 4).toUpperCase()}`
+
+  // 01·02·03… 은 실제 읽는 순서다. 사진과 본문 절에 이어서 번호를 매긴다.
+  let no = 0
+  const nextNo = () => String(++no).padStart(2, '0')
+
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* 헤더 */}
-      <div className="bg-white border-b border-border">
-        <div className="max-w-lg mx-auto px-4 py-5 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-            <CheckCircle className="h-5 w-5 text-green-600" />
-          </div>
-          <div>
-            <p className="font-bold text-lg leading-tight">작업 완료 보고서</p>
-            <p className="text-sm text-muted-foreground">{bizInfo?.name ?? '업체'}</p>
-          </div>
-        </div>
-      </div>
+    <DocPage>
+      <DocHeader
+        businessName={bizInfo?.name ?? '업체'}
+        businessPhone={bizInfo?.phone}
+        title="작업 완료 보고서"
+        docNo={docNo}
+      />
+      <DocMeta items={meta} />
 
-      <div className="max-w-lg mx-auto px-4 py-6 space-y-6">
+      <DocLede>
+        {bookingInfo?.customer_name ? `${bookingInfo.customer_name}님, ` : ''}의뢰하신 작업을 마쳤습니다.
+        진행한 내용과 현장 사진을 아래와 같이 정리해 드립니다.
+      </DocLede>
 
-        {/* 작업 정보 */}
-        <div className="bg-white rounded-2xl border border-border p-5 space-y-3">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">작업 정보</p>
-          <div className="space-y-2">
-            {quoteInfo?.cleaning_type && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">서비스</span>
-                <span className="font-semibold">
-                  {quoteInfo.cleaning_type}
-                  {quoteInfo.space_size && <span className="text-muted-foreground font-normal"> {quoteInfo.space_size}평</span>}
-                </span>
+      {/* 작업 전·후 사진 — 누르면 크게 보이고 저장할 수 있다 */}
+      {(beforePhotos.length > 0 || afterPhotos.length > 0) && (
+        <DocSection no={nextNo()} title="현장 사진" lead="사진을 누르면 크게 보이고, 저장할 수 있어요">
+          <div className="space-y-5">
+            {beforePhotos.length > 0 && (
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 mb-2">작업 전</p>
+                <ReportPhotoSection photos={beforePhotos.map((p) => ({ url: p.url, caption: p.caption ?? '작업 전' }))} />
               </div>
             )}
-            {bookingInfo?.selected_tier && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">선택 플랜</span>
-                <span className="font-semibold">{TIER_LABEL[bookingInfo.selected_tier] ?? bookingInfo.selected_tier}</span>
-              </div>
-            )}
-            {bookingInfo?.scheduled_at && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">작업 일시</span>
-                <span className="font-semibold">{formatKoreanDate(bookingInfo.scheduled_at)}</span>
-              </div>
-            )}
-            {bookingInfo?.service_address && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground shrink-0">주소</span>
-                <span className="font-semibold text-right ml-4">{bookingInfo.service_address}</span>
+            {afterPhotos.length > 0 && (
+              <div>
+                <p className="text-[11px] font-semibold text-emerald-600 mb-2">작업 후</p>
+                <ReportPhotoSection photos={afterPhotos.map((p) => ({ url: p.url, caption: p.caption ?? '작업 후' }))} />
               </div>
             )}
           </div>
-        </div>
+        </DocSection>
+      )}
 
-        {/* 작업 전 사진 — 클릭 시 라이트박스 */}
-        {beforePhotos.length > 0 && (
-          <div className="space-y-3">
-            <p className="text-sm font-bold flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-black">전</span>
-              작업 전
+      {/* 보고서 본문 — 네 항목으로 정리돼 있으면 절로 나누고, 아니면 메모 한 덩어리 */}
+      {reportNotes && (
+        reportNotes.isAiReport ? (
+          <>
+            {reportNotes.sections.map((section) => (
+              <DocSection key={section.title} no={nextNo()} title={section.title}>
+                <DocText>{section.content}</DocText>
+              </DocSection>
+            ))}
+          </>
+        ) : (
+          <DocSection no={nextNo()} title="작업 내용">
+            <DocText>{reportNotes.rawText}</DocText>
+          </DocSection>
+        )
+      )}
+
+      {/* 미리 챙긴 것 — 문제 생기기 전에 먼저 봐준다는 신뢰 */}
+      {preventiveNote && preventiveNote.trim() && (
+        <DocSection no={nextNo()} title="미리 챙긴 것 · 지켜볼 것">
+          <DocText>{preventiveNote}</DocText>
+        </DocSection>
+      )}
+
+      {/* 추가 권장 관리 — 문서 톤이라 판촉 배너가 아니라 표로 적는다 */}
+      {recommendedServices.length > 0 && (
+        <DocSection
+          no={nextNo()}
+          title="추가로 권해드리는 관리"
+          lead="현장 상태를 확인한 결과, 아래 항목은 별도로 관리하시길 권해드립니다"
+        >
+          <DocRows
+            items={recommendedServices.map((svc) => ({
+              k: svc.name,
+              v: <span className="tabular-nums">{svc.basePrice.toLocaleString()}원~</span>,
+            }))}
+          />
+          {bizInfo?.phone && (
+            <p className="text-[12px] text-slate-500 mt-3">
+              자세한 견적은 {bizInfo.phone} 으로 문의해 주세요.
             </p>
-            <ReportPhotoSection
-              photos={beforePhotos.map((p) => ({ url: p.url, caption: p.caption ?? '작업 전' }))}
-            />
-          </div>
-        )}
+          )}
+        </DocSection>
+      )}
 
-        {/* 작업 후 사진 — 클릭 시 라이트박스 */}
-        {afterPhotos.length > 0 && (
-          <div className="space-y-3">
-            <p className="text-sm font-bold flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-green-200 flex items-center justify-center text-[10px] font-black text-green-800">후</span>
-              작업 후
-            </p>
-            <ReportPhotoSection
-              photos={afterPhotos.map((p) => ({ url: p.url, caption: p.caption ?? '작업 후' }))}
-            />
-          </div>
-        )}
-
-        {/* 보고서 내용 — AI 보고서인 경우 구조화 표시 */}
-        {reportNotes && (
-          reportNotes.isAiReport ? (
-            <div className="space-y-3">
-              {reportNotes.sections.map((section) => (
-                <div key={section.title} className="bg-white rounded-2xl border border-border p-5 space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                    <span>{section.icon}</span> {section.title}
-                  </p>
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">{section.content}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="bg-white rounded-2xl border border-border p-5 space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">담당자 메모</p>
-              <p className="text-sm whitespace-pre-wrap leading-relaxed">{reportNotes.rawText}</p>
-            </div>
-          )
-        )}
-
-        {/* 미리 챙긴 것 · 지켜볼 것 — 문제 생기기 전에 먼저 봐준다는 신뢰 */}
-        {preventiveNote && preventiveNote.trim() && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 space-y-1.5">
-            <p className="text-sm font-bold text-emerald-900">미리 챙긴 것 · 지켜볼 것</p>
-            <p className="text-sm text-emerald-900/90 whitespace-pre-wrap leading-relaxed">{preventiveNote}</p>
-          </div>
-        )}
-
-        {/* 추천 서비스 */}
-        {recommendedServices.length > 0 && (
-          <div className="bg-violet-50 border border-violet-200 rounded-2xl p-5 space-y-3">
-            <div className="space-y-1">
-              <p className="text-sm font-bold text-violet-900">이런 서비스도 함께 추천드려요</p>
-              <p className="text-xs text-violet-700">현장 상태를 확인한 결과, 아래 서비스가 도움이 될 수 있어요</p>
-            </div>
-            <div className="space-y-2">
-              {recommendedServices.map((svc) => (
-                <div key={svc.name} className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-violet-100">
-                  <span className="text-sm font-semibold text-violet-900">{svc.name}</span>
-                  <span className="text-sm text-violet-600 font-medium">{svc.basePrice.toLocaleString()}원~</span>
-                </div>
-              ))}
-            </div>
-            {bizInfo?.phone && (
-              <a
-                href={`tel:${bizInfo.phone}`}
-                className="block w-full text-center bg-violet-600 text-white font-bold text-sm py-3 rounded-xl active:opacity-80 transition-opacity"
-              >
-                견적 문의하기
-              </a>
-            )}
-          </div>
-        )}
-
-        {/* 업체 연락처 */}
-        {bizInfo && (
-          <div className="bg-white rounded-2xl border border-border p-5 space-y-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">담당 업체</p>
-            <div className="flex items-center justify-between">
-              <p className="font-semibold">{bizInfo.name}</p>
-              {bizInfo.phone && (
-                <a
-                  href={`tel:${bizInfo.phone}`}
-                  className="text-sm text-primary font-semibold bg-primary/10 px-3 py-1.5 rounded-lg active:bg-primary/20 transition-colors"
-                >
-                  전화하기
-                </a>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* 리뷰 요청 */}
-        {bizInfo?.naver_place_url && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-5 space-y-3 text-center">
-            <p className="text-sm font-bold text-yellow-900">서비스가 만족스러우셨나요? ⭐</p>
-            <p className="text-xs text-yellow-800 leading-relaxed">
-              리뷰 한 줄이 저희에게 큰 힘이 됩니다.<br />30초면 충분해요!
-            </p>
-            <a
-              href={bizInfo.naver_place_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full bg-[#03C75A] text-white font-bold text-sm py-3 rounded-xl active:opacity-80 transition-opacity"
-            >
-              네이버 리뷰 남기기 →
-            </a>
-          </div>
-        )}
-
-        {/* 완료 문구 */}
-        <div className="text-center py-4 space-y-1">
-          <p className="text-sm font-semibold text-green-700">작업이 완료됐어요!</p>
-          <p className="text-xs text-muted-foreground">
-            {bookingInfo?.customer_name ?? '고객'}님, 이용해 주셔서 감사합니다.
+      {/* 후기 — 문서 끝에 한 줄로 청한다 */}
+      {bizInfo?.naver_place_url && (
+        <div className="mt-8 border border-slate-200 px-5 py-4 flex items-center justify-between gap-4 flex-wrap break-inside-avoid print:hidden">
+          <p className="text-[12px] text-slate-600">
+            작업이 만족스러우셨다면 후기 한 줄 남겨주시면 큰 힘이 됩니다.
           </p>
+          <a
+            href={bizInfo.naver_place_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[12px] font-semibold text-emerald-700 border border-emerald-600 px-3 py-1.5 hover:bg-emerald-50 transition-colors shrink-0"
+          >
+            후기 남기기
+          </a>
         </div>
+      )}
 
-      </div>
-    </div>
+      <DocSignature
+        businessName={bizInfo?.name ?? '업체'}
+        businessPhone={bizInfo?.phone}
+        issuedLabel={formatDate(report.created_at)}
+      />
+    </DocPage>
   )
 }
