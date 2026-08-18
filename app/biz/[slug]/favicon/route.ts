@@ -7,8 +7,9 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { isDomainIdentifier } from '@/lib/domains/resolve'
 
-// 하루 캐시 — 파비콘은 자주 바뀌지 않고, 크롤러가 반복 요청한다
-const CACHE_CONTROL = 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800'
+// 1시간 캐시 — 업체가 아이콘을 바꿨을 때 하루씩 옛 아이콘이 남지 않게 짧게 잡는다.
+// (그 뒤 일주일은 낡은 것을 먼저 보여주고 뒤에서 새로 받아오므로 크롤러 부담은 없다)
+const CACHE_CONTROL = 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=604800'
 const DEFAULT_BRAND_COLOR = '#059669'
 
 /** 업체명 첫 글자로 만드는 대체 아이콘 — 최소한 퀄리오 로고 대신 그 업체 색이 보이게 한다 */

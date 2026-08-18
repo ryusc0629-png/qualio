@@ -25,6 +25,18 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://qualio.co.kr"),
   title: "퀄리오 | 청소 업체 매출 올리는 솔루션",
   description: "견적·예약·홍보 자동화로 청소 업체의 새 매출을 만듭니다",
+  // 퀄리오 아이콘은 여기서 '메타데이터'로 지정한다 — public/favicon.ico 를 가리킨다.
+  // app/favicon.ico 로 두면 안 되는 이유: Next는 그 파일을 모든 페이지 <head>에 강제로 넣고
+  // 하위 레이아웃이 지울 수 없다(문서: "Favicons can only be set in the root /app segment").
+  // 그래서 고객사 홈페이지(/biz/...) 탭에도 퀄리오 아이콘이 같이 박혔다.
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48", type: "image/x-icon" },
+      { url: "/icon.svg", sizes: "any", type: "image/svg+xml" },
+    ],
+    shortcut: [{ url: "/favicon.ico" }],
+    apple: [{ url: "/apple-icon", sizes: "180x180", type: "image/png" }],
+  },
   verification: {
     ...(googleSiteVerification ? { google: googleSiteVerification } : {}),
     ...(naverSiteVerification
