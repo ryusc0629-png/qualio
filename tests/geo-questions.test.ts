@@ -10,7 +10,6 @@ const 다트클린 = {
   address: '울산광역시 울주군 삼남읍 도호 1길 39-11 202동 3103호',
   serviceAreas: ['울산 중구', '울산 남구', '울산 동구', '부산 사하구'],
   serviceNames: ['입주청소 (평당)', '준공청소'],
-  activeAreas: ['울산 남구'],
 }
 
 describe('GEO 질문 세트', () => {
@@ -22,20 +21,34 @@ describe('GEO 질문 세트', () => {
     expect(broadOnly.length).toBeLessThanOrEqual(1)
   })
 
-  it('실제로 일한 지역은 출장 지역이 많아도 공략 대상에서 안 잘린다', () => {
-    // 출장 지역을 잔뜩 넣어둔 업체라도, 실제로 일한 곳은 반드시 물어봐야 한다
-    // (시공 사례라는 근거가 있는 지역이라 인용될 확률이 가장 높다)
-    const 많은출장 = {
+  it('설정한 지역만 묻는다 — 다른 지역은 절대 끼어들지 않는다', () => {
+    // 예약 주소로 지역을 추론하던 때, 테스트로 넣은 예약 한 건 때문에
+    // 울산 업체에 '경기 오산시' 질문이 만들어졌다. 진실은 설정 한 곳에만 둔다.
+    const 울산업체 = {
       address: '울산광역시 울주군 삼남읍',
-      serviceAreas: ['부산 사하구', '부산 금정구', '대구 수성구', '대구 북구', '울산 남구'],
+      serviceAreas: ['울산 중구', '울산 남구', '울산 동구'],
       serviceNames: ['사무실 정기청소'],
-      activeAreas: ['울산 남구'],
     }
     const weeks = ['2026-W30', '2026-W31', '2026-W32', '2026-W33', '2026-W34', '2026-W35']
-    const 남구주 = weeks.filter((w) => buildGeoQuestions(많은출장, w).some((q) => q.includes('울산 남구')))
-    const 대구북구주 = weeks.filter((w) => buildGeoQuestions(많은출장, w).some((q) => q.includes('대구 북구')))
-    expect(남구주.length).toBeGreaterThan(0)
-    expect(남구주.length).toBeGreaterThanOrEqual(대구북구주.length)
+    const 허용 = ['울산 울주군', '울산 중구', '울산 남구', '울산 동구', '울산']
+    for (const w of weeks) {
+      for (const q of buildGeoQuestions(울산업체, w)) {
+        expect(허용.some((a) => q.includes(a))).toBe(true)
+      }
+    }
+  })
+
+  it('출장 지역은 사장님이 넣은 순서를 따른다', () => {
+    const qs = buildGeoQuestions(
+      {
+        address: '울산광역시 울주군 삼남읍',
+        serviceAreas: ['울산 중구', '울산 남구', '울산 동구'],
+        serviceNames: ['사무실 정기청소'],
+      },
+      '2026-W34',
+    )
+    // 사업장 주소(울주군)가 고정 3개를 차지한다
+    expect(qs.slice(0, 3).every((q) => q.includes('울산 울주군'))).toBe(true)
   })
 
   it('주가 바뀌면 다른 질문을 돌려 묻는다 (넓게 훑기)', () => {
@@ -69,7 +82,6 @@ describe('GEO 질문 세트', () => {
       address: '경기도 수원시',
       serviceAreas: Array.from({ length: 31 }, (_, i) => `경기 도시${i}시`),
       serviceNames: ['입주청소', '사무실청소', '에어컨청소', '준공청소'],
-      activeAreas: [],
     })
     expect(qs.length).toBeLessThanOrEqual(30)
   })

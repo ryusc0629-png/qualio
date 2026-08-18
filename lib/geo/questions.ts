@@ -98,11 +98,6 @@ export interface GeoQuestionInput {
   serviceAreas?: string[] | null
   /** 활성 서비스명 */
   serviceNames: string[]
-  /**
-   * 실제로 예약·작업이 있었던 지역("울산 남구" 형태, 많은 순).
-   * 시공 사례라는 근거가 있는 지역이라 가장 먼저 공략한다.
-   */
-  activeAreas?: string[] | null
 }
 
 /**
@@ -183,7 +178,7 @@ const QUESTION_TEMPLATES: ((area: string, svc: string, cond: string) => string)[
  * 브랜드 질문("○○ 후기")은 뺐다. 손님은 우리 이름을 모르는 채로 찾는다.
  */
 export function buildGeoQuestions(input: GeoQuestionInput, weekKey = currentWeekKey()): string[] {
-  const { address, serviceAreas, serviceNames, activeAreas } = input
+  const { address, serviceAreas, serviceNames } = input
 
   // ── 서비스 정리 ──
   const services: string[] = []
@@ -198,7 +193,7 @@ export function buildGeoQuestions(input: GeoQuestionInput, weekKey = currentWeek
   // 서비스를 아직 등록하지 않은 업체도 측정은 되게 한다(청소업 전용 서비스라 '청소'는 항상 참).
   if (services.length === 0) services.push('청소')
 
-  // ── 지역 정리 ── 메인 = 사업장 주소의 시군구. 그다음 실제로 일한 지역, 그다음 출장 지역.
+  // ── 지역 정리 ── 메인 = 사업장 주소의 시군구. 그다음 설정된 출장 지역.
   const homeArea = toSearchArea(address)
   const areas: string[] = []
   const seenArea = new Set<string>()
@@ -208,8 +203,9 @@ export function buildGeoQuestions(input: GeoQuestionInput, weekKey = currentWeek
     seenArea.add(v)
     areas.push(v)
   }
+  // 사업장 주소가 먼저, 그다음 사장님이 넣은 출장 지역 순서 그대로.
+  // 예약 주소로 지역을 추론하지 않는다 — 테스트 예약 한 건에 엉뚱한 지역이 끼어든다.
   pushArea(homeArea)
-  for (const a of activeAreas ?? []) pushArea(toSearchArea(a))
   for (const a of serviceAreas ?? []) pushArea(toSearchArea(a))
   if (areas.length === 0) return []
 
