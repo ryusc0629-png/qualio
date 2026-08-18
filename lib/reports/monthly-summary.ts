@@ -49,7 +49,6 @@ export interface MonthlySummary {
   totalMinutes: number
   /** 현장에서 챙긴 것 — 날짜 + 내용 */
   siteNotes: { date: string; note: string }[]
-  photoCount: number
   workerNames: string[]
 
   // ── 담당자가 실제로 궁금해하는 것 ────────────────────────
@@ -88,7 +87,6 @@ export function buildMonthlySummary(input: {
   visits: VisitLike[]
   reports: ReportLike[]
   workerNames: Map<string, string>
-  photoCount: number
   /** 기준 시각(보통 지금) — '이미 지난 방문'을 가르는 선 */
   now: Date
   /** 이번 달 접수된 문제·클레임 */
@@ -96,7 +94,7 @@ export function buildMonthlySummary(input: {
   /** 현장에서 받은 추가 요청 */
   requests?: RequestLike[]
 }): MonthlySummary {
-  const { visits, reports, workerNames, photoCount, now } = input
+  const { visits, reports, workerNames, now } = input
   const issueRows = input.issues ?? []
   const requestRows = input.requests ?? []
 
@@ -154,7 +152,6 @@ export function buildMonthlySummary(input: {
     onTimeRate,
     totalMinutes,
     siteNotes,
-    photoCount,
     workerNames: names,
     issueCount: issues.length,
     issueResolvedCount: resolvedCount,

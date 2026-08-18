@@ -1,6 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import { CircleAlert, Camera, CalendarClock } from 'lucide-react'
+import { CircleAlert, CalendarClock } from 'lucide-react'
 import { ReportPhotoSection } from '../../report/[reportId]/report-photos'
 import { PrintReportButton } from './print-button'
 import { DocPage, DocHeader, DocMeta, DocLede, DocSignature } from '@/components/report/document'
@@ -104,11 +104,13 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
     for (const w of workers ?? []) workerMap.set(w.id, w.name)
   }
 
-  // 방문별 작업 리포트 + 사진(after 우선) — 사진은 이번 달 대표 컷으로 모아 보여준다
+  // 방문별 작업 리포트 — 현장 특이사항을 모으는 용도.
+  //
+  // ⚠️ 방문 사진을 한데 모아 보여주던 '작업 사진' 절은 뺐다(사장님 결정 2026-08-19).
+  //    맥락 없이 6장 깔아두면 정보가 아니라 여백이고, 정작 필요한 사진은
+  //    요청·처리 내역에 붙어 있다. 되살리지 말 것.
   const bookingIds = bookings.map((b) => b.id)
   const reportRows: ReportLike[] = []
-  const galleryPhotos: { url: string; caption?: string }[] = []
-  let totalPhotoCount = 0
 
   if (bookingIds.length > 0) {
     const { data: reports } = (await db
@@ -121,35 +123,6 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
       reportRows.push({ booking_id: r.booking_id, notes: r.notes, preventive_note: r.preventive_note })
     }
 
-    const reportIds = (reports ?? []).map((r) => r.id)
-    if (reportIds.length > 0) {
-      const bookingIdByReport = new Map((reports ?? []).map((r) => [r.id, r.booking_id]))
-      const dateByBooking = new Map(bookings.map((b) => [b.id, b.scheduled_at]))
-
-      const { data: photos } = (await db
-        .from('report_photos')
-        .select('report_id, url, type, caption, sort_order')
-        .in('report_id', reportIds)
-        .order('sort_order', { ascending: true })) as unknown as {
-        data: { report_id: string; url: string; type: string; caption: string | null }[] | null
-      }
-      totalPhotoCount = (photos ?? []).length
-
-      // 결과(after) 사진 우선 — 방문 날짜를 캡션으로 붙여 '언제 찍힌 건지' 바로 보이게
-      const withDate = (photos ?? []).map((p) => {
-        const bookingId = bookingIdByReport.get(p.report_id)
-        const at = bookingId ? dateByBooking.get(bookingId) : null
-        return {
-          url: p.url,
-          caption: p.caption ?? (at ? `${formatShortDate(at)} 작업` : undefined),
-          isAfter: p.type === 'after',
-        }
-      })
-      galleryPhotos.push(
-        ...withDate.filter((p) => p.isAfter).map(({ url, caption }) => ({ url, caption })),
-        ...withDate.filter((p) => !p.isAfter).map(({ url, caption }) => ({ url, caption })),
-      )
-    }
   }
 
   // 계약 정보 — 이 고객의 계약 중 진행 중인 것 우선. 작업 항목(체크리스트)도 함께.
@@ -197,7 +170,6 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
     visits: bookings,
     reports: reportRows,
     workerNames: workerMap,
-    photoCount: totalPhotoCount,
     now: new Date(),
     issues: issueRows ?? [],
     requests: bookings
@@ -228,7 +200,6 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
   })
 
   const cycleLabel = contract?.frequency ? formatFrequency(contract.frequency) : null
-  const topPhotos = galleryPhotos.slice(0, 6)
 
   return (
     <DocPage action={<PrintReportButton />}>
@@ -367,17 +338,6 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
                 </li>
               ))}
             </ul>
-          </Section>
-        )}
-
-        {/* ── 작업 사진 ── */}
-        {topPhotos.length > 0 && (
-          <Section icon={<Camera className="h-4 w-4" />} title="작업 사진">
-            <p className="text-[12px] text-slate-500 mb-3">
-              이번 달 현장에서 찍은 사진이에요
-              {summary.photoCount > topPhotos.length && ` (전체 ${summary.photoCount}장 중 ${topPhotos.length}장)`}
-            </p>
-            <ReportPhotoSection photos={topPhotos} />
           </Section>
         )}
 
