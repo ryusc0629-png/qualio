@@ -12,8 +12,45 @@ import { extractBusinessNames } from '@/lib/geo/extract-names'
 // 예전엔 mini를 썼는데, 웹 챗지피티에서는 다트클린이 추천 목록에 뜨는데 우리 측정만
 // 계속 0~1이었다. 손님이 쓰는 것보다 약한 모델로 재고 있었던 것이다.
 // 모델명이 바뀌거나 계정에서 못 쓰면 자동으로 아래 것으로 내려간다(측정이 멈추지 않게).
-const PRIMARY_MODEL = process.env.OPENAI_GEO_MODEL || 'gpt-4o-search-preview'
-const FALLBACK_MODEL = 'gpt-4o-mini-search-preview'
+// 후보를 위에서부터 실제로 찔러보고 되는 것을 쓴다.
+// 모델명을 하나만 박아두면, 그 이름이 사라졌을 때 호출이 전부 실패하는데도
+// 화면에는 '0점'으로 떠서 몇 주씩 모르고 지나간다(제미나이에서 실제로 겪었다).
+const MODEL_CANDIDATES = [
+  process.env.OPENAI_GEO_MODEL,
+  'gpt-4o-search-preview',
+  'gpt-4o-mini-search-preview',
+].filter((m): m is string => !!m)
+
+let cachedModel: string | null = null
+
+/** 이 모델로 실제 호출이 되는지 한 번 찔러본다 */
+async function probe(apiKey: string, model: string): Promise<boolean> {
+  try {
+    const res = await fetch(OPENAI_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages: [{ role: 'user', content: '안녕' }] }),
+    })
+    if (res.ok) return true
+    console.warn(`[GEO/OpenAI] 후보 실패 ${model} → ${res.status}`)
+    return false
+  } catch (e) {
+    console.warn(`[GEO/OpenAI] 후보 실패 ${model}:`, e instanceof Error ? e.message : e)
+    return false
+  }
+}
+
+async function resolveModel(apiKey: string): Promise<string> {
+  if (cachedModel) return cachedModel
+  for (const m of MODEL_CANDIDATES) {
+    if (await probe(apiKey, m)) {
+      cachedModel = m
+      console.log(`[GEO/OpenAI] 사용할 모델: ${m}`)
+      return m
+    }
+  }
+  throw new Error('OpenAI 호출 가능한 검색 모델을 찾지 못했습니다 (키·권한 확인 필요)')
+}
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions'
 
 interface UrlCitation { url?: string; title?: string }
@@ -84,16 +121,9 @@ export async function measureGeoShareOfVoiceOpenAI(
   apiKey: string,
   queries: string[],
   identity: GeoIdentity,
-  model = PRIMARY_MODEL,
+  model?: string,
 ): Promise<GeoMeasureResult> {
-  // 첫 질문으로 모델이 쓸 수 있는지 확인하고, 안 되면 아래 모델로 내려간다.
-  let useModel = model
-  try {
-    await measureOne(apiKey, useModel, queries[0] ?? '테스트', [], identity.location)
-  } catch (e) {
-    console.warn(`[GEO/OpenAI] ${useModel} 사용 불가 → ${FALLBACK_MODEL}로 대체:`, e instanceof Error ? e.message : e)
-    useModel = FALLBACK_MODEL
-  }
+  const useModel = model ?? (await resolveModel(apiKey))
 
   let failed = 0
   // 동시에 던진다 — 하나씩 물으면 질문을 늘릴수록 함수 제한시간에 걸린다.
