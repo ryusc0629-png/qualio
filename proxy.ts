@@ -129,7 +129,13 @@ export const config = {
      *
      * favicon.ico는 제외하지 않는다 — 고객사 도메인에서 그 업체 아이콘으로 넘겨야 하기 때문.
      * (퀄리오 도메인 요청은 proxy 앞부분에서 곧바로 통과시킨다)
+     *
+     * IndexNow 키 파일(1c5b6…​.txt)도 제외한다. 이 파일은 "이 도메인이 내 것"임을 증명하는
+     * 소유 확인 파일이라 고객사 자체 도메인에서도 그대로 열려야 한다. 프록시를 타면
+     * /biz/{도메인}/1c5b….txt 로 바뀌어 404가 나고, 그러면 그 도메인 글은 네이버·빙에
+     * 색인 알림을 보낼 수 없다(실제로 dartclean.co.kr에서 404였다).
+     * ⚠️ .txt 전체를 제외하면 안 된다 — llms.txt는 업체별로 다른 내용을 줘야 해서 프록시를 타야 한다.
      */
-    '/((?!_next/static|_next/image|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|sitemap.xml|robots.txt|1c5b60cb44784531b64a1b74ac04ee4c\\.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
