@@ -162,6 +162,9 @@ export async function runGeoCheck(db: Db, businessId: string): Promise<RunGeoChe
   const detail = questions.map((q, i) => {
     const engines: Record<string, boolean> = {}
     const domains = new Set<string>()
+    // 답변에 함께 나온 업체 이름 — 짧은 추천 질문은 AI가 지도로 답해 웹사이트가 아니라
+    // 상호가 뜬다. 도메인만 모으면 정작 우리와 겨루는 업체가 누군지 안 보인다.
+    const names = new Set<string>()
     let mentioned = false
     for (const er of engineResults) {
       const r = er.results[i]
@@ -169,8 +172,15 @@ export async function runGeoCheck(db: Db, businessId: string): Promise<RunGeoChe
       engines[er.engine] = m
       if (m) mentioned = true
       for (const d of r?.topDomains ?? []) if (d) domains.add(d)
+      for (const n of r?.names ?? []) if (n) names.add(n)
     }
-    return { query: q, mentioned, topDomains: [...domains].slice(0, 4), engines }
+    return {
+      query: q,
+      mentioned,
+      topDomains: [...domains].slice(0, 4),
+      names: [...names].slice(0, 6),
+      engines,
+    }
   })
 
   const cited = detail.filter((d) => d.mentioned).length

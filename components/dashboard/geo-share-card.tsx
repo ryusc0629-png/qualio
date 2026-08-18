@@ -10,6 +10,7 @@ interface GeoCheckDetail {
   query: string
   mentioned: boolean
   topDomains: string[]
+  names?: string[]                  // AI 답변에 함께 나온 업체 이름(2026-08-18 이후 측정분)
   engines?: Record<string, boolean> // 엔진별 노출 여부(perplexity/gemini 등)
 }
 
@@ -166,18 +167,27 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
   const competitorsFor = (topDomains: string[]) =>
     topDomains.filter((d) => d && d !== APP_HOST).slice(0, 2)
 
-  // AI 추천 순위(리더보드) — 각 도메인이 '몇 개 질문'에 등장하는지 집계(질문당 1회).
-  // 우리 업체 순위(= cited 수 기준)를 함께 계산해 "이기는 감각"을 준다.
-  const domainWins = new Map<string, number>()
+  // AI 추천 순위(리더보드) — 각 상대가 '몇 개 질문'에 등장하는지 집계(질문당 1회).
+  //
+  // 상대를 업체 이름으로 센다. 짧은 추천 질문은 AI가 지도 데이터로 답해서 답변에 뜨는 게
+  // 웹사이트가 아니라 상호(에코크린기업·청소플러스…)이기 때문이다. 도메인만 세면
+  // soomgo.com 같은 플랫폼만 보이고 정작 같은 동네에서 겨루는 업체가 안 보인다.
+  // 이름이 없는 옛 측정 결과는 예전처럼 도메인으로 센다.
+  const hasNames = latest.detail.some((d) => (d.names?.length ?? 0) > 0)
+  const rivalWins = new Map<string, number>()
   for (const d of latest.detail) {
+    const pool = hasNames ? (d.names ?? []) : d.topDomains
     const seen = new Set<string>()
-    for (const dom of d.topDomains) {
-      if (!dom || dom === APP_HOST || seen.has(dom)) continue
-      seen.add(dom)
-      domainWins.set(dom, (domainWins.get(dom) ?? 0) + 1)
+    for (const raw of pool) {
+      const key = (raw ?? '').trim()
+      if (!key || key === APP_HOST || seen.has(key)) continue
+      // 우리 업체가 답변에 나온 건 아래 '우리 업체' 줄에서 따로 세므로 목록에서 뺀다
+      if (businessName && key.replace(/\s/g, '') === businessName.replace(/\s/g, '')) continue
+      seen.add(key)
+      rivalWins.set(key, (rivalWins.get(key) ?? 0) + 1)
     }
   }
-  const competitorRanks = [...domainWins.entries()]
+  const competitorRanks = [...rivalWins.entries()]
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count)
   const usCount = latest.cited
@@ -319,7 +329,10 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
       {competitorRanks.length > 0 && (
         <div className="rounded-lg border p-4">
           <p className="text-sm font-semibold">
-            🏆 AI 추천 순위 <span className="text-xs font-normal text-muted-foreground">(이 검색어들 기준)</span>
+            🏆 AI 추천 순위{' '}
+            <span className="text-xs font-normal text-muted-foreground">
+              ({hasNames ? '지금 AI가 답에 올리는 업체' : '이 검색어들 기준'})
+            </span>
           </p>
           <ul className="mt-2 space-y-1.5">
             {competitorRanks.slice(0, 5).map((c, i) => (

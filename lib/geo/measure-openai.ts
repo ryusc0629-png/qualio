@@ -1,5 +1,6 @@
 import 'server-only'
 import type { GeoIdentity, GeoQuestionResult, GeoMeasureResult } from '@/lib/geo/measure'
+import { extractBusinessNames } from '@/lib/geo/extract-names'
 
 // OpenAI(ChatGPT)로 GEO 노출 측정 — 웹 검색이 내장된 search 모델을 써서 '현재 웹'을 근거로 답하게 함.
 // (일반 gpt 모델은 웹 검색을 안 해 최신 지역 업체를 반영 못 하므로 search 모델 필수)
@@ -48,7 +49,7 @@ async function measureOne(apiKey: string, model: string, query: string, needles:
     })
     .filter(Boolean)
 
-  return { query, mentioned, matchedUrl: null, topDomains }
+  return { query, mentioned, matchedUrl: null, topDomains, names: extractBusinessNames(answer) }
 }
 
 // 여러 질문 측정 — 순차 + 지연. 개별 실패는 미노출로 처리(전체 중단 방지).

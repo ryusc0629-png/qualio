@@ -1,5 +1,6 @@
 import 'server-only'
 import type { GeoIdentity, GeoQuestionResult, GeoMeasureResult } from '@/lib/geo/measure'
+import { extractBusinessNames } from '@/lib/geo/extract-names'
 
 // Gemini(구글 검색 그라운딩)로 GEO 노출 측정 — 실제 웹을 검색해 답하므로 '현재 지역 업체 현실'을 반영.
 // Perplexity는 검색결과를 보지만, Gemini는 "AI가 손님에게 실제로 하는 답변"에 우리가 나오는지(답변 레벨)를 본다.
@@ -53,7 +54,7 @@ async function measureOne(apiKey: string, model: string, query: string, needles:
     })
     .filter(Boolean)
 
-  return { query, mentioned, matchedUrl: null, topDomains }
+  return { query, mentioned, matchedUrl: null, topDomains, names: extractBusinessNames(answer) }
 }
 
 // 여러 질문 측정 — 레이트리밋 보호 위해 순차 + 지연. 개별 실패는 미노출로 처리(전체 중단 방지).

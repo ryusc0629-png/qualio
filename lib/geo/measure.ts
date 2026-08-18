@@ -16,6 +16,12 @@ export interface GeoQuestionResult {
   mentioned: boolean
   matchedUrl: string | null
   topDomains: string[] // 그 질문 상위 3개 경쟁 도메인
+  /**
+   * 그 답변에 함께 나온 업체 이름들.
+   * 짧은 추천 질문은 AI가 지도 데이터로 답해서 웹사이트가 아니라 상호가 뜬다 —
+   * 도메인만 세면 정작 경쟁자가 누군지 안 보인다. (검색 API에는 답변문이 없어 비어 있음)
+   */
+  names?: string[]
 }
 
 export interface GeoMeasureResult {
