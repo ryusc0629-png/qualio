@@ -18,15 +18,22 @@ export async function generateMetadata(
   const column = UUID_RE.test(idOrSlug) ? 'id' : 'slug'
   const { data: business } = await db
     .from('businesses')
-    .select('name, logo_url, favicon_url' as never)
+    .select('name, slug, logo_url, favicon_url' as never)
     .eq(column as never, idOrSlug as never)
     .maybeSingle() as unknown as { data: {
-      name: string; logo_url: string | null; favicon_url: string | null
+      name: string; slug: string | null; logo_url: string | null; favicon_url: string | null
     } | null }
 
   // 업체를 못 찾거나 올린 아이콘이 없으면 기본(퀄리오) 아이콘을 그대로 둔다
-  const icon = business?.favicon_url || business?.logo_url
-  if (!icon) return {}
+  if (!business?.favicon_url && !business?.logo_url) return {}
+
+  // 홈페이지와 같은 파비콘 라우트를 쓴다 — 원본(수천 픽셀·수백 KB)을 고객 폰에 그대로
+  // 내려보내지 않고 96x96으로 다듬어진 것을 받게 하려는 것.
+  // 고객에게 나가는 링크는 항상 퀄리오 도메인(qualio.co.kr/q/...)이라 같은 도메인 안에서 끝난다.
+  // slug가 없는 업체만 예전처럼 원본 주소를 그대로 쓴다.
+  const icon = business.slug
+    ? `/biz/${business.slug}/favicon`
+    : (business.favicon_url || business.logo_url) as string
 
   return { icons: { icon, shortcut: icon, apple: icon } }
 }
