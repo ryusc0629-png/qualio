@@ -14,11 +14,12 @@ import { revalidatePath } from 'next/cache'
 // 비테크 사장님이 혼자 하려면 계정 만들기·소유확인·DNS까지 넘어야 해서 중간에 막힌다.
 // 여기서는 "해주세요" 한 번 받아 본사에 알리는 것까지만 한다. 실제 처리는 사람이 한다.
 
-export const REQUEST_KINDS = ['domain_setup', 'search_indexing'] as const
+export const REQUEST_KINDS = ['domain_setup', 'search_indexing', 'google_maps_setup'] as const
 
 const KIND_LABEL: Record<string, string> = {
   domain_setup: '내 인터넷 주소 만들기·연결',
   search_indexing: '네이버·구글 검색 등록',
+  google_maps_setup: '구글 지도에 가게 올리기·정리',
 }
 
 const requestSchema = z.object({
