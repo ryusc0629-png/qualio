@@ -180,7 +180,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description,
       type: 'article',
       url: canonicalUrl,
-      siteName: '퀄리오',
+      // 사이트 이름은 업체명이어야 한다 — 퀄리오가 아니다.
+      // 퍼플렉시티 같은 AI가 답변에 출처를 적을 때 이 값을 그대로 쓴다.
+      // '퀄리오'로 두면 고객사 글이 인용돼도 손님에겐 우리 이름만 남고,
+      // 정작 추천받아야 할 업체의 브랜드 신호가 약해진다.
+      siteName: business.name,
       publishedTime: post.published_at,
       ...(post.image_url ? { images: [{ url: post.image_url }] } : {}),
     },
