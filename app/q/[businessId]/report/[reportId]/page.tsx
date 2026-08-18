@@ -83,7 +83,7 @@ export default async function ReportPage({
         selected_tier,
         quotes!quote_id(cleaning_type, space_size)
       ),
-      businesses!business_id(name, phone, naver_place_url)
+      businesses!business_id(name, phone, naver_place_url, logo_url, favicon_url)
     `)
     .eq('id', reportId)
     .eq('business_id', businessId)
@@ -110,7 +110,7 @@ export default async function ReportPage({
   const biz     = Array.isArray(report.businesses) ? report.businesses[0] : report.businesses
   const quote   = Array.isArray(booking?.quotes) ? booking?.quotes[0] : booking?.quotes
 
-  const bizInfo = biz as { name: string; phone: string | null; naver_place_url: string | null } | null
+  const bizInfo = biz as { name: string; phone: string | null; naver_place_url: string | null; logo_url: string | null; favicon_url: string | null } | null
   const bookingInfo = booking as {
     customer_name: string | null
     customer_phone: string | null
@@ -172,6 +172,8 @@ export default async function ReportPage({
       <DocHeader
         businessName={bizInfo?.name ?? '업체'}
         businessPhone={bizInfo?.phone}
+        businessLogoUrl={bizInfo?.logo_url}
+        businessFaviconUrl={bizInfo?.favicon_url}
         title="작업 완료 보고서"
         docNo={docNo}
       />

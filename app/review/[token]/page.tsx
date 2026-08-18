@@ -51,8 +51,11 @@ export default async function ReviewClaimPage({ params }: Props) {
 
   // 그 현장의 작업 전·후 사진 — "아 맞다, 이렇게 깨끗해졌었지"를 떠올리게 한다.
   // 기억을 먼저 살려야 후기가 구체적으로 나온다.
-  let beforeUrl: string | null = null
-  let afterUrl: string | null = null
+  //
+  // ⚠️ 예전엔 전·후 한 장씩만 보여줬다. 그런데 고객이 후기에 올릴 사진을 고르려면
+  //    그 현장에서 찍은 게 다 보여야 한다. 전부 내려준다(현장당 최대 10장).
+  let beforePhotos: { url: string; caption: string }[] = []
+  let afterPhotos: { url: string; caption: string }[] = []
   if (claim.booking_id) {
     const { data: report } = await db
       .from('reports')
@@ -62,13 +65,14 @@ export default async function ReviewClaimPage({ params }: Props) {
     if (report?.id) {
       const { data: photos } = await db
         .from('report_photos' as never)
-        .select('url, type, sort_order' as never)
+        .select('url, type, sort_order, caption' as never)
         .eq('report_id' as never, report.id)
         .order('sort_order' as never, { ascending: true }) as unknown as {
-          data: { url: string; type: string }[] | null
+          data: { url: string; type: string; caption: string | null }[] | null
         }
-      beforeUrl = photos?.find((p) => p.type === 'before')?.url ?? null
-      afterUrl  = photos?.find((p) => p.type === 'after')?.url ?? null
+      const rows = photos ?? []
+      beforePhotos = rows.filter((p) => p.type === 'before').map((p) => ({ url: p.url, caption: p.caption || '작업 전' }))
+      afterPhotos  = rows.filter((p) => p.type === 'after').map((p) => ({ url: p.url, caption: p.caption || '작업 후' }))
     }
   }
 
@@ -100,10 +104,10 @@ export default async function ReviewClaimPage({ params }: Props) {
 
         {/* 작업 전·후 사진 — 기억을 먼저 살리고, 후기에 첨부할 수 있게 저장까지 붙인다.
             사진이 붙은 후기가 훨씬 잘 읽히고 오래 남는다. */}
-        {(beforeUrl || afterUrl) && (
+        {(beforePhotos.length > 0 || afterPhotos.length > 0) && (
           <ReviewPhotos
-            before={beforeUrl}
-            after={afterUrl}
+            before={beforePhotos}
+            after={afterPhotos}
             businessName={bizInfo.name}
           />
         )}

@@ -17,8 +17,8 @@ import { PhotoGrid } from '@/components/ui/image-lightbox'
 // 그래서 버튼도 주되, 안내 문구로 '꾹 눌러 저장'을 먼저 알려준다.
 
 interface Props {
-  before: string | null
-  after: string | null
+  before: { url: string; caption: string }[]
+  after: { url: string; caption: string }[]
   businessName: string
 }
 
@@ -26,10 +26,9 @@ export function ReviewPhotos({ before, after, businessName }: Props) {
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const photos = [
-    ...(before ? [{ url: before, caption: '작업 전' }] : []),
-    ...(after ? [{ url: after, caption: '작업 후' }] : []),
-  ]
+  // 전·후 순서로 이어 붙인다. 현장에서 여러 장 찍었으면 다 보여줘야
+  // 고객이 후기에 올릴 사진을 고를 수 있다.
+  const photos = [...before, ...after]
 
   if (photos.length === 0) return null
 
@@ -42,7 +41,7 @@ export function ReviewPhotos({ before, after, businessName }: Props) {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `${businessName}-${p.caption}.jpg`
+        a.download = `${businessName}-${p.caption}-${i + 1}.jpg`
         a.click()
         URL.revokeObjectURL(url)
         // 연달아 내려받으면 브라우저가 뒤엣것을 막는다 — 한 박자 쉬어준다
@@ -59,13 +58,18 @@ export function ReviewPhotos({ before, after, businessName }: Props) {
 
   return (
     <div className="space-y-2">
-      {/* 라벨 — 사진 위에 어느 쪽인지 */}
-      <div className="grid grid-cols-2 gap-2 text-left">
-        {before && <p className="text-[11px] text-muted-foreground">작업 전</p>}
-        {after && <p className="text-[11px] text-primary font-medium">작업 후</p>}
-      </div>
-
-      <PhotoGrid photos={photos} columns={2} />
+      {before.length > 0 && (
+        <div className="text-left space-y-1.5">
+          <p className="text-[11px] text-muted-foreground">작업 전</p>
+          <PhotoGrid photos={before} columns={2} />
+        </div>
+      )}
+      {after.length > 0 && (
+        <div className="text-left space-y-1.5">
+          <p className="text-[11px] text-primary font-medium">작업 후</p>
+          <PhotoGrid photos={after} columns={2} />
+        </div>
+      )}
 
       <p className="text-[11px] text-muted-foreground leading-relaxed">
         사진을 <b className="font-semibold text-foreground">꾹 눌러 저장</b>한 뒤 후기에 함께 올려주시면 큰 도움이 돼요

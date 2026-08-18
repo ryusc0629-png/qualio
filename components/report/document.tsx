@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { BusinessAvatar } from '@/components/biz/business-avatar'
 
 // 고객·거래처에 나가는 문서의 공통 틀.
 //
@@ -31,21 +32,34 @@ export function DocPage({ children, action }: { children: ReactNode; action?: Re
 export function DocHeader({
   businessName,
   businessPhone,
+  businessLogoUrl,
+  businessFaviconUrl,
   title,
   docNo,
 }: {
   businessName: string
   businessPhone?: string | null
+  /** 업체가 올린 로고·파비콘 — 서류에 로고가 박혀야 업체 문서로 읽힌다 */
+  businessLogoUrl?: string | null
+  businessFaviconUrl?: string | null
   title: string
   docNo?: string | null
 }) {
   return (
     <header className="flex items-start justify-between gap-4 border-b-4 border-slate-900 pb-4">
-      <div className="min-w-0">
-        <p className="text-base font-bold tracking-tight text-slate-900">{businessName}</p>
-        {businessPhone && (
-          <p className="text-[11px] text-slate-500 mt-0.5 tabular-nums">{businessPhone}</p>
-        )}
+      <div className="flex items-start gap-2.5 min-w-0">
+        <BusinessAvatar
+          name={businessName}
+          logoUrl={businessLogoUrl}
+          faviconUrl={businessFaviconUrl}
+          className="w-9 h-9 mt-0.5"
+        />
+        <div className="min-w-0">
+          <p className="text-base font-bold tracking-tight text-slate-900">{businessName}</p>
+          {businessPhone && (
+            <p className="text-[11px] text-slate-500 mt-0.5 tabular-nums">{businessPhone}</p>
+          )}
+        </div>
       </div>
       <div className="text-right shrink-0">
         <h1 className="text-xl sm:text-2xl font-bold tracking-[-0.02em] text-slate-900">{title}</h1>

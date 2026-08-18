@@ -53,7 +53,7 @@ export default async function OnboardingReportPublicPage({ params }: PageProps) 
   if (!report) notFound()
 
   const [{ data: business }, { data: customer }, { data: contract }] = await Promise.all([
-    db.from('businesses').select('name, phone').eq('id', businessId).maybeSingle(),
+    db.from('businesses').select('name, phone, logo_url, favicon_url' as never).eq('id', businessId).maybeSingle() as unknown as Promise<{ data: { name: string; phone: string | null; logo_url: string | null; favicon_url: string | null } | null }>,
     db.from('customers').select('name, address').eq('id', report.customer_id).maybeSingle(),
     report.contract_id
       ? db.from('contracts').select('service_type').eq('id', report.contract_id).maybeSingle()
@@ -80,6 +80,8 @@ export default async function OnboardingReportPublicPage({ params }: PageProps) 
       <DocHeader
         businessName={business.name}
         businessPhone={business.phone}
+        businessLogoUrl={business.logo_url}
+        businessFaviconUrl={business.favicon_url}
         title="초도 작업 리포트"
         docNo={docNo}
       />

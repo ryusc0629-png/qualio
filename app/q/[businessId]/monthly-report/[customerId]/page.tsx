@@ -60,7 +60,7 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
 
   // 업체 + 고객(거래처) — 둘 다 같은 업체 소속인지 확인
   const [{ data: business }, { data: customer }] = await Promise.all([
-    db.from('businesses').select('name, phone').eq('id', businessId).maybeSingle(),
+    db.from('businesses').select('name, phone, logo_url, favicon_url' as never).eq('id', businessId).maybeSingle() as unknown as Promise<{ data: { name: string; phone: string | null; logo_url: string | null; favicon_url: string | null } | null }>,
     db
       .from('customers')
       .select('id, name, phone, address')
@@ -204,6 +204,8 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
       <DocHeader
         businessName={business.name}
         businessPhone={business.phone}
+        businessLogoUrl={business.logo_url}
+        businessFaviconUrl={business.favicon_url}
         title={`${range.label} 작업 보고서`}
         docNo={`MR-${range.label.replace(/[^0-9]/g, '')}`}
       />
