@@ -1,6 +1,7 @@
 import 'server-only'
 import { headers } from 'next/headers'
 import { detectViewSource } from '@/lib/utils/detect-view-source'
+import { detectAiCrawler, recordAiCrawlerHit } from '@/lib/geo/crawler'
 import { normalizeChannel } from '@/lib/utils/marketing-channels'
 import { createClient, type createServiceClient } from '@/lib/supabase/server'
 
@@ -44,6 +45,16 @@ export async function trackPageView(
     const h = await headers()
     const referer = h.get('referer') ?? ''
     const userAgent = h.get('user-agent') ?? ''
+
+    // AI 크롤러는 사람 방문이 아니다 — 따로 세고 page_views에는 넣지 않는다.
+    // 예전엔 둘이 섞여, 'ChatGPT에서 온 방문 6건'이 사람이 눌러 들어온 건지
+    // GPTBot이 긁어간 건지 구분할 수 없었다.
+    const bot = detectAiCrawler(userAgent)
+    if (bot) {
+      await recordAiCrawlerHit(db, businessId, bot)
+      return
+    }
+
     const source = detectViewSource(referer, userAgent)
     const ch = normalizeChannel(channel)
     // page_views 타입이 database.ts에 아직 없어 단언 사용

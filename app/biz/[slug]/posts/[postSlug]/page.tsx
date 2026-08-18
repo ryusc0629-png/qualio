@@ -8,6 +8,7 @@ import { ArrowLeft, Calendar, Clock, MapPin, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { BeforeAfterSlider } from '@/components/ui/before-after-slider'
 import { detectViewSource } from '@/lib/utils/detect-view-source'
+import { detectAiCrawler, recordAiCrawlerHit } from '@/lib/geo/crawler'
 import { isBusinessInsiderViewing } from '@/lib/utils/track-page-view'
 import { PhoneCallLink } from '@/components/biz/phone-call-link'
 
@@ -240,13 +241,27 @@ export default async function PostPage({ params }: Props) {
   if (!post) notFound()
 
   // 조회 기록 — 업체 주인 본인 조회는 제외(테스트로 조회수 부풀림 방지)
+  //
+  // ⚠️ 예전엔 void로 던져 두고 기다리지 않았다. 서버리스에서는 응답이 끝나면 실행이 얼어붙어
+  // 그 insert가 날아갔고, 그래서 글을 100편 넘게 발행하는 동안 post_views가 0행이었다.
+  // 반드시 await 할 것. (실패해도 페이지는 떠야 하므로 try/catch로 감싼다)
   if (!(await isBusinessInsiderViewing(db, business.id))) {
     const headersList = await headers()
     const referer = headersList.get('referer') ?? ''
     const userAgent = headersList.get('user-agent') ?? ''
-    const viewSource = detectViewSource(referer, userAgent)
-    // fire-and-forget (렌더링 지연 없음)
-    void db.from('post_views').insert({ post_id: post.id, business_id: business.id, source: viewSource })
+    const bot = detectAiCrawler(userAgent)
+    try {
+      if (bot) {
+        // AI 크롤러 — 글 페이지가 크롤러가 가장 많이 오는 곳이다. 사람 조회수와 섞지 않는다.
+        await recordAiCrawlerHit(db, business.id, bot)
+      } else {
+        await db
+          .from('post_views')
+          .insert({ post_id: post.id, business_id: business.id, source: detectViewSource(referer, userAgent) })
+      }
+    } catch (error) {
+      console.error('[PostView] 조회 기록 실패:', error)
+    }
   }
 
   const { data: relatedPosts } = await db

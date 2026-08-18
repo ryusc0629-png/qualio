@@ -8,6 +8,7 @@ import { ChannelLinksCard } from './channel-links-card'
 import { ChannelPerformanceCard } from './channel-performance-card'
 import { MarketingPeriodSelector } from './period-selector'
 import { GeoShareCard } from '@/components/dashboard/geo-share-card'
+import { AiCrawlerCard } from '@/components/dashboard/ai-crawler-card'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { getOrCreatePostPlan } from '@/lib/geo/post-plan'
@@ -217,6 +218,15 @@ export default async function MarketingPage({
           </div>
         }>
           <ChannelPerformanceCard businessId={profile.business_id} months={months} />
+        </Suspense>
+
+        {/* 크롤러 방문이 노출률보다 먼저 움직이므로 위에 둔다 — 노출률이 0인 동안에도 볼 게 있어야 한다 */}
+        <Suspense fallback={
+          <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
+            AI가 읽어간 기록을 불러오는 중...
+          </div>
+        }>
+          <AiCrawlerCard businessId={profile.business_id} />
         </Suspense>
 
         <Suspense fallback={
