@@ -51,16 +51,33 @@ export const saveReportAction = action
     // 예약이 이 업체 소속인지 확인
     const { data: booking } = await db
       .from('bookings')
-      .select('id, status, customer_name, customer_phone, scheduled_at, service_address, quotes!quote_id(cleaning_type), businesses!business_id(name, phone)')
+      .select('id, status, contract_id, customer_name, customer_phone, scheduled_at, service_address, quotes!quote_id(cleaning_type), businesses!business_id(name, phone)' as never)
       .eq('id', bookingId)
       .eq('business_id', profile.business_id)
-      .single()
+      .single() as unknown as {
+        data: {
+          id: string
+          status: string
+          contract_id: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          scheduled_at: string | null
+          service_address: string | null
+          quotes: { cleaning_type: string | null } | { cleaning_type: string | null }[] | null
+          businesses: { name: string; phone: string | null } | { name: string; phone: string | null }[] | null
+        } | null
+      }
 
     if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
 
+    // 정기계약 방문이면 보고서는 저장하되 고객 알림톡은 보내지 않는다.
+    // 정기 거래처에 나가는 카톡은 방문 전날 안내·초도 보고서·월간 보고서 세 가지뿐이다.
+    // (화면에서 버튼을 감췄어도 예전 화면이나 링크로 들어올 수 있어 여기서도 막는다)
+    const sendAlimtalkToCustomer = sendAlimtalk && !booking.contract_id
+
     // 아직 시작도 안 한 일정에는 보고서를 보내지 않는다. 저장 전에 막아야
     // '저장은 됐는데 발송만 실패'한 어정쩡한 상태가 남지 않는다.
-    if (sendAlimtalk) assertReportSendable(booking.status)
+    if (sendAlimtalkToCustomer) assertReportSendable(booking.status)
 
     // 보고서 upsert (booking_id unique 제약)
     const upsertData: Record<string, unknown> = {
@@ -115,7 +132,7 @@ export const saveReportAction = action
 
     // 알림톡 발송
     let alimtalkSent = false
-    if (sendAlimtalk && booking.customer_phone) {
+    if (sendAlimtalkToCustomer && booking.customer_phone) {
       const biz   = Array.isArray(booking.businesses) ? booking.businesses[0] : booking.businesses
       const quote = Array.isArray(booking.quotes)     ? booking.quotes[0]     : booking.quotes
       const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
@@ -245,7 +262,7 @@ export const sendReviewRequestAction = action
     // 보고서 + 예약 + 업체 정보 조회
     const { data: report } = await db
       .from('reports' as never)
-      .select('id, booking_id, bookings!booking_id(status, customer_name, customer_phone, worker_id, workers!worker_id(name), quotes!quote_id(cleaning_type)), businesses!business_id(name, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)' as never)
+      .select('id, booking_id, bookings!booking_id(status, contract_id, customer_name, customer_phone, worker_id, workers!worker_id(name), quotes!quote_id(cleaning_type)), businesses!business_id(name, naver_place_url, google_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)' as never)
       .eq('id' as never, parsedInput.reportId)
       .eq('business_id' as never, profile.business_id)
       .single() as unknown as { data: { id: string; booking_id: string | null; bookings: unknown; businesses: unknown } | null }
@@ -259,6 +276,12 @@ export const sendReviewRequestAction = action
     const bookingStatus = (booking as { status?: string | null } | null)?.status
     if (bookingStatus !== 'completed') {
       throw new Error('[APP] 아직 작업이 끝나지 않은 일정이에요. 완료 처리한 뒤에 후기를 요청해주세요')
+    }
+
+    // 정기 거래처에는 후기를 요청하지 않는다 — 매 방문마다 조르는 꼴이 된다.
+    // 후기 요청은 일회성 고객을 재구매로 이어가기 위한 것이다.
+    if ((booking as { contract_id?: string | null } | null)?.contract_id) {
+      throw new Error('[APP] 정기 거래처에는 후기 요청을 보내지 않아요')
     }
     const biz     = Array.isArray(report.businesses) ? report.businesses[0] : report.businesses
     const bizInfo = biz as { name: string; naver_place_url: string | null; google_place_url: string | null; danggeun_review_url: string | null; kakao_place_url: string | null; active_review_platform: string; review_reward_type: string; review_reward_description: string | null } | null

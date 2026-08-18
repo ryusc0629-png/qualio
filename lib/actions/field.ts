@@ -36,6 +36,7 @@ interface BookingRow {
   status: string
   memo: string | null
   quote_id: string | null
+  contract_id: string | null // 정기계약 방문이면 계약 id — 고객 알림톡 발송 여부 판정에 쓴다
 }
 
 // 직원 인증 — workerId로 직원과 업체 정보를 한 번에 검증
@@ -64,7 +65,7 @@ async function verifyBookingOwnership(
   const [{ data: booking }, { data: teamCheck }] = await Promise.all([
     db
       .from('bookings')
-      .select('id, business_id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, quote_id')
+      .select('id, business_id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, quote_id, contract_id' as never)
       .eq('id', bookingId)
       .eq('business_id', businessId)
       .maybeSingle() as unknown as Promise<{ data: BookingRow | null }>,
@@ -359,7 +360,9 @@ export const fieldCompletePaymentAction = action
     // 크론(D+1·D+3)과 똑같이 인증 페이지(/review/토큰)로 보낸다.
     // 예전엔 여기서만 리뷰 사이트로 직접 보내서 발송·클릭·작성 기록이 하나도 안 남았고,
     // 담당 기사도 알 수 없었다. 같은 경로로 통일해야 집계와 성과급이 성립한다.
-    if (!parsedInput.skipReview) {
+    // 정기계약 방문은 후기 요청 대상이 아니다 — 매 방문마다 조르는 꼴이 된다.
+    // (정기 거래처 카톡은 방문 전날 안내·초도 보고서·월간 보고서 세 가지뿐)
+    if (!parsedInput.skipReview && !booking.contract_id) {
       const reviewUrl = business.google_place_url || business.naver_place_url
       if (booking.customer_phone && reviewUrl) {
         try {
@@ -518,6 +521,9 @@ export const fieldSendReportAction = action
     // 아직 시작도 안 한 일정에는 보고서를 보내지 않는다.
     // ('진행 중'은 허용 — 수금 전이라 아직 완료로 안 넘어간 정상 상황이다)
     assertReportSendable(booking.status)
+
+    // 정기계약 방문은 고객에게 작업 보고서를 보내지 않는다 — 월간 보고서로 한 번에 안내한다
+    if (booking.contract_id) throw new Error('[APP] 정기 거래처엔 방문마다 보내지 않아요. 월간 보고서로 안내됩니다')
 
     if (!booking.customer_phone) throw new Error('[APP] 고객 연락처가 없어 발송할 수 없어요')
 

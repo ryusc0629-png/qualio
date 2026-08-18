@@ -33,6 +33,8 @@ interface BookingInfo {
   customerPhone: string | null
   serviceAddress: string | null
   scheduledAt: string
+  /** 정기계약 방문이면 계약 id — 정기 거래처엔 방문마다 보고서를 보내지 않는다 */
+  contractId: string | null
 }
 
 interface ExistingReport {
@@ -956,6 +958,14 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           </>
         ) : (
           <>
+            {/* 정기 거래처엔 방문마다 보내지 않는다 — 쓴 내용은 월간 보고서로 모인다 */}
+            {booking.contractId ? (
+              <p className="text-sm text-muted-foreground text-center bg-muted/40 border border-border rounded-lg px-3 py-3">
+                정기 거래처라 방문마다 보내지 않아요.
+                <br />
+                여기 쓴 내용과 사진은 <b>월간 보고서</b>에 자동으로 들어가요.
+              </p>
+            ) : (
             <Button
               size="lg"
               className="w-full h-14 text-base gap-2"
@@ -965,7 +975,8 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
               <Send className="h-5 w-5" />
               {isSending ? '발송 중...' : '고객에게 보고서 발송하기'}
             </Button>
-            {!booking.customerPhone && (
+            )}
+            {!booking.contractId && !booking.customerPhone && (
               <p className="text-xs text-muted-foreground text-center">고객 연락처가 없어 알림톡을 보낼 수 없어요</p>
             )}
             <Button

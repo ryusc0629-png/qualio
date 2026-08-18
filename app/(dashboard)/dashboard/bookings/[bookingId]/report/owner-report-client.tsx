@@ -35,6 +35,8 @@ interface BookingInfo {
   scheduledAt: string
   /** 예약 상태 — 아직 시작 안 한 일정에는 보고서를 보낼 수 없다 */
   status: string
+  /** 정기계약 방문이면 계약 id — 정기 거래처엔 방문마다 보고서를 보내지 않는다 */
+  contractId: string | null
 }
 
 interface AiReportData {
@@ -697,6 +699,14 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
           </Button>
         ) : (
           <>
+            {/* 정기 거래처엔 방문마다 보내지 않는다 — 월간 보고서로 한 번에 안내한다 */}
+            {booking.contractId ? (
+              <p className="text-sm text-muted-foreground text-center bg-muted/40 border border-border rounded-lg px-3 py-3">
+                정기 거래처라 방문마다 보내지 않아요.
+                <br />
+                여기 쓴 내용과 사진은 <b>월간 보고서</b>에 자동으로 들어가요.
+              </p>
+            ) : (
             <Button
               size="lg"
               className="w-full h-14 text-base gap-2"
@@ -707,14 +717,15 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
               <Send className="h-5 w-5" />
               {isSending ? '발송 중...' : alreadySent ? '고객에게 다시 보내기' : '고객에게 보고서 발송하기'}
             </Button>
-            {!canSend && (
+            )}
+            {!booking.contractId && !canSend && (
               <p className="text-xs text-amber-700 text-center bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                 아직 시작하지 않은 일정이에요. 작업을 마치고 <b>완료 처리</b>한 뒤에 보낼 수 있어요.
                 <br />
                 지금 쓴 내용은 저장해두면 그대로 남아요.
               </p>
             )}
-            {canSend && !booking.customerPhone && (
+            {!booking.contractId && canSend && !booking.customerPhone && (
               <p className="text-xs text-muted-foreground text-center">고객 연락처가 없어 알림톡을 보낼 수 없어요</p>
             )}
             <Button

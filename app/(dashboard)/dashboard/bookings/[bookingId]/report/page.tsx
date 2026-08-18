@@ -26,10 +26,20 @@ export default async function OwnerReportPage({ params }: Props) {
   // 예약 조회 (이 업체 소속인지 검증)
   const { data: booking } = await db
     .from('bookings')
-    .select('id, customer_name, customer_phone, service_address, scheduled_at, status')
+    .select('id, customer_name, customer_phone, service_address, scheduled_at, status, contract_id' as never)
     .eq('id', bookingId)
     .eq('business_id', profile.business_id)
-    .maybeSingle()
+    .maybeSingle() as unknown as {
+      data: {
+        id: string
+        customer_name: string
+        customer_phone: string | null
+        service_address: string | null
+        scheduled_at: string
+        status: string
+        contract_id: string | null
+      } | null
+    }
 
   if (!booking) notFound()
 
@@ -87,6 +97,7 @@ export default async function OwnerReportPage({ params }: Props) {
         serviceAddress: booking.service_address,
         scheduledAt: booking.scheduled_at,
         status: booking.status,
+        contractId: booking.contract_id ?? null,
       }}
       existingReport={report ? {
         id: report.id,
