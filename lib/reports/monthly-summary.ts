@@ -19,11 +19,6 @@ export interface ReportLike {
   preventive_note: string | null
 }
 
-export interface ChecklistItem {
-  id: string
-  label: string
-}
-
 /** 접수된 문제·클레임 — 담당자가 가장 먼저 보는 것은 '문제가 있었나, 처리됐나'다 */
 export interface IssueLike {
   id: string
@@ -49,8 +44,6 @@ export interface MonthlySummary {
   onTimeRate: number | null
   /** 도착~마감 기록이 있는 방문의 총 작업 시간(분) */
   totalMinutes: number
-  /** 사진으로 확인된 작업 항목 — 많이 한 순 */
-  taskCounts: { label: string; count: number }[]
   /** 현장에서 챙긴 것 — 날짜 + 내용 */
   siteNotes: { date: string; note: string }[]
   photoCount: number
@@ -83,7 +76,6 @@ function durationMinutes(start?: string | null, end?: string | null): number {
 export function buildMonthlySummary(input: {
   visits: VisitLike[]
   reports: ReportLike[]
-  checklistItems: ChecklistItem[]
   workerNames: Map<string, string>
   photoCount: number
   /** 기준 시각(보통 지금) — '이미 지난 방문'을 가르는 선 */
@@ -93,7 +85,7 @@ export function buildMonthlySummary(input: {
   /** 현장에서 받은 추가 요청 */
   requests?: RequestLike[]
 }): MonthlySummary {
-  const { visits, reports, checklistItems, workerNames, photoCount, now } = input
+  const { visits, reports, workerNames, photoCount, now } = input
   const issueRows = input.issues ?? []
   const requestRows = input.requests ?? []
 
@@ -106,23 +98,6 @@ export function buildMonthlySummary(input: {
   const onTimeRate = past.length > 0 ? Math.round((pastCompleted / past.length) * 100) : null
 
   const totalMinutes = completed.reduce((sum, v) => sum + durationMinutes(v.checkin_at, v.checkout_at), 0)
-
-  // 작업 항목별 수행 횟수 — 직원이 항목마다 올린 사진이 곧 수행 증거
-  const labelById = new Map(checklistItems.map((i) => [i.id, i.label]))
-  const countByLabel = new Map<string, number>()
-  for (const v of completed) {
-    const photos = v.checklist_photos
-    if (!photos || typeof photos !== 'object') continue
-    for (const [itemId, urls] of Object.entries(photos)) {
-      if (!Array.isArray(urls) || urls.length === 0) continue
-      const label = labelById.get(itemId)
-      if (!label) continue
-      countByLabel.set(label, (countByLabel.get(label) ?? 0) + 1)
-    }
-  }
-  const taskCounts = Array.from(countByLabel.entries())
-    .map(([label, count]) => ({ label, count }))
-    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'ko'))
 
   // 현장 특이사항 — 완료된 방문에 남은 것만, 날짜 순
   const noteByBooking = new Map(
@@ -165,7 +140,6 @@ export function buildMonthlySummary(input: {
     upcomingCount: upcoming.length,
     onTimeRate,
     totalMinutes,
-    taskCounts,
     siteNotes,
     photoCount,
     workerNames: names,

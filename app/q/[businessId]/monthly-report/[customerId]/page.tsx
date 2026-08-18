@@ -1,6 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import { ClipboardCheck, CircleAlert, Camera, CalendarClock } from 'lucide-react'
+import { CircleAlert, Camera, CalendarClock } from 'lucide-react'
 import { ReportPhotoSection } from '../../report/[reportId]/report-photos'
 import { PrintReportButton } from './print-button'
 import { DocPage, DocHeader, DocMeta, DocLede, DocSignature } from '@/components/report/document'
@@ -10,7 +10,6 @@ import {
   buildHeadline,
   type VisitLike,
   type ReportLike,
-  type ChecklistItem,
 } from '@/lib/reports/monthly-summary'
 
 // ── 월 범위 계산 (KST 기준) ────────────────────────────────
@@ -156,7 +155,7 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
   // 계약 정보 — 이 고객의 계약 중 진행 중인 것 우선. 작업 항목(체크리스트)도 함께.
   const { data: contracts } = (await db
     .from('contracts')
-    .select('service_type, frequency, contract_price, status, checklist_items' as never)
+    .select('service_type, frequency, contract_price, status' as never)
     .eq('business_id', businessId)
     .eq('customer_id', customerId)) as unknown as {
     data:
@@ -165,7 +164,6 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
           frequency: string
           contract_price: number
           status: string
-          checklist_items: ChecklistItem[] | null
         }[]
       | null
   }
@@ -196,7 +194,6 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
   const summary = buildMonthlySummary({
     visits: bookings,
     reports: reportRows,
-    checklistItems: contract?.checklist_items ?? [],
     workerNames: workerMap,
     photoCount: totalPhotoCount,
     now: new Date(),
@@ -230,7 +227,6 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
 
   const cycleLabel = contract?.frequency ? formatFrequency(contract.frequency) : null
   const topPhotos = galleryPhotos.slice(0, 6)
-  const maxTaskCount = summary.taskCounts[0]?.count ?? 0
 
   return (
     <DocPage action={<PrintReportButton />}>
@@ -339,31 +335,6 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
             <p className="text-[13px] text-slate-500">
               이번 달 접수된 요청이나 문제는 없었습니다.
             </p>
-          </Section>
-        )}
-
-        {/* ── 이번 달 수행한 작업 ── */}
-        {summary.taskCounts.length > 0 && (
-          <Section icon={<ClipboardCheck className="h-4 w-4" />} title="이번 달 수행한 작업">
-            <p className="text-[12px] text-slate-500 mb-3">
-              작업 항목마다 현장 사진으로 확인된 횟수예요
-            </p>
-            <ul className="space-y-2.5">
-              {summary.taskCounts.map((t) => (
-                <li key={t.label} className="flex items-center gap-3">
-                  <span className="w-32 shrink-0 truncate text-[14px] text-slate-700">{t.label}</span>
-                  <span className="relative h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-                    <span
-                      className="absolute inset-y-0 left-0 rounded-full bg-emerald-500 print:bg-emerald-500"
-                      style={{ width: `${maxTaskCount > 0 ? Math.max(8, (t.count / maxTaskCount) * 100) : 0}%` }}
-                    />
-                  </span>
-                  <span className="w-10 shrink-0 text-right text-[13px] font-semibold tabular-nums text-slate-900">
-                    {t.count}회
-                  </span>
-                </li>
-              ))}
-            </ul>
           </Section>
         )}
 
