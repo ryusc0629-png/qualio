@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { ReviewClaimClient } from './review-claim-client'
+import { ReviewPhotos } from './review-photos'
 
 interface Props {
   params: Promise<{ token: string }>
@@ -97,26 +98,14 @@ export default async function ReviewClaimPage({ params }: Props) {
           </p>
         </div>
 
-        {/* 작업 전·후 사진 — 기억을 먼저 살린다 */}
+        {/* 작업 전·후 사진 — 기억을 먼저 살리고, 후기에 첨부할 수 있게 저장까지 붙인다.
+            사진이 붙은 후기가 훨씬 잘 읽히고 오래 남는다. */}
         {(beforeUrl || afterUrl) && (
-          <div className="space-y-1.5">
-            <div className="grid grid-cols-2 gap-2">
-              {beforeUrl && (
-                <div className="space-y-1">
-                  <p className="text-[11px] text-muted-foreground">작업 전</p>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={beforeUrl} alt="작업 전" className="w-full aspect-square object-cover rounded-lg" />
-                </div>
-              )}
-              {afterUrl && (
-                <div className="space-y-1">
-                  <p className="text-[11px] text-primary font-medium">작업 후</p>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={afterUrl} alt="작업 후" className="w-full aspect-square object-cover rounded-lg" />
-                </div>
-              )}
-            </div>
-          </div>
+          <ReviewPhotos
+            before={beforeUrl}
+            after={afterUrl}
+            businessName={bizInfo.name}
+          />
         )}
 
         {/* 감사 선물 안내 — 후기를 남기면 자동으로 쌓인다(사장님이 따로 보내지 않는다) */}

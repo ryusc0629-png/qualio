@@ -46,6 +46,11 @@ export function ReviewClaimClient({ claimId, reviewUrl, hasReward }: ReviewClaim
         <p className="text-sm text-muted-foreground">
           같은 후기를 <b>네이버</b>에도 남겨주시면 저희에게 큰 힘이 돼요
         </p>
+        {/* 위에서 저장한 작업 전·후 사진을 붙이도록 한 번 더 짚어준다 —
+            사진이 붙은 후기가 훨씬 잘 읽히고 오래 남는다 */}
+        <p className="text-xs text-muted-foreground">
+          위의 <b className="font-semibold text-foreground">작업 전·후 사진</b>을 함께 올려주시면 더 좋아요
+        </p>
         <Button
           className="w-full h-12"
           onClick={() => { window.open(reviewUrl!, '_blank'); setStep('done') }}
