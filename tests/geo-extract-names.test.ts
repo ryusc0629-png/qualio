@@ -50,4 +50,16 @@ describe('AI 답변에서 업체 이름 뽑기', () => {
   it('빈 답변이면 빈 배열', () => {
     expect(extractBusinessNames('')).toEqual([])
   })
+
+  it('체크리스트 항목을 상호로 착각하지 않는다', () => {
+    // "업체 고를 때 확인할 것"에 AI가 나열하는 말들 — 리더보드 2위에 "청소 범위"가 올라간 적이 있다
+    expect(extractBusinessNames('**청소 범위**를 확인하세요')).toEqual([])
+    expect(extractBusinessNames('- 청소 범위와 주기\n- 환경 친화성\n- 서비스 만족도')).toEqual([])
+    expect(extractBusinessNames('**청소 인력**과 **장비 수준**')).toEqual([])
+  })
+
+  it('굵은 글씨 뒤에 조사가 붙어도 상호만 남긴다', () => {
+    // '**'의 첫 별표를 불릿으로 오인해 "*다트클린**은 울주군"을 통째로 집던 문제
+    expect(extractBusinessNames('**다트클린**은 울주군에 있습니다')).toEqual(['다트클린'])
+  })
 })

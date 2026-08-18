@@ -326,13 +326,11 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
       )}
 
       {/* AI 추천 순위(리더보드) — 이 질문들에서 누가 자주 추천되나 + 우리 위치 */}
-      {competitorRanks.length > 0 && (
+      {competitorRanks.length >= 2 && (
         <div className="rounded-lg border p-4">
           <p className="text-sm font-semibold">
-            🏆 AI 추천 순위{' '}
-            <span className="text-xs font-normal text-muted-foreground">
-              ({hasNames ? '지금 AI가 답에 올리는 업체' : '이 검색어들 기준'})
-            </span>
+            {hasNames ? '🏆 AI 답변에 함께 나온 곳' : '🏆 지금 잡히는 채널'}{' '}
+            <span className="text-xs font-normal text-muted-foreground">(이 검색어들 기준)</span>
           </p>
           <ul className="mt-2 space-y-1.5">
             {competitorRanks.slice(0, 5).map((c, i) => (
@@ -345,10 +343,13 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
               </li>
             ))}
           </ul>
+          {/* 등수는 붙이지 않는다.
+              우리는 업체명·홈페이지 주소로 정확히 세지만 다른 곳은 답변 글에서 읽어낸 것이라,
+              재는 방법이 달라 같은 줄에 세워 등수를 매기면 우리가 늘 이기는 착시가 된다. */}
           <div className="mt-2 pt-2 border-t flex items-center justify-between text-sm font-semibold text-emerald-700">
             <span>우리 업체</span>
             <span className="text-xs">
-              {usCount > 0 ? `${usRank}위 · ${usCount}개 검색어에서 추천` : '아직 순위 밖 — 글이 쌓이면 올라가요'}
+              {usCount > 0 ? `${usCount}개 검색어에서 추천` : '아직 안 잡혀요 — 글이 쌓이면 올라가요'}
             </span>
           </div>
         </div>
