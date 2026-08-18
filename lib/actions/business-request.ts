@@ -14,7 +14,11 @@ import { revalidatePath } from 'next/cache'
 // 비테크 사장님이 혼자 하려면 계정 만들기·소유확인·DNS까지 넘어야 해서 중간에 막힌다.
 // 여기서는 "해주세요" 한 번 받아 본사에 알리는 것까지만 한다. 실제 처리는 사람이 한다.
 
-export const REQUEST_KINDS = ['domain_setup', 'search_indexing', 'google_maps_setup'] as const
+// ⚠️ 'use server' 파일은 async 함수만 내보낼 수 있다. 이 목록을 export 하면
+// 그 순간 이 모듈을 쓰는 화면이 통째로 500이 난다("A 'use server' file can only
+// export async functions, found object" — 2026-08-19 마케팅 화면 장애).
+// 밖에서 쓸 일이 생기면 이 파일이 아니라 별도 모듈로 빼서 내보낼 것.
+const REQUEST_KINDS = ['domain_setup', 'search_indexing', 'google_maps_setup'] as const
 
 const KIND_LABEL: Record<string, string> = {
   domain_setup: '내 인터넷 주소 만들기·연결',
