@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
+import { compressImage, mapWithConcurrency } from '@/lib/upload/image'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -29,6 +30,9 @@ import {
 // 사장님은 현장에 안 가므로 위치를 알 방법이 없고, 위치가 없으면 거래처에 보낼
 // 초도 보고서를 만들 수 없다.
 type PhotoSlot = { url: string; uploading: boolean; caption?: string }
+
+// 작업 전·후 각각 올릴 수 있는 장수. 대청소 현장은 5장으로 모자란다.
+const MAX_PHOTOS = 10
 type VideoSlot = { url: string; uploading: boolean; thumbnailUrl?: string }
 
 interface BookingInfo {
@@ -319,9 +323,9 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     setSlots: React.Dispatch<React.SetStateAction<PhotoSlot[]>>,
     type: 'before' | 'after',
   ) => {
-    const remaining = 5 - slots.length
+    const remaining = MAX_PHOTOS - slots.length
     if (remaining <= 0) {
-      toast.error('사진은 최대 5장까지 등록할 수 있어요')
+      toast.error(`사진은 최대 ${MAX_PHOTOS}장까지 등록할 수 있어요`)
       return
     }
     const toUpload = Array.from(files).slice(0, remaining)
@@ -329,18 +333,21 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     setSlots((prev) => [...prev, ...placeholders])
 
     const supabase = createClient()
-    const uploaded: string[] = []
 
-    for (const file of toUpload) {
-      const ext = file.name.split('.').pop() ?? 'jpg'
+    // 올리기 전에 줄이고(3MB→250KB 안팎), 3장씩 동시에 올린다.
+    // 현장은 대개 LTE라 원본을 한 장씩 보내면 체감이 크게 느리다.
+    const results = await mapWithConcurrency(toUpload, async (file) => {
+      const small = await compressImage(file)
+      const ext = small.name.split('.').pop() ?? 'jpg'
       const path = `${businessId}/${booking.id}/${type}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error } = await supabase.storage.from('report-photos').upload(path, file, { upsert: true })
-      if (error) {
-        toast.error('사진 업로드에 실패했어요')
-        continue
-      }
-      const { data: { publicUrl } } = supabase.storage.from('report-photos').getPublicUrl(path)
-      uploaded.push(publicUrl)
+      const { error } = await supabase.storage.from('report-photos').upload(path, small, { upsert: true })
+      if (error) return null
+      return supabase.storage.from('report-photos').getPublicUrl(path).data.publicUrl
+    })
+
+    const uploaded = results.filter((u): u is string => !!u)
+    if (uploaded.length < toUpload.length) {
+      toast.error(`사진 ${toUpload.length - uploaded.length}장을 못 올렸어요. 다시 시도해주세요`)
     }
 
     setSlots((prev) => {
@@ -479,7 +486,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
               </div>
             )
           )}
-          {slots.length < 5 && (
+          {slots.length < MAX_PHOTOS && (
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
@@ -511,7 +518,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             </div>
           )
         )}
-        {slots.length < 5 && (
+        {slots.length < MAX_PHOTOS && (
           <button
             type="button"
             onClick={() => inputRef.current?.click()}

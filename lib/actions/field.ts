@@ -406,7 +406,7 @@ export const fieldSaveBeforePhotosAction = action
   .schema(z.object({
     workerId:        z.string().uuid(),
     bookingId:       z.string().uuid(),
-    beforePhotoUrls: z.array(z.string().min(1)).max(5),
+    beforePhotoUrls: z.array(z.string().min(1)).max(10),
   }))
   .action(async ({ parsedInput }) => {
     const { db, worker } = await verifyWorker(parsedInput.workerId)
@@ -448,12 +448,12 @@ export const fieldSaveReportAction = action
     bookingId:       z.string().uuid(),
     notes:           z.string().max(5000).optional(),
     preventiveNote:  z.string().max(2000).optional(), // 현장 특이사항 — 월말 거래처 보고서에 자동으로 모임
-    beforePhotoUrls: z.array(z.string().min(1)).max(5),
-    afterPhotoUrls:  z.array(z.string().min(1)).max(5),
+    beforePhotoUrls: z.array(z.string().min(1)).max(10),
+    afterPhotoUrls:  z.array(z.string().min(1)).max(10),
     // 사진마다 '어디'인지 — 사진 배열과 같은 순서. 초도(첫) 방문에서만 받는다.
     // 사장님은 현장에 안 가므로 이 값이 없으면 초도 보고서를 만들 수 없다.
-    beforePhotoCaptions: z.array(z.string().max(100)).max(5).optional(),
-    afterPhotoCaptions:  z.array(z.string().max(100)).max(5).optional(),
+    beforePhotoCaptions: z.array(z.string().max(100)).max(10).optional(),
+    afterPhotoCaptions:  z.array(z.string().max(100)).max(10).optional(),
     // 앞으로 손봐야 할 것 + 몇 달 뒤에 사장님께 알릴지(0이면 알림 없음)
     careAdvice:      z.string().max(2000).optional(),
     careMonths:      z.number().int().min(0).max(24).optional(),

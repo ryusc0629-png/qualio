@@ -4,16 +4,20 @@ import { useRef, useState } from 'react'
 import { Camera, X, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { Label } from '@/components/ui/label'
+import { compressImage, mapWithConcurrency } from '@/lib/upload/image'
 
 // 사진 몇 장 올리는 작은 칸. 클레임 접수·처리 사진처럼 '한두 장만 붙이는' 자리에 쓴다.
 //
-// 보고서 화면(field-report-client 등)은 자체 업로드 로직을 이미 갖고 있어 건드리지 않았다.
+// 보고서 화면(field-report-client 등)은 Storage로 직접 올리는 자체 경로가 있지만,
+// 압축·동시 업로드는 lib/upload/image.ts를 함께 쓴다.
 // 새로 사진을 받는 자리가 생기면 이 조각을 쓸 것 — 화면마다 업로드를 새로 짜면
 // 실패 처리·장수 제한이 제각각이 된다.
 
 async function uploadOne(file: File): Promise<string> {
+  // 올리기 전에 줄인다 — 폰 사진 원본은 3~5MB라 그대로 보내면 오래 걸린다
+  const small = await compressImage(file)
   const fd = new FormData()
-  fd.append('file', file)
+  fd.append('file', small)
   const res = await fetch('/api/upload-image', { method: 'POST', body: fd })
   const json = (await res.json()) as { url?: string; error?: string }
   if (!res.ok || !json.url) throw new Error(json.error ?? '업로드에 실패했어요')
@@ -40,14 +44,16 @@ export function PhotoPicker({ label, hint, urls, onChange, max = 4 }: Props) {
     }
     const list = Array.from(files).slice(0, remaining)
     setUploading(list.length)
-    const done: string[] = []
-    for (const f of list) {
+    // 3장씩 동시에 — 한 장씩 기다리면 체감이 크게 느리다
+    const results = await mapWithConcurrency(list, async (f) => {
       try {
-        done.push(await uploadOne(f))
+        return await uploadOne(f)
       } catch (e) {
         toast.error(e instanceof Error ? e.message : '사진을 올리지 못했어요')
+        return null
       }
-    }
+    })
+    const done = results.filter((u): u is string => !!u)
     setUploading(0)
     if (done.length > 0) onChange([...urls, ...done])
   }

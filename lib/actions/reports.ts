@@ -25,8 +25,8 @@ const saveReportSchema = z.object({
   bookingId:       z.string().uuid(),
   notes:           z.string().max(5000).optional(),
   preventiveNote:  z.string().max(2000).optional(), // 미리 챙긴 것·지켜볼 것(예방 케어)
-  beforePhotoUrls: z.array(z.string().min(1)).max(5),
-  afterPhotoUrls:  z.array(z.string().min(1)).max(5),
+  beforePhotoUrls: z.array(z.string().min(1)).max(10),
+  afterPhotoUrls:  z.array(z.string().min(1)).max(10),
   sendAlimtalk:    z.boolean(),
   // 앞으로 손봐야 할 것 + 몇 달 뒤에 알릴지(0이면 알림 없음)
   careAdvice:      z.string().max(2000).optional(),
