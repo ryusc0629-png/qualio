@@ -154,9 +154,14 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
   // 브랜드 검색어("우리 이름 + 후기") — 손님이 이름을 듣고 AI에 물었을 때 제대로 나오는가
   const brandQuestion = withKind.find((d) => d.kind === 'brand') ?? null
 
-  // 질문별 승패 — 이미 잡힌 질문 / 아직 안 잡힌 질문 (광역은 아래에서 따로 다룬다)
-  const citedQuestions = winnable.filter((d) => d.mentioned)
-  const weakQuestions = winnable.filter((d) => !d.mentioned)
+  // 질문별 승패 — 이미 잡힌 질문 / 아직 안 잡힌 질문.
+  //
+  // 검색어 규칙을 바꾸기 전(2026-08-18 이전)에 측정된 결과는 질문이 전부 광역이라
+  // '이길 수 있는 판'이 0개다. 그때 winnable만 보면 목록이 통째로 비어
+  // "안 잡힌 게 없다 = 다 잡혔다"로 잘못 읽힌다. 그런 옛 결과는 전체 질문으로 되돌려 보여준다.
+  const shown = winnable.length > 0 ? winnable : withKind
+  const citedQuestions = shown.filter((d) => d.mentioned)
+  const weakQuestions = shown.filter((d) => !d.mentioned)
   // 특정 질문에서 지금 잡히는 경쟁 채널(우리 도메인 제외, 상위 2개)
   const competitorsFor = (topDomains: string[]) =>
     topDomains.filter((d) => d && d !== APP_HOST).slice(0, 2)
@@ -367,7 +372,9 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
         </div>
       )}
 
-      {weakQuestions.length === 0 && (
+      {/* 전승 축하 — '안 잡힌 게 없다'만으로는 부족하다. 실제로 잡힌 게 하나라도 있어야 한다.
+          (질문 목록이 비어 있을 때 0%인데도 축하가 뜨던 문제) */}
+      {weakQuestions.length === 0 && citedQuestions.length > 0 && (
         <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-4">
           <p className="text-sm font-semibold text-emerald-900">모든 검색어에서 우리 업체가 잡혔어요! 🎉</p>
           <p className="text-xs text-emerald-900/70 mt-1">계속 글을 쌓아 이 자리를 지켜요.</p>
