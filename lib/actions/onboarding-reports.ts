@@ -5,7 +5,9 @@ import { revalidatePath } from 'next/cache'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { action } from '@/lib/safe-action'
 import { generateOnboardingNotes } from '@/lib/ai/onboarding-note'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { sendOnboardingReportAlimtalk } from '@/lib/kakao/alimtalk'
+import { rebuildOnboardingDraft } from '@/lib/onboarding/draft-from-field'
 import { formatDate } from '@/lib/format/datetime'
 
 // 공통 인증 — 로그인 사용자의 business_id 확보
@@ -183,6 +185,25 @@ export const sendOnboardingReportAction = action
     revalidatePath(`/dashboard/clients/${contract.customer_id}`)
 
     return { success: true, sent }
+  })
+
+// 현장 기록 다시 불러오기 — 직원이 사진·메모를 나중에 더 올린 경우에 쓴다.
+// 사장님이 쓴 문장(작업 시방·관리 계획)은 건드리지 않고, 현장에서 온 값만 새로 덮는다.
+export const refreshOnboardingDraftAction = action
+  .schema(z.object({ contractId: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getAuthedBusiness()
+    await loadContractContext(db, businessId, parsedInput.contractId)
+
+    const rebuilt = await rebuildOnboardingDraft({
+      db: db as unknown as SupabaseClient,
+      businessId,
+      contractId: parsedInput.contractId,
+    })
+
+    if (!rebuilt) throw new Error('[APP] 현장에서 올라온 첫 방문 기록이 아직 없어요')
+
+    return { success: true, beforeNote: rebuilt.beforeNote, items: rebuilt.items }
   })
 
 const generateSchema = z.object({

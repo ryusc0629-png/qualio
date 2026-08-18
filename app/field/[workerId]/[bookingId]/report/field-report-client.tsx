@@ -35,6 +35,8 @@ interface BookingInfo {
   scheduledAt: string
   /** 정기계약 방문이면 계약 id — 정기 거래처엔 방문마다 보고서를 보내지 않는다 */
   contractId: string | null
+  /** 이 계약의 첫 방문인지 — 여기 쓴 기록이 초도 리포트 초안이 된다 */
+  isFirstVisit: boolean
 }
 
 interface ExistingReport {
@@ -642,6 +644,18 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       </div>
 
       <div className="px-4 py-4 space-y-5">
+        {/* 첫 방문 안내 — 여기 쓴 게 사장님 쪽 초도 리포트 초안이 된다.
+            ⚠️ 직원이 입력할 항목은 늘리지 않는다. 늘리면 안 쓰게 되고, 그러면 초안도 안 생긴다.
+            평소대로 사진 찍고 메모만 쓰면 되고, 이 안내는 '왜 신경 써야 하는지'만 알려준다. */}
+        {booking.isFirstVisit && (
+          <div className="rounded-xl bg-blue-50 border border-blue-200 p-4">
+            <p className="text-sm font-semibold text-blue-900">이 현장 첫 방문이에요</p>
+            <p className="text-xs text-blue-800/80 mt-1 leading-relaxed">
+              오늘 찍은 사진과 메모가 거래처에 보낼 <b>첫 작업 리포트</b>로 정리돼요.
+              사진은 <b>작업 전·후를 같은 자리에서</b> 찍어주시면 제일 좋아요. 한 장만 있어도 괜찮아요.
+            </p>
+          </div>
+        )}
         {/* 발송 완료 배너 */}
         {alreadySent && (
           <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-200 p-4">

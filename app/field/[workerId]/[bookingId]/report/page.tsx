@@ -1,6 +1,8 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { FieldReportClient } from './field-report-client'
+import { isFirstVisitOfContract } from '@/lib/onboarding/draft-from-field'
 
 // workers 테이블 타입 (Supabase 타입 아직 미생성)
 interface WorkerRow {
@@ -83,6 +85,17 @@ export default async function FieldReportPage({ params }: Props) {
     .is('deleted_at', null)
     .order('sort_order')
 
+  // 이 방문이 계약의 '첫 방문'인지 — 초도 리포트는 계약당 한 번뿐이라
+  // 첫 방문에서만 안내를 띄운다(직원이 할 일은 늘지 않는다)
+  const isFirstVisit = booking.contract_id
+    ? await isFirstVisitOfContract(
+        db as unknown as SupabaseClient,
+        worker.business_id,
+        booking.contract_id,
+        booking.id,
+      )
+    : false
+
   return (
     <FieldReportClient
       workerId={workerId}
@@ -94,6 +107,7 @@ export default async function FieldReportPage({ params }: Props) {
         serviceAddress: booking.service_address,
         scheduledAt: booking.scheduled_at,
         contractId: booking.contract_id ?? null,
+        isFirstVisit,
       }}
       existingReport={report ? {
         id: report.id,

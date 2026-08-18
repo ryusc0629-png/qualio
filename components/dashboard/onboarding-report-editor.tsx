@@ -15,7 +15,7 @@ import {
   type ResolutionKind,
   type ResultKind,
 } from '@/lib/onboarding/types'
-import { saveOnboardingReportAction, generateOnboardingNotesAction, sendOnboardingReportAction } from '@/lib/actions/onboarding-reports'
+import { saveOnboardingReportAction, generateOnboardingNotesAction, sendOnboardingReportAction, refreshOnboardingDraftAction } from '@/lib/actions/onboarding-reports'
 
 interface Props {
   contractId: string
@@ -98,6 +98,17 @@ export function OnboardingReportEditor({ contractId, businessId, customerName, s
 
   const doSave = (status: 'draft' | 'shared') =>
     save({ contractId, beforeNote, specNote, managementNote, items, status })
+
+  const { execute: refreshDraft, isPending: isRefreshing } = useAction(refreshOnboardingDraftAction, {
+    onSuccess: ({ data }) => {
+      if (!data) return
+      // 사장님이 쓴 문장(작업 시방·관리 계획)은 건드리지 않는다 — 현장에서 온 값만 새로 채운다
+      setBeforeNote(data.beforeNote)
+      setItems(data.items.length > 0 ? data.items : [newOnboardingItem()])
+      toast.success('현장 기록을 다시 불러왔어요')
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '불러오지 못했어요'),
+  })
 
   const { execute: sendReport, isPending: isSending } = useAction(sendOnboardingReportAction, {
     onSuccess: ({ data }) => {
@@ -272,6 +283,19 @@ export function OnboardingReportEditor({ contractId, businessId, customerName, s
             placeholder="앞으로 관리하겠다는 다짐과, 같은 문제가 다시 생길 수 있음을 정직하게 전하세요." />
         </div>
       </section>
+
+      {/* 현장 기록 다시 불러오기 — 직원이 사진을 나중에 더 올린 경우 */}
+      <button
+        type="button"
+        onClick={() => {
+          if (!confirm('현장 기록을 다시 불러올까요?\n\n사진과 현장 메모가 새로 채워져요. 직접 쓰신 시방·관리 계획은 그대로 남아요.')) return
+          refreshDraft({ contractId })
+        }}
+        disabled={isRefreshing}
+        className="w-full text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 py-1 disabled:opacity-50"
+      >
+        {isRefreshing ? '불러오는 중...' : '현장 기록 다시 불러오기'}
+      </button>
 
       {/* 저장 · 공유 */}
       <div className="sticky bottom-0 -mx-4 px-4 py-3 bg-white/90 backdrop-blur border-t border-border flex items-center gap-2">

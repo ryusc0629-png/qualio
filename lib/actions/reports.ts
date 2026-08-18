@@ -7,7 +7,9 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendWorkCompleteAlimtalk, sendReviewRequestAlimtalk } from '@/lib/kakao/alimtalk'
 import { generateAiReport } from '@/lib/ai/report-writer'
 import { createPortfolioDraft } from '@/lib/actions/portfolio'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { assertReportSendable } from '@/lib/utils/report-send-guard'
+import { ensureOnboardingDraft } from '@/lib/onboarding/draft-from-field'
 import { revalidatePath } from 'next/cache'
 
 const aiReportDataSchema = z.object({
@@ -157,6 +159,15 @@ export const saveReportAction = action
         console.error('[Reports] alimtalk 발송 실패:', err)
       }
     }
+
+    // 정기계약의 '첫 방문'이면 초도 리포트 초안을 만들어 둔다(사장님이 대신 쓴 경우)
+    await ensureOnboardingDraft({
+      db: db as unknown as SupabaseClient,
+      businessId: profile.business_id,
+      bookingId,
+      contractId: booking.contract_id,
+      reportId: report.id,
+    })
 
     // 포트폴리오 초안 자동 생성 (비동기 — 실패해도 보고서 저장에 영향 없음)
     // Before/After 사진 + AI 보고서 데이터가 모두 있을 때만 생성

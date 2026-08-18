@@ -289,6 +289,27 @@ export default async function CustomerDetailPage({ params }: Props) {
 
   // 계약별 방문 요약 (다음 예정 방문 · 완료·예정 횟수) — bookingList를 contract_id로 그룹
   const nowIso = new Date().toISOString()
+  // 계약별 초도 리포트 상태 — '초도 현장'일 때만 버튼을 띄우기 위해 필요하다.
+  // (첫 작업 전이면 만들 게 없고, 이미 보냈으면 '보기'로 바뀐다)
+  const onboardingByContract = new Map<string, { hasDraft: boolean; sent: boolean }>()
+  {
+    const ids = (customerContracts ?? []).map((c) => c.id)
+    if (ids.length > 0) {
+      const { data: rows } = (await db
+        .from('onboarding_reports' as never)
+        .select('contract_id, alimtalk_sent_at')
+        .eq('business_id' as never, profile.business_id)
+        .in('contract_id' as never, ids)) as unknown as {
+        data: { contract_id: string | null; alimtalk_sent_at: string | null }[] | null
+      }
+      for (const r of rows ?? []) {
+        if (r.contract_id) {
+          onboardingByContract.set(r.contract_id, { hasDraft: true, sent: !!r.alimtalk_sent_at })
+        }
+      }
+    }
+  }
+
   const contractVisits = new Map<string, { next: string | null; completed: number; upcoming: number }>()
   for (const b of bookingList) {
     if (!b.contract_id) continue
@@ -553,14 +574,35 @@ export default async function CustomerDetailPage({ params }: Props) {
                       {contract.end_date ? ` · ${new Date(contract.end_date + 'T00:00:00').toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' })} 종료` : ' · 무기한'}
                     </span>
                   </div>
-                  {/* 초도(첫) 진단·작업 리포트 — 정착기 고객 만족·신뢰용 */}
-                  <Link
-                    href={`/dashboard/contracts/${contract.id}/onboarding-report`}
-                    className="flex items-center justify-center gap-1.5 h-10 rounded-lg border border-emerald-200 bg-emerald-50 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
-                  >
-                    <ClipboardList className="h-4 w-4" />
-                    초도 진단 리포트 만들기
-                  </Link>
+                  {/* 초도(첫) 작업 리포트 — '초도 현장'일 때만 보인다.
+                      첫 작업 전에는 만들 게 없고, 이미 보낸 뒤에는 다시 만들 일이 아니다. */}
+                  {(() => {
+                    const ob = onboardingByContract.get(contract.id)
+                    if ((visits?.completed ?? 0) === 0) {
+                      return (
+                        <p className="text-xs text-muted-foreground text-center py-1.5">
+                          첫 작업을 마치면 초도 리포트를 만들 수 있어요
+                        </p>
+                      )
+                    }
+                    return (
+                      <Link
+                        href={`/dashboard/contracts/${contract.id}/onboarding-report`}
+                        className={`flex items-center justify-center gap-1.5 h-10 rounded-lg border text-sm font-medium transition-colors ${
+                          ob?.sent
+                            ? 'border-border text-muted-foreground hover:bg-muted'
+                            : 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                        }`}
+                      >
+                        <ClipboardList className="h-4 w-4" />
+                        {ob?.sent
+                          ? '보낸 초도 리포트 보기'
+                          : ob?.hasDraft
+                            ? '초도 리포트 검토하고 보내기'
+                            : '초도 리포트 만들기'}
+                      </Link>
+                    )
+                  })()}
                 </div>
               )
             })}

@@ -11,6 +11,7 @@ import {
   sendWorkCompleteAlimtalk,
 } from '@/lib/kakao/alimtalk'
 import { sendOnMyWayForBooking } from '@/lib/kakao/on-my-way'
+import { ensureOnboardingDraft } from '@/lib/onboarding/draft-from-field'
 import { generateAiReport } from '@/lib/ai/report-writer'
 import { geocodeAddress } from '@/lib/roadmap/geo'
 import { postBookingRevenue } from '@/lib/finance/post-booking-revenue'
@@ -458,7 +459,7 @@ export const fieldSaveReportAction = action
   }))
   .action(async ({ parsedInput }) => {
     const { db, worker } = await verifyWorker(parsedInput.workerId)
-    await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+    const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
 
     // 보고서 upsert
     const upsertData: Record<string, unknown> = {
@@ -504,7 +505,17 @@ export const fieldSaveReportAction = action
       await db.from('report_photos').insert(allPhotos)
     }
 
-    return { success: true, reportId: report.id }
+    // 정기계약의 '첫 방문'이면 초도 리포트 초안을 만들어 둔다.
+    // 직원이 따로 할 일은 없다 — 평소대로 저장하면 사장님 쪽에 초안이 기다리고 있게 된다.
+    const draftCreated = await ensureOnboardingDraft({
+      db: db as unknown as SupabaseClient,
+      businessId: worker.business_id,
+      bookingId: parsedInput.bookingId,
+      contractId: booking.contract_id,
+      reportId: report.id,
+    })
+
+    return { success: true, reportId: report.id, onboardingDraftCreated: draftCreated }
   })
 
 // 보고서 발송 (검토 후 승인 시 호출)

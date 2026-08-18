@@ -168,20 +168,26 @@ export default async function OnboardingReportPublicPage({ params }: PageProps) 
                         </p>
                       )}
 
+                      {/* 전·후 둘 다 있으면 나란히, 한 장만 있으면 그 한 장만 절반 폭으로.
+                          현장에서 늘 두 장을 찍는 건 아니다 — 빈 칸을 남겨 문서가 미완성으로 보이면 안 된다. */}
                       {(it.beforeUrl || it.afterUrl) && (
-                        <div className="grid grid-cols-2 gap-3 mt-3 pl-7">
+                        <div className={`grid gap-3 mt-3 pl-7 ${it.beforeUrl && it.afterUrl ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-2'}`}>
                           {it.beforeUrl && (
                             <figure>
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={it.beforeUrl} alt="작업 전" className="w-full aspect-[4/3] object-cover rounded ring-1 ring-slate-200" />
-                              <figcaption className="text-[10px] font-semibold tracking-wide text-slate-400 mt-1">BEFORE</figcaption>
+                              <figcaption className="text-[10px] font-semibold tracking-wide text-slate-400 mt-1">
+                                {it.afterUrl ? 'BEFORE' : '작업 전'}
+                              </figcaption>
                             </figure>
                           )}
                           {it.afterUrl && (
                             <figure>
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={it.afterUrl} alt="작업 후" className="w-full aspect-[4/3] object-cover rounded ring-1 ring-emerald-200" />
-                              <figcaption className="text-[10px] font-semibold tracking-wide text-emerald-600 mt-1">AFTER</figcaption>
+                              <figcaption className="text-[10px] font-semibold tracking-wide text-emerald-600 mt-1">
+                                {it.beforeUrl ? 'AFTER' : '작업 후'}
+                              </figcaption>
                             </figure>
                           )}
                         </div>
