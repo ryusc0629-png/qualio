@@ -1,6 +1,7 @@
 'use client'
 
-import { CheckCircle2, ChevronRight, Sparkles } from 'lucide-react'
+import { useState } from 'react'
+import { CheckCircle2, ChevronRight, ChevronDown, Sparkles } from 'lucide-react'
 
 export interface CompletenessItem {
   key: string
@@ -18,13 +19,27 @@ interface Props {
 
 // 숨고식 완성도 온보딩 패널 — 채울수록 홈페이지 설득력이 강해진다는 걸 % 진행바로 보여준다.
 // 필수(공개 준비)와 강화(설득력)를 나눠, 안 채운 칸으로 바로 데려간다.
+//
+// ⚠️ 기본은 '남은 것만' 보여준다(2026-08-19).
+//    예전엔 다 채운 항목까지 전부 펼쳐놔서, 94%인데도 화면을 한참 내려야
+//    남은 1개가 보였다. 체크리스트는 '뭐가 남았나'를 알려주는 도구지
+//    '뭘 했나'를 자랑하는 목록이 아니다.
+//    다 채운 항목은 '완료한 N개 보기'로 접어둔다 — 목차 역할은 그대로 살아 있다.
+//    100%면 박스 전체가 한 줄로 접힌다.
 export function CompletenessPanel({ items, onJump }: Props) {
   const total = items.length
   const doneCount = items.filter((i) => i.done).length
   const percent = total > 0 ? Math.round((doneCount / total) * 100) : 0
+  const allDone = total > 0 && doneCount === total
 
-  const essentials = items.filter((i) => i.essential)
-  const enrichment = items.filter((i) => !i.essential)
+  const remaining = items.filter((i) => !i.done)
+  const essentials = remaining.filter((i) => i.essential)
+  const enrichment = remaining.filter((i) => !i.essential)
+  const completed = items.filter((i) => i.done)
+
+  // 다 채운 항목 펼치기 / 100%일 때 박스 펼치기
+  const [showDone, setShowDone] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   // 완성도 구간별 응원 문구
   const message =
@@ -72,6 +87,29 @@ export function CompletenessPanel({ items, onJump }: Props) {
     </li>
   )
 
+  // 다 채웠으면 한 줄로 접어둔다 — 할 일이 없는 목록이 화면 맨 위를 차지할 이유가 없다
+  if (allDone && !expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="w-full rounded-xl border bg-card px-5 py-3.5 flex items-center gap-3 text-left hover:bg-muted/40 transition-colors"
+      >
+        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+          <Sparkles className="h-4 w-4 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold">홈페이지 완성도 100%</p>
+          <p className="text-[11px] text-muted-foreground">{total}개 항목을 다 채웠어요</p>
+        </div>
+        <span className="text-xs text-muted-foreground shrink-0 inline-flex items-center gap-0.5">
+          펼치기
+          <ChevronDown className="h-3.5 w-3.5" />
+        </span>
+      </button>
+    )
+  }
+
   return (
     <div className="rounded-xl border bg-card p-5 space-y-4">
       {/* 헤더 + 퍼센트 */}
@@ -97,23 +135,38 @@ export function CompletenessPanel({ items, onJump }: Props) {
       </div>
       <p className="text-xs text-muted-foreground">{message}</p>
 
-      {/* 필수 항목 */}
+      {/* 아직 안 채운 것 — 필수 먼저 */}
       {essentials.length > 0 && (
         <div className="pt-1">
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+          <p className="text-[11px] font-semibold text-muted-foreground mb-1">
             기본 정보 (홈페이지 공개에 필요해요)
           </p>
           <ul className="divide-y divide-border/60">{essentials.map(renderRow)}</ul>
         </div>
       )}
 
-      {/* 설득력 강화 항목 */}
       {enrichment.length > 0 && (
         <div className="pt-1">
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+          <p className="text-[11px] font-semibold text-muted-foreground mb-1">
             설득력 강화 (채울수록 고객이 믿어요)
           </p>
           <ul className="divide-y divide-border/60">{enrichment.map(renderRow)}</ul>
+        </div>
+      )}
+
+      {/* 다 채운 항목 — 접어둔다. 눌러서 펼치면 설정 화면의 목차로 쓸 수 있다 */}
+      {completed.length > 0 && (
+        <div className="pt-1 border-t border-border/60">
+          <button
+            type="button"
+            onClick={() => setShowDone((v) => !v)}
+            className="flex w-full items-center gap-1.5 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+            완료한 {completed.length}개 {showDone ? '접기' : '보기'}
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showDone ? 'rotate-180' : ''}`} />
+          </button>
+          {showDone && <ul className="divide-y divide-border/60">{completed.map(renderRow)}</ul>}
         </div>
       )}
     </div>
