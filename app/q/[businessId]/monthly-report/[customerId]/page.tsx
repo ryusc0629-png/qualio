@@ -8,6 +8,7 @@ import { formatFrequency } from '@/lib/utils/frequency'
 import {
   buildMonthlySummary,
   buildHeadline,
+  formatResolveDays,
   type VisitLike,
   type ReportLike,
 } from '@/lib/reports/monthly-summary'
@@ -196,7 +197,6 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
     summary,
     monthLabel: range.label,
     serviceName,
-    frequency: contract?.frequency ?? null,
   })
 
   const cycleLabel = contract?.frequency ? formatFrequency(contract.frequency) : null
@@ -245,11 +245,17 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
              ⛔ 회차 지표를 다시 넣지 말 것. */}
         <section className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-px overflow-hidden border border-slate-200 bg-slate-200 break-inside-avoid">
           <Metric value={`${summary.issueCount}건`} label="접수된 요청" />
-          <Metric value={`${summary.issueResolvedCount}건`} label="처리 완료" />
           <Metric
             value={summary.issueResolveRate !== null ? `${summary.issueResolveRate}%` : '—'}
             label="처리율"
             accent
+          />
+          {/* '처리 완료 N건'은 접수 건수와 처리율에서 그대로 나오는 값이라 뺐다.
+              대신 '얼마나 빨리 대응했나'를 넣는다 — 담당자가 재계약을 판단할 때
+              건수보다 이쪽이 중요하다. */}
+          <Metric
+            value={summary.avgResolveDays !== null ? formatResolveDays(summary.avgResolveDays) : '—'}
+            label="평균 처리 소요"
           />
           <Metric value={`${summary.siteNotes.length}건`} label="미리 발견해 조치" />
         </section>

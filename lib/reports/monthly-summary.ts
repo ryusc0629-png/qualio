@@ -1,5 +1,3 @@
-import { formatFrequency } from '@/lib/utils/frequency'
-
 // 거래처 월간 보고서 요약 계산 — 날짜 나열이 아니라 '이번 달 어땠는지'를 한눈에 만든다.
 // 페이지(서버 컴포넌트)는 화면 그리기에만 집중하고, 숫자 만드는 규칙은 전부 여기에 모은다.
 
@@ -45,8 +43,6 @@ export interface MonthlySummary {
   upcomingCount: number
   /** 이번 달 예정분 대비 완료 비율(%) — 이미 지난 방문만 분모로 삼는다 */
   onTimeRate: number | null
-  /** 도착~마감 기록이 있는 방문의 총 작업 시간(분) */
-  totalMinutes: number
   /** 현장에서 챙긴 것 — 날짜 + 내용 */
   siteNotes: { date: string; note: string }[]
   workerNames: string[]
@@ -59,6 +55,9 @@ export interface MonthlySummary {
   issueResolvedCount: number
   /** 처리율(%) — 접수가 없으면 null(0%로 보이면 안 된다) */
   issueResolveRate: number | null
+  /** 접수부터 처리까지 평균 며칠 걸렸는지 — 처리된 건이 없으면 null.
+   *  담당자가 재계약을 판단할 때 '얼마나 빨리 대응하나'가 건수보다 중요하다. */
+  avgResolveDays: number | null
   /** 접수·처리 내역 — 날짜 순 */
   issues: {
     date: string
@@ -73,14 +72,6 @@ export interface MonthlySummary {
   requests: { date: string; note: string }[]
   /** 달을 넘긴 미해결 건 — 다음 달 계획에 그대로 올린다 */
   carriedOver: { date: string; title: string }[]
-}
-
-/** 두 시각 사이 분 — 비정상 값(음수·12시간 초과)은 집계에서 뺀다 */
-function durationMinutes(start?: string | null, end?: string | null): number {
-  if (!start || !end) return 0
-  const min = (new Date(end).getTime() - new Date(start).getTime()) / 60000
-  if (!Number.isFinite(min) || min <= 0 || min > 12 * 60) return 0
-  return Math.round(min)
 }
 
 export function buildMonthlySummary(input: {
@@ -105,8 +96,6 @@ export function buildMonthlySummary(input: {
   const past = visits.filter((v) => new Date(v.scheduled_at) <= now)
   const pastCompleted = past.filter((v) => v.status === 'completed').length
   const onTimeRate = past.length > 0 ? Math.round((pastCompleted / past.length) * 100) : null
-
-  const totalMinutes = completed.reduce((sum, v) => sum + durationMinutes(v.checkin_at, v.checkout_at), 0)
 
   // 현장 특이사항 — 완료된 방문에 남은 것만, 날짜 순
   const noteByBooking = new Map(
@@ -142,6 +131,17 @@ export function buildMonthlySummary(input: {
     .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
     .map((r) => ({ date: r.scheduled_at, note: r.request.trim() }))
 
+  // 접수 → 처리까지 걸린 평균 일수(소수 한 자리). 처리된 건만 센다.
+  const resolvedWithTime = issuesSorted.filter((i) => isResolved(i) && i.resolved_at)
+  const avgResolveDays = resolvedWithTime.length > 0
+    ? Math.round(
+        (resolvedWithTime.reduce(
+          (sum, i) => sum + (new Date(i.resolved_at!).getTime() - new Date(i.created_at).getTime()),
+          0,
+        ) / resolvedWithTime.length / (24 * 60 * 60 * 1000)) * 10,
+      ) / 10
+    : null
+
   const carriedOver = issuesSorted
     .filter((i) => !isResolved(i))
     .map((i) => ({ date: i.created_at, title: (i.title ?? '').trim() || '요청 접수' }))
@@ -150,27 +150,18 @@ export function buildMonthlySummary(input: {
     completedCount: completed.length,
     upcomingCount: upcoming.length,
     onTimeRate,
-    totalMinutes,
     siteNotes,
     workerNames: names,
     issueCount: issues.length,
     issueResolvedCount: resolvedCount,
     issueResolveRate: issues.length > 0 ? Math.round((resolvedCount / issues.length) * 100) : null,
+    avgResolveDays,
     issues,
     requests,
     carriedOver,
   }
 }
 
-/** 분 → '12시간 30분' 같은 읽기 쉬운 문구 */
-export function formatDuration(minutes: number): string {
-  if (minutes <= 0) return '—'
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h === 0) return `${m}분`
-  if (m === 0) return `${h}시간`
-  return `${h}시간 ${m}분`
-}
 
 /**
  * 보고서 맨 위 한 줄 총평 — 담당자가 표를 읽지 않아도 이번 달을 알 수 있게.
@@ -180,26 +171,23 @@ export function buildHeadline(input: {
   summary: MonthlySummary
   monthLabel: string
   serviceName: string | null
-  frequency: string | null
 }): string {
-  const { summary, monthLabel, serviceName, frequency } = input
+  const { summary, monthLabel, serviceName } = input
   const service = serviceName ?? '정기 청소'
 
   if (summary.completedCount === 0) {
-    return summary.upcomingCount > 0
-      ? `${monthLabel} ${service}는 ${summary.upcomingCount}회 방문이 예정되어 있습니다.`
-      : `${monthLabel}에는 기록된 방문이 없습니다.`
+    return `${monthLabel}에는 진행된 방문이 없습니다.`
   }
 
-  const parts: string[] = []
-  const cycle = frequency ? formatFrequency(frequency) : null
-  parts.push(
-    cycle && cycle !== '—'
-      ? `${monthLabel} ${service}를 ${cycle} 일정으로 ${summary.completedCount}회 진행했습니다.`
-      : `${monthLabel} ${service}를 ${summary.completedCount}회 진행했습니다.`,
-  )
+  // ⛔ 방문 횟수·주기·체류 시간을 문장에 넣지 말 것(사장님 지적 2026-08-19).
+  //    계약서에 이미 있는 값이라 담당자에게 정보가 아니다.
+  //    총평은 '어떻게 관리했고, 요청은 어떻게 처리했는지'만 말한다.
+  const parts: string[] = [
+    summary.onTimeRate === 100
+      ? `${monthLabel} ${service}를 계약된 일정대로 모두 진행했습니다.`
+      : `${monthLabel} ${service}를 진행했습니다.`,
+  ]
 
-  // 담당자가 먼저 보는 건 '문제가 있었나, 처리됐나'다. 체류 시간보다 이걸 앞세운다.
   if (summary.issueCount > 0) {
     parts.push(
       summary.issueResolvedCount === summary.issueCount
@@ -210,9 +198,17 @@ export function buildHeadline(input: {
   } else {
     parts.push('접수된 요청이나 문제는 없었습니다.')
   }
+
   if (summary.siteNotes.length > 0) {
     parts.push(`문제가 되기 전에 미리 챙긴 것 ${summary.siteNotes.length}건은 아래에 정리했습니다.`)
   }
 
   return parts.join(' ')
+}
+
+/** 평균 처리 소요를 사람이 읽는 말로 — 하루 안이면 '당일', 그 외엔 'N일' */
+export function formatResolveDays(days: number): string {
+  if (days < 1) return '당일'
+  if (days < 1.5) return '1일'
+  return `${days % 1 === 0 ? days : days.toFixed(1)}일`
 }
