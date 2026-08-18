@@ -36,6 +36,8 @@ export interface GeoMeasureResult {
   cited: number
   total: number
   sharePct: number
+  /** 호출 자체가 실패한 질문 수. 전부 실패했으면 그 엔진은 '측정 안 됨'이지 '0점'이 아니다. */
+  failed?: number
 }
 
 interface PplxSearchItem { title?: string; url?: string; snippet?: string }
@@ -81,16 +83,18 @@ export async function measureGeoShareOfVoice(
   queries: string[],
   identity: GeoIdentity,
 ): Promise<GeoMeasureResult> {
+  let failed = 0
   // 동시에 던진다 — 하나씩 물으면 질문을 늘릴수록 함수 제한시간에 걸린다.
   const results = await mapWithConcurrency(queries, GEO_CONCURRENCY, async (q) => {
     try {
       return await measureOne(apiKey, q, identity.needles)
     } catch (e) {
+      failed++
       console.error('[GEO] 측정 실패:', q, e instanceof Error ? e.message : e)
       return { query: q, mentioned: false, matchedUrl: null, topDomains: [] } as GeoQuestionResult
     }
   })
   const cited = results.filter((r) => r.mentioned).length
   const total = results.length
-  return { results, cited, total, sharePct: total ? Math.round((cited / total) * 100) : 0 }
+  return { results, cited, total, failed, sharePct: total ? Math.round((cited / total) * 100) : 0 }
 }

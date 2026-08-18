@@ -165,19 +165,27 @@ export async function runGeoCheck(
   const settled = await Promise.all(
     engineJobs.map(async (job) => {
       try {
-        return { engine: job.engine, results: (await job.run()).results }
+        const r = await job.run()
+        // 전부 실패했으면 그 엔진은 '0점'이 아니라 '측정 안 됨'이다.
+        // 예전엔 제미나이가 호출마다 404였는데 화면에 "Gemini 0/30"이 정상 측정처럼 떴다.
+        if ((r.failed ?? 0) >= r.total && r.total > 0) {
+          console.error(`[GEO] ${job.engine} 전부 실패 — 이번 측정에서 제외`)
+          return null
+        }
+        return { engine: job.engine, results: r.results }
       } catch (e) {
         console.error(`[GEO] ${job.engine} 엔진 실패:`, e instanceof Error ? e.message : e)
-        return { engine: job.engine, results: [] as GeoQuestionResult[] }
+        return null
       }
     }),
   )
-  const engineResults = settled
+  const engineResults = settled.filter((e): e is { engine: string; results: GeoQuestionResult[] } => e !== null)
 
   // 비용·시간을 눈으로 볼 수 있게 남긴다 — 질문 수를 올릴지 판단하는 근거가 된다
   console.log(
     `[GEO] 측정 완료 business=${businessId} 질문=${questions.length} 엔진=${engineJobs.length} ` +
-    `호출=${questions.length * engineJobs.length} 소요=${Math.round((Date.now() - startedAt) / 1000)}초`,
+    `호출=${questions.length * engineJobs.length} 성공엔진=${engineResults.length} ` +
+    `소요=${Math.round((Date.now() - startedAt) / 1000)}초`,
   )
 
   // 질문별 엔진 통합 — 어느 엔진에서든 잡히면 노출(union), 인용 도메인은 합집합.

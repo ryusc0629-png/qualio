@@ -95,11 +95,13 @@ export async function measureGeoShareOfVoiceOpenAI(
     useModel = FALLBACK_MODEL
   }
 
+  let failed = 0
   // 동시에 던진다 — 하나씩 물으면 질문을 늘릴수록 함수 제한시간에 걸린다.
   const results = await mapWithConcurrency(queries, GEO_CONCURRENCY, async (q) => {
     try {
       return await measureOne(apiKey, useModel, q, identity.needles, identity.location)
     } catch (e) {
+      failed++
       console.error('[GEO/OpenAI] 측정 실패:', q, e instanceof Error ? e.message : e)
       return { query: q, mentioned: false, matchedUrl: null, topDomains: [] } as GeoQuestionResult
     }
@@ -107,5 +109,5 @@ export async function measureGeoShareOfVoiceOpenAI(
   console.log(`[GEO/OpenAI] 모델=${useModel} 질문=${queries.length} 잡힘=${results.filter((r) => r.mentioned).length}`)
   const cited = results.filter((r) => r.mentioned).length
   const total = results.length
-  return { results, cited, total, sharePct: total ? Math.round((cited / total) * 100) : 0 }
+  return { results, cited, total, failed, sharePct: total ? Math.round((cited / total) * 100) : 0 }
 }
