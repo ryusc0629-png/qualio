@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { runGeoCheck } from '@/lib/geo/run-check'
+import { isAdminEmail } from '@/lib/admin/auth'
 import { revalidatePath } from 'next/cache'
 
 // "지금 측정하기" 버튼 — 사장님이 즉시 AI 검색 노출률을 측정한다.
@@ -25,7 +26,13 @@ export const runGeoCheckAction = action
 
     // 비용 안전장치 — 같은 질문으로 반복해 재는 것만 막는다.
     // 질문 세트가 바뀌었으면(검색어 규칙 개선·지역/서비스 추가) 바로 다시 잴 수 있어야 한다.
-    const { skipped, result } = await runGeoCheck(db, profile.business_id, { minIntervalHours: 1 })
+    //
+    // 본사(관리자) 계정은 잠금을 두지 않는다. 다트클린은 우리가 직접 운영하는 계정이라
+    // 검색어·문구를 바꿔가며 그때그때 확인해야 하는데, 잠금이 걸리면 매번 기다려야 한다.
+    const isAdmin = isAdminEmail(user.email)
+    const { skipped, result } = await runGeoCheck(db, profile.business_id, {
+      minIntervalHours: isAdmin ? 0 : 1,
+    })
 
     if (skipped === 'too-soon') {
       throw new Error('[APP] 방금 측정했어요. 잠시 후에 다시 눌러주세요')

@@ -204,14 +204,14 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
   return (
     <div className="rounded-xl border bg-white p-6 space-y-5">
       {/* 머리 — '지금 측정하기'는 첫 측정 전에만 있었다. 그러면 한 번 재고 나면
-          다시 누를 방법이 없어 매주 자동 측정을 기다리는 수밖에 없었다(설정을 고친 직후엔 특히 답답하다).
+          다시 누를 방법이 없어 자동 측정을 기다리는 수밖에 없었다(설정을 고친 직후엔 특히 답답하다).
           측정을 한 뒤에도 항상 보이게 둔다. 연속 호출은 서버에서 12시간으로 막는다. */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <p className="font-semibold text-sm">🔎 AI 검색 노출률</p>
           <p className="text-xs text-muted-foreground mt-1">
             {formatKstDate(latest.checked_at)} 측정 · 손님 검색어 {latest.total}개 기준
-            {measureEnabled && ' · 매주 자동 측정돼요'}
+            {measureEnabled && ' · 매달 자동 측정돼요'}
           </p>
         </div>
         {measureEnabled && <GeoMeasureButton label="다시 측정하기" />}
@@ -321,7 +321,7 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
         </div>
       ) : (
         <p className="text-xs text-muted-foreground rounded-lg bg-slate-50 border p-3">
-          측정을 몇 번 더 하면 여기에 <b>노출률이 올라가는 그래프</b>가 그려져요. 매주 자동으로도 측정됩니다.
+          측정을 몇 번 더 하면 여기에 <b>노출률이 올라가는 그래프</b>가 그려져요. 달마다 자동으로도 측정됩니다.
         </p>
       )}
 

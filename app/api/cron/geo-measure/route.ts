@@ -11,10 +11,14 @@ import type { GeoMeasureResult } from '@/lib/geo/measure'
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
-// 실행 1회당 측정 업체 상한 — Perplexity 호출량(업체당 ~12질문)을 예측 가능하게 묶는다.
+// 실행 1회당 측정 업체 상한 — 호출량(업체당 질문 30개 × 엔진 3개 = 90번)을 예측 가능하게 묶는다.
 const CAP_PER_RUN = 15
-// 재측정 최소 간격(일) — 노출률은 콘텐츠 누적에 따라 천천히 변하므로 주 1회로 충분.
-const MIN_INTERVAL_DAYS = 7
+// 재측정 최소 간격(일) — 자동 측정은 달에 한 번.
+//
+// 왜 주 1회에서 내렸나: 질문을 12개에서 30개로 넓히면서 측정 1회 호출이 36번 → 90번이 됐다.
+// 노출률은 글이 쌓이는 속도만큼만 움직여서 주 단위로 볼 만한 변화가 없는데 비용은 4배가 된다.
+// 그때그때 확인이 필요하면 화면의 '다시 측정하기'로 언제든 잴 수 있다.
+const MIN_INTERVAL_DAYS = 30
 
 // 마일스톤 — 이 선을 처음 넘으면 축하 푸시(높은 것 우선)
 const MILESTONES = [50, 25, 10]
