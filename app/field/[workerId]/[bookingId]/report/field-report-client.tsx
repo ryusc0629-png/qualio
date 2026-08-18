@@ -751,6 +751,21 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             </div>
           </div>
         )}
+        {/* 사진이 어디로 가는지 — 기사님이 알아야 제대로 찍는다.
+            "잘 찍어주세요"만으로는 안 움직인다. 이 사진이 고객에게 그대로 간다는 걸 알려준다. */}
+        <div className="rounded-xl bg-slate-50 border border-slate-200 p-4">
+          <p className="text-sm font-semibold text-slate-800">사진은 고객이 그대로 봅니다</p>
+          <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+            {booking.contractId
+              ? '오늘 찍은 사진은 월말에 거래처로 가는 보고서에 그대로 실려요. 거래처가 재계약을 정할 때 보는 자료예요.'
+              : '오늘 찍은 사진은 작업 보고서로 고객 휴대폰에 그대로 갑니다. 고객이 후기를 남길 때도 이 사진을 내려받아 올려요.'}
+          </p>
+          <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+            <b className="text-slate-800">작업 전과 같은 자리·같은 각도</b>로 찍어주세요. 나란히 놓고 보여주기 때문에
+            각도가 어긋나면 얼마나 깨끗해졌는지 안 드러나요.
+          </p>
+        </div>
+
         {/* Before 사진 */}
         <div className="rounded-xl bg-white border p-4">
           <PhotoSection
@@ -919,7 +934,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
         <div className="rounded-xl bg-white border p-4">
           <PhotoSection
             label="작업 후 사진"
-            hint="작업 완료 후 깨끗해진 모습을 촬영해주세요"
+            hint="작업 전과 같은 자리에서 찍어주세요"
             slots={after}
             setSlots={setAfter}
             inputRef={afterInputRef}
