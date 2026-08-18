@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { GeoMeasureButton } from './geo-measure-button'
+import { classifyGeoQuestion } from '@/lib/geo/questions'
 
 // AI 검색 노출률 카드(GEO Phase 1) — 소비자 질문을 AI 검색에 던져 우리 업체가
 // 결과에 잡히는 비율을 측정한 결과를 사장님이 숫자로 보게 한다.
@@ -94,6 +95,14 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
   const db = createServiceClient()
   const measureEnabled = !!(process.env.PERPLEXITY_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY)
 
+  // 업체명 — 검색어가 '브랜드(우리 이름) 질문'인지 가려내는 데 쓴다
+  const { data: bizRow } = await db
+    .from('businesses')
+    .select('name')
+    .eq('id', businessId)
+    .maybeSingle()
+  const businessName = bizRow?.name ?? null
+
   // 최근 12건 — 추세 그래프 + 직전 대비 계산용
   const { data } = (await db
     .from('geo_checks' as never)
@@ -129,9 +138,25 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
   // 추세 — 직전 측정 대비 몇 %p 변화
   const delta = prev ? latest.share_pct - prev.share_pct : null
 
-  // 질문별 승패 — 이미 잡힌 질문 / 아직 안 잡힌 질문
-  const citedQuestions = latest.detail.filter((d) => d.mentioned)
-  const weakQuestions = latest.detail.filter((d) => !d.mentioned)
+  // 질문 성격 분류 — 이길 수 있는 판(우리 동네·가격·브랜드)과 참고용(광역)을 갈라 본다.
+  //
+  // 왜 나누나: "경기 입주청소 추천" 같은 광역 검색어는 답이 목록으로 나가야 해서 AI가
+  // 플랫폼(숨고·미소)·비교글을 인용한다. 동네 업체가 글을 아무리 써도 잘 안 뚫린다.
+  // 그걸 실패로 같이 세면 노력해도 숫자가 안 움직여 사장님이 먼저 지친다.
+  // 그래서 광역은 '참고'로 빼고, 우리가 이길 수 있는 판의 성적을 따로 보여준다.
+  const withKind = latest.detail.map((d) => ({ ...d, kind: classifyGeoQuestion(d.query, businessName) }))
+  const winnable = withKind.filter((d) => d.kind !== 'broad')
+  const broadQuestions = withKind.filter((d) => d.kind === 'broad')
+
+  const winnableCited = winnable.filter((d) => d.mentioned).length
+  const winnablePct = winnable.length ? Math.round((winnableCited / winnable.length) * 100) : 0
+
+  // 브랜드 검색어("우리 이름 + 후기") — 손님이 이름을 듣고 AI에 물었을 때 제대로 나오는가
+  const brandQuestion = withKind.find((d) => d.kind === 'brand') ?? null
+
+  // 질문별 승패 — 이미 잡힌 질문 / 아직 안 잡힌 질문 (광역은 아래에서 따로 다룬다)
+  const citedQuestions = winnable.filter((d) => d.mentioned)
+  const weakQuestions = winnable.filter((d) => !d.mentioned)
   // 특정 질문에서 지금 잡히는 경쟁 채널(우리 도메인 제외, 상위 2개)
   const competitorsFor = (topDomains: string[]) =>
     topDomains.filter((d) => d && d !== APP_HOST).slice(0, 2)
@@ -171,7 +196,26 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
         </p>
       </div>
 
-      {/* 핵심 숫자 */}
+      {/* 핵심 숫자 — 검색어가 3개 미만이면 퍼센트를 크게 띄우지 않는다.
+          1개 중 1개가 잡혔다고 "100%"로 보여주면 실제보다 잘 되는 것처럼 읽힌다. */}
+      {latest.total < 3 ? (
+        <div className="rounded-lg border bg-slate-50 p-4">
+          <p className="text-sm font-semibold text-foreground">
+            {latest.cited > 0 ? '우리 이름으로 물으면 AI가 답해요' : '아직 AI가 우리를 모르고 있어요'}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+            지금은 검색어 {latest.total}개만 보고 있어서 노출률(%)은 아직 의미가 없어요.
+            <b> 설정에서 지역과 서비스를 채우면</b> 우리 동네 검색어 여러 개로 늘어나고, 그때부터 숫자가 쌓입니다.
+          </p>
+          <a
+            href="/dashboard/settings"
+            className="inline-block mt-3 text-sm font-medium text-emerald-700 hover:underline"
+          >
+            지역·서비스 채우러 가기 →
+          </a>
+        </div>
+      ) : (
+      <>
       <div className="flex items-end gap-3">
         <span className="text-4xl font-bold text-emerald-600">{latest.share_pct}%</span>
         {delta !== null && (
@@ -188,6 +232,51 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
         손님 검색어 <b>{latest.total}개</b> 중 <b className="text-foreground">{latest.cited}개</b>에서
         AI 검색에 우리 업체가 잡혔어요.
       </p>
+      </>
+      )}
+
+      {/* 우리 동네 기준 성적 — 이길 수 있는 판만 따로. 광역은 참고라 여기서 뺀다. */}
+      {broadQuestions.length > 0 && winnable.length > 0 && (
+        <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 p-3 -mt-2">
+          <p className="text-sm text-emerald-900">
+            이 중 <b>우리 동네 검색어 {winnable.length}개</b>만 보면{' '}
+            <b className="text-emerald-700">{winnablePct}%</b>
+            {winnableCited > 0 ? ` (${winnableCited}개에서 잡힘)` : ''}
+          </p>
+          <p className="text-xs text-emerald-900/70 mt-1 leading-relaxed">
+            나머지 {broadQuestions.length}개는 <b>{broadQuestions.map((d) => d.query).join(', ')}</b> 같은 넓은 지역
+            검색어예요. 여긴 전국 플랫폼이 차지한 자리라 참고만 하시면 돼요 — 우리가 이기는 판은 위 숫자입니다.
+          </p>
+        </div>
+      )}
+
+      {/* 브랜드 검색 — 이름을 아는 손님이 AI에 물었을 때. 가장 먼저 잡히는 자리다. */}
+      {brandQuestion && (
+        <div
+          className={`rounded-lg border p-3 -mt-2 ${
+            brandQuestion.mentioned ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'
+          }`}
+        >
+          <p className="text-sm">
+            {brandQuestion.mentioned ? (
+              <>
+                <b className="text-emerald-800">✅ 우리 이름으로 물으면 AI가 제대로 답해요</b>
+                <span className="text-emerald-900/70"> — “{brandQuestion.query}”</span>
+              </>
+            ) : (
+              <>
+                <b className="text-foreground">우리 이름으로 물었을 때 아직 안 나와요</b>
+                <span className="text-muted-foreground"> — “{brandQuestion.query}”</span>
+              </>
+            )}
+          </p>
+          {!brandQuestion.mentioned && (
+            <p className="text-xs text-muted-foreground mt-1">
+              홈페이지가 검색에 등록되면 여기부터 잡히기 시작해요. 보통 가장 먼저 채워지는 칸입니다.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* 엔진별 노출 — 여러 AI 검색엔진에서 각각 몇 개 질문에 잡혔나 */}
       {engineStats.length >= 2 && (
@@ -285,7 +374,8 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
         </div>
       )}
 
-      {/* 기대치 설명 — 아직 한 건도 안 잡혔을 때(초기 이탈 방지) */}
+      {/* 기대치 설명 — 아직 한 건도 안 잡혔을 때(초기 이탈 방지).
+          하나라도 잡혔으면 격려가 아니라 김이 새는 문구라 숨긴다. */}
       {latest.cited === 0 && (
         <div className="rounded-lg bg-slate-50 border p-4">
           <p className="text-sm font-semibold text-foreground">지금 0%인 건 정상이에요</p>

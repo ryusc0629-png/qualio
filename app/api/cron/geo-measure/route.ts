@@ -74,15 +74,19 @@ export async function GET(request: NextRequest) {
 
   const db = createServiceClient()
 
-  // 측정 대상 후보 — 공개 페이지(slug)와 지역(address)이 있는 업체만(질문 생성 가능 조건)
+  // 측정 대상 후보 — 업체명만 있으면 넣는다.
+  //
+  // 예전엔 slug와 주소를 둘 다 요구해 32곳 중 10곳만 측정됐고, 나머지는 AI 검색 화면이
+  // 영영 빈 채로 남았다. 지역이 없으면 지역 검색어는 못 만들지만(지어낼 수 없다)
+  // "우리 이름으로 물으면 AI가 답하나?"는 지역 없이도 측정되고, 그 결과 하나가
+  // 지역·서비스를 채울 이유가 된다. 질문 세트가 비는 업체는 runGeoCheck가 알아서 건너뛴다.
   const { data: businesses } = (await db
     .from('businesses')
-    .select('id, address' as never)
-    .not('slug', 'is', null)) as unknown as {
-    data: { id: string; address: string | null }[] | null
+    .select('id, name' as never)) as unknown as {
+    data: { id: string; name: string | null }[] | null
   }
 
-  const candidates = (businesses ?? []).filter((b) => !!b.address?.trim())
+  const candidates = (businesses ?? []).filter((b) => (b.name?.trim().length ?? 0) >= 2)
   if (candidates.length === 0) {
     return NextResponse.json({ measured: 0, skipped: 0, eligible: 0 })
   }

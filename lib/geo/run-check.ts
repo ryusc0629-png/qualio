@@ -1,6 +1,6 @@
 import 'server-only'
 import type { createServiceClient } from '@/lib/supabase/server'
-import { buildGeoQuestions } from '@/lib/geo/questions'
+import { buildGeoQuestions, toSearchArea, type GeoQuestionInput } from '@/lib/geo/questions'
 import { measureGeoShareOfVoice, type GeoMeasureResult, type GeoQuestionResult } from '@/lib/geo/measure'
 import { measureGeoShareOfVoiceGemini } from '@/lib/geo/measure-gemini'
 import { measureGeoShareOfVoiceOpenAI } from '@/lib/geo/measure-openai'
@@ -25,9 +25,7 @@ export function currentMonthKey(): string {
 export async function ensureGeoQuestions(
   db: Db,
   businessId: string,
-  address: string | null,
-  serviceAreas: string[] | null,
-  serviceNames: string[],
+  input: Omit<GeoQuestionInput, 'activeAreas'> & { activeAreas?: string[] | null },
 ): Promise<string[]> {
   const month = currentMonthKey()
 
@@ -41,7 +39,7 @@ export async function ensureGeoQuestions(
   const current = rows.map((r) => r.question)
 
   // 지금 규칙으로 만들어야 할 질문 세트 — 결정적 템플릿. 지역·서비스 부족하면 빈 배열.
-  const desired = buildGeoQuestions(address, serviceAreas, serviceNames)
+  const desired = buildGeoQuestions(input)
 
   // 생성이 불가능하면(지역·서비스 없음) 기존 질문이라도 있으면 그대로 사용
   if (desired.length === 0) return current
@@ -106,7 +104,36 @@ export async function runGeoCheck(db: Db, businessId: string): Promise<RunGeoChe
 
   const serviceNames = (services ?? []).map((s) => s.name as string)
 
-  const questions = await ensureGeoQuestions(db, businessId, biz.address, biz.service_areas, serviceNames)
+  // 실제로 일한 지역 — 시공 사례라는 근거가 있는 곳부터 공략한다.
+  // (예약 주소를 시군구로 접어 많은 순으로 정렬. 없으면 출장 지역 순서를 그대로 쓴다)
+  const { data: doneBookings } = (await db
+    .from('bookings')
+    .select('service_address')
+    .eq('business_id', businessId)
+    .is('deleted_at', null)
+    .not('service_address', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(200)) as unknown as { data: { service_address: string | null }[] | null }
+
+  const areaCount = new Map<string, number>()
+  for (const b of doneBookings ?? []) {
+    const area = toSearchArea(b.service_address)
+    if (!area || !area.includes(' ')) continue // 광역만 나온 주소는 신호가 약해 제외
+    areaCount.set(area, (areaCount.get(area) ?? 0) + 1)
+  }
+  const activeAreas = [...areaCount.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([area]) => area)
+
+  const questionInput: GeoQuestionInput = {
+    businessName: biz.name,
+    address: biz.address,
+    serviceAreas: biz.service_areas,
+    serviceNames,
+    activeAreas,
+  }
+
+  const questions = await ensureGeoQuestions(db, businessId, questionInput)
   if (questions.length === 0) return { skipped: 'no-questions' }
 
   // 식별 신호(needles) — 업체명·slug가 검색결과/답변/인용에 있으면 "노출"로 판정.
