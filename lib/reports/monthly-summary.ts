@@ -24,6 +24,24 @@ export interface ChecklistItem {
   label: string
 }
 
+/** 접수된 문제·클레임 — 담당자가 가장 먼저 보는 것은 '문제가 있었나, 처리됐나'다 */
+export interface IssueLike {
+  id: string
+  title: string | null
+  content: string | null
+  status: string
+  resolution: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
+/** 현장에서 고객이 추가로 요청한 것 — 방문에 붙어 있다 */
+export interface RequestLike {
+  booking_id: string
+  scheduled_at: string
+  request: string
+}
+
 export interface MonthlySummary {
   completedCount: number
   upcomingCount: number
@@ -37,6 +55,21 @@ export interface MonthlySummary {
   siteNotes: { date: string; note: string }[]
   photoCount: number
   workerNames: string[]
+
+  // ── 담당자가 실제로 궁금해하는 것 ────────────────────────
+  // 방문 횟수·체류 시간보다 '문제가 있었나, 처리됐나'가 먼저다(사장님 지적 2026-08-18).
+  /** 이번 달 접수된 문제·요청 건수 */
+  issueCount: number
+  /** 그중 처리 완료된 건수 */
+  issueResolvedCount: number
+  /** 처리율(%) — 접수가 없으면 null(0%로 보이면 안 된다) */
+  issueResolveRate: number | null
+  /** 접수·처리 내역 — 날짜 순 */
+  issues: { date: string; title: string; detail: string | null; resolution: string | null; resolved: boolean }[]
+  /** 현장에서 고객이 추가로 요청한 것 */
+  requests: { date: string; note: string }[]
+  /** 달을 넘긴 미해결 건 — 다음 달 계획에 그대로 올린다 */
+  carriedOver: { date: string; title: string }[]
 }
 
 /** 두 시각 사이 분 — 비정상 값(음수·12시간 초과)은 집계에서 뺀다 */
@@ -55,8 +88,14 @@ export function buildMonthlySummary(input: {
   photoCount: number
   /** 기준 시각(보통 지금) — '이미 지난 방문'을 가르는 선 */
   now: Date
+  /** 이번 달 접수된 문제·클레임 */
+  issues?: IssueLike[]
+  /** 현장에서 받은 추가 요청 */
+  requests?: RequestLike[]
 }): MonthlySummary {
   const { visits, reports, checklistItems, workerNames, photoCount, now } = input
+  const issueRows = input.issues ?? []
+  const requestRows = input.requests ?? []
 
   const completed = visits.filter((v) => v.status === 'completed')
   const upcoming = visits.filter((v) => v.status !== 'completed')
@@ -100,6 +139,27 @@ export function buildMonthlySummary(input: {
     .map((id) => workerNames.get(id))
     .filter((n): n is string => Boolean(n))
 
+  // 문제·요청 — '처리됨'의 기준은 status가 resolved이거나 resolved_at이 찍힌 것
+  const isResolved = (i: IssueLike) => i.status === 'resolved' || !!i.resolved_at
+  const issuesSorted = [...issueRows].sort((a, b) => a.created_at.localeCompare(b.created_at))
+  const resolvedCount = issuesSorted.filter(isResolved).length
+  const issues = issuesSorted.map((i) => ({
+    date: i.created_at,
+    title: (i.title ?? '').trim() || '요청 접수',
+    detail: i.content?.trim() || null,
+    resolution: i.resolution?.trim() || null,
+    resolved: isResolved(i),
+  }))
+
+  const requests = requestRows
+    .filter((r) => r.request.trim())
+    .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
+    .map((r) => ({ date: r.scheduled_at, note: r.request.trim() }))
+
+  const carriedOver = issuesSorted
+    .filter((i) => !isResolved(i))
+    .map((i) => ({ date: i.created_at, title: (i.title ?? '').trim() || '요청 접수' }))
+
   return {
     completedCount: completed.length,
     upcomingCount: upcoming.length,
@@ -109,6 +169,12 @@ export function buildMonthlySummary(input: {
     siteNotes,
     photoCount,
     workerNames: names,
+    issueCount: issues.length,
+    issueResolvedCount: resolvedCount,
+    issueResolveRate: issues.length > 0 ? Math.round((resolvedCount / issues.length) * 100) : null,
+    issues,
+    requests,
+    carriedOver,
   }
 }
 
@@ -149,11 +215,19 @@ export function buildHeadline(input: {
       : `${monthLabel} ${service}를 ${summary.completedCount}회 진행했습니다.`,
   )
 
-  if (summary.totalMinutes > 0) {
-    parts.push(`현장에 머문 시간은 모두 ${formatDuration(summary.totalMinutes)}입니다.`)
+  // 담당자가 먼저 보는 건 '문제가 있었나, 처리됐나'다. 체류 시간보다 이걸 앞세운다.
+  if (summary.issueCount > 0) {
+    parts.push(
+      summary.issueResolvedCount === summary.issueCount
+        ? `접수된 요청 ${summary.issueCount}건은 모두 처리 완료했습니다.`
+        : `접수된 요청 ${summary.issueCount}건 중 ${summary.issueResolvedCount}건을 처리했고, ` +
+          `${summary.issueCount - summary.issueResolvedCount}건은 진행 중입니다.`,
+    )
+  } else {
+    parts.push('접수된 요청이나 문제는 없었습니다.')
   }
   if (summary.siteNotes.length > 0) {
-    parts.push(`작업 중 확인한 특이사항 ${summary.siteNotes.length}건은 아래에 정리했습니다.`)
+    parts.push(`문제가 되기 전에 미리 챙긴 것 ${summary.siteNotes.length}건은 아래에 정리했습니다.`)
   }
 
   return parts.join(' ')

@@ -1,6 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import { CheckCircle2, ClipboardCheck, CircleAlert, Camera } from 'lucide-react'
+import { CheckCircle2, ClipboardCheck, CircleAlert, Camera, CalendarClock } from 'lucide-react'
 import { ReportPhotoSection } from '../../report/[reportId]/report-photos'
 import { PrintReportButton } from './print-button'
 import { DocPage, DocHeader, DocMeta, DocLede, DocSignature } from '@/components/report/document'
@@ -79,7 +79,7 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
   const { data: bookingsRaw } = (await db
     .from('bookings')
     .select(
-      'id, scheduled_at, status, worker_id, memo, contract_id, checkin_at, checkout_at, checklist_photos, quotes!quote_id(cleaning_type)' as never,
+      'id, scheduled_at, status, worker_id, memo, customer_request, contract_id, checkin_at, checkout_at, checklist_photos, quotes!quote_id(cleaning_type)' as never,
     )
     .eq('business_id', businessId)
     .or(orFilter)
@@ -92,6 +92,7 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
       | Array<
           VisitLike & {
             memo: string | null
+            customer_request: string | null
             contract_id: string | null
             quotes: { cleaning_type: string | null } | null
           }
@@ -178,6 +179,28 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
   }
   const contract = (contracts ?? []).find((c) => c.status === 'active') ?? (contracts ?? [])[0] ?? null
 
+  // 이번 달 접수된 문제·클레임 — 담당자가 가장 먼저 보는 항목이다.
+  // (이 거래처의 이번 달 방문에 붙은 건만)
+  const { data: issueRows } = (bookingIds.length > 0
+    ? await db
+        .from('claims' as never)
+        .select('id, title, content, status, resolution, created_at, resolved_at')
+        .eq('business_id' as never, businessId)
+        .in('booking_id' as never, bookingIds)
+    : { data: [] }) as unknown as {
+    data:
+      | Array<{
+          id: string
+          title: string | null
+          content: string | null
+          status: string
+          resolution: string | null
+          created_at: string
+          resolved_at: string | null
+        }>
+      | null
+  }
+
   const summary = buildMonthlySummary({
     visits: bookings,
     reports: reportRows,
@@ -185,7 +208,38 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
     workerNames: workerMap,
     photoCount: totalPhotoCount,
     now: new Date(),
+    issues: issueRows ?? [],
+    requests: bookings
+      .filter((b) => b.customer_request)
+      .map((b) => ({ booking_id: b.id, scheduled_at: b.scheduled_at, request: b.customer_request! })),
   })
+
+  // 다음 달 예정 방문 — '익월 작업 계획'의 근거
+  const nextMonthStart = new Date(range.endISO)
+  const nextMonthEnd = new Date(Date.UTC(nextMonthStart.getUTCFullYear(), nextMonthStart.getUTCMonth() + 1, 1))
+  const { count: nextMonthVisits } = (await db
+    .from('bookings')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', businessId)
+    .or(orFilter)
+    .gte('scheduled_at', nextMonthStart.toISOString())
+    .lt('scheduled_at', nextMonthEnd.toISOString())
+    .is('deleted_at' as never, null)
+    .not('status', 'in', '("cancelled","no_show")')) as unknown as { count: number | null }
+
+  // 다음에 손봐야 할 것 — 보고서에 적어둔 관리 소견 중 아직 안 지난 것
+  const { data: careRows } = (reportRows.length > 0
+    ? await db
+        .from('reports' as never)
+        .select('care_advice, care_due_at')
+        .in('booking_id' as never, bookingIds)
+        .not('care_advice', 'is', null)
+    : { data: [] }) as unknown as {
+    data: Array<{ care_advice: string | null; care_due_at: string | null }> | null
+  }
+  const carePlans = (careRows ?? [])
+    .filter((c) => c.care_advice?.trim())
+    .map((c) => ({ advice: c.care_advice!.trim(), dueAt: c.care_due_at }))
 
   const serviceName = contract?.service_type ?? bookings[0]?.quotes?.cleaning_type ?? null
   const headline = buildHeadline({
@@ -237,19 +291,81 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
         </section>
 
         {/* ── 핵심 숫자 ── */}
+        {/* 핵심 숫자 — 담당자가 먼저 보는 것부터.
+            방문 횟수·체류 시간은 뒤로 뺐다(사장님 지적 2026-08-18): 그건 우리 사정이고,
+            거래처가 궁금한 건 '문제가 있었나, 처리됐나'다. */}
         <section className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-px overflow-hidden border border-slate-200 bg-slate-200 break-inside-avoid">
-          <Metric value={`${summary.completedCount}회`} label="완료한 방문" accent />
+          <Metric value={`${summary.issueCount}건`} label="접수된 요청" />
+          <Metric value={`${summary.issueResolvedCount}건`} label="처리 완료" />
           <Metric
-            value={summary.onTimeRate !== null ? `${summary.onTimeRate}%` : '—'}
-            label="일정 이행률"
+            value={summary.issueResolveRate !== null ? `${summary.issueResolveRate}%` : '—'}
+            label="처리율"
+            accent
           />
-          <Metric value={formatDuration(summary.totalMinutes)} label="현장 체류 시간" />
-          <Metric value={summary.photoCount > 0 ? `${summary.photoCount}장` : '—'} label="작업 사진" />
+          <Metric value={`${nextMonthVisits ?? 0}회`} label="다음 달 예정" />
         </section>
-        {summary.onTimeRate !== null && summary.upcomingCount > 0 && (
-          <p className="mt-2 text-[12px] text-slate-400">
-            이행률은 오늘까지 예정됐던 방문 기준이에요 · 남은 방문 {summary.upcomingCount}회
-          </p>
+        <p className="mt-2 text-[12px] text-slate-400">
+          {summary.completedCount}회 방문 완료
+          {summary.onTimeRate !== null && ` · 일정 이행률 ${summary.onTimeRate}%`}
+          {summary.totalMinutes > 0 && ` · 현장 체류 ${formatDuration(summary.totalMinutes)}`}
+          {summary.upcomingCount > 0 && ` · 이번 달 남은 방문 ${summary.upcomingCount}회`}
+        </p>
+
+        {/* ── 요청 · 처리 내역 — 이 보고서에서 제일 먼저 읽히는 부분 ── */}
+        {(summary.issues.length > 0 || summary.requests.length > 0) && (
+          <Section icon={<CircleAlert className="h-4 w-4" />} title="요청 · 처리 내역">
+            <p className="text-[12px] text-slate-500 mb-3">
+              접수된 요청과 처리 결과예요
+            </p>
+            <ul className="divide-y divide-slate-200 border-y border-slate-200">
+              {summary.issues.map((it, i) => (
+                <li key={`issue-${i}`} className="py-3.5">
+                  <div className="flex items-baseline gap-2.5 flex-wrap">
+                    <span className="text-[12px] font-semibold text-slate-400 tabular-nums shrink-0">
+                      {formatShortDate(it.date)}
+                    </span>
+                    <span className="text-[14px] font-semibold text-slate-900">{it.title}</span>
+                    <span
+                      className={`text-[10px] font-semibold border px-1.5 py-0.5 rounded ${
+                        it.resolved
+                          ? 'border-emerald-300 text-emerald-700 bg-emerald-50'
+                          : 'border-amber-300 text-amber-700 bg-amber-50'
+                      }`}
+                    >
+                      {it.resolved ? '처리 완료' : '진행 중'}
+                    </span>
+                  </div>
+                  {it.detail && (
+                    <p className="text-[13px] leading-[1.7] text-slate-600 mt-1.5 whitespace-pre-wrap">{it.detail}</p>
+                  )}
+                  {it.resolution && (
+                    <p className="text-[13px] leading-[1.7] text-slate-700 mt-1.5 pl-3 border-l-2 border-emerald-300 whitespace-pre-wrap">
+                      <span className="font-semibold">처리</span> · {it.resolution}
+                    </p>
+                  )}
+                </li>
+              ))}
+              {summary.requests.map((r, i) => (
+                <li key={`req-${i}`} className="py-3.5">
+                  <div className="flex items-baseline gap-2.5 flex-wrap">
+                    <span className="text-[12px] font-semibold text-slate-400 tabular-nums shrink-0">
+                      {formatShortDate(r.date)}
+                    </span>
+                    <span className="text-[14px] font-semibold text-slate-900">현장 요청</span>
+                  </div>
+                  <p className="text-[13px] leading-[1.7] text-slate-600 mt-1.5 whitespace-pre-wrap">{r.note}</p>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+
+        {summary.issues.length === 0 && summary.requests.length === 0 && (
+          <Section icon={<CircleAlert className="h-4 w-4" />} title="요청 · 처리 내역">
+            <p className="text-[13px] text-slate-500">
+              이번 달 접수된 요청이나 문제는 없었습니다.
+            </p>
+          </Section>
         )}
 
         {/* ── 이번 달 수행한 작업 ── */}
@@ -304,6 +420,44 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
               {summary.photoCount > topPhotos.length && ` (전체 ${summary.photoCount}장 중 ${topPhotos.length}장)`}
             </p>
             <ReportPhotoSection photos={topPhotos} />
+          </Section>
+        )}
+
+        {/* ── 익월 작업 계획 — 보고서를 '지난달 정산'이 아니라 '관리 계약'으로 읽히게 한다.
+             지어내지 않고 실제 데이터만 엮는다: 예정 방문 수 · 이월된 미해결 건 · 적어둔 관리 소견 ── */}
+        {((nextMonthVisits ?? 0) > 0 || summary.carriedOver.length > 0 || carePlans.length > 0) && (
+          <Section icon={<CalendarClock className="h-4 w-4" />} title="다음 달 작업 계획">
+            <ul className="space-y-3">
+              {(nextMonthVisits ?? 0) > 0 && (
+                <li className="flex gap-3">
+                  <span className="mt-0.5 shrink-0 rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-semibold text-slate-600">
+                    방문
+                  </span>
+                  <p className="text-[14px] leading-[1.65] text-slate-700">
+                    계약대로 <b className="font-semibold text-slate-900">{nextMonthVisits}회</b> 방문이 예정되어 있습니다
+                    {cycleLabel && cycleLabel !== '—' && ` (${cycleLabel})`}.
+                  </p>
+                </li>
+              )}
+              {summary.carriedOver.map((c, i) => (
+                <li key={`carry-${i}`} className="flex gap-3">
+                  <span className="mt-0.5 shrink-0 rounded-md bg-amber-50 px-2 py-0.5 text-[12px] font-semibold text-amber-700">
+                    이월
+                  </span>
+                  <p className="text-[14px] leading-[1.65] text-slate-700">
+                    {c.title} — 이어서 처리하겠습니다.
+                  </p>
+                </li>
+              ))}
+              {carePlans.map((c, i) => (
+                <li key={`care-${i}`} className="flex gap-3">
+                  <span className="mt-0.5 shrink-0 rounded-md bg-emerald-50 px-2 py-0.5 text-[12px] font-semibold text-emerald-700">
+                    관리
+                  </span>
+                  <p className="text-[14px] leading-[1.65] text-slate-700 whitespace-pre-wrap">{c.advice}</p>
+                </li>
+              ))}
+            </ul>
           </Section>
         )}
 
