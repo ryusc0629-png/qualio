@@ -35,10 +35,16 @@ describe('GEO 질문 세트', () => {
     expect(qs.some((q) => /비용|가격/.test(q))).toBe(true)
   })
 
-  it('브랜드 질문은 딱 1개만 넣는다 (승률을 부풀리지 않기 위해)', () => {
+  it('브랜드 질문은 넣지 않는다 (손님은 우리 이름을 모르는 채로 찾는다)', () => {
     const qs = buildGeoQuestions(다트클린)
-    const brand = qs.filter((q) => classifyGeoQuestion(q, '다트클린') === 'brand')
-    expect(brand).toHaveLength(1)
+    expect(qs.some((q) => q.includes('다트클린'))).toBe(false)
+  })
+
+  it('검색어가 아니라 사람이 말하듯 묻는 문장이다', () => {
+    const qs = buildGeoQuestions(다트클린)
+    // 조건이나 요청이 붙은 문장 — 짧은 키워드는 지도가 답하고 문장은 글이 답한다
+    expect(qs.every((q) => /[.?]/.test(q))).toBe(true)
+    expect(qs.every((q) => q.length >= 20)).toBe(true)
   })
 
   it('질문 수 상한을 넘지 않는다 (검색 API 비용 가드)', () => {
@@ -64,13 +70,8 @@ describe('GEO 질문 세트', () => {
     expect(qs.filter((q) => q.includes('울산 남구')).length).toBeGreaterThanOrEqual(qs.length - 1)
   })
 
-  it('지역이 없으면 브랜드 질문 하나만 측정한다', () => {
-    // 지역 검색어를 지어낼 수는 없지만 "우리 이름으로 물으면 나오나"는 지역 없이도 유효하다
-    expect(buildGeoQuestions({ businessName: '다트클린', serviceNames: [], address: null }))
-      .toEqual(['다트클린 후기'])
-  })
-
-  it('업체명도 지역도 없으면 측정하지 않는다', () => {
+  it('지역이 없으면 측정하지 않는다 (지역 질문을 지어낼 수는 없다)', () => {
+    expect(buildGeoQuestions({ businessName: '다트클린', serviceNames: [], address: null })).toEqual([])
     expect(buildGeoQuestions({ serviceNames: [], address: null })).toEqual([])
   })
 })
@@ -91,10 +92,10 @@ describe('질문 성격 분류', () => {
     expect(classifyGeoQuestion('다트클린 후기', '다트클린')).toBe('brand')
   })
   it('비용·가격이 들어가면 가격형', () => {
-    expect(classifyGeoQuestion('울산 남구 입주청소 비용', '다트클린')).toBe('price')
+    expect(classifyGeoQuestion('울산 남구에서 입주청소 맡기면 비용이 얼마나 드나요?', '다트클린')).toBe('price')
   })
-  it('시군구가 붙으면 로컬, 광역뿐이면 광역', () => {
-    expect(classifyGeoQuestion('울산 남구 입주청소 업체', '다트클린')).toBe('local')
-    expect(classifyGeoQuestion('울산 입주청소 추천', '다트클린')).toBe('broad')
+  it('문장 안에 시군구가 있으면 로컬, 광역뿐이면 광역', () => {
+    expect(classifyGeoQuestion('울산 남구에 입주청소 맡길 업체 추천해주세요.', '다트클린')).toBe('local')
+    expect(classifyGeoQuestion('울산에서 입주청소 잘하는 업체 추천해주세요.', '다트클린')).toBe('broad')
   })
 })

@@ -28,6 +28,10 @@ const TRAILING = /(은|는|이|가|을|를|의|에|에서|와|과|도|이라는|
 
 function clean(raw: string): string {
   return raw
+    // 주소가 이름에 붙어 들어오던 것 제거 — "미소크린https://…" 처럼 찍혔다
+    .replace(/https?:\/\/\S*/gi, '')
+    .replace(/https?/gi, '')
+    .replace(/[\w.-]+\.(com|co\.kr|kr|net|org)\S*/gi, '')
     .replace(/^[\s*_·\-–—•]+/, '')
     .replace(/[\s*_]+$/, '')
     .replace(/^\d+[.)]\s*/, '')       // "1. " "2) "
