@@ -1,4 +1,3 @@
-import crypto from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/server'
 import { chargeBillingKey } from './portone'
@@ -8,10 +7,9 @@ import type { PlanId } from '@/lib/config/plans'
 
 // 정기결제 자동청구 — 이용기간이 만료된 활성 구독을 저장된 빌키(billing_key)로 재청구한다.
 //
-// ⚠️ 아직 cron(daily-maintenance)에 연결하지 않았다.
-//    실결제 테스트(카드등록 → 이 함수로 1회 청구 성공)까지 확인한 뒤에
-//    daily-maintenance에서 `await chargeDueSubscriptions()` 한 줄로 연결할 것.
-//    (검증 전 연결하면 미검증 상태로 실제 카드가 청구될 수 있음)
+// 2026-08-19 cron 연결 완료 — `app/api/cron/charge-subscriptions`가 이 함수를 부르고,
+// 그 라우트는 daily-maintenance의 하위 작업 목록에 들어 있다.
+// (실결제 검증: 심사용 테스트 계정으로 카드등록→첫 달 49,000원 승인→빌키 저장까지 확인)
 //
 // ⚠️ 청구는 반드시 빌키를 발급한 곳과 같은 경로로 해야 한다.
 //    우리 빌키는 포트원 카드등록창(portone-billing-return)에서 발급되므로 포트원 API로 청구한다.
@@ -67,16 +65,30 @@ export async function chargeDueSubscriptions(): Promise<ChargeSummary> {
     if (!amount || amount <= 0) continue
 
     const planLabel = PLANS[effectivePlan]?.label ?? effectivePlan
-    const ordrIdxx = `QR${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`.toUpperCase()
 
-    // 감사/멱등용 주문 기록
-    await (db as unknown as SupabaseClient).from('kcp_payment_orders').insert({
-      ordr_idxx: ordrIdxx,
-      business_id: sub.business_id,
-      plan_id: effectivePlan,
-      amount,
-      status: 'pending',
-    })
+    // ★중복 청구 방지 — 주문번호를 (구독 × 이용기간)으로 고정해 PK로 선점한다.
+    //   daily-maintenance는 하위 작업을 병렬로 돌리고, 크론은 재시도·수동 호출로 겹칠 수 있다.
+    //   난수 주문번호를 쓰면 같은 달 요금이 두 번 승인돼도 DB가 막아주지 못한다(실제 돈이 두 번 빠진다).
+    //   같은 기간 건은 두 번째 insert가 PK 충돌로 실패 → 그 구독은 건너뛴다.
+    //   ⛔난수(Date.now+randomBytes)로 되돌리지 말 것.
+    const periodKey = (sub.current_period_end ?? now.toISOString()).slice(0, 10).replace(/-/g, '')
+    const ordrIdxx = `QR${sub.id.replace(/-/g, '').slice(0, 18)}${periodKey}`.toUpperCase()
+
+    // 감사·멱등용 주문 기록 — 청구 '전에' 선점해야 의미가 있다
+    const { error: claimError } = await (db as unknown as SupabaseClient)
+      .from('kcp_payment_orders')
+      .insert({
+        ordr_idxx: ordrIdxx,
+        business_id: sub.business_id,
+        plan_id: effectivePlan,
+        amount,
+        status: 'pending',
+      })
+    if (claimError) {
+      // 이미 같은 기간으로 청구가 걸려 있음(동시 실행·재시도) → 건너뛴다
+      console.error('[Billing charge] 이미 처리 중인 청구라 건너뜀:', sub.business_id, ordrIdxx)
+      continue
+    }
 
     try {
       const r = await chargeBillingKey({
