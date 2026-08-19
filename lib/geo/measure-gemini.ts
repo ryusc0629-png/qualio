@@ -195,10 +195,13 @@ interface GeminiResponse {
 // 측정이 죽지는 않는다. 기다리는 시간을 두 배씩 늘리고, 여러 요청이 같은 순간에
 // 몰려 다시 부딪히지 않도록 무작위로 조금씩 어긋나게 한다.
 async function fetchWithRetry(url: string, init: RequestInit, tries = 4): Promise<Response> {
+  // 429(한도 초과)와 503(일시 과부하)은 잠깐 뒤에 다시 하면 되는 경우다.
+  // 503은 구글이 "Spikes in demand are usually temporary"라고 직접 알려준다.
+  const RETRIABLE = [429, 503]
   let last: Response | null = null
   for (let i = 0; i < tries; i++) {
     const res = await fetchWithTimeout(url, init, GEMINI_TIMEOUT_MS)
-    if (res.status !== 429) return res
+    if (!RETRIABLE.includes(res.status)) return res
     last = res
     if (i === tries - 1) break
     const waitMs = 1000 * 2 ** i + Math.floor(Math.random() * 400)
