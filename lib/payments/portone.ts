@@ -141,3 +141,59 @@ export async function chargeBillingKey(params: {
 
   return { ok: true, amount }
 }
+
+export interface CancelResult {
+  ok: boolean
+  /** 실제로 취소된 금액 */
+  cancelledAmount?: number
+  error?: string
+}
+
+// 결제 취소(환불) — 포트원 V2 취소 API 호출.
+//
+// 약관(제6조) 기준: 7일 이내 미사용이면 전액, 이용 내역이 있으면 남은 기간 일할 계산.
+// 그래서 부분 취소가 필요하고, amount를 넘기면 그 금액만 환불한다(안 넘기면 전액).
+//
+// ⚠️ 이 함수만 부르고 끝내면 안 된다. 포트원에서만 환불되고 우리 DB는 '결제됨'으로 남아
+//    본사 장부와 어긋난다. 호출부에서 kcp_payment_orders.status를 함께 갱신할 것.
+export async function cancelPortOnePayment(params: {
+  paymentId: string
+  /** 부분 환불 금액(원). 생략하면 전액 취소 */
+  amount?: number
+  reason: string
+}): Promise<CancelResult> {
+  const { paymentId, amount, reason } = params
+
+  const apiSecret = process.env.PORTONE_V2_API_SECRET
+  if (!apiSecret) {
+    console.error('[Payment] PORTONE_V2_API_SECRET 환경변수 없음')
+    return { ok: false, error: '결제 설정 오류입니다' }
+  }
+  if (amount != null && amount <= 0) {
+    return { ok: false, error: '환불 금액이 올바르지 않습니다' }
+  }
+
+  const res = await fetch(
+    `https://api.portone.io/payments/${encodeURIComponent(paymentId)}/cancel`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `PortOne ${apiSecret}`,
+        'Content-Type': 'application/json',
+      },
+      // amount를 아예 넣지 않아야 전액 취소로 처리된다(0이나 null을 넣으면 거부)
+      body: JSON.stringify(amount != null ? { reason, amount } : { reason }),
+    }
+  )
+
+  const body = (await res.json().catch(() => ({}))) as {
+    message?: string
+    cancellation?: { totalAmount?: number }
+  }
+  if (!res.ok) {
+    console.error('[Payment] 포트원 결제 취소 실패:', paymentId, body)
+    return { ok: false, error: body.message ?? '환불 처리에 실패했습니다' }
+  }
+
+  return { ok: true, cancelledAmount: body.cancellation?.totalAmount ?? amount }
+}
