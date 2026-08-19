@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { PLANS, formatPrice } from '@/lib/config/plans'
+import { PLANS, formatPrice, formatPriceWithVat } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { applyLifetimeDiscount } from '@/lib/config/beta'
 import { CalendarClock } from 'lucide-react'
@@ -72,9 +72,25 @@ export function CurrentPlanCard({
                 <span className="text-foreground font-semibold">
                   {formatPrice(applyLifetimeDiscount(plan.price, lifetimeDiscountRate))}
                 </span>
+                <span className="ml-1">(부가세 별도)</span>
               </>
-            ) : formatPrice(plan.price)}
+            ) : (
+              <>
+                {formatPrice(plan.price)} <span>(부가세 별도)</span>
+              </>
+            )}
           </p>
+          {/* 실제로 카드에서 빠지는 금액 — 통장 내역과 대조할 때 이 숫자를 본다 */}
+          {!isBeta && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              매달 결제되는 금액{' '}
+              <b className="text-foreground">
+                {formatPriceWithVat(
+                  hasLifetimeDiscount ? applyLifetimeDiscount(plan.price, lifetimeDiscountRate) : plan.price
+                )}
+              </b>
+            </p>
+          )}
           {isPaid && periodEndLabel && (
             <p className="text-xs text-muted-foreground mt-1">
               다음 결제일: {periodEndLabel}

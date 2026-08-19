@@ -192,6 +192,9 @@ export async function getAdminMetrics(): Promise<AdminMetrics> {
   const mrr = paidSubs.reduce((sum, s) => sum + planPrice(s.plan), 0)
 
   // 플랜별 분해(유료 플랜만)
+  // ⚠️ MRR은 PLANS의 price(=공급가액, 부가세 별도)로 센다. 카드에 실제로 청구되는 총액은
+  //    여기에 부가세 10%가 붙은 값인데, 부가세는 받아서 국가에 내는 돈이라 우리 매출이 아니다.
+  //    ⛔청구 총액(withVat)으로 바꾸지 말 것 — MRR이 10% 부풀려진다. [[project_revenue_vat_excluded]]
   const planBreakdown: PlanBreakdownRow[] = Object.values(PLANS)
     .filter((p) => p.price > 0)
     .map((p) => {

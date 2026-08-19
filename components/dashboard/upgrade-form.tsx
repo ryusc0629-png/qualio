@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { Check, Star, Loader2, ArrowUp, ArrowDown, CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { PAID_PLANS, PLANS, formatPrice } from '@/lib/config/plans'
+import { PAID_PLANS, PLANS, formatPrice, formatPriceWithVat } from '@/lib/config/plans'
 import { applyLifetimeDiscount, betaBadgeLabel, LAUNCH_DATE_LABEL, isBeforeLaunch } from '@/lib/config/beta'
 import { BILLING_COPY, IS_RECURRING_BILLING } from '@/lib/config/billing'
 import type { PlanId } from '@/lib/config/plans'
@@ -399,13 +399,29 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
               <div className="mb-3">
                 {plan.tagline && <p className="text-xs text-muted-foreground">{plan.tagline}</p>}
                 <h3 className="font-bold text-lg">{plan.label}</h3>
+                {/* 금액은 공급가액(부가세 별도)으로 적고, 실제 카드에 나가는 총액을 바로 아래 밝힌다.
+                    표시가와 청구액이 다르면 그 자체로 분쟁이 된다. */}
                 {hasDiscount ? (
                   <div className="mt-1">
                     <p className="text-xs text-muted-foreground line-through">{formatPrice(plan.price)}</p>
-                    <p className="text-xl font-bold text-primary">{formatPrice(chargeOf(plan.price))}</p>
+                    <p className="text-xl font-bold text-primary">
+                      {formatPrice(chargeOf(plan.price))}
+                      <span className="text-xs font-normal text-muted-foreground ml-1">(부가세 별도)</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      결제는 {formatPriceWithVat(chargeOf(plan.price))}
+                    </p>
                   </div>
                 ) : (
-                  <p className="text-xl font-bold text-primary mt-1">{formatPrice(plan.price)}</p>
+                  <div className="mt-1">
+                    <p className="text-xl font-bold text-primary">
+                      {formatPrice(plan.price)}
+                      <span className="text-xs font-normal text-muted-foreground ml-1">(부가세 별도)</span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      결제는 {formatPriceWithVat(plan.price)}
+                    </p>
+                  </div>
                 )}
               </div>
 

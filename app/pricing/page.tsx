@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Check, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { PAID_PLANS, formatPrice } from '@/lib/config/plans'
+import { PAID_PLANS, formatPrice, formatPriceWithVat } from '@/lib/config/plans'
 import { SiteFooter } from '@/components/site-footer'
 import { BETA_SEATS, BETA_LIFETIME_DISCOUNT_RATE, applyLifetimeDiscount, LAUNCH_DATE_LABEL, isBeforeLaunch } from '@/lib/config/beta'
 import { getRemainingBetaSeats } from '@/lib/payments/pricing'
@@ -106,13 +106,19 @@ export default async function PricingPage() {
                 {/* 주 가격은 항상 정가 — 결제창에 실제로 청구되는 금액(정가 또는 베타 할인가)과
                     이 화면의 큰 숫자가 어긋나면 결제망 심사에서 '가격 고지 불일치'로 걸린다.
                     베타 할인은 아래 한 줄 안내로만 알린다(결제 화면에서 정가 취소선 + 할인가로 다시 보여줌). */}
-                <div className="text-3xl font-bold mb-2">
+                <div className="text-3xl font-bold mb-1">
                   {formatPrice(plan.price)}
+                  <span className="text-sm font-normal text-muted-foreground ml-1.5">부가세 별도</span>
                 </div>
+                {/* 표시가는 공급가액이므로, 카드에 실제로 나가는 총액을 반드시 함께 밝힌다 */}
+                <p className="text-xs text-muted-foreground mb-2">
+                  실제 결제 {formatPriceWithVat(plan.price)}
+                </p>
                 {remainingSeats > 0 && (
                   <p className="text-xs text-primary font-medium mb-1">
                     베타 {BETA_SEATS}팀은 결제 시 {BETA_LIFETIME_DISCOUNT_RATE}% 할인 —{' '}
-                    {formatPrice(applyLifetimeDiscount(plan.price, BETA_LIFETIME_DISCOUNT_RATE))}
+                    {formatPrice(applyLifetimeDiscount(plan.price, BETA_LIFETIME_DISCOUNT_RATE))} (부가세 별도,
+                    실제 결제 {formatPriceWithVat(applyLifetimeDiscount(plan.price, BETA_LIFETIME_DISCOUNT_RATE))})
                   </p>
                 )}
                 {/* 결제 방식 — 실제 동작(lib/config/billing.ts)과 항상 같은 문구 */}
@@ -168,6 +174,10 @@ export default async function PricingPage() {
               {
                 q: '환불은 어떻게 되나요?',
                 a: '결제 후 7일 이내 서비스를 이용하지 않으셨다면 전액 환불이 가능합니다. 이용 내역이 있는 경우 남은 기간을 일할 계산하여 환불합니다.',
+              },
+              {
+                q: '표시된 금액에 부가세가 포함되어 있나요?',
+                a: `요금표의 금액은 부가세가 빠진 공급가액입니다. 실제로는 여기에 부가세 10%가 더해져 결제됩니다. 예를 들어 시작 플랜은 ${formatPrice(PAID_PLANS[0].price)}에 부가세를 더해 ${formatPriceWithVat(PAID_PLANS[0].price)}이 청구됩니다. 사업자라면 매입세액 공제를 받으실 수 있습니다.`,
               },
               {
                 q: '결제 수단은 무엇을 지원하나요?',

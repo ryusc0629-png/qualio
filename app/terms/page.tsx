@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { PAID_PLANS, formatPrice } from '@/lib/config/plans'
+import { PAID_PLANS, formatPrice, formatPriceWithVat } from '@/lib/config/plans'
 import { BusinessInfo } from '@/components/business-info'
 
 export const metadata: Metadata = {
@@ -75,7 +75,10 @@ export default function TermsPage() {
                 {PAID_PLANS.map((plan) => (
                   <tr key={plan.id}>
                     <td className="px-4 py-2">{plan.name}</td>
-                    <td className="px-4 py-2">{formatPrice(plan.price)}</td>
+                    <td className="px-4 py-2">
+                      {formatPrice(plan.price)} <span className="text-muted-foreground">(부가세 별도)</span>
+                      <span className="block text-xs text-muted-foreground">실제 결제 {formatPriceWithVat(plan.price)}</span>
+                    </td>
                     <td className="px-4 py-2 text-muted-foreground">{plan.target}</td>
                   </tr>
                 ))}

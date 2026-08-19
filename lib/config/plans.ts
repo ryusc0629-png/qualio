@@ -136,13 +136,37 @@ export type Plan = (typeof PLANS)[PlanId]
 // 유료 플랜 목록 (결제 페이지에서 사용)
 export const PAID_PLANS = [PLANS.starter, PLANS.pro, PLANS.scale] as const
 
-// 금액 포맷 (39000 → "39,000원/월") — 통화 표기는 마켓 설정을 따른다
+// ★PLANS의 price는 전부 '공급가액(부가세 별도)'다.
+//   실제 카드에 청구되는 금액은 여기에 부가세 10%를 더한 값이다.
+//   화면에 금액을 쓸 때는 반드시 "부가세 별도"임을 함께 밝히거나 withVat()로 총액을 보여줄 것.
+//   ⚠️ 결제 금액 계산은 getChargeAmount()(lib/payments/pricing.ts) 하나만 쓴다 —
+//      한쪽만 부가세를 더하면 "결제 금액이 올바르지 않습니다"로 정상 결제가 튕긴다.
+export const VAT_RATE = 0.1
+
+/** 공급가액 → 부가세 (원 단위 반올림) */
+export function vatOf(supplyPrice: number): number {
+  return Math.round(supplyPrice * VAT_RATE)
+}
+
+/** 공급가액 → 실제 청구 총액(부가세 포함) */
+export function withVat(supplyPrice: number): number {
+  return supplyPrice + vatOf(supplyPrice)
+}
+
+// 금액 포맷 (39000 → "39,000원/월") — 통화 표기는 마켓 설정을 따른다.
+// ⚠️ 이 함수가 받는 값은 공급가액이다. 화면엔 "부가세 별도"를 함께 적을 것.
 export function formatPrice(price: number): string {
   if (price === 0) return '무료'
   return `${formatMoney(price)}/월`
 }
 
-// 플랜 ID로 금액 조회 (결제 검증 시 사용)
+/** 부가세를 포함한 실제 청구액 표기 (49000 → "53,900원/월") */
+export function formatPriceWithVat(supplyPrice: number): string {
+  if (supplyPrice === 0) return '무료'
+  return `${formatMoney(withVat(supplyPrice))}/월`
+}
+
+// 플랜 ID로 공급가액 조회 (결제 검증 시 사용 — 청구액은 여기에 부가세를 더한 값)
 export function getPlanPrice(planId: PlanId): number {
   return PLANS[planId].price
 }
