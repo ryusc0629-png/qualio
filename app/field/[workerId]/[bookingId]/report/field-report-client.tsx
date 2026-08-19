@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { CareAdviceField } from '@/components/dashboard/care-advice-field'
 import { createClient } from '@/lib/supabase/client'
 import { REPORT_PHOTO_MAX } from '@/lib/config/photos'
-import { fieldSaveReportAction, fieldSendReportAction, fieldGenerateAiReportAction, fieldSaveWorkClipsAction, fieldRequestReelAction, fieldGetReelStatusAction } from '@/lib/actions/field'
+import { fieldSaveReportAction, fieldSendReportAction, fieldGenerateAiReportAction, fieldSaveWorkClipsAction, fieldRequestReelAction, fieldGetReelStatusAction, fieldSaveMemoAction } from '@/lib/actions/field'
 import {
   ArrowLeft,
   Camera,
@@ -25,7 +25,23 @@ import {
   Video,
   Film,
   Loader2,
+  ChevronDown,
 } from 'lucide-react'
+
+// 현장 순서대로 번호를 붙인다 — 작업 전 사진 → 하자 기록 → 작업 중 영상 → 작업 후 사진 → 마무리.
+// 현장 직원은 화면을 위에서부터 훑기 때문에, 번호가 있으면 '어디까지 했는지'를 안 헷갈린다.
+const STEP_LABELS = ['작업 전', '하자 기록', '작업 중 영상', '작업 후', '마무리'] as const
+
+function StepBadge({ n }: { n: 1 | 2 | 3 | 4 | 5 }) {
+  return (
+    <div className="flex items-center gap-1.5 mb-2">
+      <span className="w-5 h-5 rounded-full bg-primary text-white text-[11px] font-bold flex items-center justify-center shrink-0">
+        {n}
+      </span>
+      <span className="text-[11px] font-semibold text-primary tracking-wide">{STEP_LABELS[n - 1]}</span>
+    </div>
+  )
+}
 
 // caption = 이 사진이 '어디'인지. 초도(첫) 방문에서는 직원이 반드시 적는다 —
 // 사장님은 현장에 안 가므로 위치를 알 방법이 없고, 위치가 없으면 거래처에 보낼
@@ -83,9 +99,13 @@ interface Props {
   booking: BookingInfo
   existingReport: ExistingReport | null
   serviceItems: ServiceItem[]
+  /** 현장에서 고객이 추가로 부탁한 것 (bookings.customer_request) */
+  existingCustomerRequest: string
+  /** 다음에 올 직원이 알아야 할 것 (customers.notes에 오늘 날짜로 쌓임) */
+  existingNextVisitNote: string
 }
 
-export function FieldReportClient({ workerId, businessId, booking, existingReport, serviceItems }: Props) {
+export function FieldReportClient({ workerId, businessId, booking, existingReport, serviceItems, existingCustomerRequest, existingNextVisitNote }: Props) {
   const [notes, setNotes] = useState(existingReport?.notes ?? '')
   // 현장 특이사항 — 오늘 눈에 띈 것. 월말에 거래처 보고서로 자동으로 모인다.
   const [preventiveNote, setPreventiveNote] = useState(existingReport?.preventiveNote ?? '')
@@ -113,6 +133,13 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     new Set(existingReport?.aiReportData?.recommendedServices ?? [])
   )
   const [showServicePicker, setShowServicePicker] = useState(false)
+  // 예전엔 '현장 메모 작성'이 작업 상세에 따로 있었다 — 같은 사진·같은 특이사항을 두 화면에서
+  // 두 번 물어보는 꼴이라 여기로 합쳤다. 저장은 보고서 저장 버튼 한 번으로 같이 나간다.
+  const [customerRequest, setCustomerRequest] = useState(existingCustomerRequest)
+  const [nextVisitNote, setNextVisitNote] = useState(existingNextVisitNote)
+  const [extrasOpen, setExtrasOpen] = useState(
+    !!existingCustomerRequest || !!existingNextVisitNote
+  )
 
   const beforeInputRef = useRef<HTMLInputElement>(null)
   const afterInputRef = useRef<HTMLInputElement>(null)
@@ -131,6 +158,11 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       toast.success('보고서가 저장됐어요!')
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+  })
+
+  // 현장 메모 3종 저장 — 보고서 저장과 함께 조용히 나간다(토스트는 보고서 쪽 하나만)
+  const { execute: saveMemo } = useAction(fieldSaveMemoAction, {
+    onError: () => toast.error('메모를 못 저장했어요. 인터넷 확인 후 다시 눌러주세요'),
   })
 
   // 보고서 발송
@@ -390,6 +422,15 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       if (!confirmed) return
     }
     const withCaption = (p: PhotoSlot) => !p.uploading && p.url
+    // 하자·특이사항은 예약(bookings.memo)에도 같이 남긴다 — 사장님 화면과 월간 보고서가
+    // 이 값을 읽는다. 화면에 칸은 하나지만 저장은 두 곳으로 나간다.
+    saveMemo({
+      workerId,
+      bookingId: booking.id,
+      siteMemo: preventiveNote.trim(),
+      customerRequest: customerRequest.trim(),
+      nextVisitNote: nextVisitNote.trim() || undefined,
+    })
     saveReport({
       workerId,
       bookingId: booking.id,
@@ -735,12 +776,23 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div>
-          <h1 className="font-bold">작업 완료 보고서</h1>
+          <h1 className="font-bold">작업 보고서</h1>
           <p className="text-xs text-muted-foreground">{booking.customerName} · {date}</p>
         </div>
       </div>
 
       <div className="px-4 py-4 space-y-5">
+        {/* 무엇을 하는 화면인지 한 줄로 — 현장 직원은 설명을 읽지 않으니 짧게, 대신 '누가 보는지'까지 */}
+        <div className="rounded-xl bg-primary/5 border border-primary/20 p-4">
+          <p className="text-sm font-semibold text-foreground">
+            작업 사진과 하자·특이사항을 기록해주세요
+          </p>
+          <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+            {booking.contractId
+              ? '여기 쓴 내용과 사진은 월말에 거래처로 가는 보고서에 그대로 들어가요.'
+              : '여기 쓴 내용과 사진은 작업이 끝나면 고객에게 그대로 발송돼요.'}
+          </p>
+        </div>
         {/* 첫 방문 안내 — 여기 쓴 게 사장님 쪽 초도 리포트 초안이 된다.
             ⚠️ 직원이 입력할 항목은 늘리지 않는다. 늘리면 안 쓰게 되고, 그러면 초안도 안 생긴다.
             평소대로 사진 찍고 메모만 쓰면 되고, 이 안내는 '왜 신경 써야 하는지'만 알려준다. */}
@@ -783,8 +835,9 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           </p>
         </div>
 
-        {/* Before 사진 */}
+        {/* ① 작업 전 사진 */}
         <div className="rounded-xl bg-white border p-4">
+          <StepBadge n={1} />
           <PhotoSection
             label="작업 전 사진"
             hint="작업 시작 전 현장 상태를 촬영해주세요"
@@ -795,15 +848,46 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           />
         </div>
 
-        {/* 릴스용 작업 중 영상 — 항상 표시, 저장 버튼은 보고서 저장 후 활성화 */}
+        {/* ② 하자·특이사항 — 작업 전 사진 바로 다음. 현장에선 사진 찍고 곧바로 이걸 보고한다.
+            여기 쓴 내용은 보고서(reports.preventive_note)와 예약 메모(bookings.memo) 양쪽에 저장된다. */}
+        <div className="rounded-xl bg-white border p-4 space-y-2">
+          <StepBadge n={2} />
+          <div>
+            <Label className="text-sm font-medium">하자·특이사항</Label>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              깨진 곳, 원래 있던 흠집, 미리 손봐둔 것을 한 줄만 적어주세요.
+              작업 전에 있던 문제를 적어두면 나중에 책임 시비가 안 생겨요.
+            </p>
+          </div>
+          <Textarea
+            placeholder="예: 거실 창틀에 원래 흠집 있었어요. 3층 탕비실 배수구가 느려서 미리 뚫어뒀어요."
+            value={preventiveNote}
+            onChange={(e) => setPreventiveNote(e.target.value)}
+            rows={3}
+          />
+        </div>
+
+        {/* ③ 작업 중 영상 — 나가면 다시 못 찍는다. 촬영 요령을 여기 한 곳에만 둔다 */}
         <div className="rounded-xl bg-white border p-4 space-y-3">
           <div>
+            <StepBadge n={3} />
             <div className="flex items-center gap-2">
               <Film className="h-4 w-4 text-rose-500" />
-              <Label className="text-sm font-medium">작업 중 촬영한 영상 (선택)</Label>
+              <Label className="text-sm font-medium">작업 중 촬영한 영상</Label>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              찍어둔 영상 3컷을 올려두세요 — 나중에 버튼 하나로 릴스가 완성돼요
+              3컷만 올리면 버튼 하나로 홍보 영상이 만들어져요
+            </p>
+          </div>
+
+          {/* 촬영 요령 — 예전엔 작업 상세에 노란 박스로 따로 떠 있었다.
+              찍는 사람이 올리는 자리에서 보는 게 맞아서 여기로 옮겼다. */}
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1">
+            <p className="text-xs font-bold text-amber-900">이렇게 찍어주세요</p>
+            <p className="text-[11px] text-amber-800 leading-relaxed">
+              ① 더러운 곳 클로즈업 · ② 작업하는 모습 · ③ 깨끗해진 결과
+              <br />
+              각 10초 이내 · <b>세로로</b> 찍어야 딱 맞아요. 현장을 떠나면 다시 못 찍어요.
             </p>
           </div>
 
@@ -947,8 +1031,9 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           ) : null}
         </div>
 
-        {/* After 사진 */}
+        {/* ④ 작업 후 사진 */}
         <div className="rounded-xl bg-white border p-4">
+          <StepBadge n={4} />
           <PhotoSection
             label="작업 후 사진"
             hint="작업 전과 같은 자리에서 찍어주세요"
@@ -959,41 +1044,12 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           />
         </div>
 
-        {/* 현장 특이사항 — 오늘 눈에 띈 것 한 줄. 월말에 거래처 보고서로 자동으로 모인다. */}
-        <div className="rounded-xl bg-emerald-50/60 border border-emerald-100 p-4 space-y-2">
-          <div>
-            <Label className="text-sm font-medium text-emerald-800">오늘 현장 특이사항</Label>
-            <p className="text-xs text-emerald-700 leading-relaxed">
-              눈에 띈 것, 미리 챙긴 것, 다음에 볼 것을 한 줄만 적어두세요.
-              월말에 거래처 보고서로 자동으로 정리됩니다. (선택)
-            </p>
-          </div>
-          <Textarea
-            placeholder="예: 3층 탕비실 배수구 물 빠짐이 느려져 미리 뚫어뒀어요. 창고 형광등 하나 나가 다음에 볼게요."
-            value={preventiveNote}
-            onChange={(e) => setPreventiveNote(e.target.value)}
-            rows={3}
-          />
-        </div>
-
-        {/* 앞으로 손봐야 할 것 — 그 시점이 되면 사장님께 알림이 간다.
-            판촉 배너 대신 이걸 남긴다: 근거가 그 현장 기록이라 설득력이 다르다. */}
-        <div className="rounded-xl bg-white border p-4">
-          <CareAdviceField
-            advice={careAdvice}
-            months={careMonths}
-            onAdviceChange={setCareAdvice}
-            onMonthsChange={setCareMonths}
-          />
-        </div>
-
         {/* 메모 + AI 작성 */}
         <div className="rounded-xl bg-white border p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-sm font-medium">작업 메모</Label>
-              <p className="text-xs text-muted-foreground">간단히 적으면 전문 보고서로 만들어드려요</p>
-            </div>
+          <div>
+            <StepBadge n={5} />
+            <Label className="text-sm font-medium">오늘 한 작업</Label>
+            <p className="text-xs text-muted-foreground">간단히 적으면 전문 보고서로 만들어드려요</p>
           </div>
 
           {/* AI 보고서가 없을 때: 메모 입력 + 생성 버튼 */}
@@ -1052,6 +1108,59 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
                 <Sparkles className="h-3.5 w-3.5" />
                 {isGenerating ? '다시 정리 중이에요...' : '보고서 다시 작성하기'}
               </Button>
+            </div>
+          )}
+        </div>
+
+        {/* 앞으로 손봐야 할 것 — 그 시점이 되면 사장님께 알림이 간다.
+            판촉 배너 대신 이걸 남긴다: 근거가 그 현장 기록이라 설득력이 다르다. */}
+        <div className="rounded-xl bg-white border p-4">
+          <CareAdviceField
+            advice={careAdvice}
+            months={careMonths}
+            onAdviceChange={setCareAdvice}
+            onMonthsChange={setCareMonths}
+          />
+        </div>
+
+        {/* 그 밖에 남길 것 — 늘 쓰는 칸이 아니라 접어둔다.
+            예전 '현장 메모 작성'에 있던 두 칸을 그대로 가져왔다(같은 액션에 저장). */}
+        <div className="rounded-xl bg-white border overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setExtrasOpen((v) => !v)}
+            className="w-full px-4 py-3.5 flex items-center gap-2.5 text-left"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium">그 밖에 남길 것 (선택)</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                고객이 더 부탁한 것 · 다음에 올 직원이 알아야 할 것
+              </p>
+            </div>
+            <ChevronDown className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform ${extrasOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {extrasOpen && (
+            <div className="px-4 pb-4 space-y-4 border-t pt-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">고객이 현장에서 더 부탁한 것</Label>
+                <Textarea
+                  placeholder="예: 베란다 창틀도 닦아달라고 하셨어요"
+                  value={customerRequest}
+                  onChange={(e) => setCustomerRequest(e.target.value)}
+                  rows={2}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">다음에 올 직원이 알아야 할 것</Label>
+                <p className="text-xs text-muted-foreground">고객 정보에 저장돼요 (고객에게는 안 보여요)</p>
+                <Textarea
+                  placeholder="예: 현관 비밀번호 1234#, 강아지 있어요"
+                  value={nextVisitNote}
+                  onChange={(e) => setNextVisitNote(e.target.value)}
+                  rows={2}
+                />
+              </div>
             </div>
           )}
         </div>

@@ -78,57 +78,42 @@ export default async function FieldBookingPage({ params }: Props) {
     checklistItems = contract?.checklist_items ?? []
   }
 
-  // 메모 최종 저장자 이름 조회
-  let memoUpdatedByName: string | null = null
-  if (booking.memo_updated_by) {
-    const { data: memoWorker } = await db
-      .from('workers' as never)
-      .select('name' as never)
-      .eq('id' as never, booking.memo_updated_by)
-      .maybeSingle() as { data: { name: string } | null }
-    memoUpdatedByName = memoWorker?.name ?? null
-  }
-
-  // 보고서 + 작업 전 사진 조회
+  // 보고서 진행 상황 조회 — 사진·영상·메모를 어디까지 채웠는지 작업 상세에서 한눈에 보여준다.
+  // (입력은 전부 보고서 화면 한 곳에서 한다. 여기선 '얼마나 남았는지'만 알려준다)
   const { data: report } = await db
     .from('reports')
-    .select('id, notes, kakao_sent_at, report_photos(url, type, sort_order)')
+    .select('id, notes, kakao_sent_at, work_clip_urls, report_photos(url, type)' as never)
     .eq('booking_id', bookingId)
-    .maybeSingle()
+    .maybeSingle() as { data: {
+      id: string; notes: string | null; kakao_sent_at: string | null
+      work_clip_urls: string[] | null
+      report_photos: { url: string; type: string }[]
+    } | null }
 
-  const beforeUrls = ((report?.report_photos ?? []) as { url: string; type: string; sort_order: number }[])
-    .filter((p) => p.type === 'before')
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map((p) => p.url)
+  const reportPhotos = report?.report_photos ?? []
+  const reportProgress = {
+    beforeCount: reportPhotos.filter((p) => p.type === 'before').length,
+    afterCount:  reportPhotos.filter((p) => p.type === 'after').length,
+    clipCount:   (report?.work_clip_urls ?? []).filter(Boolean).length,
+    hasNotes:    !!report?.notes?.trim(),
+  }
 
-  // 다음 방문 참고사항 + 출발 알림 수신 설정 로드
-  let savedNextVisitNote = ''
+  // 출발 알림 수신 설정
   let notifyOnMyWay = true
   if (booking.customer_phone) {
     const { data: customer } = await db
       .from('customers')
-      .select('notes, notify_on_my_way' as never)
+      .select('notify_on_my_way' as never)
       .eq('business_id', worker.business_id)
       .eq('phone', booking.customer_phone)
-      .maybeSingle() as { data: { notes: string | null; notify_on_my_way: boolean | null } | null }
+      .maybeSingle() as { data: { notify_on_my_way: boolean | null } | null }
 
     if (customer && customer.notify_on_my_way === false) notifyOnMyWay = false
-
-    if (customer?.notes) {
-      // 오늘 날짜로 저장된 마지막 메모를 추출
-      const today = new Date().toLocaleDateString('ko-KR')
-      const entries = (customer.notes as string).split('\n\n')
-      const todayEntry = entries.filter((e: string) => e.startsWith(`[${today}]`)).pop()
-      if (todayEntry) {
-        savedNextVisitNote = todayEntry.replace(`[${today}] `, '')
-      }
-    }
   }
 
   return (
     <FieldBookingClient
       workerId={workerId}
-      workerName={worker.name}
       businessId={worker.business_id}
       booking={{
         id: booking.id,
@@ -140,8 +125,8 @@ export default async function FieldBookingPage({ params }: Props) {
         status: booking.status,
         memo: booking.memo,
       }}
-      reportId={report?.id ?? null}
       reportSentAt={report?.kakao_sent_at ?? null}
+      reportProgress={reportProgress}
       notifyOnMyWay={notifyOnMyWay}
       onMyWaySentAt={booking.on_my_way_sent_at}
       requiresLockup={requiresLockup}
@@ -152,12 +137,6 @@ export default async function FieldBookingPage({ params }: Props) {
       checkoutAt={booking.checkout_at}
       checklistItems={checklistItems}
       existingChecklistPhotos={booking.checklist_photos ?? {}}
-      existingBeforeUrls={beforeUrls}
-      existingCustomerRequest={(booking.customer_request as string) ?? ''}
-      existingNextVisitNote={savedNextVisitNote}
-      memoUpdatedById={booking.memo_updated_by}
-      memoUpdatedByName={memoUpdatedByName}
-      memoUpdatedAt={booking.memo_updated_at}
     />
   )
 }

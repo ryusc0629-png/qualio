@@ -33,7 +33,7 @@ export default async function FieldReportPage({ params }: Props) {
   // 예약 조회
   const { data: booking } = await db
     .from('bookings')
-    .select('id, customer_name, customer_phone, service_address, scheduled_at, status, contract_id' as never)
+    .select('id, customer_name, customer_phone, service_address, scheduled_at, status, contract_id, customer_request' as never)
     .eq('id', bookingId)
     .eq('business_id', worker.business_id)
     .eq('worker_id' as never, workerId)
@@ -46,10 +46,32 @@ export default async function FieldReportPage({ params }: Props) {
         scheduled_at: string
         status: string
         contract_id: string | null
+        customer_request: string | null
       } | null
     }
 
   if (!booking) notFound()
+
+  // 오늘 남긴 '다음 방문 참고'는 고객 메모(customers.notes)에 날짜 머리표와 함께 쌓인다.
+  // 다시 열었을 때 오늘 쓴 내용이 그대로 보여야 해서 되짚어 읽는다.
+  let savedNextVisitNote = ''
+  if (booking.customer_phone) {
+    const { data: customer } = await db
+      .from('customers')
+      .select('notes')
+      .eq('business_id', worker.business_id)
+      .eq('phone', booking.customer_phone)
+      .maybeSingle()
+
+    if (customer?.notes) {
+      const today = new Date().toLocaleDateString('ko-KR')
+      const todayEntry = (customer.notes as string)
+        .split('\n\n')
+        .filter((e) => e.startsWith(`[${today}]`))
+        .pop()
+      if (todayEntry) savedNextVisitNote = todayEntry.replace(`[${today}] `, '')
+    }
+  }
 
   // 기존 보고서 + 사진 + 릴스 정보 조회
   const { data: report } = await db
@@ -113,6 +135,8 @@ export default async function FieldReportPage({ params }: Props) {
         contractId: booking.contract_id ?? null,
         isFirstVisit,
       }}
+      existingCustomerRequest={booking.customer_request ?? ''}
+      existingNextVisitNote={savedNextVisitNote}
       existingReport={report ? {
         id: report.id,
         notes: report.notes,

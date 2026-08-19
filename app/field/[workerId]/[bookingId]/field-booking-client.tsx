@@ -5,13 +5,9 @@ import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
 import { createClient } from '@/lib/supabase/client'
 import {
   fieldStartWorkAction,
-  fieldSaveMemoAction,
-  fieldSaveBeforePhotosAction,
   fieldCompletePaymentAction,
   fieldRequestPaymentAction,
   fieldSendOnMyWayAction,
@@ -31,10 +27,8 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Play,
-  Upload,
   X,
   ChevronDown,
-  ChevronUp,
   Film,
   Send,
   Lock,
@@ -56,13 +50,20 @@ interface BookingData {
 
 type PhotoSlot = { url: string; uploading: boolean }
 
+/** 보고서를 어디까지 채웠는지 — 작업 상세에서 남은 할 일을 보여주는 데만 쓴다 */
+interface ReportProgress {
+  beforeCount: number
+  afterCount: number
+  clipCount: number
+  hasNotes: boolean
+}
+
 interface Props {
   workerId: string
-  workerName: string
   businessId: string
   booking: BookingData
-  reportId: string | null
   reportSentAt: string | null
+  reportProgress: ReportProgress
   notifyOnMyWay: boolean
   onMyWaySentAt: string | null
   requiresLockup: boolean
@@ -73,42 +74,16 @@ interface Props {
   checkoutAt: string | null
   checklistItems: { id: string; label: string }[]
   existingChecklistPhotos: Record<string, string[]>
-  existingBeforeUrls: string[]
-  existingCustomerRequest: string
-  existingNextVisitNote: string
-  memoUpdatedById: string | null
-  memoUpdatedByName: string | null
-  memoUpdatedAt: string | null
 }
 
-function relativeTime(dateStr: string): string {
-  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000)
-  if (diff < 60) return '방금 전'
-  if (diff < 3600) return `${Math.floor(diff / 60)}분 전`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`
-  return `${Math.floor(diff / 86400)}일 전`
-}
-
-export function FieldBookingClient({ workerId, workerName, businessId, booking, reportId, reportSentAt, notifyOnMyWay, onMyWaySentAt, requiresLockup, isRecurring, existingOpenPhotoUrls, existingLockupPhotoUrls, checkinAt, checkoutAt, checklistItems, existingChecklistPhotos, existingBeforeUrls, existingCustomerRequest, existingNextVisitNote, memoUpdatedById, memoUpdatedByName, memoUpdatedAt }: Props) {
+export function FieldBookingClient({ workerId, businessId, booking, reportSentAt, reportProgress, notifyOnMyWay, onMyWaySentAt, requiresLockup, isRecurring, existingOpenPhotoUrls, existingLockupPhotoUrls, checkinAt, checkoutAt, checklistItems, existingChecklistPhotos }: Props) {
   const [currentStatus, setCurrentStatus] = useState(booking.status)
   const [onMyWaySent, setOnMyWaySent] = useState(!!onMyWaySentAt)
   // 도착 사진 → 작업 자동 시작이 한 번만 실행되도록 (사진 여러 장 올려도 중복 시작 방지)
   const autoStartedRef = useRef(false)
   // 현장에서 항목을 조정하면 결제 금액도 실시간으로 따라간다
   const [liveTotal, setLiveTotal] = useState(booking.finalPrice)
-  const [siteMemo, setSiteMemo] = useState(booking.memo ?? '')
-  const [customerRequest, setCustomerRequest] = useState(existingCustomerRequest)
-  const [nextVisitNote, setNextVisitNote] = useState(existingNextVisitNote)
-  const [memoOpen, setMemoOpen] = useState(false)
-  const [memoSaved, setMemoSaved] = useState(false)
-  const [lastSavedById, setLastSavedById] = useState(memoUpdatedById)
-  const [lastSavedByName, setLastSavedByName] = useState(memoUpdatedByName)
-  const [lastSavedAt, setLastSavedAt] = useState(memoUpdatedAt)
   const [paymentRequested, setPaymentRequested] = useState(false)
-  const [beforePhotos, setBeforePhotos] = useState<PhotoSlot[]>(
-    existingBeforeUrls.map((url) => ({ url, uploading: false }))
-  )
-  const beforeInputRef = useRef<HTMLInputElement>(null)
 
   // 문단속 인증 — 오픈(도착)/마감(잠금) 사진
   const [openPhotos, setOpenPhotos] = useState<PhotoSlot[]>(
@@ -200,18 +175,6 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
-  // 메모 저장
-  const { execute: saveMemo, isPending: isSavingMemo } = useAction(fieldSaveMemoAction, {
-    onSuccess: () => {
-      setMemoSaved(true)
-      setLastSavedById(workerId)
-      setLastSavedByName(workerName)
-      setLastSavedAt(new Date().toISOString())
-      toast.success('메모가 저장됐어요!')
-    },
-    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
-  })
-
   // 수금 완료
   const { execute: completePayment, isPending: isCompleting } = useAction(fieldCompletePaymentAction, {
     onSuccess: ({ data }) => {
@@ -233,12 +196,6 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
       setPaymentRequested(true)
       toast.success('고객에게 결제 요청을 보냈어요!')
     },
-    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
-  })
-
-  // 작업 전 사진 저장
-  const { execute: saveBeforePhotos, isPending: isSavingPhotos } = useAction(fieldSaveBeforePhotosAction, {
-    onSuccess: () => toast.success('현장 사진이 저장됐어요!'),
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
@@ -298,58 +255,6 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
   // 체크리스트 완료 여부 — 모든 항목에 사진 1장 이상이면 작업 완료 가능
   const checklistDoneCount = checklistItems.filter((it) => (checklistPhotos[it.id] ?? []).some((p) => p.url)).length
   const checklistDone = checklistItems.length === 0 || checklistDoneCount === checklistItems.length
-
-  // 사진 업로드
-  const handleBeforePhotoUpload = async (files: FileList) => {
-    const remaining = 5 - beforePhotos.length
-    if (remaining <= 0) {
-      toast.error('사진은 최대 5장까지 등록할 수 있어요')
-      return
-    }
-    const toUpload = Array.from(files).slice(0, remaining)
-    const placeholders = toUpload.map(() => ({ url: '', uploading: true }))
-    setBeforePhotos((prev) => [...prev, ...placeholders])
-
-    const supabase = createClient()
-    const uploaded: string[] = []
-
-    for (const file of toUpload) {
-      const ext = file.name.split('.').pop() ?? 'jpg'
-      const path = `${businessId}/${booking.id}/before/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error } = await supabase.storage.from('report-photos').upload(path, file, { upsert: true })
-      if (error) {
-        toast.error('사진 업로드에 실패했어요')
-        continue
-      }
-      const { data: { publicUrl } } = supabase.storage.from('report-photos').getPublicUrl(path)
-      uploaded.push(publicUrl)
-    }
-
-    // 저장 목록은 낡은 beforePhotos가 아니라 최신 state(prev)에서 파생 — 빠르게 연달아 올려도 밀리지 않음
-    let allUrls: string[] = []
-    setBeforePhotos((prev) => {
-      const kept = prev.filter((p) => p.url && !p.uploading)
-      const next = [...kept, ...uploaded.map((url) => ({ url, uploading: false }))]
-      allUrls = next.map((p) => p.url)
-      return next
-    })
-
-    // 업로드 완료 후 자동 저장
-    if (allUrls.length > 0) {
-      saveBeforePhotos({ workerId, bookingId: booking.id, beforePhotoUrls: allUrls })
-    }
-  }
-
-  const removeBeforePhoto = (url: string) => {
-    const updated = beforePhotos.filter((p) => p.url !== url)
-    setBeforePhotos(updated)
-    // 삭제 후 자동 저장
-    saveBeforePhotos({
-      workerId,
-      bookingId: booking.id,
-      beforePhotoUrls: updated.filter((p) => p.url).map((p) => p.url),
-    })
-  }
 
   // 문단속 사진(오픈/마감) 공용 업로더 — folder와 저장 콜백만 다르다
   const uploadLockupPhotos = async (
@@ -431,9 +336,28 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
     completed:   'bg-emerald-100 text-emerald-700',
   }
 
+  // 보고서에서 남은 할 일 — 현장을 떠나기 전에 뭘 더 해야 하는지 카드에 그대로 보여준다
+  const reportSteps = [
+    { label: '작업 전 사진', done: reportProgress.beforeCount > 0 },
+    { label: '작업 중 영상', done: reportProgress.clipCount >= 3 },
+    { label: '작업 후 사진', done: reportProgress.afterCount > 0 },
+    { label: '하자·특이사항', done: reportProgress.hasNotes },
+  ]
+
   // 문단속 현장인데 아직 도착 사진이 없으면 → 시작 버튼이 곧장 카메라를 열고, 사진 올리면 자동 시작
   const hasArrivalPhoto = openPhotos.some((p) => p.url)
   const startNeedsArrivalPhoto = requiresLockup && !hasArrivalPhoto
+
+  // 법인 현장 — 그 자리에서 돈이 안 나온다. 결재가 돌고 계산서를 끊어야 입금되기 때문에
+  // 현장은 '작업 완료'까지만 하고, 청구는 사장님에게 넘긴다(전액 미수금 + 대표 알림).
+  const completeInvoice = () => {
+    if (!confirm(
+      `${liveTotal.toLocaleString()}원 전액을 계산서로 청구할까요?\n\n` +
+      '작업은 완료 처리되고, 사장님께 세금계산서 발행 요청 알림이 갑니다.\n' +
+      "받을 돈은 '못 받은 돈'에 남아요.",
+    )) return
+    completePayment({ workerId, bookingId: booking.id, skipReview: true, invoiceRequested: true })
+  }
 
   // 일부만 받았을 때 — 받은 금액만 입력, 나머지는 미수금으로 남긴다
   const completeWithPartial = (skipReview?: boolean) => {
@@ -456,7 +380,9 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
   }
 
   return (
-    <div className="min-h-dvh bg-gray-50 pb-32">
+    // 하단 고정 버튼 뒤로 내용이 가리지 않도록 넉넉히 띄운다.
+    // 작업 중에는 아래에 큰 버튼 1개 + 보조 링크 2줄이 깔려서 pb-32(128px)로는 모자랐다.
+    <div className="min-h-dvh bg-gray-50 pb-56">
       {/* 헤더 */}
       <div className="bg-white border-b px-4 py-3 sticky top-0 z-10 flex items-center gap-3">
         <Link href={`/field/${workerId}`} className="p-1">
@@ -497,10 +423,10 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
             <Play className="h-4 w-4 mt-0.5 shrink-0" />
             <p>
               {requiresLockup
-                ? '도착하면 문 여는 사진을 먼저 찍고, 아래 파란 버튼을 눌러 작업을 시작하세요.'
-                : '현장에 도착하면 아래 파란 버튼을 눌러 작업을 시작하세요.'}
+                ? '도착하면 문 여는 사진을 먼저 찍고, 맨 아래 초록 버튼을 눌러 작업을 시작하세요.'
+                : '현장에 도착하면 맨 아래 초록 버튼을 눌러 작업을 시작하세요.'}
               <br />
-              <span className="text-blue-600">작업 항목·메모는 시작한 뒤에 나타나요.</span>
+              <span className="text-blue-600">작업 보고서와 추가 서비스는 시작한 뒤에 나타나요.</span>
             </p>
           </div>
         )}
@@ -721,161 +647,64 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
           </div>
         )}
 
-        {/* 메모 섹션 — 작업 시작 후에만 (예정 화면에선 숨김) */}
-        {currentStatus === 'in_progress' && (
-          <div className="rounded-xl bg-white border overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setMemoOpen(!memoOpen)}
-              className="w-full px-4 py-3 flex items-center justify-between text-sm font-medium"
-            >
-              <div className="flex items-center gap-2 flex-wrap">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                <span>현장 메모 작성</span>
-                {memoSaved && <span className="text-xs text-emerald-600">(저장됨)</span>}
-                {lastSavedByName && lastSavedAt && !memoSaved && (
-                  <span className="text-xs text-muted-foreground">
-                    마지막 저장: {lastSavedByName} · {relativeTime(lastSavedAt)}
-                  </span>
-                )}
+        {/* 작업 보고서 — 현장에서 해야 할 '진짜 일'. 사진·영상·메모를 여기 한 곳에서 다 한다.
+            예전엔 현장 메모 / 릴스 안내 / 보고서 링크가 따로 있었는데, 셋 다 같은 보고서로 들어가는
+            내용이라 직원 입장에선 같은 걸 세 번 물어보는 화면이었다. 하나로 합쳤다. */}
+        {(currentStatus === 'in_progress' || currentStatus === 'completed') && (
+          <Link
+            href={`/field/${workerId}/${booking.id}/report`}
+            className="block rounded-xl bg-white border-2 border-primary/30 overflow-hidden"
+          >
+            <div className="px-4 py-3.5 flex items-center gap-3 bg-primary/5 border-b border-primary/20">
+              <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center shrink-0">
+                <FileText className="h-5 w-5 text-white" />
               </div>
-              {memoOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold">작업 보고서</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {reportSentAt
+                    ? '고객에게 발송 완료'
+                    : '작업 사진과 하자·특이사항을 기록해주세요. 고객에게 그대로 발송돼요'}
+                </p>
+              </div>
+              <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90" />
+            </div>
 
-            {memoOpen && (
-              <div className="px-4 pb-4 space-y-4 border-t pt-3">
-                {/* 현장 특이사항 */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground">
-                    현장 특이사항
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    작업 전 파손·오염 등 기록 (책임 분리용)
-                  </p>
-                  <Textarea
-                    placeholder="예: 거실 창문 틀에 기존 흠집 있음"
-                    value={siteMemo}
-                    onChange={(e) => { setSiteMemo(e.target.value); setMemoSaved(false) }}
-                    rows={2}
-                  />
-
-                  {/* 작업 전 현장 사진 */}
-                  <div className="mt-3 space-y-2">
-                    <p className="text-xs text-muted-foreground">
-                      현장 사진을 찍어두면 보고서에 자동으로 올라가요
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {beforePhotos.map((photo) => (
-                        <div key={photo.url || 'uploading'} className="relative w-20 h-20 rounded-lg overflow-hidden border bg-muted">
-                          {photo.uploading ? (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                            </div>
-                          ) : (
-                            <>
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={photo.url} alt="현장 사진" className="w-full h-full object-cover" />
-                              <button
-                                type="button"
-                                onClick={() => removeBeforePhoto(photo.url)}
-                                className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
-                              >
-                                <X className="h-3 w-3 text-white" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      ))}
-                      {beforePhotos.length < 5 && (
-                        <button
-                          type="button"
-                          onClick={() => beforeInputRef.current?.click()}
-                          className="w-20 h-20 rounded-lg border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1 hover:border-primary/50 transition-colors"
-                        >
-                          <Camera className="h-5 w-5 text-muted-foreground" />
-                          <span className="text-[10px] text-muted-foreground">사진 추가</span>
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      ref={beforeInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => {
-                        if (e.target.files?.length) handleBeforePhotoUpload(e.target.files)
-                        e.target.value = ''
-                      }}
-                    />
-                  </div>
+            {/* 남은 할 일 — 무엇이 비었는지 열어보지 않고 알 수 있게 */}
+            <div className="px-4 py-3 grid grid-cols-2 gap-x-3 gap-y-2">
+              {reportSteps.map((s) => (
+                <div key={s.label} className="flex items-center gap-1.5 text-xs">
+                  {s.done ? (
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  ) : (
+                    <span className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30 inline-block shrink-0" />
+                  )}
+                  <span className={s.done ? 'text-emerald-700 font-medium' : 'text-muted-foreground'}>
+                    {s.label}
+                  </span>
                 </div>
+              ))}
+            </div>
 
-                {/* 고객 추가 요청 */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground">
-                    고객 추가 요청사항
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    현장에서 고객이 추가로 요청한 내용
-                  </p>
-                  <Textarea
-                    placeholder="예: 베란다 창틀도 닦아달라고 요청"
-                    value={customerRequest}
-                    onChange={(e) => { setCustomerRequest(e.target.value); setMemoSaved(false) }}
-                    rows={2}
-                  />
+            {/* 아직 영상을 안 올렸으면 지금 찍어야 할 3컷을 알려준다 — 현장을 떠나면 다시 못 찍는다 */}
+            {currentStatus === 'in_progress' && reportProgress.clipCount < 3 && (
+              <div className="mx-4 mb-4 rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Film className="h-4 w-4 text-amber-600 shrink-0" />
+                  <p className="text-xs font-bold text-amber-900">나가기 전에 영상 3컷만 찍어두세요</p>
                 </div>
-
-                {/* 다음 방문 참고 */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground">
-                    다음 방문 시 참고
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    다음에 올 직원이 알아야 할 내용 (고객 DB에 자동 저장)
-                  </p>
-                  <Textarea
-                    placeholder="예: 현관 비밀번호 1234#, 반려동물 있음"
-                    value={nextVisitNote}
-                    onChange={(e) => { setNextVisitNote(e.target.value); setMemoSaved(false) }}
-                    rows={2}
-                  />
-                </div>
-
-                {lastSavedByName && lastSavedAt && lastSavedById !== workerId && (
-                  <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800">
-                    <span className="font-semibold">{lastSavedByName}</span>님이 {relativeTime(lastSavedAt)} 저장했어요.
-                    저장하면 그 내용을 덮어씁니다.
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  className="w-full h-11"
-                  disabled={isSavingMemo}
-                  onClick={() => {
-                    const doSave = () => saveMemo({
-                      workerId,
-                      bookingId: booking.id,
-                      siteMemo: siteMemo || undefined,
-                      customerRequest: customerRequest || undefined,
-                      nextVisitNote: nextVisitNote || undefined,
-                    })
-                    if (lastSavedById && lastSavedById !== workerId && lastSavedAt) {
-                      if (confirm(`${lastSavedByName}님이 ${relativeTime(lastSavedAt)} 저장했어요.\n덮어쓸까요?`)) doSave()
-                    } else {
-                      doSave()
-                    }
-                  }}
-                >
-                  {isSavingMemo ? '저장 중...' : '메모 저장하기'}
-                </Button>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  ① 더러운 곳 클로즈업 → ② 작업하는 모습 → ③ 깨끗해진 결과
+                  <br />
+                  각 10초 이내 · 세로로 찍어주세요. 나중에 버튼 하나로 홍보 영상이 만들어져요.
+                </p>
               </div>
             )}
-          </div>
+          </Link>
         )}
 
-        {/* 항목별 금액 조정 — 일회성 현장, 작업 시작 후에만 (정기청소는 월말 정산이라 현장 추가 항목 없음) */}
+        {/* 추가 서비스 — 일회성 현장, 작업 시작 후에만 (정기청소는 월말 정산이라 현장 추가 항목 없음).
+            평소엔 접혀 있다 — 늘 하는 일이 아니라 청소 범위가 늘었을 때만 여는 칸이다. */}
         {!isRecurring && currentStatus === 'in_progress' && (
           <FieldBookingItemsEditor
             workerId={workerId}
@@ -883,62 +712,6 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
             fallbackTotal={booking.finalPrice}
             onTotalChange={setLiveTotal}
           />
-        )}
-
-        {/* 릴스 촬영 유도 — 작업 중일 때만 */}
-        {currentStatus === 'in_progress' && (
-          <div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-4 space-y-3">
-            <div className="flex items-start gap-3">
-              <div className="h-10 w-10 rounded-full bg-amber-400 flex items-center justify-center shrink-0">
-                <Film className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <p className="font-bold text-amber-900">지금 영상을 찍어두세요!</p>
-                <p className="text-xs text-amber-800 mt-0.5">
-                  작업 중 3컷만 찍으면 — 나중에 버튼 하나로 릴스가 완성돼요
-                </p>
-              </div>
-            </div>
-            <div className="space-y-1.5 pl-1">
-              <div className="flex items-center gap-2 text-xs text-amber-900">
-                <span className="w-5 h-5 rounded-full bg-amber-400 text-white flex items-center justify-center font-bold shrink-0 text-[10px]">1</span>
-                오염된 부분 클로즈업 (작업 전 상태)
-              </div>
-              <div className="flex items-center gap-2 text-xs text-amber-900">
-                <span className="w-5 h-5 rounded-full bg-amber-400 text-white flex items-center justify-center font-bold shrink-0 text-[10px]">2</span>
-                열심히 작업하는 모습
-              </div>
-              <div className="flex items-center gap-2 text-xs text-amber-900">
-                <span className="w-5 h-5 rounded-full bg-amber-400 text-white flex items-center justify-center font-bold shrink-0 text-[10px]">3</span>
-                깨끗해진 결과물 클로즈업
-              </div>
-            </div>
-            <p className="text-[11px] text-amber-700 pl-1">각 영상 10초 이내 · 세로로 찍어야 릴스에 딱 맞아요</p>
-          </div>
-        )}
-
-        {/* 보고서 바로가기 — 작업 중 이상일 때 */}
-        {(currentStatus === 'in_progress' || currentStatus === 'completed') && (
-          <Link
-            href={`/field/${workerId}/${booking.id}/report`}
-            className="flex items-center gap-3 rounded-xl bg-white border p-4 hover:border-primary/30 transition-colors"
-          >
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <Camera className="h-5 w-5 text-primary" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium">작업 완료 보고서</p>
-              <p className="text-xs text-muted-foreground">
-                {reportId
-                  ? reportSentAt
-                    ? '보고서 발송 완료'
-                    : '보고서 작성됨 · 발송 대기 중'
-                  : 'Before/After 사진을 올려주세요'
-                }
-              </p>
-            </div>
-            <ChevronDown className="h-4 w-4 text-muted-foreground -rotate-90" />
-          </Link>
         )}
 
         {/* 완료 상태 안내 */}
@@ -1059,6 +832,14 @@ export function FieldBookingClient({ workerId, workerName, businessId, booking, 
                 onClick={() => completeWithPartial()}
               >
                 일부만 받았어요 (나머지 미수금으로 남기기) →
+              </button>
+              <button
+                type="button"
+                className="w-full text-xs text-muted-foreground underline py-1"
+                disabled={isCompleting}
+                onClick={() => completeInvoice()}
+              >
+                회사 결재라 나중에 입금돼요 (계산서 청구) →
               </button>
             </div>
           )}

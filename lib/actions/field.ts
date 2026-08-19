@@ -17,6 +17,7 @@ import { generateAiReport } from '@/lib/ai/report-writer'
 import { geocodeAddress } from '@/lib/roadmap/geo'
 import { postBookingRevenue } from '@/lib/finance/post-booking-revenue'
 import { assertReportSendable } from '@/lib/utils/report-send-guard'
+import { sendPushToBusiness } from '@/lib/push/web-push'
 
 // workers 테이블 타입 (Supabase 타입 아직 미생성)
 interface WorkerRow {
@@ -267,6 +268,9 @@ export const fieldCompletePaymentAction = action
     skipReview: z.boolean().optional(),
     // 실제 받은 금액 — 생략하면 전액(final_price) 받은 것으로 처리. 일부만 받으면 나머지는 미수금.
     paidAmount: z.coerce.number().int().min(0).optional(),
+    // 법인 현장에서 그 자리에 못 받는 경우 — 계산서 끊고 결재가 돌아야 입금된다.
+    // 현장은 작업만 끝내고, 청구는 사장님이 이어받도록 알림을 보낸다.
+    invoiceRequested: z.boolean().optional(),
   }))
   .action(async ({ parsedInput }) => {
     const { db, worker } = await verifyWorker(parsedInput.workerId)
@@ -307,7 +311,10 @@ export const fieldCompletePaymentAction = action
 
     // 수금액 기록 + 매출 장부 자동 반영 — 일회성 예약만(정기는 월말 정산이라 제외)
     if (!bChk?.contract_id) {
-      const paid = parsedInput.paidAmount ?? Math.round(booking.final_price ?? 0)
+      // 계산서 청구 건은 현장에서 받은 돈이 0원 — 전액이 '못 받은 돈'으로 남아 재무 화면에 뜬다
+      const paid = parsedInput.invoiceRequested
+        ? 0
+        : parsedInput.paidAmount ?? Math.round(booking.final_price ?? 0)
       await db
         .from('bookings')
         .update({ paid_amount: paid } as never)
@@ -364,6 +371,22 @@ export const fieldCompletePaymentAction = action
     // 담당 기사도 알 수 없었다. 같은 경로로 통일해야 집계와 성과급이 성립한다.
     // 정기계약 방문은 후기 요청 대상이 아니다 — 매 방문마다 조르는 꼴이 된다.
     // (정기 거래처 카톡은 방문 전날 안내·초도 보고서·월간 보고서 세 가지뿐)
+    // 계산서 청구 건은 사장님이 이어받아야 한다 — 현장에서 끝나지 않는 유일한 마감이라 알림을 보낸다.
+    // (실패해도 작업 완료는 유지 — 알림은 부가 기능)
+    if (parsedInput.invoiceRequested) {
+      const amount = Math.round(booking.final_price ?? 0)
+      try {
+        await sendPushToBusiness(worker.business_id, {
+          title: '세금계산서 발행 요청',
+          body: `${booking.customer_name} 현장 ${amount.toLocaleString('ko-KR')}원 — 현장에서 못 받았어요. 계산서 끊고 청구해주세요.`,
+          url: '/dashboard/finance',
+          tag: `invoice-${parsedInput.bookingId}`,
+        })
+      } catch (err) {
+        console.error('[Field] 계산서 요청 알림 실패:', err)
+      }
+    }
+
     if (!parsedInput.skipReview && !booking.contract_id) {
       const reviewUrl = business.google_place_url || business.naver_place_url
       if (booking.customer_phone && reviewUrl) {

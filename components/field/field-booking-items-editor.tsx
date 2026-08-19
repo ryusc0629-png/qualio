@@ -9,7 +9,7 @@ import {
   fieldUpdateBookingItemAction,
   fieldDeleteBookingItemAction,
 } from '@/lib/actions/field'
-import { Plus, Trash2, History, ChevronDown } from 'lucide-react'
+import { Plus, Trash2, History, ChevronDown, PlusCircle } from 'lucide-react'
 
 interface Item {
   id: string
@@ -56,6 +56,9 @@ export function FieldBookingItemsEditor({ workerId, bookingId, fallbackTotal, on
   const [changes, setChanges] = useState<Change[]>([])
   const [loaded, setLoaded] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  // 접힌 채로 시작한다 — 현장에서 늘 하는 일이 아니라 '추가 작업이 생겼을 때만' 여는 칸이라,
+  // 열려 있으면 필수인 작업 보고서보다 메인처럼 보인다. 이미 추가한 항목이 있으면 펼쳐준다.
+  const [open, setOpen] = useState(false)
 
   // 새 항목 입력
   const [newName, setNewName] = useState('')
@@ -69,6 +72,8 @@ export function FieldBookingItemsEditor({ workerId, bookingId, fallbackTotal, on
       setItems(loadedItems)
       setChanges(data.changes as Change[])
       setLoaded(true)
+      // 이미 현장에서 추가한 항목이 있으면 접어두지 않는다 (금액을 확인해야 하므로)
+      if (loadedItems.length > 0) setOpen(true)
       // 항목이 있으면 합계, 없으면 기존 단일 금액(fallback)을 상위에 반영
       onTotalChange?.(loadedItems.length > 0 ? loadedItems.reduce((s, it) => s + it.amount, 0) : fallbackTotal)
     },
@@ -126,19 +131,36 @@ export function FieldBookingItemsEditor({ workerId, bookingId, fallbackTotal, on
   }
 
   return (
-    <div className="rounded-xl border bg-white p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold">항목별 금액 조정</p>
-        <span className="text-xs text-muted-foreground">현장에서 추가·할인</span>
-      </div>
+    <div className="rounded-xl border bg-white overflow-hidden">
+      {/* 접힘/펼침 헤더 — 평소엔 접혀 있고, 추가 작업이 생겼을 때만 연다 */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-4 py-3.5 flex items-center gap-2.5 text-left"
+      >
+        <PlusCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold">추가 서비스</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {items.length > 0
+              ? `${items.length}개 추가됨 · 합계 ${won(total)}`
+              : '현장에서 청소 범위가 늘었을 때만 눌러주세요'}
+          </p>
+        </div>
+        <ChevronDown className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
 
+      {open && (
+      <div className="px-4 pb-4 space-y-3 border-t pt-3">
       {/* 항목 목록 */}
       {!loaded ? (
         <p className="text-xs text-muted-foreground py-2">불러오는 중...</p>
       ) : items.length === 0 ? (
         <div className="rounded-lg bg-muted/30 border border-dashed px-3 py-3 text-center">
           <p className="text-xs text-muted-foreground">
-            현장에서 항목이 추가되면 금액({won(fallbackTotal)})이<br />항목별로 자동 계산돼요.
+            아래에 추가한 만큼 금액이 자동으로 더해져요.
+            <br />
+            지금 받을 돈은 {won(fallbackTotal)}이에요.
           </p>
         </div>
       ) : (
@@ -207,11 +229,11 @@ export function FieldBookingItemsEditor({ workerId, bookingId, fallbackTotal, on
 
       {/* 새 항목 추가 */}
       <div className="rounded-lg bg-muted/20 border p-2.5 space-y-2">
-        <p className="text-xs font-medium text-muted-foreground">항목 추가</p>
+        <p className="text-xs font-medium text-muted-foreground">추가로 한 작업 적기</p>
         <input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          placeholder="항목명 (예: 에어컨 청소)"
+          placeholder="무슨 작업이에요? (예: 에어컨 청소)"
           className="w-full h-9 rounded-lg border px-2.5 text-sm"
         />
         <div className="flex items-center gap-2">
@@ -276,6 +298,8 @@ export function FieldBookingItemsEditor({ workerId, bookingId, fallbackTotal, on
             </div>
           )}
         </div>
+      )}
+      </div>
       )}
     </div>
   )
