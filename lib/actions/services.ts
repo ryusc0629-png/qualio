@@ -80,34 +80,6 @@ const deleteServiceItemSchema = z.object({
   id: z.string().uuid(),
 })
 
-// 삭제한 서비스 하나만 3단계 플랜(번들)에서 빼낸다.
-//
-// 왜 이렇게 바뀌었나: 예전엔 서비스를 추가·수정·복제·삭제할 때마다 업체의 번들 연결을
-// 통째로 지웠다("AI 캐시 초기화"). 번들이 AI가 자동으로 만들던 시절의 로직인데,
-// 지금은 사장님이 '견적 플랜 설정' 화면에서 직접 체크해 만드는 데이터다.
-// 그래서 서비스 이름 한 글자만 고쳐도 애써 짠 기본·추천·프리미엄 구성이 전부 풀리고,
-// 고객 견적서도 번들 없는 상태(기본가×배수)로 조용히 돌아갔다.
-// 이제는 '없어진 서비스만' 빼고 나머지 구성은 그대로 둔다.
-async function removeServiceFromBundles(
-  db: ReturnType<typeof createServiceClient>,
-  businessId: string,
-  serviceId: string,
-) {
-  const { data: tiers } = await db
-    .from('quote_tiers')
-    .select('id')
-    .eq('business_id', businessId)
-
-  if (!tiers || tiers.length === 0) return
-
-  const tierIds = tiers.map((t) => t.id)
-  await db
-    .from('quote_tier_services')
-    .delete()
-    .in('tier_id', tierIds)
-    .eq('service_id', serviceId)
-}
-
 // 서비스 한 항목의 플랜(기본/추천/프리미엄) 구성 항목을 AI가 개별 추천
 export const aiSuggestServiceTierItemsAction = action
   .schema(z.object({ id: z.string().uuid() }))
@@ -384,12 +356,9 @@ export const deleteServiceItemAction = action
 
     if (error) throw new Error('[APP] 서비스 삭제에 실패했습니다')
 
-    // 없어진 서비스만 3단계 플랜에서 뺀다 (나머지 플랜 구성은 그대로 유지)
-    await removeServiceFromBundles(db, profile.business_id, parsedInput.id)
     // 홍보 페이지 문구도 이 서비스로 만들어진 것 → 다시 만들라고 표시
     await markSeoStale(db, profile.business_id)
 
     revalidatePath('/dashboard/services')
-    revalidatePath('/dashboard/tiers')
     return { success: true }
   })

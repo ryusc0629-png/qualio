@@ -11,7 +11,6 @@ const SECTION_PREFIXES: { prefix: string; label: string }[] = [
   { prefix: '/dashboard/payroll', label: '급여' },
   { prefix: '/dashboard/roadmap', label: '영업 동선' },
   { prefix: '/dashboard/services', label: '서비스' },
-  { prefix: '/dashboard/tiers', label: '가격 3단계' },
   { prefix: '/dashboard/settings', label: '설정' },
 ]
 

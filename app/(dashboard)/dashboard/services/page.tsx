@@ -36,19 +36,10 @@ export default async function ServicesPage() {
   const serviceCount = services?.length ?? 0
   const hasBundles = (services ?? []).some((s) => (s.tier_good_items?.length ?? 0) > 0)
 
-  // 플랜 배수 (예시 가격 계산용) — quote_tiers에서
+  // 플랜 배수 (예시 가격 계산용) — 코드 상수로 고정.
+  // 업체별로 바꿀 수 있게 뒀던 설정 화면은 없앴다(2026-08-19) — 고객 견적서가
+  // 그 값을 안 읽고 있어서, 사장님이 만져도 아무 일도 일어나지 않는 설정이었다.
   const tierMultipliers = { good: 1.0, better: 1.2, best: 1.5 }
-  {
-    const { data: tierRows } = await db
-      .from('quote_tiers')
-      .select('tier, price_multiplier')
-      .eq('business_id', profile.business_id)
-    for (const t of tierRows ?? []) {
-      if (t.tier === 'good' || t.tier === 'better' || t.tier === 'best') {
-        tierMultipliers[t.tier] = Number(t.price_multiplier) || tierMultipliers[t.tier]
-      }
-    }
-  }
 
   // 객단가 상위 업체 가격 벤치마크 (매일 cron 갱신) — 표본 미달이면 null 이라 문구가 숨겨진다
   const pricingBenchmark = await getLatestPricingBenchmark()

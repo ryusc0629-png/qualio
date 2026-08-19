@@ -11,8 +11,6 @@ import { CustomDomainSection } from '@/components/dashboard/custom-domain-sectio
 import { HelpRequestCard } from '@/components/dashboard/help-request-card'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PlanId } from '@/lib/config/plans'
-import Link from 'next/link'
-import { Layers, ChevronRight } from 'lucide-react'
 
 interface FaqItem {
   question: string
@@ -139,22 +137,6 @@ export default async function SettingsPage() {
       {/* 폰 알림 받기 (앱 푸시) */}
       <PushNotificationToggle />
 
-      {/* 견적 플랜 가격·할인 설정 바로가기 */}
-      <Link
-        href="/dashboard/tiers"
-        className="flex items-center gap-3 bg-white rounded-xl border border-border p-5 hover:border-primary/40 transition-colors"
-      >
-        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-          <Layers className="h-5 w-5 text-primary" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h2 className="font-semibold text-sm">견적 플랜 이름·구성</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            플랜 이름(기본·추천·프리미엄)과 강조 표시, 묶음 구성을 정해요. 가격·할인은 각 서비스 편집에서 설정해요
-          </p>
-        </div>
-        <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
-      </Link>
 
       {/* 내 홈페이지 링크 — 사장님이 밖에 뿌리는 대표 주소는 견적 폼이 아니라 홈페이지다.
           (견적 링크는 홈 화면 우측 상단 '견적 링크 복사'에 그대로 있음) */}

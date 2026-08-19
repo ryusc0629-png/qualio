@@ -47,7 +47,7 @@ const createBusinessSchema = z.object({
 // 업체 생성 액션
 // - 사용자 인증은 일반 클라이언트로 검증
 // - DB 쓰기 작업은 서비스 롤 클라이언트로 실행 (RLS 우회, 서버 전용)
-// 순서: businesses 생성 → profiles.business_id 업데이트 → subscriptions 생성 → quote_tiers 생성
+// 순서: businesses 생성 → profiles.business_id 업데이트 → subscriptions 생성
 export const createBusinessAction = action
   .schema(createBusinessSchema)
   .action(async ({ parsedInput }) => {
@@ -153,21 +153,6 @@ export const createBusinessAction = action
         plan: 'beta',
         status: 'active',
       })
-    }
-
-    // 6. 기본 견적 3단계(Good/Better/Best) 자동 생성 — 없을 때만
-    const { data: existingTiers } = await db
-      .from('quote_tiers')
-      .select('id')
-      .eq('business_id', businessId)
-      .limit(1)
-
-    if (!existingTiers || existingTiers.length === 0) {
-      await db.from('quote_tiers').insert([
-        { business_id: businessId, tier: 'good',   label: '기본',     price_multiplier: 1.0, highlight: false, sort_order: 0 },
-        { business_id: businessId, tier: 'better', label: '추천',     price_multiplier: 1.2, highlight: true,  sort_order: 1 },
-        { business_id: businessId, tier: 'best',   label: '프리미엄', price_multiplier: 1.5, highlight: false, sort_order: 2 },
-      ])
     }
 
     // 7. 신규 업체가 실제로 생성된 경우에만 본사(관리자) 폰에 즉시 알림

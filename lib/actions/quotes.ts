@@ -8,7 +8,6 @@ import { generateTierDescriptions } from '@/lib/ai/tier-descriptions'
 import { sendBookingConfirmAlimtalk } from '@/lib/kakao/alimtalk'
 import { sendQuoteToCustomer } from '@/lib/kakao/quote-delivery'
 import { sendPushToBusiness } from '@/lib/push/web-push'
-import { detectBundleReview } from '@/lib/utils/booking-review'
 import { isBusinessService } from '@/lib/utils'
 import { findCustomerIdByPhone } from '@/lib/actions/_customer-lookup'
 import { inputToUtcIso } from '@/lib/format/datetime'
@@ -163,14 +162,11 @@ export const calculateAndCreateQuoteAction = publicAction
       baseCalc = service.base_price
     }
 
-    // 업체의 quote_tiers 조회
-    const { data: dbTiers } = await db
-      .from('quote_tiers')
-      .select('id, tier, label, price_multiplier, highlight')
-      .eq('business_id', parsedInput.business_id)
-      .order('sort_order')
-
-    const tiers = dbTiers && dbTiers.length > 0 ? dbTiers : DEFAULT_TIERS
+    // 플랜 이름·배수는 코드 상수 하나로 고정한다(2026-08-19).
+    // 예전엔 업체마다 quote_tiers 행을 두고 설정 화면(/dashboard/tiers)에서 고치게 했는데,
+    // 정작 고객이 보는 견적서는 '기본/추천/프리미엄'을 코드에 박아 쓰고 있어서
+    // 무엇을 바꿔도 화면이 안 바뀌었다. 비테크 사장님에게 아무 일도 안 하는 설정은 짐이다.
+    const tiers = DEFAULT_TIERS
     const roundToThousand = (n: number) => Math.round(n / 1000) * 1000
 
     // 서비스별 플랜 할인 (컬럼이 아직 없으면 0 — 마이그레이션 적용 전 안전)
@@ -187,35 +183,22 @@ export const calculateAndCreateQuoteAction = publicAction
       return Math.max(0, roundToThousand(discounted))
     }
 
-    // 번들 기반 가격 계산 (quote_tier_services 조회)
-    const tierIds = tiers
-      .filter((t): t is typeof t & { id: string } => 'id' in t && typeof t.id === 'string')
-      .map((t) => t.id)
-
-    const { data: tierServicesRows } = tierIds.length > 0
-      ? await db
-          .from('quote_tier_services')
-          .select('tier_id, service_id')
-          .in('tier_id', tierIds)
-      : { data: [] }
-
-    // 업체가 이 서비스에 3단계 플랜을 설정했는지 여부. 미설정이면 단일 금액으로 안내한다.
-    // 설정 신호 = ① 번들(quote_tier_services) 또는
-    //           ② 서비스 자체의 플랜 구성(포함 항목 tier_*_items · 직접 가격 tier_*_price)
-    // (예전엔 번들만 봐서, 서비스 편집에서 플랜 항목을 채워도 단일 금액만 나오던 버그가 있었음)
-    const hasBundle = !!tierServicesRows && tierServicesRows.length > 0
-    const hasServiceTiers =
+    // 이 서비스에 3단계 플랜이 설정됐는지 — 미설정이면 단일 금액으로 안내한다.
+    // 판단 기준은 서비스 자체의 플랜 구성뿐이다(포함 항목 tier_*_items · 직접 가격 tier_*_price).
+    // 예전엔 quote_tier_services(플랜별 서비스 묶음)도 함께 봤는데, 그 화면을 없애면서
+    // 함께 걷어냈다 — 전 업체 통틀어 한 건도 쓰지 않던 경로였다.
+    const plansConfigured =
       (service.tier_good_items?.length   ?? 0) > 0 ||
       (service.tier_better_items?.length ?? 0) > 0 ||
       (service.tier_best_items?.length   ?? 0) > 0 ||
       service.tier_good_price   != null ||
       service.tier_better_price != null ||
       service.tier_best_price   != null
-    const plansConfigured = hasBundle || hasServiceTiers
 
-    const goodTier   = tiers.find((t) => t.tier === 'good')
-    const betterTier = tiers.find((t) => t.tier === 'better')
-    const bestTier   = tiers.find((t) => t.tier === 'best')
+    // DEFAULT_TIERS 상수라 항상 찾아진다
+    const goodTier   = tiers.find((t) => t.tier === 'good')!
+    const betterTier = tiers.find((t) => t.tier === 'better')!
+    const bestTier   = tiers.find((t) => t.tier === 'best')!
 
     let goodPrice: number
     let betterPrice: number | null
@@ -230,50 +213,7 @@ export const calculateAndCreateQuoteAction = publicAction
       betterPrice = null
       bestPrice = null
     } else {
-      // tier_id → service_ids 맵
-      const bundleMap: Record<string, string[]> = {}
-      for (const row of tierServicesRows ?? []) {
-        if (!bundleMap[row.tier_id]) bundleMap[row.tier_id] = []
-        bundleMap[row.tier_id].push(row.service_id)
-      }
-
-      // 번들 포함 서비스들의 합산 가격 계산
-      const calcBundlePrice = async (tierId: string): Promise<number | null> => {
-        const svcIds = bundleMap[tierId]
-        if (!svcIds || svcIds.length === 0) return null
-
-        const { data: svcItems } = await db
-          .from('service_items')
-          .select('id, base_price, unit, volume_tiers' as never)
-          .in('id', svcIds) as unknown as {
-            data: Array<{ id: string; base_price: number; unit: string; volume_tiers?: unknown }> | null
-          }
-
-        if (!svcItems) return null
-
-        return roundToThousand(
-          svcItems.reduce((sum, s) => {
-            // 번들에 묶인 서비스도 각자의 구간 단가를 따른다
-            const price = s.unit === '평당'
-              ? unitPriceForSize(s.base_price, parseVolumeTiers(s.volume_tiers), parsedInput.space_size)
-                * (parsedInput.space_size || 1)
-              : s.base_price
-            return sum + price
-          }, 0)
-        )
-      }
-
-      const goodId   = 'id' in (goodTier   ?? {}) ? (goodTier   as { id: string }).id : null
-      const betterId = 'id' in (betterTier ?? {}) ? (betterTier as { id: string }).id : null
-      const bestId   = 'id' in (bestTier   ?? {}) ? (bestTier   as { id: string }).id : null
-
-      const [bundleGood, bundleBetter, bundleBest] = await Promise.all([
-        goodId   ? calcBundlePrice(goodId)   : Promise.resolve(null),
-        betterId ? calcBundlePrice(betterId) : Promise.resolve(null),
-        bestId   ? calcBundlePrice(bestId)   : Promise.resolve(null),
-      ])
-
-      // 번들 없으면: 서비스별 직접 가격(tier_*_price)이 있으면 그 값 우선, 없으면 기본가 × 배수.
+      // 서비스별 직접 가격(tier_*_price)이 있으면 그 값 우선, 없으면 기본가 × 배수.
       // 직접 가격은 원/평(평당) 또는 정액 단가이므로 평당이면 평수만큼 곱한다.
       // 플랜 직접 가격에도 규모 구간 비율을 함께 적용한다 — 안 그러면 큰 건에서
       // 기본 금액만 내려가고 추천·프리미엄은 그대로라 플랜 순서가 뒤집힌다.
@@ -284,24 +224,14 @@ export const calculateAndCreateQuoteAction = publicAction
           ? roundToThousand(override * volumeRatio * sizeMult)
           : roundToThousand(baseCalc * mult)
 
-      goodPrice   = applyDiscount(bundleGood   ?? tierByPriceOrMult(service.tier_good_price,   Number(goodTier?.price_multiplier   ?? 1.0)), 'good')
-      betterPrice = applyDiscount(bundleBetter ?? tierByPriceOrMult(service.tier_better_price, Number(betterTier?.price_multiplier ?? 1.2)), 'better')
-      bestPrice   = applyDiscount(bundleBest   ?? tierByPriceOrMult(service.tier_best_price,   Number(bestTier?.price_multiplier   ?? 1.5)), 'best')
+      goodPrice   = applyDiscount(tierByPriceOrMult(service.tier_good_price,   goodTier.price_multiplier),   'good')
+      betterPrice = applyDiscount(tierByPriceOrMult(service.tier_better_price, betterTier.price_multiplier), 'better')
+      bestPrice   = applyDiscount(tierByPriceOrMult(service.tier_best_price,   bestTier.price_multiplier),   'best')
 
-      // AI 설명에 전달할 번들 서비스 목록
-      const getBundleServiceNames = async (tierId: string | null): Promise<string[]> => {
-        if (!tierId) return []
-        const svcIds = bundleMap[tierId]
-        if (!svcIds || svcIds.length === 0) return []
-        const { data } = await db.from('service_items').select('name').in('id', svcIds)
-        return data?.map((s) => s.name) ?? []
-      }
-
-      ;[goodNames, betterNames, bestNames] = await Promise.all([
-        getBundleServiceNames(goodId),
-        getBundleServiceNames(betterId),
-        getBundleServiceNames(bestId),
-      ])
+      // AI 설명에 전달할 플랜별 포함 항목 — 서비스 편집에서 적은 그대로
+      goodNames   = service.tier_good_items   ?? []
+      betterNames = service.tier_better_items ?? []
+      bestNames   = service.tier_best_items   ?? []
     }
 
     // B2B 서비스에서 받은 회사명은 quotes에 전용 컬럼이 없어 메모(extra_notes) 앞에 기록 —
@@ -477,9 +407,6 @@ export const createBookingAction = publicAction
       `${parsedInput.scheduled_date}T${parsedInput.scheduled_time ?? '09:00'}`
     )
 
-    // 선택한 번들에 변동형 서비스(에어컨 대수·줄눈 개수 등)가 있으면 '검토 필요'로 표시
-    const review = await detectBundleReview(db, quote.business_id, parsedInput.selected_tier)
-
     const { data: newBooking, error: bookingError } = await db.from('bookings').insert({
       business_id: quote.business_id,
       quote_id: quote.id,
@@ -490,8 +417,6 @@ export const createBookingAction = publicAction
       selected_tier: parsedInput.selected_tier,
       final_price: finalPrice,
       status: 'confirmed',
-      needs_review: review.needsReview,
-      review_reason: review.reason,
       // 견적의 유입 채널을 예약에 승계 — 매출을 채널까지 귀속
       channel: quote.channel ?? null,
     } as never).select('id').single()
@@ -502,10 +427,8 @@ export const createBookingAction = publicAction
     // 알림 클릭 시 해당 예약 날짜의 일정으로 이동 + 예약 상세 시트 자동 오픈
     const bookingDate = scheduledAt.slice(0, 10) // UTC 날짜 (일정 보드도 UTC 기준 매칭)
     await sendPushToBusiness(quote.business_id, {
-      title: review.needsReview ? '새 예약 — 금액 확인이 필요해요 📞' : '새 예약이 잡혔어요! 📅',
-      body: review.needsReview
-        ? `${parsedInput.customer_name}님 · ${quote.cleaning_type} · 통화로 금액 확인`
-        : `${parsedInput.customer_name}님 · ${quote.cleaning_type}`,
+      title: '새 예약이 잡혔어요! 📅',
+      body: `${parsedInput.customer_name}님 · ${quote.cleaning_type}`,
       url: `/dashboard/schedule?view=day&date=${bookingDate}&booking=${newBooking.id}`,
       tag: `booking-${newBooking.id}`,
     })
@@ -801,9 +724,6 @@ export const confirmBookingFromQuoteAction = authAction
 
     if (!quote) throw new Error('[APP] 견적 정보를 찾을 수 없거나 이미 처리된 견적입니다')
 
-    // 선택한 번들에 변동형 서비스가 있으면 '검토 필요'로 표시
-    const review = await detectBundleReview(db, quote.business_id, parsedInput.selected_tier)
-
     // 예약 생성 (알림톡·이력용으로 id 확보)
     const { data: newBooking, error: bookingError } = await db.from('bookings').insert({
       business_id:     quote.business_id,
@@ -815,8 +735,6 @@ export const confirmBookingFromQuoteAction = authAction
       selected_tier:   parsedInput.selected_tier,
       final_price:     parsedInput.final_price,
       status:          'confirmed',
-      needs_review:    review.needsReview,
-      review_reason:   review.reason,
       // 견적의 유입 채널을 예약에 승계 — 매출을 채널까지 귀속
       channel:         quote.channel ?? null,
     } as never).select('id').single() as unknown as { data: { id: string } | null; error: unknown }
