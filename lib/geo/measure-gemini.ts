@@ -1,6 +1,6 @@
 import 'server-only'
 import type { GeoIdentity, GeoQuestionResult, GeoMeasureResult } from '@/lib/geo/measure'
-import { mapWithConcurrency, GEO_CONCURRENCY } from '@/lib/geo/run-parallel'
+import { mapWithConcurrency, GEO_CONCURRENCY, fetchWithTimeout } from '@/lib/geo/run-parallel'
 
 // 동시 호출 수. 결제를 걸면 분당 한도가 크게 올라가 다른 엔진과 같은 속도로 던져도 된다.
 // 한도에 걸리면(429) 아래 fetchWithRetry가 쉬었다 다시 하므로, 무료 키에서도 느려질 뿐 죽지 않는다.
@@ -63,7 +63,7 @@ async function probe(
   withSearch = true,
 ): Promise<'ok' | 'quota' | 'fail'> {
   try {
-    const res = await fetch(urlFor(version, model, apiKey), {
+    const res = await fetchWithTimeout(urlFor(version, model, apiKey), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -128,7 +128,7 @@ async function resolveModel(apiKey: string): Promise<{ model: string; version: s
   // ① 계정이 가진 목록에서 고르기
   for (const version of API_VERSIONS) {
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/${version}/models?key=${apiKey}`)
+      const res = await fetchWithTimeout(`https://generativelanguage.googleapis.com/${version}/models?key=${apiKey}`)
       if (!res.ok) {
         console.warn(`[GEO/Gemini] 모델 목록 조회 실패 ${version} → ${res.status}`)
         continue
@@ -190,7 +190,7 @@ interface GeminiResponse {
 async function fetchWithRetry(url: string, init: RequestInit, tries = 4): Promise<Response> {
   let last: Response | null = null
   for (let i = 0; i < tries; i++) {
-    const res = await fetch(url, init)
+    const res = await fetchWithTimeout(url, init)
     if (res.status !== 429) return res
     last = res
     if (i === tries - 1) break

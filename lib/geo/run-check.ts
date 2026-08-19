@@ -5,6 +5,7 @@ import { parseKoreanRegion } from '@/lib/address/parse-region'
 import { measureGeoShareOfVoice, type GeoMeasureResult, type GeoQuestionResult } from '@/lib/geo/measure'
 import { measureGeoShareOfVoiceGemini } from '@/lib/geo/measure-gemini'
 import { measureGeoShareOfVoiceOpenAI } from '@/lib/geo/measure-openai'
+import { withDeadline, GEO_ENGINE_DEADLINE_MS } from '@/lib/geo/run-parallel'
 
 // GEO 측정 1회 실행의 "코어" — 수동 액션(버튼)과 주기 cron이 공용으로 쓴다.
 // 흐름: 질문 세트 보장(월 단위 캐시) → Perplexity 검색 측정 → geo_checks에 1행 저장.
@@ -165,7 +166,13 @@ export async function runGeoCheck(
   const settled = await Promise.all(
     engineJobs.map(async (job) => {
       try {
-        const r = await job.run()
+        // 엔진 하나가 늦어도 측정 전체가 멈추면 안 된다 — 마감 시간을 두고 그때까지의 결과로 끝낸다
+        const r = await withDeadline(
+          job.run(),
+          GEO_ENGINE_DEADLINE_MS,
+          { results: [], cited: 0, total: questions.length, failed: questions.length, sharePct: 0 },
+          job.engine,
+        )
         // 전부 실패했으면 그 엔진은 '0점'이 아니라 '측정 안 됨'이다.
         // 예전엔 제미나이가 호출마다 404였는데 화면에 "Gemini 0/30"이 정상 측정처럼 떴다.
         if ((r.failed ?? 0) >= r.total && r.total > 0) {

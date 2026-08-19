@@ -1,6 +1,6 @@
 import 'server-only'
 import type { GeoIdentity, GeoQuestionResult, GeoMeasureResult } from '@/lib/geo/measure'
-import { mapWithConcurrency, GEO_CONCURRENCY } from '@/lib/geo/run-parallel'
+import { mapWithConcurrency, GEO_CONCURRENCY, fetchWithTimeout } from '@/lib/geo/run-parallel'
 import { extractBusinessNames } from '@/lib/geo/extract-names'
 
 // OpenAI(ChatGPT)로 GEO 노출 측정 — 웹 검색이 내장된 search 모델을 써서 '현재 웹'을 근거로 답하게 함.
@@ -26,7 +26,7 @@ let cachedModel: string | null = null
 /** 이 모델로 실제 호출이 되는지 한 번 찔러본다 */
 async function probe(apiKey: string, model: string): Promise<boolean> {
   try {
-    const res = await fetch(OPENAI_URL, {
+    const res = await fetchWithTimeout(OPENAI_URL, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, messages: [{ role: 'user', content: '안녕' }] }),
@@ -80,7 +80,7 @@ async function measureOne(
       }
     : undefined
 
-  const res = await fetch(OPENAI_URL, {
+  const res = await fetchWithTimeout(OPENAI_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({

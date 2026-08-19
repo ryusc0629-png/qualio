@@ -4,7 +4,7 @@ import 'server-only'
 // 검색 API(/search)는 저렴·결정적이라 다수 업체×질문을 주기적으로 돌리기에 적합(답변 API보다 비용↓).
 // "AI 답변에 인용되려면 먼저 검색 결과에 잡혀야 한다" — 노출률은 GEO의 선행 지표.
 
-import { mapWithConcurrency, GEO_CONCURRENCY } from '@/lib/geo/run-parallel'
+import { mapWithConcurrency, GEO_CONCURRENCY, fetchWithTimeout } from '@/lib/geo/run-parallel'
 
 const PPLX_SEARCH_URL = 'https://api.perplexity.ai/search'
 
@@ -44,7 +44,7 @@ interface PplxSearchItem { title?: string; url?: string; snippet?: string }
 
 // 한 질문 측정 — 검색결과에 업체 식별 신호가 있으면 노출로 판정
 async function measureOne(apiKey: string, query: string, needles: string[]): Promise<GeoQuestionResult> {
-  const res = await fetch(PPLX_SEARCH_URL, {
+  const res = await fetchWithTimeout(PPLX_SEARCH_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, max_results: 8, max_tokens_per_page: 128 }),
