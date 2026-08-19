@@ -647,7 +647,12 @@ export interface MonthlyReportParams {
   customerName:  string
   businessName:  string
   period:        string  // 예: 2026년 8월
-  visitCount:    number  // 그 달 완료 작업 횟수
+  // ⚠️ 회차는 보고서 본문에서 전부 뺐다(계약서에 이미 있는 값이라 담당자에게 정보가 아님).
+  //    그런데 승인돼 있는 옛 템플릿 본문에 '작업 완료: #{완료횟수}회'가 박혀 있어, 그 템플릿을
+  //    쓰는 동안에는 이 값을 계속 넘겨야 한다(변수를 빼면 미치환으로 발송이 거부된다).
+  //    회차를 뺀 v2 템플릿(KA01TP260819133209593TaRB71DIXwK)이 승인되고 환경변수를
+  //    갈아끼운 뒤에 이 필드를 지울 것. 여분 변수는 무시되므로 그 전까지 양쪽 다 동작한다.
+  visitCount:    number
   reportUrl:     string  // https://qualio.co.kr/q/... 전체 주소
 }
 
