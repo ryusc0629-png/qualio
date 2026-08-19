@@ -2,10 +2,13 @@ import 'server-only'
 import type { GeoIdentity, GeoQuestionResult, GeoMeasureResult } from '@/lib/geo/measure'
 import { mapWithConcurrency, GEO_CONCURRENCY, fetchWithTimeout } from '@/lib/geo/run-parallel'
 
-// 동시 호출 수. 결제를 걸면 분당 한도가 크게 올라가 다른 엔진과 같은 속도로 던져도 된다.
-// 한도에 걸리면(429) 아래 fetchWithRetry가 쉬었다 다시 하므로, 무료 키에서도 느려질 뿐 죽지 않는다.
-// 요금제를 바꿨는데 429가 잦으면 GEMINI_CONCURRENCY로 낮출 수 있다.
-const GEMINI_CONCURRENCY = Number(process.env.GEMINI_CONCURRENCY) || GEO_CONCURRENCY
+// 동시 호출 수. 한도에 걸리면(429) 아래 fetchWithRetry가 쉬었다 다시 하므로 넉넉히 잡아도 된다.
+// 429가 잦으면 GEMINI_CONCURRENCY로 낮출 수 있다.
+const GEMINI_CONCURRENCY = Number(process.env.GEMINI_CONCURRENCY) || 10
+
+// 제미나이는 구글 검색을 돌리고 답을 만들기까지 다른 엔진보다 오래 걸린다.
+// 20초로 잡았더니 30개 질문이 전부 제한시간에 걸려 통째로 빠졌다.
+const GEMINI_TIMEOUT_MS = 60_000
 import { extractBusinessNames } from '@/lib/geo/extract-names'
 
 // Gemini(구글 검색 그라운딩)로 GEO 노출 측정 — 실제 웹을 검색해 답하므로 '현재 지역 업체 현실'을 반영.
@@ -63,14 +66,18 @@ async function probe(
   withSearch = true,
 ): Promise<'ok' | 'quota' | 'fail'> {
   try {
-    const res = await fetchWithTimeout(urlFor(version, model, apiKey), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: '안녕' }] }],
-        ...(withSearch ? { tools: [{ google_search: {} }] } : {}),
-      }),
-    })
+    const res = await fetchWithTimeout(
+      urlFor(version, model, apiKey),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: '안녕' }] }],
+          ...(withSearch ? { tools: [{ google_search: {} }] } : {}),
+        }),
+      },
+      GEMINI_TIMEOUT_MS,
+    )
     if (res.ok) return 'ok'
     if (res.status === 429) {
       console.warn(`[GEO/Gemini] ${version}/${model} 한도 초과(429) — 모델은 살아 있음`)
@@ -190,7 +197,7 @@ interface GeminiResponse {
 async function fetchWithRetry(url: string, init: RequestInit, tries = 4): Promise<Response> {
   let last: Response | null = null
   for (let i = 0; i < tries; i++) {
-    const res = await fetchWithTimeout(url, init)
+    const res = await fetchWithTimeout(url, init, GEMINI_TIMEOUT_MS)
     if (res.status !== 429) return res
     last = res
     if (i === tries - 1) break

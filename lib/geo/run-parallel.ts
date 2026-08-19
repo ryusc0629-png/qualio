@@ -46,8 +46,9 @@ export function fetchWithTimeout(url: string, init: RequestInit = {}, ms = GEO_R
   return fetch(url, { ...init, signal: AbortSignal.timeout(ms) })
 }
 
-/** 이 엔진에 허용하는 전체 시간(ms) — 넘으면 그때까지 결과로 끝낸다 */
-export const GEO_ENGINE_DEADLINE_MS = 120_000
+/** 이 엔진에 허용하는 전체 시간(ms) — 넘으면 그때까지 결과로 끝낸다.
+ *  엔진끼리는 동시에 도니 이 값이 곧 측정 시간의 상한이다(함수 제한은 300초). */
+export const GEO_ENGINE_DEADLINE_MS = 240_000
 
 /** 주어진 시간 안에 안 끝나면 fallback을 돌려준다 */
 export async function withDeadline<T>(work: Promise<T>, ms: number, fallback: T, label: string): Promise<T> {
