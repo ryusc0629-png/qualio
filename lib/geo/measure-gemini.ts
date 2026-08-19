@@ -1,9 +1,11 @@
 import 'server-only'
 import type { GeoIdentity, GeoQuestionResult, GeoMeasureResult } from '@/lib/geo/measure'
-import { mapWithConcurrency } from '@/lib/geo/run-parallel'
+import { mapWithConcurrency, GEO_CONCURRENCY } from '@/lib/geo/run-parallel'
 
-// 제미나이는 무료 한도가 분당 호출 수로 걸려 다른 엔진보다 천천히 던진다
-const GEMINI_CONCURRENCY = 2
+// 동시 호출 수. 결제를 걸면 분당 한도가 크게 올라가 다른 엔진과 같은 속도로 던져도 된다.
+// 한도에 걸리면(429) 아래 fetchWithRetry가 쉬었다 다시 하므로, 무료 키에서도 느려질 뿐 죽지 않는다.
+// 요금제를 바꿨는데 429가 잦으면 GEMINI_CONCURRENCY로 낮출 수 있다.
+const GEMINI_CONCURRENCY = Number(process.env.GEMINI_CONCURRENCY) || GEO_CONCURRENCY
 import { extractBusinessNames } from '@/lib/geo/extract-names'
 
 // Gemini(구글 검색 그라운딩)로 GEO 노출 측정 — 실제 웹을 검색해 답하므로 '현재 지역 업체 현실'을 반영.
@@ -180,15 +182,20 @@ interface GeminiResponse {
   }[]
 }
 
-// 429(한도 초과)는 잠깐 기다렸다 다시 하면 되는 경우가 대부분이라 몇 번 쉬었다 재시도한다.
-// 무료 한도는 분당 호출 수가 낮아, 동시에 여러 개를 던지면 쉽게 걸린다.
-async function fetchWithRetry(url: string, init: RequestInit, tries = 3): Promise<Response> {
+// 429(한도 초과)는 잠깐 기다렸다 다시 하면 되는 경우가 대부분이라 쉬었다 재시도한다.
+//
+// 이게 있어서 동시 호출 수를 넉넉히 잡아도 된다 — 한도에 걸리면 그만큼 느려질 뿐
+// 측정이 죽지는 않는다. 기다리는 시간을 두 배씩 늘리고, 여러 요청이 같은 순간에
+// 몰려 다시 부딪히지 않도록 무작위로 조금씩 어긋나게 한다.
+async function fetchWithRetry(url: string, init: RequestInit, tries = 4): Promise<Response> {
   let last: Response | null = null
   for (let i = 0; i < tries; i++) {
     const res = await fetch(url, init)
     if (res.status !== 429) return res
     last = res
-    await new Promise((r) => setTimeout(r, 1500 * (i + 1)))
+    if (i === tries - 1) break
+    const waitMs = 1000 * 2 ** i + Math.floor(Math.random() * 400)
+    await new Promise((r) => setTimeout(r, waitMs))
   }
   return last as Response
 }
