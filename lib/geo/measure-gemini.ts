@@ -16,15 +16,19 @@ import { extractBusinessNames } from '@/lib/geo/extract-names'
 // 그런데 실패를 '노출 안 됨'으로 처리해서, 화면에는 "Gemini 0/30"이 정상 측정한 것처럼
 // 떴다. 몇 주 동안 제미나이는 한 번도 measure된 적이 없었다.
 // 모델명을 코드에 박으면 같은 일이 또 난다 — 계정이 가진 목록을 물어보고 고른다.
-const MODEL_PREFERENCE = ['2.5-flash', '2.5-pro', '2.0-flash', 'flash-latest', 'flash', 'pro']
+// 구글이 모델을 자주 갈아치운다. 2026-08-19 로그에 이렇게 찍혔다:
+//   "models/gemini-2.5-flash is no longer available to new users.
+//    Please update your code to use models/gemini-3.6-flash"
+// 그래서 최신 이름을 앞에 두되, '-latest' 별칭을 그다음에 둔다(별칭은 구글이 알아서 최신을 가리킨다).
+const MODEL_PREFERENCE = ['3.6-flash', 'flash-latest', '3.1-flash', '2.5-flash', 'flash', 'pro']
 
 // 목록 조회가 막혔을 때 직접 찔러볼 후보. 위에서부터 실제로 호출해 보고 되는 것을 쓴다.
 const FALLBACK_CANDIDATES = [
-  'gemini-2.5-flash',
+  'gemini-3.6-flash',
   'gemini-flash-latest',
-  'gemini-2.0-flash',
-  'gemini-2.5-pro',
-  'gemini-1.5-flash',
+  'gemini-3.1-flash',
+  'gemini-2.5-flash',
+  'gemini-pro-latest',
 ]
 
 // API 버전도 계정·모델에 따라 갈린다. 둘 다 시도한다.
