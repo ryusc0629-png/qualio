@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { chargeBillingKey } from './portone'
 import { PLANS } from '@/lib/config/plans'
 import { getChargeAmount } from './pricing'
+import { notifyChargeFailed } from './charge-failed-notify'
 import type { PlanId } from '@/lib/config/plans'
 
 // 정기결제 자동청구 — 이용기간이 만료된 활성 구독을 저장된 빌키(billing_key)로 재청구한다.
@@ -116,17 +117,30 @@ export async function chargeDueSubscriptions(): Promise<ChargeSummary> {
           .eq('ordr_idxx', ordrIdxx)
         charged++
       } else {
-        // 청구 실패 → past_due 로 표시(재시도·안내는 후속). 서비스 즉시 차단은 하지 않음.
+        // 청구 실패 → past_due 로 표시. 서비스 즉시 차단은 하지 않고 7일 유예를 준다.
         console.error('[Billing charge] 실패:', sub.business_id, r.error)
         await db.from('subscriptions').update({ status: 'past_due' } as never).eq('id', sub.id)
         await (db as unknown as SupabaseClient).from('kcp_payment_orders')
           .update({ status: 'failed' }).eq('ordr_idxx', ordrIdxx)
+        // ★사장님에게 알린다 — 이게 없으면 7일 뒤 "갑자기 잠겼다"는 CS가 된다.
+        //   알림이 실패해도 청구 루프는 계속돼야 하므로 여기서 삼킨다.
+        await notifyChargeFailed({ businessId: sub.business_id, planLabel, amount })
+          .catch((e) => console.error('[Billing charge] 실패 알림 오류:', sub.business_id, e))
         failed++
       }
     } catch (e) {
+      // 예외(네트워크 오류·타임아웃 등)도 실패와 똑같이 처리한다 — past_due + 사장님 알림.
+      //
+      // ⚠️ 여기서 주문 기록(선점)을 지워 '내일 자동 재시도'하게 만들고 싶어질 텐데, 하지 말 것.
+      //    포트원이 승인을 마친 뒤 응답을 받는 도중에 끊겨도 이 catch로 온다. 그 상태에서
+      //    선점을 풀면 다음 실행이 같은 달 요금을 또 승인한다. 돈이 두 번 빠지는 것보다
+      //    한 번 덜 걷히는 편이 낫다 — 사장님이 알림을 받고 카드를 다시 등록하면 복구된다.
       console.error('[Billing charge] 예외:', sub.business_id, e)
+      await db.from('subscriptions').update({ status: 'past_due' } as never).eq('id', sub.id)
       await (db as unknown as SupabaseClient).from('kcp_payment_orders')
         .update({ status: 'failed' }).eq('ordr_idxx', ordrIdxx)
+      await notifyChargeFailed({ businessId: sub.business_id, planLabel, amount })
+        .catch((err) => console.error('[Billing charge] 실패 알림 오류:', sub.business_id, err))
       failed++
     }
   }

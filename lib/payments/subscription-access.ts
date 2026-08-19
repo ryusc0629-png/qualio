@@ -20,6 +20,24 @@ export interface SubscriptionAccess {
   needsPayment: boolean
   /** 대시보드 이용 가능 여부 */
   allowed: boolean
+  /**
+   * 카드 청구가 실패해 유예로 버티는 중인지(past_due이고 아직 안 잠김).
+   * 이때 아무 안내도 안 하면 며칠 뒤 "갑자기 잠겼다"가 된다 — 대시보드 상단 띠로 알린다.
+   */
+  inPastDueGrace: boolean
+  /** 잠기기까지 남은 날(올림). 유예 중이 아니면 null */
+  graceDaysLeft: number | null
+}
+
+/** 유예가 끝나 서비스가 잠기는 시각 — 안내 문구에 "언제까지"를 쓰기 위해 계산한다 */
+function lockAt(sub: SubscriptionRow | null): Date | null {
+  if (!sub?.current_period_end) return null
+  const end = new Date(sub.current_period_end)
+  if (Number.isNaN(end.getTime())) return null
+  const graceDays = sub.status === 'past_due' ? PAST_DUE_GRACE_DAYS : GRACE_DAYS
+  const deadline = new Date(end)
+  deadline.setDate(deadline.getDate() + graceDays)
+  return deadline
 }
 
 // 자동청구(정기결제)가 하루이틀 늦어도 정상 결제 고객이 잠기지 않도록 두는 여유 기간.
@@ -57,5 +75,16 @@ export function evaluateSubscription(sub: SubscriptionRow | null): SubscriptionA
   const expired = isPaidPeriodOver(sub)
   const needsPayment = isBeta || expired
 
-  return { isBeta, expired, needsPayment, allowed: !needsPayment }
+  // 청구가 실패했지만(past_due) 아직 유예가 남아 평소처럼 쓰고 있는 구간
+  const inPastDueGrace = !isBeta && !expired && sub?.status === 'past_due'
+  let graceDaysLeft: number | null = null
+  if (inPastDueGrace) {
+    const deadline = lockAt(sub)
+    if (deadline) {
+      const ms = deadline.getTime() - Date.now()
+      graceDaysLeft = Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)))
+    }
+  }
+
+  return { isBeta, expired, needsPayment, allowed: !needsPayment, inPastDueGrace, graceDaysLeft }
 }

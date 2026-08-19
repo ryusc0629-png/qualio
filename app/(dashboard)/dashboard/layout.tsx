@@ -5,6 +5,7 @@ import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register'
 import { SessionRefresher } from '@/components/pwa/session-refresher'
 import { UsageTracker } from '@/components/dashboard/usage-tracker'
 import { evaluateSubscription } from '@/lib/payments/subscription-access'
+import { PaymentIssueBanner } from '@/components/dashboard/payment-issue-banner'
 
 // 대시보드 레이아웃 — 서버 컴포넌트에서 인증 검증 후 업체명 전달
 export default async function DashboardLayout({
@@ -44,6 +45,11 @@ export default async function DashboardLayout({
   // 단, 결제 심사 계정은 제외 — 결제창을 봐야 하므로. 결제 켤 때 이 환경변수 제거로 페이월 복구.
   const betaOpen = process.env.NEXT_PUBLIC_BETA_OPEN === 'true' && !isPaymentReviewer
 
+  // 카드 청구 실패로 유예 중인지 — 맞으면 대시보드 맨 위에 안내 띠를 띄운다.
+  // (베타 개방·관리자라 페이월을 건너뛰는 경우엔 해당 없음)
+  let pastDueDaysLeft: number | null = null
+  let showPaymentIssue = false
+
   if (!isAdmin && !betaOpen) {
     // 구독 플랜 확인 — 베타이거나 이용기간이 끝났으면 결제 페이지로 이동.
     // 판정은 /upgrade와 같은 함수를 쓴다(어긋나면 결제창과 대시보드를 무한 왕복하게 됨).
@@ -53,7 +59,12 @@ export default async function DashboardLayout({
       .eq('business_id', profile.business_id)
       .maybeSingle()
 
-    if (!evaluateSubscription(subscription).allowed) redirect('/upgrade')
+    const access = evaluateSubscription(subscription)
+    if (!access.allowed) redirect('/upgrade')
+
+    // 아직 잠기진 않았지만 청구가 실패한 상태 — 문자·푸시를 놓친 분을 위한 마지막 안전망
+    showPaymentIssue = access.inPastDueGrace
+    pastDueDaysLeft = access.graceDaysLeft
   }
 
   const businessName =
@@ -64,6 +75,7 @@ export default async function DashboardLayout({
       <ServiceWorkerRegister />
       <SessionRefresher />
       <UsageTracker />
+      {showPaymentIssue && <PaymentIssueBanner daysLeft={pastDueDaysLeft} />}
       {children}
     </DashboardShell>
   )
