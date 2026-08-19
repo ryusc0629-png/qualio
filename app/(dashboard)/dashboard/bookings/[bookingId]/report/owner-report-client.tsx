@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { CareAdviceField } from '@/components/dashboard/care-advice-field'
 import { createClient } from '@/lib/supabase/client'
+import { REPORT_PHOTO_MAX } from '@/lib/config/photos'
 import { saveReportAction, ownerSendReportAction, ownerGenerateAiReportAction, skipReportSendAction } from '@/lib/actions/reports'
 import { canSendReport } from '@/lib/utils/report-send-guard'
 import {
@@ -29,8 +30,8 @@ import {
 
 type PhotoSlot = { url: string; uploading: boolean }
 
-// 작업 전·후 각각 올릴 수 있는 장수(현장 앱과 동일)
-const MAX_PHOTOS = 10
+// 작업 전·후 각각 올릴 수 있는 장수(현장 앱·시공사례 편집창과 동일 — lib/config/photos.ts)
+const MAX_PHOTOS = REPORT_PHOTO_MAX
 
 interface BookingInfo {
   id: string

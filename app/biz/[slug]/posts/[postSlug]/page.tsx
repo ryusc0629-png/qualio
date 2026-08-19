@@ -302,6 +302,22 @@ export default async function PostPage({ params }: Props) {
   const toc = extractToc(mainContent)
   const minutes = readingTime(mainContent)
 
+  // 시공사례 현장 사진 — 사장님이 올린 전·후 사진을 손님에게 전부 보여준다.
+  // 비교 슬라이더가 각 줄의 첫 장을 이미 쓰고 있으면 그 두 장은 빼고 나머지만 모은다
+  // (슬라이더는 전·후가 둘 다 있을 때만 뜨므로, 안 뜰 땐 첫 장부터 전부 보여준다).
+  const hasBeforeAfterSlider =
+    post.post_type === 'portfolio' &&
+    !!post.before_image_urls?.[0] &&
+    !!post.after_image_urls?.[0]
+  const galleryFrom = hasBeforeAfterSlider ? 1 : 0
+  const galleryGroups =
+    post.post_type === 'portfolio'
+      ? [
+          { key: 'before', label: '시공 전', urls: (post.before_image_urls ?? []).slice(galleryFrom) },
+          { key: 'after', label: '시공 후', urls: (post.after_image_urls ?? []).slice(galleryFrom) },
+        ].filter((group) => group.urls.length > 0)
+      : []
+
   // JSON-LD — Article + FAQPage + BreadcrumbList
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -461,6 +477,35 @@ export default async function PostPage({ params }: Props) {
                     ← 드래그하여 시공 전후를 비교해보세요
                   </p>
                 </div>
+              )}
+
+              {/* 현장 사진 — 비교에 쓴 대표 사진 말고 나머지도 전부 보여준다 */}
+              {galleryGroups.length > 0 && (
+                <section className="space-y-4">
+                  <p className="text-xs font-semibold text-primary uppercase tracking-wider">현장 사진</p>
+                  {galleryGroups.map((group) => (
+                    <div key={group.key} className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">{group.label}</p>
+                      {/* 폰에서는 옆으로 넘겨 보고(세로로 길어지지 않게), 화면이 넓으면 격자로 편다 */}
+                      <div className="flex gap-2 overflow-x-auto snap-x pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-4 sm:gap-3 sm:overflow-x-visible">
+                        {group.urls.map((url, i) => (
+                          <div
+                            key={url}
+                            className="snap-start shrink-0 w-40 sm:w-auto aspect-square rounded-lg overflow-hidden border bg-muted"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={url}
+                              alt={`${group.label} 현장 사진 ${i + 1}`}
+                              loading="lazy"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </section>
               )}
 
               {/* 본문 */}

@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { CareAdviceField } from '@/components/dashboard/care-advice-field'
 import { createClient } from '@/lib/supabase/client'
+import { REPORT_PHOTO_MAX } from '@/lib/config/photos'
 import { fieldSaveReportAction, fieldSendReportAction, fieldGenerateAiReportAction, fieldSaveWorkClipsAction, fieldRequestReelAction, fieldGetReelStatusAction } from '@/lib/actions/field'
 import {
   ArrowLeft,
@@ -32,7 +33,8 @@ import {
 type PhotoSlot = { url: string; uploading: boolean; caption?: string }
 
 // 작업 전·후 각각 올릴 수 있는 장수. 대청소 현장은 5장으로 모자란다.
-const MAX_PHOTOS = 10
+// 이 사진이 그대로 시공사례 글로 넘어가므로 상한은 lib/config/photos.ts 한 곳에서 정한다.
+const MAX_PHOTOS = REPORT_PHOTO_MAX
 type VideoSlot = { url: string; uploading: boolean; thumbnailUrl?: string }
 
 interface BookingInfo {

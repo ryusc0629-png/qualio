@@ -12,6 +12,7 @@ import { Loader2, Save, ImagePlus, X, GripVertical, Sparkles } from 'lucide-reac
 import { toast } from 'sonner'
 import { RichTextEditor } from './rich-text-editor'
 import { buildUploadPath } from '@/lib/storage/upload-path'
+import { REPORT_PHOTO_MAX } from '@/lib/config/photos'
 
 interface PostEditorProps {
   businessId: string
@@ -35,6 +36,9 @@ interface PostEditorProps {
 
 // 본문 앞의 JSON 메타 블록(keyPoints/faqs) — 공개 페이지에선 숨겨지므로 편집창에서도 분리
 const META_BLOCK_RE = /^```json\n[\s\S]+?\n```\n/
+
+// 순서를 바꿀 수 있는 사진 칸
+type PhotoList = 'main' | 'before' | 'after'
 
 // dailyLimit 기본값은 서버가 못 넘겨준 예외 상황용 폴백 — 진짜 기준은 POST_DRAFT_DAILY_LIMIT(서버)
 export function PostEditor({ businessId, post, onClose, onSaved, remainingToday, dailyLimit = 5 }: PostEditorProps) {
@@ -62,9 +66,9 @@ export function PostEditor({ businessId, post, onClose, onSaved, remainingToday,
   const fileInputRef = useRef<HTMLInputElement>(null)
   const beforeFileInputRef = useRef<HTMLInputElement>(null)
   const afterFileInputRef = useRef<HTMLInputElement>(null)
-  // 드래그 중인 이미지 인덱스
-  const [dragIndex, setDragIndex] = useState<number | null>(null)
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  // 드래그 중인 이미지 — 사진 칸이 셋(본문·시공 전·시공 후)이라 어느 칸인지까지 같이 들고 있어야 한다
+  const [dragFrom, setDragFrom] = useState<{ list: PhotoList; index: number } | null>(null)
+  const [dragOver, setDragOver] = useState<{ list: PhotoList; index: number } | null>(null)
 
   const { execute: savePost, isPending } = useAction(savePostAction, {
     onSuccess: () => {
@@ -105,7 +109,15 @@ export function PostEditor({ businessId, post, onClose, onSaved, remainingToday,
       title,
       content: metaBlock + content,
       summary: summary || undefined,
-      imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+      // 시공사례는 화면에 보이는 전·후 사진이 곧 전체 사진 목록이다.
+      // 예전엔 보고서에서 받아온 옛 목록을 손도 못 댄 채 그대로 되돌려보내서,
+      // 편집창에서 지운 사진이 대표 이미지로 계속 되살아났다.
+      // 일반 글은 사진을 다 지운 경우에도 빈 목록을 보내야 마지막 한 장이 지워진다.
+      imageUrls: isPortfolio
+        ? [...beforeImageUrls, ...afterImageUrls]
+        : imageUrls.length > 0 || (post?.image_urls?.length ?? 0) > 0
+          ? imageUrls
+          : undefined,
       beforeImageUrls: isPortfolio ? beforeImageUrls : undefined,
       afterImageUrls: isPortfolio ? afterImageUrls : undefined,
       published,
@@ -169,8 +181,9 @@ export function PostEditor({ businessId, post, onClose, onSaved, remainingToday,
     inputRef: React.RefObject<HTMLInputElement | null>,
   ) => {
     if (!files || files.length === 0) return
-    const maxFiles = 5 - current.length
-    if (maxFiles <= 0) { toast.error('사진은 최대 5장까지 추가할 수 있어요'); return }
+    // 상한은 작업 보고서와 같은 값 — 보고서 사진이 그대로 넘어오므로 여기가 더 작으면 잘려 보인다
+    const maxFiles = REPORT_PHOTO_MAX - current.length
+    if (maxFiles <= 0) { toast.error(`사진은 최대 ${REPORT_PHOTO_MAX}장까지 추가할 수 있어요`); return }
     const toUpload = Array.from(files).slice(0, maxFiles)
     setUpl(true)
     const supabase = createClient()
@@ -188,30 +201,38 @@ export function PostEditor({ businessId, post, onClose, onSaved, remainingToday,
     if (inputRef.current) inputRef.current.value = ''
   }
 
-  // 드래그 앤 드롭으로 이미지 순서 변경
-  const handleDragStart = (index: number) => {
-    setDragIndex(index)
+  // 드래그 앤 드롭으로 사진 순서 변경
+  const setterFor = (list: PhotoList) =>
+    list === 'before' ? setBeforeImageUrls : list === 'after' ? setAfterImageUrls : setImageUrls
+
+  const clearDrag = () => {
+    setDragFrom(null)
+    setDragOver(null)
   }
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  const handleDragStart = (list: PhotoList, index: number) => {
+    setDragFrom({ list, index })
+  }
+
+  const handleDragOver = (e: React.DragEvent, list: PhotoList, index: number) => {
     e.preventDefault()
-    setDragOverIndex(index)
+    setDragOver({ list, index })
   }
 
-  const handleDrop = (index: number) => {
-    if (dragIndex === null || dragIndex === index) {
-      setDragIndex(null)
-      setDragOverIndex(null)
+  const handleDrop = (list: PhotoList, index: number) => {
+    // 다른 칸으로는 옮기지 않는다 — 시공 전 사진이 후 사진 자리에 끼면 비교가 뒤집힌다
+    if (!dragFrom || dragFrom.list !== list || dragFrom.index === index) {
+      clearDrag()
       return
     }
-    setImageUrls((prev) => {
+    const from = dragFrom.index
+    setterFor(list)((prev) => {
       const next = [...prev]
-      const [moved] = next.splice(dragIndex, 1)
+      const [moved] = next.splice(from, 1)
       next.splice(index, 0, moved)
       return next
     })
-    setDragIndex(null)
-    setDragOverIndex(null)
+    clearDrag()
   }
 
   return (
@@ -323,14 +344,27 @@ export function PostEditor({ businessId, post, onClose, onSaved, remainingToday,
                 <div key={side}>
                   <Label className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1.5 block">
                     <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${colorClass}`}>{label}</span>
-                    <span>({urls.length}/5)</span>
+                    <span>({urls.length}/{REPORT_PHOTO_MAX})</span>
                   </Label>
                   {urls.length > 0 && (
                     <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-2">
                       {urls.map((url, i) => (
-                        <div key={`${side}-${i}`} className="relative group aspect-square rounded-lg overflow-hidden border bg-muted">
+                        <div
+                          key={`${side}-${url}-${i}`}
+                          className={`relative group aspect-square rounded-lg overflow-hidden border bg-muted cursor-grab active:cursor-grabbing ${
+                            dragOver?.list === side && dragOver.index === i ? 'ring-2 ring-primary' : ''
+                          } ${dragFrom?.list === side && dragFrom.index === i ? 'opacity-50' : ''}`}
+                          draggable
+                          onDragStart={() => handleDragStart(side, i)}
+                          onDragOver={(e) => handleDragOver(e, side, i)}
+                          onDrop={() => handleDrop(side, i)}
+                          onDragEnd={clearDrag}
+                        >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={url} alt={`${label} ${i + 1}`} className="w-full h-full object-cover" />
+                          <div className="absolute top-1 left-1 bg-black/50 rounded p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <GripVertical className="h-3.5 w-3.5 text-white" />
+                          </div>
                           <button
                             type="button"
                             onClick={() => setUrls((prev) => prev.filter((_, idx) => idx !== i))}
@@ -338,6 +372,11 @@ export function PostEditor({ businessId, post, onClose, onSaved, remainingToday,
                           >
                             <X className="h-3.5 w-3.5 text-white" />
                           </button>
+                          {i === 0 && (
+                            <span className="absolute bottom-1 left-1 bg-primary text-primary-foreground text-[10px] px-1.5 py-0.5 rounded-full font-medium">
+                              대표
+                            </span>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -354,7 +393,7 @@ export function PostEditor({ businessId, post, onClose, onSaved, remainingToday,
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={isPending || isUploading || urls.length >= 5}
+                    disabled={isPending || isUploading || urls.length >= REPORT_PHOTO_MAX}
                     onClick={() => inputRef.current?.click()}
                     className="gap-2"
                   >
@@ -365,7 +404,9 @@ export function PostEditor({ businessId, post, onClose, onSaved, remainingToday,
                 </div>
               )
             })}
-            <p className="text-xs text-muted-foreground">시공 후 사진이 카드 썸네일과 Before/After 비교에 사용돼요</p>
+            <p className="text-xs text-muted-foreground">
+              드래그로 순서를 바꿀 수 있어요. 각 줄의 첫 번째(대표) 사진이 시공 전·후 비교에 쓰이고, 시공 후 대표 사진이 목록 카드에 보여요.
+            </p>
           </div>
         ) : (
           /* ── 일반 포스트: 기존 이미지 업로드 ── */
@@ -380,13 +421,13 @@ export function PostEditor({ businessId, post, onClose, onSaved, remainingToday,
                   <div
                     key={`${url}-${i}`}
                     className={`relative group aspect-square rounded-lg overflow-hidden border bg-muted cursor-grab active:cursor-grabbing ${
-                      dragOverIndex === i ? 'ring-2 ring-primary' : ''
-                    } ${dragIndex === i ? 'opacity-50' : ''}`}
+                      dragOver?.list === 'main' && dragOver.index === i ? 'ring-2 ring-primary' : ''
+                    } ${dragFrom?.list === 'main' && dragFrom.index === i ? 'opacity-50' : ''}`}
                     draggable
-                    onDragStart={() => handleDragStart(i)}
-                    onDragOver={(e) => handleDragOver(e, i)}
-                    onDrop={() => handleDrop(i)}
-                    onDragEnd={() => { setDragIndex(null); setDragOverIndex(null) }}
+                    onDragStart={() => handleDragStart('main', i)}
+                    onDragOver={(e) => handleDragOver(e, 'main', i)}
+                    onDrop={() => handleDrop('main', i)}
+                    onDragEnd={clearDrag}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={url} alt={`사진 ${i + 1}`} className="w-full h-full object-cover" />

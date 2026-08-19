@@ -222,9 +222,11 @@ export const savePostAction = action
       }
       if (parsedInput.afterImageUrls !== undefined) {
         updateData.after_image_urls = parsedInput.afterImageUrls
-        if (!parsedInput.imageUrls) {
-          updateData.image_url = parsedInput.afterImageUrls[0] ?? null
-        }
+        // 시공사례의 대표 이미지는 언제나 '시공 후' 첫 사진이다.
+        // 예전엔 image_urls가 오면 이 줄을 건너뛰었는데, 그 image_urls는 보고서에서
+        // 받아온 옛 목록이고 편집창에 보이지도 않아서, 사장님이 사진을 아무리 바꿔도
+        // 맨 위 사진이 옛것으로 되돌아갔다.
+        updateData.image_url = parsedInput.afterImageUrls[0] ?? null
       }
 
       const { error } = await db
@@ -256,7 +258,8 @@ export const savePostAction = action
           title: parsedInput.title,
           content: parsedInput.content,
           summary: parsedInput.summary ?? null,
-          image_url: imgs[0] ?? afterImgs[0] ?? parsedInput.imageUrl ?? null,
+          // 수정할 때와 같은 순서 — 시공 후 사진이 있으면 그게 대표 이미지
+          image_url: afterImgs[0] ?? imgs[0] ?? parsedInput.imageUrl ?? null,
           image_urls: imgs.length > 0 ? imgs : undefined,
           before_image_urls: parsedInput.beforeImageUrls?.length ? parsedInput.beforeImageUrls : undefined,
           after_image_urls: afterImgs.length > 0 ? afterImgs : undefined,
