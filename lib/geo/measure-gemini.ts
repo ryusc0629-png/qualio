@@ -1,6 +1,9 @@
 import 'server-only'
 import type { GeoIdentity, GeoQuestionResult, GeoMeasureResult } from '@/lib/geo/measure'
-import { mapWithConcurrency, GEO_CONCURRENCY } from '@/lib/geo/run-parallel'
+import { mapWithConcurrency } from '@/lib/geo/run-parallel'
+
+// 제미나이는 무료 한도가 분당 호출 수로 걸려 다른 엔진보다 천천히 던진다
+const GEMINI_CONCURRENCY = 2
 import { extractBusinessNames } from '@/lib/geo/extract-names'
 
 // Gemini(구글 검색 그라운딩)로 GEO 노출 측정 — 실제 웹을 검색해 답하므로 '현재 지역 업체 현실'을 반영.
@@ -37,24 +40,58 @@ function urlFor(version: string, model: string, key: string) {
   return `https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent?key=${key}`
 }
 
-/** 이 모델·버전 조합으로 실제 호출이 되는지 한 번 찔러본다(검색 도구까지 붙여서). */
-async function probe(apiKey: string, version: string, model: string): Promise<boolean> {
+/**
+ * 이 모델·버전 조합으로 실제 호출이 되는지 찔러본다.
+ *
+ * ⚠️ 429(호출량 초과)를 실패로 보면 안 된다. 429는 "그 모델이 없다"가 아니라
+ * "있는데 지금 한도에 걸렸다"는 뜻이다. 실제로 gemini-flash-latest가 429였는데
+ * 실패로 버려서 쓸 모델이 하나도 없다는 결론이 났다.
+ *
+ * 그리고 실패하면 구글이 보낸 메시지를 함께 남긴다 — 상태 코드만으로는
+ * 모델이 없는 건지, 검색 도구를 못 쓰는 건지, 결제가 안 걸린 건지 구분이 안 된다.
+ */
+async function probe(
+  apiKey: string,
+  version: string,
+  model: string,
+  withSearch = true,
+): Promise<'ok' | 'quota' | 'fail'> {
   try {
     const res = await fetch(urlFor(version, model, apiKey), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: '안녕' }] }],
-        tools: [{ google_search: {} }],
+        ...(withSearch ? { tools: [{ google_search: {} }] } : {}),
       }),
     })
-    if (res.ok) return true
-    console.warn(`[GEO/Gemini] 후보 실패 ${version}/${model} → ${res.status}`)
-    return false
+    if (res.ok) return 'ok'
+    if (res.status === 429) {
+      console.warn(`[GEO/Gemini] ${version}/${model} 한도 초과(429) — 모델은 살아 있음`)
+      return 'quota'
+    }
+    const body = await res.text().catch(() => '')
+    console.warn(
+      `[GEO/Gemini] 후보 실패 ${version}/${model}${withSearch ? '' : ' (검색도구 없이)'} → ${res.status} ${body.slice(0, 300)}`,
+    )
+    return 'fail'
   } catch (e) {
     console.warn(`[GEO/Gemini] 후보 실패 ${version}/${model}:`, e instanceof Error ? e.message : e)
-    return false
+    return 'fail'
   }
+}
+
+/** 검색 도구를 붙여서 되면 그게 최선. 안 되면 도구 없이도 되는지 본다(원인 구분용). */
+async function probeBoth(apiKey: string, version: string, model: string): Promise<'ok' | 'quota' | 'fail'> {
+  const withTool = await probe(apiKey, version, model, true)
+  if (withTool !== 'fail') return withTool
+  const plain = await probe(apiKey, version, model, false)
+  if (plain !== 'fail') {
+    console.warn(
+      `[GEO/Gemini] ${version}/${model}은 되는데 검색 도구(google_search)가 거부됨 — 결제 설정 확인 필요`,
+    )
+  }
+  return 'fail'
 }
 
 /**
@@ -73,7 +110,7 @@ async function resolveModel(apiKey: string): Promise<{ model: string; version: s
   const forced = process.env.GEMINI_GEO_MODEL
   if (forced) {
     for (const version of API_VERSIONS) {
-      if (await probe(apiKey, version, forced)) {
+      if ((await probeBoth(apiKey, version, forced)) !== 'fail') {
         cached = { model: forced, version }
         console.log(`[GEO/Gemini] 지정 모델 사용: ${version}/${forced}`)
         return cached
@@ -100,7 +137,7 @@ async function resolveModel(apiKey: string): Promise<{ model: string; version: s
 
       for (const want of MODEL_PREFERENCE) {
         const hit = usable.find((m) => m.includes(want))
-        if (hit && (await probe(apiKey, version, hit))) {
+        if (hit && (await probeBoth(apiKey, version, hit)) !== 'fail') {
           cached = { model: hit, version }
           console.log(`[GEO/Gemini] 사용할 모델: ${version}/${hit} (쓸 수 있는 ${usable.length}개 중 선택)`)
           return cached
@@ -115,7 +152,7 @@ async function resolveModel(apiKey: string): Promise<{ model: string; version: s
   // ② 목록이 막혔으면 후보를 직접 찔러본다
   for (const version of API_VERSIONS) {
     for (const model of FALLBACK_CANDIDATES) {
-      if (await probe(apiKey, version, model)) {
+      if ((await probeBoth(apiKey, version, model)) !== 'fail') {
         cached = { model, version }
         console.log(`[GEO/Gemini] 후보에서 찾음: ${version}/${model}`)
         return cached
@@ -139,8 +176,21 @@ interface GeminiResponse {
   }[]
 }
 
+// 429(한도 초과)는 잠깐 기다렸다 다시 하면 되는 경우가 대부분이라 몇 번 쉬었다 재시도한다.
+// 무료 한도는 분당 호출 수가 낮아, 동시에 여러 개를 던지면 쉽게 걸린다.
+async function fetchWithRetry(url: string, init: RequestInit, tries = 3): Promise<Response> {
+  let last: Response | null = null
+  for (let i = 0; i < tries; i++) {
+    const res = await fetch(url, init)
+    if (res.status !== 429) return res
+    last = res
+    await new Promise((r) => setTimeout(r, 1500 * (i + 1)))
+  }
+  return last as Response
+}
+
 async function measureOne(apiKey: string, model: string, query: string, needles: string[], version = 'v1beta'): Promise<GeoQuestionResult> {
-  const res = await fetch(geminiUrl(model, apiKey, version), {
+  const res = await fetchWithRetry(geminiUrl(model, apiKey, version), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -148,7 +198,10 @@ async function measureOne(apiKey: string, model: string, query: string, needles:
       tools: [{ google_search: {} }], // 구글 검색 그라운딩 — 최신 웹 근거로 답하게 함
     }),
   })
-  if (!res.ok) throw new Error(`Gemini ${res.status}`)
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Gemini ${res.status} ${body.slice(0, 200)}`)
+  }
 
   const data = (await res.json()) as GeminiResponse
   const cand = data.candidates?.[0]
@@ -187,7 +240,7 @@ export async function measureGeoShareOfVoiceGemini(
   let failed = 0
 
   // 동시에 던진다 — 하나씩 물으면 질문을 늘릴수록 함수 제한시간에 걸린다.
-  const results = await mapWithConcurrency(queries, GEO_CONCURRENCY, async (q) => {
+  const results = await mapWithConcurrency(queries, GEMINI_CONCURRENCY, async (q) => {
     try {
       return await measureOne(apiKey, useModel, q, identity.needles, picked.version)
     } catch (e) {
