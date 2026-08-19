@@ -33,11 +33,12 @@ function ReviewRow({
 
   const { execute: send, isPending: isSending } = useAction(sendMonthlyReportAction, {
     onSuccess: ({ data }) => {
-      // 알림톡 템플릿이 승인·연결돼 있으면 실제로 발송된 것, 아니면 표시만 된 것
+      // 카톡이 실제로 나갔을 때만 여기 온다(못 나가면 서버가 막고 오류로 알려준다).
+      // 연락처가 없는 거래처만 '보냄 처리'로 남는다 — 그 경우 링크를 직접 전달해야 한다.
       toast.success(
         data?.alimtalkSent
           ? `${item.customerName}에 ${periodLabel(item.period)} 리포트를 보냈어요`
-          : `${item.customerName} ${periodLabel(item.period)} 리포트를 보냄 처리했어요 (링크를 직접 전달해 주세요)`
+          : `${item.customerName} ${periodLabel(item.period)} 리포트를 보냄 처리했어요 (연락처가 없어 링크를 직접 전달해 주세요)`
       )
       onDone(item.id)
     },

@@ -54,7 +54,7 @@ export const sendMonthlyReportAction = action
     if (!dispatch) throw new Error('[APP] 리포트를 찾을 수 없습니다')
     if (dispatch.status !== 'pending') throw new Error('[APP] 이미 처리된 리포트예요')
 
-    // 거래처에 알림톡 발송 — 템플릿이 없으면 조용히 건너뛰고 '검토 완료'로만 남는다
+    // 거래처에 알림톡 발송
     const customer = Array.isArray(dispatch.customers) ? dispatch.customers[0] : dispatch.customers
     const biz      = Array.isArray(dispatch.businesses) ? dispatch.businesses[0] : dispatch.businesses
     let alimtalkSent = false
@@ -72,9 +72,19 @@ export const sendMonthlyReportAction = action
           reportUrl:     `${appUrl}/q/${businessId}/monthly-report/${dispatch.customer_id}?month=${dispatch.period}`,
         })
       } catch (e) {
-        // 발송 실패가 검토 완료 처리를 막지는 않는다 — 사장님이 링크를 직접 보낼 수 있다
         console.error('[MonthlyReport] 알림톡 발송 실패:', e)
       }
+    }
+
+    // ⚠️ 실제로 못 나갔으면 '보냄'으로 잠그지 않는다.
+    //    예전엔 실패해도 status를 sent로 바꿨는데, 목록은 pending만 다루므로
+    //    한 번 잠기면 다시 보낼 수가 없었다. 거래처는 아무것도 못 받았는데
+    //    사장님 화면에는 '보냄'으로 남는 상태가 된다.
+    //    (템플릿 심사 중이라 발송이 반드시 실패하는 기간에 특히 위험하다 — 2026-08-19)
+    //    연락처가 없는 거래처는 애초에 카톡으로 보낼 수 없으니 '보냄 처리'를 허용한다.
+    const hasPhone = !!customer?.phone
+    if (hasPhone && !alimtalkSent) {
+      throw new Error('[APP] 지금은 카톡으로 보낼 수 없어요. 잠시 후 다시 눌러주세요')
     }
 
     const { error } = await looseDb
