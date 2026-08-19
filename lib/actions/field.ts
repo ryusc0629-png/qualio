@@ -67,7 +67,7 @@ async function verifyBookingOwnership(
   const [{ data: booking }, { data: teamCheck }] = await Promise.all([
     db
       .from('bookings')
-      .select('id, business_id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, quote_id, contract_id' as never)
+      .select('id, business_id, worker_id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, memo, quote_id, contract_id' as never)
       .eq('id', bookingId)
       .eq('business_id', businessId)
       .maybeSingle() as unknown as Promise<{ data: BookingRow | null }>,

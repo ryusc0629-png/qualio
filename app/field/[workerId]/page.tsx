@@ -76,6 +76,9 @@ export default async function FieldDashboard({ params }: Props) {
   const assignedIds = (bwRows ?? []).map((r) => r.booking_id)
 
   // worker_id 직접 배정 OR booking_workers 팀원 배정 모두 포함
+  //
+  // ⚠️ 취소·노쇼와 삭제된 일정은 반드시 빼야 한다. 예전엔 오늘 목록에만 이 조건이 없어서
+  // 사장님이 취소하거나 지운 일정이 직원 폰에 그대로 남았다 — 직원이 취소된 현장으로 간다.
   const { data: bookings } = assignedIds.length > 0
     ? await (db
         .from('bookings')
@@ -84,6 +87,8 @@ export default async function FieldDashboard({ params }: Props) {
         .or(`worker_id.eq.${workerId},id.in.(${assignedIds.join(',')})`)
         .gte('scheduled_at', todayStart)
         .lte('scheduled_at', todayEnd)
+        .is('deleted_at', null)
+        .not('status', 'in', '("cancelled","no_show")')
         .order('scheduled_at', { ascending: true }) as unknown as Promise<{ data: BookingRow[] | null }>)
     : await (db
         .from('bookings')
@@ -92,6 +97,8 @@ export default async function FieldDashboard({ params }: Props) {
         .eq('worker_id' as never, workerId)
         .gte('scheduled_at', todayStart)
         .lte('scheduled_at', todayEnd)
+        .is('deleted_at', null)
+        .not('status', 'in', '("cancelled","no_show")')
         .order('scheduled_at', { ascending: true }) as unknown as Promise<{ data: BookingRow[] | null }>)
 
   const jobs = bookings ?? []
@@ -110,6 +117,7 @@ export default async function FieldDashboard({ params }: Props) {
         .or(`worker_id.eq.${workerId},id.in.(${assignedIds.join(',')})`)
         .gte('scheduled_at', tomorrowStart)
         .lte('scheduled_at', tomorrowEnd)
+        .is('deleted_at', null)
         .not('status', 'in', '("cancelled","no_show")')
         .order('scheduled_at', { ascending: true }) as unknown as Promise<{ data: BookingRow[] | null }>)
     : await (db
@@ -119,6 +127,7 @@ export default async function FieldDashboard({ params }: Props) {
         .eq('worker_id' as never, workerId)
         .gte('scheduled_at', tomorrowStart)
         .lte('scheduled_at', tomorrowEnd)
+        .is('deleted_at', null)
         .not('status', 'in', '("cancelled","no_show")')
         .order('scheduled_at', { ascending: true }) as unknown as Promise<{ data: BookingRow[] | null }>)
 
