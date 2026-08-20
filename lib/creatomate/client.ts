@@ -7,9 +7,17 @@ import type { ReelLine } from '@/lib/ai/reel-script'
 // 지금 구조: 대본 문장 하나가 자막 한 줄이자 음성 한 마디이고, 화면 길이는 그 문장 길이를 따라간다.
 // 컷 수를 늘리지 않아도 되는 이유는 목소리가 계속 정보를 밀어주기 때문이다.
 
+/** 현장에서 올린 작업 영상 한 개 */
+export interface ReelClip {
+  url: string
+  /** 실제 길이(초). 브라우저에서 고를 때 읽어 저장해둔 값 */
+  duration: number
+}
+
 interface ReelInput {
   beforePhotoUrl: string
-  clipUrls: [string, string, string]
+  /** 1~3개. 개수가 적으면 그만큼만 쓴다 */
+  clips: ReelClip[]
   afterPhotoUrl: string
   businessName: string
   /**
@@ -48,33 +56,31 @@ export interface Segment {
 }
 
 /**
- * 대본을 화면 5개(앞사진 · 클립3 · 뒷사진)에 나눠 붙인다.
+ * 대본을 화면에 나눠 붙인다: 작업 전 사진 · 클립들 · 작업 후 사진.
  *
  * 첫 문장은 작업 전 사진 위에, 마지막 문장은 작업 후 사진 위에.
- * 가운데 문장들은 클립 3개에 고르게 나눈다. 화면 길이는 문장 길이의 합이라
- * 대본이 길면 화면도 같이 길어진다(=자막이 잘리지 않는다).
+ * 가운데 문장들은 클립에 나누되 **클립이 실제로 몇 초짜리인지에 비례해서** 나눈다 —
+ * 3초짜리와 15초짜리에 같은 분량을 얹으면 짧은 쪽이 계속 되감긴다.
+ *
+ * 클립이 1~2개뿐이어도 그대로 동작한다(그 개수만큼만 화면이 생긴다).
  */
-export function planSegments(lines: ReelLine[]): Segment[] {
-  // 최소 5문장은 보장되지만(대본 생성 쪽에서 걸러진다) 방어적으로 처리
+export function planSegments(lines: ReelLine[], clipDurations: number[]): Segment[] {
+  const usable = clipDurations.filter((d) => d > 0)
   const first = lines.slice(0, 1)
   const last = lines.length >= 3 ? lines.slice(-1) : []
   const middle = lines.slice(first.length, lines.length - last.length)
 
-  // 가운데 문장을 클립 3개에 앞에서부터 순서대로 나눠 담는다.
-  // (번갈아 담으면 말 순서가 섞여 화면과 대본이 어긋난다)
-  const perClip = Math.ceil(middle.length / 3)
-  const buckets: ReelLine[][] = [
-    middle.slice(0, perClip),
-    middle.slice(perClip, perClip * 2),
-    middle.slice(perClip * 2),
-  ]
+  // 클립이 하나도 없으면 사진 두 장에 전부 얹는다 (릴스를 못 만드는 것보단 낫다)
+  const groups: ReelLine[][] =
+    usable.length === 0
+      ? [first, [...middle, ...last]]
+      : [first, ...spreadByWeight(middle, usable), last]
 
-  const groups = [first, ...buckets, last]
   const segments: Segment[] = []
   let cursor = 0
 
   for (const group of groups) {
-    // 문장이 하나도 안 배정된 화면은 최소 시간만 준다 (사진이 깜빡이고 지나가지 않게)
+    // 문장이 하나도 안 배정된 화면은 최소 시간만 준다 (깜빡이고 지나가지 않게)
     const duration = group.length > 0 ? group.reduce((s, l) => s + l.seconds, 0) : 1.5
     let lineCursor = cursor
     const placed = group.map((line) => {
@@ -87,6 +93,32 @@ export function planSegments(lines: ReelLine[]): Segment[] {
   }
 
   return segments
+}
+
+/**
+ * 문장들을 가중치(클립 길이)에 비례해 순서대로 나눠 담는다.
+ * 순서는 절대 섞지 않는다 — 섞이면 말이 앞뒤가 안 맞는다.
+ * 클립 수보다 문장이 적으면 뒤쪽 클립은 빈 채로 둔다(최소 시간만 받는다).
+ */
+function spreadByWeight(lines: ReelLine[], weights: number[]): ReelLine[][] {
+  const buckets: ReelLine[][] = weights.map(() => [])
+  if (lines.length === 0) return buckets
+
+  const totalWeight = weights.reduce((a, b) => a + b, 0)
+  // 각 클립이 가져갈 문장 수 — 최소 1개씩은 주되, 문장이 모자라면 앞에서부터 채운다
+  const quota = weights.map((w) => Math.max(1, Math.round((lines.length * w) / totalWeight)))
+
+  let i = 0
+  for (let b = 0; b < buckets.length; b++) {
+    const remainingBuckets = buckets.length - b - 1
+    // 뒤 클립들에 최소 1개씩 남겨둔다
+    const maxTake = Math.max(0, lines.length - i - remainingBuckets)
+    const take = b === buckets.length - 1 ? lines.length - i : Math.min(quota[b], maxTake)
+    buckets[b] = lines.slice(i, i + take)
+    i += take
+  }
+
+  return buckets
 }
 
 /** 자막 한 줄 — 화면 가운데, 한 줄, 흰색(강조는 노랑) */
@@ -118,8 +150,11 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
   if (!apiKey) throw new Error('[APP] 영상 편집 서비스가 설정되지 않았어요')
 
   const fadeIn = [{ time: 0, duration: 0.4, easing: 'quadratic-out', type: 'fade' }]
-  const segments = planSegments(input.lines)
-  const [beforeSeg, clip1, clip2, clip3, afterSeg] = segments
+  const segments = planSegments(input.lines, input.clips.map((c) => c.duration))
+  const beforeSeg = segments[0]
+  const afterSeg = segments[segments.length - 1]
+  // 가운데 화면들 = 클립. 클립이 하나도 없으면 빈 배열이라 사진 두 장만 나간다.
+  const clipSegs = segments.slice(1, -1)
   const narrationEnd = segments.reduce((s, seg) => s + seg.duration, 0)
   const total = Math.round((narrationEnd + OUTRO_SECONDS) * 10) / 10
 
@@ -138,8 +173,8 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
       fit: 'cover',
       source: input.beforePhotoUrl,
     },
-    // ── 작업 중 영상 클립 3개 ───────────────────────────
-    ...[clip1, clip2, clip3].map((seg, i) => ({
+    // ── 작업 중 영상 클립 (1~3개) ───────────────────────
+    ...clipSegs.map((seg, i) => ({
       name: `clip-${i + 1}`,
       type: 'video',
       track: 1,
@@ -158,7 +193,7 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
       // ⚠️ Creatomate volume은 0~100 퍼센트다(기본 '100%'). 0.12로 적으면 12%가 아니라
       // 0.12%라 소리가 아예 안 들린다 — 예전 0.4도 같은 오해였다.
       volume: '12%',
-      source: input.clipUrls[i],
+      source: input.clips[i].url,
     })),
     // ── 작업 후 사진 ────────────────────────────────────
     {

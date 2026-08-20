@@ -19,6 +19,9 @@ import { postBookingRevenue } from '@/lib/finance/post-booking-revenue'
 import { assertReportSendable } from '@/lib/utils/report-send-guard'
 import { sendPushToBusiness } from '@/lib/push/web-push'
 
+/** 클립 길이 기록이 없는 예전 보고서에 쓰는 기본값(초) — 다 비슷한 길이로 보고 고르게 나눈다 */
+const DEFAULT_CLIP_SECONDS = 8
+
 // workers 테이블 타입 (Supabase 타입 아직 미생성)
 interface WorkerRow {
   id: string
@@ -633,6 +636,8 @@ export const fieldSaveWorkClipsAction = action
     workerId:  z.string().uuid(),
     bookingId: z.string().uuid(),
     clipUrls:  z.array(z.string().min(1)).min(1).max(3),
+    // 각 영상의 실제 길이(초) — clipUrls와 같은 순서. 릴스에서 화면 길이를 정하는 데 쓴다.
+    clipDurations: z.array(z.number().min(0).max(600)).max(3).optional(),
   }))
   .action(async ({ parsedInput }) => {
     const { db, worker } = await verifyWorker(parsedInput.workerId)
@@ -649,7 +654,10 @@ export const fieldSaveWorkClipsAction = action
     if (existing) {
       const { error } = await db
         .from('reports')
-        .update({ work_clip_urls: parsedInput.clipUrls } as never)
+        .update({
+          work_clip_urls: parsedInput.clipUrls,
+          work_clip_durations: parsedInput.clipDurations ?? null,
+        } as never)
         .eq('id', existing.id)
       if (error) throw new Error('[APP] 영상 저장에 실패했어요')
     } else {
@@ -659,6 +667,7 @@ export const fieldSaveWorkClipsAction = action
           business_id: worker.business_id,
           booking_id: parsedInput.bookingId,
           work_clip_urls: parsedInput.clipUrls,
+          work_clip_durations: parsedInput.clipDurations ?? null,
         } as never)
       if (error) throw new Error('[APP] 영상 저장에 실패했어요')
     }
@@ -680,13 +689,14 @@ export const fieldRequestReelAction = action
     // 보고서 + 사진 + 클립 + AI 보고서 데이터(자막 생성용) 조회
     const { data: report } = await db
       .from('reports')
-      .select('id, work_clip_urls, notes, preventive_note, care_advice, ai_report_data, report_photos(url, type, sort_order)' as never)
+      .select('id, work_clip_urls, work_clip_durations, notes, preventive_note, care_advice, ai_report_data, report_photos(url, type, sort_order)' as never)
       .eq('id', parsedInput.reportId)
       .eq('business_id', worker.business_id)
       .maybeSingle() as {
         data: {
           id: string
           work_clip_urls: string[]
+          work_clip_durations: number[] | null
           notes: string | null
           preventive_note: string | null
           care_advice: string | null
@@ -701,8 +711,18 @@ export const fieldRequestReelAction = action
 
     if (!report) throw new Error('[APP] 보고서를 찾을 수 없어요')
 
-    const clips = report.work_clip_urls ?? []
-    if (clips.length < 3) throw new Error('[APP] 작업 중 영상 3개를 모두 올려주세요')
+    // 영상은 1개만 있어도 만든다 — 3개를 못 채워서 아예 못 만드는 것보단 낫다.
+    // (3개일 때가 가장 보기 좋아서 현장 화면에서는 3컷을 권한다)
+    const clipUrls = (report.work_clip_urls ?? []).filter(Boolean)
+    if (clipUrls.length === 0) throw new Error('[APP] 작업 중 영상을 1개 이상 올려주세요')
+
+    // 클립 길이는 영상을 고를 때 브라우저에서 읽어 저장해둔 값이다.
+    // 예전에 올린 보고서엔 없을 수 있는데, 그때는 다 비슷한 길이로 보고 고르게 나눈다.
+    const durations = report.work_clip_durations ?? []
+    const reelClips = clipUrls.map((url, i) => ({
+      url,
+      duration: durations[i] && durations[i] > 0 ? durations[i] : DEFAULT_CLIP_SECONDS,
+    }))
 
     const beforePhotos = report.report_photos
       .filter((p) => p.type === 'before')
@@ -785,7 +805,7 @@ export const fieldRequestReelAction = action
 
     const renderId = await requestReelRender({
       beforePhotoUrl: beforePhotos[0].url,
-      clipUrls: [clips[0], clips[1], clips[2]],
+      clips: reelClips,
       afterPhotoUrl: afterPhotos[0].url,
       businessName: business.name,
       lines,
