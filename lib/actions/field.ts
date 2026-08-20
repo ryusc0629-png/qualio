@@ -680,7 +680,7 @@ export const fieldRequestReelAction = action
     // 보고서 + 사진 + 클립 + AI 보고서 데이터(자막 생성용) 조회
     const { data: report } = await db
       .from('reports')
-      .select('id, work_clip_urls, notes, ai_report_data, report_photos(url, type, sort_order)' as never)
+      .select('id, work_clip_urls, notes, preventive_note, care_advice, ai_report_data, report_photos(url, type, sort_order)' as never)
       .eq('id', parsedInput.reportId)
       .eq('business_id', worker.business_id)
       .maybeSingle() as {
@@ -688,6 +688,8 @@ export const fieldRequestReelAction = action
           id: string
           work_clip_urls: string[]
           notes: string | null
+          preventive_note: string | null
+          care_advice: string | null
           ai_report_data: {
             beforeStatus?: string
             workDetails?: string
@@ -731,14 +733,52 @@ export const fieldRequestReelAction = action
       if (quote?.cleaning_type) cleaningType = quote.cleaning_type
     }
 
-    // 작업 보고서 기반으로 짧은 후킹 자막 생성 (시청 지속 ↑)
-    const { generateReelCaptions } = await import('@/lib/ai/reel-captions')
-    const captions = await generateReelCaptions({
+    // 오늘 보고서에 실제로 적힌 것만으로 나레이션 대본을 만든다.
+    // 업체가 따로 등록해둔 '노하우' 같은 건 없다 — 있는 데이터만 쓴다.
+    const { generateReelScript } = await import('@/lib/ai/reel-script')
+    const draft = await generateReelScript({
       cleaningType,
       beforeStatus: report.ai_report_data?.beforeStatus ?? booking.memo ?? '',
-      workDetails: report.ai_report_data?.workDetails ?? '',
-      afterResult: report.ai_report_data?.afterResult ?? '',
+      workDetails:  report.ai_report_data?.workDetails ?? report.notes ?? '',
+      afterResult:  report.ai_report_data?.afterResult ?? '',
+      siteNote:     report.preventive_note ?? booking.memo ?? '',
+      careAdvice:   report.care_advice ?? '',
     })
+
+    // 문장을 하나씩 음성으로 만들고, 그 mp3의 '실제' 길이를 자막·화면 길이로 삼는다.
+    // 글자 수로 추정하면 뒤로 갈수록 자막이 목소리보다 밀린다(실측 7~10자/초로 편차가 크다).
+    // 합성이 안 되면 추정값 그대로 무음 영상을 만든다 — 릴스를 통째로 못 만드는 것보단 낫다.
+    const { synthesizeLines } = await import('@/lib/ai/narration')
+    const stamp = Date.now()
+    const clipsAudio = await synthesizeLines(draft.map((l) => l.text))
+
+    let lines = draft
+    let narrationUrls: string[] = []
+
+    if (clipsAudio) {
+      const uploaded: string[] = []
+      for (const [i, clip] of clipsAudio.entries()) {
+        const path = `${worker.business_id}/${parsedInput.bookingId}/narration/${stamp}-${i}.mp3`
+        const { error: upErr } = await db.storage
+          .from('report-photos')
+          .upload(path, clip.mp3, { contentType: 'audio/mpeg', upsert: true })
+        if (upErr) {
+          console.error('[Field] 나레이션 업로드 실패:', upErr)
+          break
+        }
+        uploaded.push(db.storage.from('report-photos').getPublicUrl(path).data.publicUrl)
+      }
+
+      // 전부 올라갔을 때만 음성을 쓴다 — 일부만 올라가면 중간에 목소리가 끊긴다
+      if (uploaded.length === clipsAudio.length) {
+        narrationUrls = uploaded
+        // 문장 끝에 숨 돌릴 틈을 조금 준다. 붙여 놓으면 다음 문장이 겹쳐 들린다.
+        lines = draft.map((l, i) => ({
+          ...l,
+          seconds: Math.round((clipsAudio[i].seconds + 0.35) * 100) / 100,
+        }))
+      }
+    }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
     const { requestReelRender } = await import('@/lib/creatomate/client')
@@ -748,8 +788,8 @@ export const fieldRequestReelAction = action
       clipUrls: [clips[0], clips[1], clips[2]],
       afterPhotoUrl: afterPhotos[0].url,
       businessName: business.name,
-      beforeText: booking.memo ?? '작업 전 현장',
-      captions,
+      lines,
+      narrationUrls,
       webhookUrl: `${appUrl}/api/creatomate/webhook`,
     })
 

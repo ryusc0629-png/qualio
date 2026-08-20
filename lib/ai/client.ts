@@ -118,3 +118,19 @@ export function getClaude(where: string): Anthropic {
 
   return client
 }
+
+/**
+ * 응답에서 글자만 뽑아낸다.
+ *
+ * ⚠️ `content[0]`을 곧바로 답으로 읽으면 안 된다. 모델이 생각 블록을 먼저 내보내면
+ * 0번 자리가 밀려서 빈 문자열이 나오고, 호출부는 그걸 '실패'가 아니라 '빈 답'으로 받아
+ * 조용히 기본값으로 넘어간다. 화면엔 아무 일도 없어 보여서 원인을 늦게 찾는다.
+ * (2026-08-21 릴스 대본에서 claude-sonnet-5가 실제로 이랬다. haiku-4-5·sonnet-4-6은
+ *  생각 블록을 안 내보내서 지금은 멀쩡하지만, 모델만 올려도 같은 함정에 빠진다.)
+ */
+export function textFrom(response: { content: { type: string }[] }): string {
+  return response.content
+    .filter((b): b is { type: 'text'; text: string } => b.type === 'text' && 'text' in b)
+    .map((b) => b.text)
+    .join('\n')
+}

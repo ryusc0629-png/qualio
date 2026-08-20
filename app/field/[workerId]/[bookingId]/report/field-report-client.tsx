@@ -217,7 +217,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   const { execute: requestReel, isPending: isRequestingReel } = useAction(fieldRequestReelAction, {
     onSuccess: () => {
       setReelStatus('processing')
-      toast.success('릴스 편집을 요청했어요! 완성되면 사장님께 알려드려요.')
+      toast.success('영상을 만들기 시작했어요! 완성되면 사장님께 알려드려요')
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
@@ -982,7 +982,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           {/* 릴스 요청 버튼 */}
           {!savedReportId ? (
             <p className="text-xs text-muted-foreground text-center">
-              아래에서 보고서를 먼저 저장하면 릴스를 만들 수 있어요
+              아래에서 보고서를 먼저 저장하면 홍보 영상을 만들 수 있어요
             </p>
           ) : reelStatus === 'idle' || reelStatus === 'failed' ? (
             <div className="space-y-2">
@@ -995,17 +995,17 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
                   }
                 >
                   <Film className="h-4 w-4" />
-                  {isRequestingReel ? '요청 중...' : '릴스 자동 편집 신청하기'}
+                  {isRequestingReel ? '만드는 중... 1분쯤 걸려요' : '홍보 영상 만들기'}
                 </Button>
               ) : (
                 <p className="text-xs text-muted-foreground text-center">
                   {clips.filter((c) => c.url && !c.uploading).length > 0
-                    ? `영상 ${clips.filter((c) => c.url && !c.uploading).length}개 저장됨 — 3개를 모두 올리면 릴스를 만들 수 있어요`
-                    : '영상 3개를 모두 올리면 릴스를 만들 수 있어요'}
+                    ? `${clips.filter((c) => c.url && !c.uploading).length}개 저장됐어요 — 3개를 모두 올리면 만들 수 있어요`
+                    : '영상 3개를 모두 올리면 홍보 영상을 만들 수 있어요'}
                 </p>
               )}
               {reelStatus === 'failed' && (
-                <p className="text-xs text-rose-600 text-center">편집에 실패했어요. 다시 신청해주세요</p>
+                <p className="text-xs text-rose-600 text-center">영상을 못 만들었어요. 다시 눌러주세요</p>
               )}
             </div>
           ) : reelStatus === 'processing' ? (
@@ -1017,7 +1017,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 space-y-2">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                <p className="text-sm font-semibold text-emerald-800">릴스 완성됐어요!</p>
+                <p className="text-sm font-semibold text-emerald-800">홍보 영상이 완성됐어요!</p>
               </div>
               <a
                 href={reelUrl}
