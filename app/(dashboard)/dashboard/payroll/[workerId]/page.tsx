@@ -58,8 +58,13 @@ export default async function PayslipPage({
         </div>
       </div>
 
+      {/* 브라우저가 인쇄 시 종이 가장자리에 찍는 머리글·바닥글 제거.
+          직원에게 주는 명세서라 날짜·주소가 찍히면 문서로 안 보인다.
+          여백을 0으로 없앤 대신 본문 padding으로 여백을 만든다. */}
+      <style>{`@page { size: A4; margin: 0; }`}</style>
+
       {/* 명세서 본문 */}
-      <div className="rounded-xl border bg-white p-6 space-y-5 print:border-0 print:p-0">
+      <div className="rounded-xl border bg-white p-6 space-y-5 print:border-0 print:p-[15mm]">
         <div className="text-center border-b pb-4">
           <h1 className="text-xl font-bold">급여 명세서</h1>
           <p className="text-sm text-muted-foreground mt-1">{businessName} · {label}</p>

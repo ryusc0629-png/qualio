@@ -97,6 +97,9 @@ export default async function ContractPrintPage({
       <PrintActions workerId={workerId} />
 
       {/* A4(210mm) 문서. 폰에서는 종이 흉내를 버리고 읽기 편한 여백으로, 인쇄는 A4 그대로. */}
+      {/* 브라우저가 인쇄 시 종이 가장자리에 찍는 머리글·바닥글 제거 —
+          여백을 0으로 만들어 찍힐 자리를 없앤다(여백은 아래 print:p-[15mm]가 담당) */}
+      <style>{`@page { size: A4; margin: 0; }`}</style>
       <div className="max-w-[210mm] mx-auto bg-white px-4 py-6 text-[14px] leading-relaxed sm:p-[20mm] print:p-[15mm] print:max-w-none font-sans text-gray-900">
 
         {/* 표제 */}

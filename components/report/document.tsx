@@ -18,9 +18,18 @@ import { BusinessAvatar } from '@/components/biz/business-avatar'
 export function DocPage({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <main className="min-h-screen bg-slate-100 py-6 px-3 print:bg-white print:p-0 [-webkit-print-color-adjust:exact] [print-color-adjust:exact]">
+      {/* 인쇄할 때 브라우저가 종이 가장자리에 찍는 머리글·바닥글을 없앤다.
+          (상단 날짜·문서명, 하단 주소·쪽번호) 거래처에 보내는 서류에 그게 찍히면
+          인쇄물이 아니라 화면 캡처처럼 보인다.
+
+          ⚠️ 우리가 그린 게 아니라 브라우저 인쇄 기능이 넣는 것이라 HTML로는 못 지운다.
+             종이 여백을 0으로 만들어 찍힐 자리 자체를 없애는 게 유일한 방법이고,
+             대신 여백은 아래 print:p-[15mm] 가 담당한다. */}
+      <style>{`@page { size: A4; margin: 0; }`}</style>
+
       <div className="mx-auto max-w-[860px] print:max-w-none">
         {action && <div className="flex justify-end mb-3 print:hidden">{action}</div>}
-        <article className="bg-white shadow-sm ring-1 ring-slate-200 px-6 py-8 sm:px-12 sm:py-12 print:shadow-none print:ring-0 print:px-0 print:py-0">
+        <article className="bg-white shadow-sm ring-1 ring-slate-200 px-6 py-8 sm:px-12 sm:py-12 print:shadow-none print:ring-0 print:p-[15mm]">
           {children}
         </article>
       </div>
