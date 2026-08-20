@@ -81,14 +81,15 @@ export async function GET(request: NextRequest) {
         .gte('scheduled_at', d90End.toISOString())
       if ((recentCount ?? 0) > 0) continue
 
-      // 이미 대기열에 있거나(어느 상태든) 예전 재유도 발송 이력 있으면 스킵
+      // 이미 대기열에 있거나(어느 상태든) 예전 재유도 발송 이력 있으면 스킵.
+      // 현장 제안이 여러 건 있을 수 있어 단건 조회(maybeSingle)를 쓰면 안 된다 — 에러가 난다.
       const { data: existing } = (await looseDb
         .from('reengagement_dispatches')
         .select('id')
         .eq('business_id', business_id)
         .eq('customer_phone', customer_phone)
-        .maybeSingle()) as unknown as { data: { id: string } | null }
-      if (existing) continue
+        .limit(1)) as unknown as { data: { id: string }[] | null }
+      if (existing && existing.length > 0) continue
 
       const { data: cust } = await db
         .from('customers')

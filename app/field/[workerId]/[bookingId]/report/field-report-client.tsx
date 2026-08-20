@@ -4,11 +4,13 @@ import { useState, useRef, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import { compressImage, mapWithConcurrency } from '@/lib/upload/image'
+import { readVideoMeta, checkVideo, VIDEO_MAX_MB } from '@/lib/upload/video'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { CareAdviceField } from '@/components/dashboard/care-advice-field'
+import { SiteIssueSection } from '@/components/field/site-issue-section'
 import { createClient } from '@/lib/supabase/client'
 import { REPORT_PHOTO_MAX } from '@/lib/config/photos'
 import { fieldSaveReportAction, fieldSendReportAction, fieldGenerateAiReportAction, fieldSaveWorkClipsAction, fieldRequestReelAction, fieldGetReelStatusAction, fieldSaveMemoAction } from '@/lib/actions/field'
@@ -51,7 +53,7 @@ type PhotoSlot = { url: string; uploading: boolean; caption?: string }
 // 작업 전·후 각각 올릴 수 있는 장수. 대청소 현장은 5장으로 모자란다.
 // 이 사진이 그대로 시공사례 글로 넘어가므로 상한은 lib/config/photos.ts 한 곳에서 정한다.
 const MAX_PHOTOS = REPORT_PHOTO_MAX
-type VideoSlot = { url: string; uploading: boolean; thumbnailUrl?: string }
+type VideoSlot = { url: string; uploading: boolean; thumbnailUrl?: string; duration?: number }
 
 interface BookingInfo {
   id: string
@@ -103,9 +105,11 @@ interface Props {
   existingCustomerRequest: string
   /** 다음에 올 직원이 알아야 할 것 (customers.notes에 오늘 날짜로 쌓임) */
   existingNextVisitNote: string
+  /** 이미 골라둔 '다음에 제안할 서비스' */
+  existingSuggestions?: string[]
 }
 
-export function FieldReportClient({ workerId, businessId, booking, existingReport, serviceItems, existingCustomerRequest, existingNextVisitNote }: Props) {
+export function FieldReportClient({ workerId, businessId, booking, existingReport, serviceItems, existingCustomerRequest, existingNextVisitNote, existingSuggestions = [] }: Props) {
   const [notes, setNotes] = useState(existingReport?.notes ?? '')
   // 현장 특이사항 — 오늘 눈에 띈 것. 월말에 거래처 보고서로 자동으로 모인다.
   const [preventiveNote, setPreventiveNote] = useState(existingReport?.preventiveNote ?? '')
@@ -118,14 +122,17 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   // 앞으로 손봐야 할 것 — 그 시점이 되면 사장님께 알림이 간다
   const [careAdvice, setCareAdvice] = useState(existingReport?.careAdvice ?? '')
   const [careMonths, setCareMonths] = useState(existingReport?.careMonths ?? 6)
+  // 다음에 제안할 서비스 — 고객에게 지금 나가지 않고, 대표가 승인하면 careMonths 뒤에 연락된다
+  const [suggestedServices, setSuggestedServices] = useState<string[]>(existingSuggestions)
   const [savedReportId, setSavedReportId] = useState<string | null>(existingReport?.id ?? null)
   const [alreadySent, setAlreadySent] = useState(!!existingReport?.sentAt)
   const [aiReport, setAiReport] = useState<AiReportData | null>(existingReport?.aiReportData ?? null)
   const [clips, setClips] = useState<VideoSlot[]>(
     existingReport?.workClipUrls.map((url) => ({ url, uploading: false })) ?? []
   )
+  // 영상 1개만 있어도 만들 수 있다 — 3개를 못 채워서 아예 못 만드는 것보단 낫다
   const [clipsSaved, setClipsSaved] = useState(
-    (existingReport?.workClipUrls.length ?? 0) >= 3
+    (existingReport?.workClipUrls.length ?? 0) >= 1
   )
   const [reelStatus, setReelStatus] = useState(existingReport?.reelStatus ?? 'idle')
   const [reelUrl, setReelUrl] = useState<string | null>(existingReport?.reelUrl ?? null)
@@ -141,6 +148,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     !!existingCustomerRequest || !!existingNextVisitNote
   )
 
+  const memoRef = useRef<HTMLTextAreaElement>(null)
   const beforeInputRef = useRef<HTMLInputElement>(null)
   const afterInputRef = useRef<HTMLInputElement>(null)
   const clipRef0 = useRef<HTMLInputElement>(null)
@@ -148,11 +156,16 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   const clipRef2 = useRef<HTMLInputElement>(null)
   const clipRefs = [clipRef0, clipRef1, clipRef2] as const
 
+  // 정기 거래처 현장 — 매일 하는 일이 똑같아서 전/후 사진·영상·'오늘 한 작업'을 매일 받으면 아무도 안 쓴다.
+  // 거래처가 월간 보고서에서 보는 건 '무슨 문제였고 어떻게 했나'뿐이라 그 한 덩어리만 받는다.
+  const isRecurringSite = !!booking.contractId
+
   const isUploading = before.some((p) => p.uploading) || after.some((p) => p.uploading)
+  const savedClipCount = clips.filter((c) => c.url && !c.uploading).length
   const hasPhotos = before.some((p) => !p.uploading && p.url) || after.some((p) => !p.uploading && p.url)
 
   // 보고서 저장
-  const { execute: saveReport, isPending: isSaving } = useAction(fieldSaveReportAction, {
+  const { execute: saveReport, executeAsync: saveReportAsync, isPending: isSaving } = useAction(fieldSaveReportAction, {
     onSuccess: ({ data }) => {
       if (data?.reportId) setSavedReportId(data.reportId)
       toast.success('보고서가 저장됐어요!')
@@ -175,12 +188,10 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   })
 
   // AI 포맷된 notes 텍스트 생성 헬퍼
-  const formatAiNotes = (report: AiReportData, services: Set<string>) => {
-    const recSection = report.recommendedServices.filter(s => services.has(s)).length > 0
-      ? `\n\n💡 추천 서비스\n${report.recommendedServices.filter(s => services.has(s)).join(', ')}`
-      : ''
-    return `📋 작업 전 상태\n${report.beforeStatus}\n\n🔧 작업 내용\n${report.workDetails}\n\n✨ 작업 결과\n${report.afterResult}\n\n📌 참고사항\n${report.additionalNotes}${recSection}`
-  }
+  // 고객 문서에 실릴 본문. 추천 서비스는 여기 넣지 않는다 —
+  // 서류에 판촉이 섞이면 격이 떨어지고, 제안은 대기열로 따로 간다.
+  const formatAiNotes = (report: AiReportData) =>
+    `📋 작업 전 상태\n${report.beforeStatus}\n\n🔧 작업 내용\n${report.workDetails}\n\n✨ 작업 결과\n${report.afterResult}\n\n📌 참고사항\n${report.additionalNotes}`
 
   // AI 보고서 생성
   const { execute: generateAi, isPending: isGenerating } = useAction(fieldGenerateAiReportAction, {
@@ -189,7 +200,12 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
         const newServices = new Set(data.report.recommendedServices)
         setAiReport(data.report)
         setSelectedServices(newServices)
-        const formatted = formatAiNotes(data.report, newServices)
+        // 자동 정리가 집어낸 서비스는 '다음에 제안할 서비스'의 밑그림으로 올려둔다.
+        // 현장이 보고 빼거나 더하면 된다 — 고르는 사람은 현장이다.
+        if (newServices.size > 0) {
+          setSuggestedServices((prev) => [...new Set([...prev, ...newServices])])
+        }
+        const formatted = formatAiNotes(data.report)
         setNotes(formatted)
         toast.success('전문 보고서가 작성됐어요!')
 
@@ -246,48 +262,63 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reelStatus, savedReportId])
 
-  // 로컬 파일에서 첫 프레임 썸네일 추출
-  const extractThumbnail = (file: File): Promise<string> =>
-    new Promise((resolve) => {
-      const objectUrl = URL.createObjectURL(file)
-      const video = document.createElement('video')
-      video.src = objectUrl
-      video.muted = true
-      video.playsInline = true
-      video.currentTime = 0.5
-      const capture = () => {
-        const canvas = document.createElement('canvas')
-        canvas.width = 320
-        canvas.height = 320
-        const ctx = canvas.getContext('2d')
-        if (ctx) ctx.drawImage(video, 0, 0, 320, 320)
-        URL.revokeObjectURL(objectUrl)
-        resolve(canvas.toDataURL('image/jpeg', 0.8))
+  // 파일을 칸 밖에 떨어뜨리면 브라우저가 그 파일을 열어버려서, 작성 중이던 보고서가 통째로 날아간다.
+  // 칸 안에 떨어뜨린 건 아래 dropZone이 먼저 처리하므로 영향 없다.
+  useEffect(() => {
+    const block = (e: DragEvent) => {
+      if (e.dataTransfer?.types?.includes('Files')) e.preventDefault()
+    }
+    window.addEventListener('dragover', block)
+    window.addEventListener('drop', block)
+    return () => {
+      window.removeEventListener('dragover', block)
+      window.removeEventListener('drop', block)
+    }
+  }, [])
+
+  // 끌어다 놓기(드래그 앤 드롭) — PC에서 파일 탐색기의 파일을 칸 위에 놓으면 바로 올라간다.
+  // 현장 폰에는 드래그가 없으므로 탭해서 고르는 기존 방식은 그대로 둔다.
+  // 끄는 동안엔 data-dragging으로 어느 칸에 들어갈지 테두리로 보여준다.
+  const dropZone = (kind: 'video' | 'image', onFiles: (files: File[]) => void) => ({
+    onDragOver: (e: React.DragEvent<HTMLElement>) => {
+      if (!e.dataTransfer.types.includes('Files')) return
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'copy'
+      e.currentTarget.dataset.dragging = 'true'
+    },
+    onDragLeave: (e: React.DragEvent<HTMLElement>) => {
+      delete e.currentTarget.dataset.dragging
+    },
+    onDrop: (e: React.DragEvent<HTMLElement>) => {
+      e.preventDefault()
+      delete e.currentTarget.dataset.dragging
+      const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith(`${kind}/`))
+      if (files.length === 0) {
+        toast.error(kind === 'video' ? '영상 파일만 올릴 수 있어요' : '사진 파일만 올릴 수 있어요')
+        return
       }
-      video.addEventListener('seeked', capture, { once: true })
-      video.addEventListener('error', () => {
-        URL.revokeObjectURL(objectUrl)
-        resolve('')
-      }, { once: true })
-      video.load()
-    })
+      onFiles(files)
+    },
+  })
 
   // 영상 클립 업로드 (한 번에 하나씩, 슬롯 인덱스 지정)
   const uploadClip = async (file: File, index: number) => {
-    // 파일 크기 사전 체크 (200MB 초과 시 거부)
-    const MAX_MB = 200
-    if (file.size > MAX_MB * 1024 * 1024) {
-      toast.error(`영상 파일이 너무 커요 (최대 ${MAX_MB}MB). 짧게 찍거나 해상도를 낮춰서 다시 올려주세요`)
+    // 고르는 즉시 길이·가로세로·첫 프레임을 읽는다.
+    // 올려보고 나서 실패를 알려주면 현장 회선에서 시간만 버린다.
+    const meta = await readVideoMeta(file)
+    const verdict = checkVideo(file, meta)
+    if (!verdict.ok) {
+      toast.error(verdict.error ?? '이 영상은 올릴 수 없어요')
       return
     }
+    if (verdict.warning) toast.warning(verdict.warning)
 
-    // 업로드 전 로컬에서 썸네일 추출
-    const thumbnailUrl = await extractThumbnail(file)
+    const thumbnailUrl = meta?.thumbnailUrl ?? ''
 
     const resetSlot = () =>
       setClips((prev) => {
         const next = [...prev]
-        next[index] = { url: '', uploading: false, thumbnailUrl: undefined }
+        next[index] = { url: '', uploading: false, thumbnailUrl: undefined, duration: undefined }
         return next
       })
 
@@ -296,7 +327,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
 
     setClips((prev) => {
       const next = [...prev]
-      next[index] = { url: '', uploading: true, thumbnailUrl }
+      next[index] = { url: '', uploading: true, thumbnailUrl, duration: meta?.duration }
       return next
     })
 
@@ -318,15 +349,17 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
 
       setClips((prev) => {
         const next = [...prev]
-        next[index] = { url: publicUrl, uploading: false, thumbnailUrl }
+        next[index] = { url: publicUrl, uploading: false, thumbnailUrl, duration: meta?.duration }
 
         // 업로드 완료 즉시 DB 자동 저장 (보고서 미저장 상태에서도 동작)
-        const urls = next.filter((c) => c.url && !c.uploading).map((c) => c.url)
-        if (urls.length >= 1) {
+        const done = next.filter((c) => c.url && !c.uploading)
+        if (done.length >= 1) {
           saveClips({
             workerId,
             bookingId: booking.id,
-            clipUrls: urls as [string, ...string[]],
+            clipUrls: done.map((c) => c.url) as [string, ...string[]],
+            // 홍보 영상에서 이 길이에 맞춰 화면을 나눈다 — 못 읽었으면 서버가 알아서 잡는다
+            clipDurations: done.map((c) => Math.round((c.duration ?? 0) * 10) / 10),
           })
         }
 
@@ -352,7 +385,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
 
   // 사진 업로드
   const uploadPhotos = async (
-    files: FileList,
+    files: FileList | File[],
     slots: PhotoSlot[],
     setSlots: React.Dispatch<React.SetStateAction<PhotoSlot[]>>,
     type: 'before' | 'after',
@@ -421,17 +454,25 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       )
       if (!confirmed) return
     }
-    const withCaption = (p: PhotoSlot) => !p.uploading && p.url
+    saveMemo(memoPayload())
+    saveReport(reportPayload())
+  }
+
+  // 저장 내용 조립 — 저장 버튼과 발송 버튼이 같은 것을 보내야 한다.
+  // (발송 전에 한 번 더 저장한다. 안 그러면 방금 적은 관리 안내·제안 서비스가 통째로 날아간다)
+  const memoPayload = () => ({
+    workerId,
+    bookingId: booking.id,
     // 하자·특이사항은 예약(bookings.memo)에도 같이 남긴다 — 사장님 화면과 월간 보고서가
     // 이 값을 읽는다. 화면에 칸은 하나지만 저장은 두 곳으로 나간다.
-    saveMemo({
-      workerId,
-      bookingId: booking.id,
-      siteMemo: preventiveNote.trim(),
-      customerRequest: customerRequest.trim(),
-      nextVisitNote: nextVisitNote.trim() || undefined,
-    })
-    saveReport({
+    siteMemo: preventiveNote.trim(),
+    customerRequest: customerRequest.trim(),
+    nextVisitNote: nextVisitNote.trim() || undefined,
+  })
+
+  const reportPayload = () => {
+    const withCaption = (p: PhotoSlot) => !p.uploading && p.url
+    return {
       workerId,
       bookingId: booking.id,
       notes: notes.trim() || undefined,
@@ -442,20 +483,46 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       afterPhotoCaptions: after.filter(withCaption).map((p) => (p.caption ?? '').trim()),
       careAdvice,
       careMonths,
+      suggestedServices,
       aiReportData: aiReport ? {
         ...aiReport,
         // 선택된 서비스만 저장
         recommendedServices: aiReport.recommendedServices.filter((s) => selectedServices.has(s)),
       } : undefined,
-    })
+    }
   }
 
-  const handleSend = () => {
+  // ① 전문 보고서로 정리하기 — 메모가 짧으면 먼저 메모 칸으로 데려간다
+  const handleAutoWrite = () => {
+    const memo = notes.replace(/📋 작업 전 상태\n[\s\S]*$/, '').trim()
+    if (memo.length < 5) {
+      memoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      memoRef.current?.focus()
+      toast.error('오늘 한 작업을 한 줄이라도 적어주세요. 그래야 보고서를 만들 수 있어요')
+      return
+    }
+    generateAi({ workerId, memo, serviceItems })
+  }
+
+  const handleSend = async () => {
     if (!savedReportId) return
+    // 정리 안 된 메모가 그대로 고객에게 나가면 업체 격이 떨어진다 — 정리를 먼저 시킨다
+    if (!aiReport) {
+      toast.error('먼저 [전문 보고서로 정리하기]를 눌러주세요')
+      return
+    }
     const confirmed = window.confirm(
-      '보고서를 검토하셨나요?\n\n고객에게 카카오 알림톡으로 보고서가 발송됩니다.'
+      '고객에게 이대로 보내집니다.\n\n' +
+      '· 사진과 작업 내용을 한 번 훑어보셨나요?\n' +
+      '· 고칠 곳은 각 항목을 눌러 바로 수정할 수 있어요.\n\n' +
+      '지금 보낼까요?'
     )
     if (!confirmed) return
+
+    // 보내기 전에 화면에 있는 내용을 먼저 저장한다 — 방금 고친 문장이 안 실린 채 나가면 안 된다
+    saveMemo(memoPayload())
+    await saveReportAsync(reportPayload())
+
     sendReport({
       workerId,
       bookingId: booking.id,
@@ -485,7 +552,10 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     inputRef: React.RefObject<HTMLInputElement | null>
     type: 'before' | 'after'
   }) => (
-    <div className="space-y-2">
+    <div
+      className="space-y-2 rounded-xl data-[dragging=true]:ring-2 data-[dragging=true]:ring-primary/60 data-[dragging=true]:ring-offset-4"
+      {...dropZone('image', (files) => uploadPhotos(files, slots, setSlots, type))}
+    >
       <div>
         <Label className="text-sm font-medium">{label}</Label>
         <p className="text-xs text-muted-foreground">{hint}</p>
@@ -589,47 +659,12 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     </div>
   )
 
-  // 추천 서비스의 가격 정보 매칭
-  const getServicePrice = (serviceName: string) =>
-    serviceItems.find((s) => s.name === serviceName)
-
-  // 추천 서비스 선택/해제 토글
-  const toggleService = (name: string) => {
-    const next = new Set(selectedServices)
-    if (next.has(name)) next.delete(name)
-    else next.add(name)
-    setSelectedServices(next)
-    if (aiReport) {
-      // aiReport.recommendedServices에 없는 수동 추가 서비스도 포함
-      const updated = { ...aiReport, recommendedServices: Array.from(new Set([...aiReport.recommendedServices, ...next])) }
-      setAiReport(updated)
-      setNotes(formatAiNotes(updated, next))
-    }
-  }
-
-  // 서비스 직접 추가
-  const addService = (name: string) => {
-    if (!aiReport) return
-    const next = new Set(selectedServices)
-    next.add(name)
-    setSelectedServices(next)
-    const updated = { ...aiReport, recommendedServices: [...new Set([...aiReport.recommendedServices, name])] }
-    setAiReport(updated)
-    setNotes(formatAiNotes(updated, next))
-    setShowServicePicker(false)
-  }
-
-  // 추가 가능한 서비스 목록 (이미 추천 목록에 있는 것 제외)
-  const availableServices = serviceItems.filter(
-    (s) => !aiReport?.recommendedServices.includes(s.name)
-  )
-
   // AI 보고서 섹션 수정
   const updateAiField = (field: keyof Omit<AiReportData, 'recommendedServices'>, value: string) => {
     if (!aiReport) return
     const updated = { ...aiReport, [field]: value }
     setAiReport(updated)
-    setNotes(formatAiNotes(updated, selectedServices))
+    setNotes(formatAiNotes(updated))
   }
 
   // 편집 가능한 보고서 섹션
@@ -683,88 +718,8 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       <EditableSection label="작업 내용" value={report.workDetails} field="workDetails" bgClass="bg-blue-50" borderClass="border-blue-100" labelClass="text-blue-800" textClass="text-blue-900" />
       <EditableSection label="작업 결과" value={report.afterResult} field="afterResult" bgClass="bg-emerald-50" borderClass="border-emerald-100" labelClass="text-emerald-800" textClass="text-emerald-900" />
       <EditableSection label="참고사항" value={report.additionalNotes} field="additionalNotes" bgClass="bg-gray-50" borderClass="border-gray-200" labelClass="text-gray-700" textClass="text-gray-800" />
-      <div className="rounded-lg bg-violet-50 border border-violet-100 p-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold text-violet-800">추천 서비스</p>
-          {report.recommendedServices.length > 0 && (
-            <p className="text-[10px] text-violet-500">체크 해제하면 보고서에서 빠져요</p>
-          )}
-        </div>
-        {report.recommendedServices.length > 0 && (
-          <div className="space-y-1.5">
-            {report.recommendedServices.map((name) => {
-              const svc = getServicePrice(name)
-              const isSelected = selectedServices.has(name)
-              return (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => toggleService(name)}
-                  className={`w-full flex items-center gap-3 rounded-md px-3 py-2.5 border transition-colors text-left ${
-                    isSelected
-                      ? 'bg-white border-violet-200'
-                      : 'bg-violet-50/50 border-violet-100 opacity-50'
-                  }`}
-                >
-                  <div className={`shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                    isSelected
-                      ? 'bg-violet-600 border-violet-600'
-                      : 'border-gray-300 bg-white'
-                  }`}>
-                    {isSelected && (
-                      <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
-                        <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
-                  </div>
-                  <span className={`text-sm font-medium flex-1 ${isSelected ? 'text-violet-900' : 'text-violet-400 line-through'}`}>{name}</span>
-                  {svc && (
-                    <span className={`text-xs ${isSelected ? 'text-violet-600' : 'text-violet-300'}`}>{svc.basePrice.toLocaleString()}원~</span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        )}
-        {/* 서비스 직접 추가 */}
-        {availableServices.length > 0 && (
-          <div className="pt-1">
-            {!showServicePicker ? (
-              <button
-                type="button"
-                onClick={() => setShowServicePicker(true)}
-                className="w-full flex items-center justify-center gap-1.5 rounded-md px-3 py-2 border border-dashed border-violet-300 text-violet-600 hover:bg-violet-100/50 transition-colors"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span className="text-xs font-medium">서비스 직접 추가</span>
-              </button>
-            ) : (
-              <div className="space-y-1.5 bg-white rounded-md border border-violet-200 p-2">
-                <div className="flex items-center justify-between px-1">
-                  <p className="text-xs font-medium text-violet-700">추가할 서비스 선택</p>
-                  <button type="button" onClick={() => setShowServicePicker(false)} className="p-0.5">
-                    <X className="h-3.5 w-3.5 text-violet-400" />
-                  </button>
-                </div>
-                {availableServices.map((svc) => (
-                  <button
-                    key={svc.name}
-                    type="button"
-                    onClick={() => addService(svc.name)}
-                    className="w-full flex items-center justify-between rounded-md px-3 py-2.5 hover:bg-violet-50 transition-colors text-left"
-                  >
-                    <span className="text-sm text-violet-900">{svc.name}</span>
-                    <span className="text-xs text-violet-500">{svc.basePrice.toLocaleString()}원~</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-        {report.recommendedServices.length === 0 && availableServices.length === 0 && (
-          <p className="text-xs text-violet-500 text-center py-1">등록된 서비스 항목이 없어요</p>
-        )}
-      </div>
+      {/* 추천 서비스는 여기서 뺐다 — 고객 문서엔 원래 안 실렸고, 골라도 아무 데도 안 갔다.
+          지금은 아래 '다음에 제안할 서비스'에서 골라 대표 승인 후 연락으로 이어진다. */}
     </div>
   )
 
@@ -835,6 +790,13 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           </p>
         </div>
 
+        {/* 정기 거래처 — 특이사항 하나만 받는다. 저장은 claims라 월간 보고서·홈 타일·대표 알림이 그대로 붙는다 */}
+        {isRecurringSite && (
+          <SiteIssueSection workerId={workerId} businessId={businessId} bookingId={booking.id} />
+        )}
+
+        {!isRecurringSite && (
+        <>
         {/* ① 작업 전 사진 */}
         <div className="rounded-xl bg-white border p-4">
           <StepBadge n={1} />
@@ -879,18 +841,26 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
               <Label className="text-sm font-medium">작업 중 촬영한 영상</Label>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              3컷만 올리면 버튼 하나로 홍보 영상이 만들어져요
+              1개만 올려도 만들어져요. 3개를 채우면 제일 보기 좋아요
             </p>
           </div>
 
-          {/* 촬영 요령 — 예전엔 작업 상세에 노란 박스로 따로 떠 있었다.
-              찍는 사람이 올리는 자리에서 보는 게 맞아서 여기로 옮겼다. */}
-          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1">
+          {/* 촬영 요령 — 찍는 사람이 올리는 자리에서 봐야 해서 여기 둔다.
+              '왜'까지 적는다: 이유를 모르면 다음 현장에서 또 가로로 찍어 온다. */}
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-2">
             <p className="text-xs font-bold text-amber-900">이렇게 찍어주세요</p>
-            <p className="text-[11px] text-amber-800 leading-relaxed">
-              ① 더러운 곳 클로즈업 · ② 작업하는 모습 · ③ 깨끗해진 결과
+
+            <div className="space-y-1 text-[11px] text-amber-900">
+              <p><b className="text-amber-950">무엇을</b> ① 더러운 곳 가까이 ② 작업하는 모습 ③ 깨끗해진 결과</p>
+              <p><b className="text-amber-950">몇 초</b> 한 개에 5~10초. 길게 찍어도 앞부분만 쓰여요</p>
+              <p><b className="text-amber-950">어떻게</b> 폰을 세워서. 눕혀서 찍으면 좌우가 잘려요</p>
+            </div>
+
+            <p className="text-[11px] text-amber-800 leading-relaxed border-t border-amber-200 pt-2">
+              한 개에 <b>{VIDEO_MAX_MB}MB</b>까지 올라가요. 10초면 보통 10~15MB예요.
               <br />
-              각 10초 이내 · <b>세로로</b> 찍어야 딱 맞아요. 현장을 떠나면 다시 못 찍어요.
+              계속 &ldquo;너무 커요&rdquo;가 뜨면 폰이 4K로 찍고 있는 거예요 —
+              카메라 설정에서 <b>FHD·1080p</b>로 바꿔주세요.
             </p>
           </div>
 
@@ -903,7 +873,10 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
               return (
                 <div key={idx} className="flex flex-col items-center gap-1.5">
                   <p className="text-[10px] text-muted-foreground font-medium">장면 {idx + 1}</p>
-                  <div className="relative w-full aspect-square">
+                  <div
+                    className="relative w-full aspect-square rounded-xl data-[dragging=true]:ring-2 data-[dragging=true]:ring-rose-400 data-[dragging=true]:ring-offset-2"
+                    {...dropZone('video', (files) => uploadClip(files[0]!, idx))}
+                  >
                     <button
                       type="button"
                       onClick={() => clipRefs[idx].current?.click()}
@@ -953,6 +926,10 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
                         <>
                           <Video className="h-5 w-5 text-muted-foreground" />
                           <span className="text-[10px] text-muted-foreground">영상 올리기</span>
+                          {/* 드래그는 PC에만 있는 동작이라 좁은 화면에선 숨긴다 */}
+                          <span className="hidden md:block text-[10px] text-muted-foreground/70">
+                            끌어다 놓아도 돼요
+                          </span>
                         </>
                       )}
                     </button>
@@ -990,21 +967,26 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           ) : reelStatus === 'idle' || reelStatus === 'failed' ? (
             <div className="space-y-2">
               {clipsSaved ? (
-                <Button
-                  className="w-full h-12 gap-2 bg-rose-500 hover:bg-rose-600 text-white"
-                  disabled={isRequestingReel}
-                  onClick={() =>
-                    requestReel({ workerId, bookingId: booking.id, reportId: savedReportId })
-                  }
-                >
-                  <Film className="h-4 w-4" />
-                  {isRequestingReel ? '만드는 중... 1분쯤 걸려요' : '홍보 영상 만들기'}
-                </Button>
+                <>
+                  <Button
+                    className="w-full h-12 gap-2 bg-rose-500 hover:bg-rose-600 text-white"
+                    disabled={isRequestingReel}
+                    onClick={() =>
+                      requestReel({ workerId, bookingId: booking.id, reportId: savedReportId })
+                    }
+                  >
+                    <Film className="h-4 w-4" />
+                    {isRequestingReel ? '만드는 중... 1분쯤 걸려요' : '홍보 영상 만들기'}
+                  </Button>
+                  {savedClipCount < 3 && (
+                    <p className="text-xs text-muted-foreground text-center">
+                      지금 {savedClipCount}개예요. 3개를 채우면 더 보기 좋아요
+                    </p>
+                  )}
+                </>
               ) : (
                 <p className="text-xs text-muted-foreground text-center">
-                  {clips.filter((c) => c.url && !c.uploading).length > 0
-                    ? `${clips.filter((c) => c.url && !c.uploading).length}개 저장됐어요 — 3개를 모두 올리면 만들 수 있어요`
-                    : '영상 3개를 모두 올리면 홍보 영상을 만들 수 있어요'}
+                  영상을 1개 이상 올리면 홍보 영상을 만들 수 있어요
                 </p>
               )}
               {reelStatus === 'failed' && (
@@ -1059,30 +1041,19 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           {!aiReport ? (
             <>
               <Textarea
+                ref={memoRef}
                 placeholder="예: 주방 후드 기름때 제거, 화장실 곰팡이 제거, 창틀·블라인드 먼지 제거"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
               />
 
-              <Button
-                variant="outline"
-                className="w-full h-11 gap-2"
-                disabled={isGenerating || notes.trim().length < 5}
-                onClick={() => generateAi({ workerId, memo: notes.trim(), serviceItems })}
-              >
-                <Sparkles className="h-4 w-4" />
-                {isGenerating ? '전문 보고서로 정리 중이에요...' : '전문 보고서로 정리하기'}
-              </Button>
-
-              {notes.trim().length > 0 && notes.trim().length < 5 && (
-                <p className="text-xs text-amber-600 text-center">5자 이상 작성하면 전문 보고서를 만들 수 있어요</p>
-              )}
-              {notes.trim().length === 0 && (
-                <p className="text-xs text-muted-foreground text-center">
-                  작업 내용을 간단히 메모하면 전문 보고서로 변환해드려요
-                </p>
-              )}
+              {/* 정리 버튼은 아래 고정 바에 ①번으로 있다 — 같은 일을 하는 버튼을 두 곳에 두지 않는다 */}
+              <p className="text-xs text-muted-foreground text-center">
+                {notes.trim().length > 0 && notes.trim().length < 5
+                  ? '한 줄만 더 적어주세요'
+                  : '적고 나서 아래 [① 전문 보고서로 정리하기]를 눌러주세요'}
+              </p>
             </>
           ) : (
             /* AI 보고서가 있을 때: 결과 표시 + 재작성 버튼 */
@@ -1115,14 +1086,21 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           )}
         </div>
 
+        </>
+        )}
+
         {/* 앞으로 손봐야 할 것 — 그 시점이 되면 사장님께 알림이 간다.
-            판촉 배너 대신 이걸 남긴다: 근거가 그 현장 기록이라 설득력이 다르다. */}
+            판촉 배너 대신 이걸 남긴다: 근거가 그 현장 기록이라 설득력이 다르다.
+            정기·일회성 둘 다 쓴다 — 정기 거래처에도 "다음 달엔 이걸 봐야 한다"가 필요하다. */}
         <div className="rounded-xl bg-white border p-4">
           <CareAdviceField
             advice={careAdvice}
             months={careMonths}
             onAdviceChange={setCareAdvice}
             onMonthsChange={setCareMonths}
+            serviceItems={serviceItems}
+            suggestions={suggestedServices}
+            onSuggestionsChange={setSuggestedServices}
           />
         </div>
 
@@ -1171,7 +1149,32 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
 
       {/* 하단 고정 버튼 */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 pb-safe space-y-2">
-        {!savedReportId ? (
+        {/* 순서가 곧 안내다 — ① 정리하기를 먼저 시키고, 정리된 뒤에만 ② 발송하기가 나온다.
+            손으로 쓴 메모가 그대로 고객에게 나가면 업체 격이 떨어지기 때문. */}
+        {!aiReport && !alreadySent ? (
+          <>
+            <Button
+              size="lg"
+              className="w-full h-14 text-base gap-2"
+              disabled={isGenerating || isUploading}
+              onClick={handleAutoWrite}
+            >
+              <Sparkles className="h-5 w-5" />
+              {isGenerating ? '전문 보고서로 정리 중이에요...' : '① 전문 보고서로 정리하기'}
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              정리해야 고객에게 보낼 수 있어요. 적은 메모가 그대로 나가지 않아요
+            </p>
+            <Button
+              variant="outline"
+              className="w-full h-10 text-sm"
+              disabled={isSaving || isUploading}
+              onClick={handleSave}
+            >
+              {isSaving ? '저장 중...' : '나중에 이어서 하기 (저장만)'}
+            </Button>
+          </>
+        ) : !savedReportId ? (
           <Button
             size="lg"
             className="w-full h-14 text-base gap-2"
@@ -1234,7 +1237,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
               onClick={handleSend}
             >
               <Send className="h-5 w-5" />
-              {isSending ? '발송 중...' : '고객에게 보고서 발송하기'}
+              {isSending ? '발송 중...' : '② 고객에게 보고서 발송하기'}
             </Button>
             )}
             {!booking.contractId && !booking.customerPhone && (

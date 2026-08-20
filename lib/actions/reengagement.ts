@@ -72,10 +72,86 @@ export const skipReengagementAction = action
       .update({ status: 'skipped', sent_at: new Date().toISOString() })
       .eq('id', parsedInput.dispatchId)
       .eq('business_id', businessId)
-      .eq('status', 'pending')
+      .in('status', ['pending', 'scheduled'])
     if (error) throw new Error('[APP] 처리에 실패했어요')
 
     revalidatePath('/dashboard/reengagement')
     revalidatePath('/dashboard')
     return { success: true }
+  })
+
+// ── 현장에서 올린 '다음에 제안할 서비스' ────────────────────────────
+//
+// 현장 직원이 고르면 검토 대기(pending)로 쌓인다. 대표가 여기서 승인해야(scheduled)
+// 정해진 날짜에 문자가 나간다. 승인 전에는 고객에게 아무것도 가지 않는다.
+
+// 승인 — 문구를 확정하고 발송 예약 상태로 바꾼다
+export const approveSuggestionAction = action
+  .schema(z.object({
+    dispatchId: z.string().uuid(),
+    message:    z.string().min(10, '문구를 적어주세요').max(1000),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+    const looseDb = db as unknown as SupabaseClient
+
+    const { data: row } = (await looseDb
+      .from('reengagement_dispatches')
+      .select('status, due_at')
+      .eq('id', parsedInput.dispatchId)
+      .eq('business_id', businessId)
+      .maybeSingle()) as unknown as { data: { status: string; due_at: string | null } | null }
+
+    if (!row) throw new Error('[APP] 대상을 찾을 수 없습니다')
+    if (row.status !== 'pending') throw new Error('[APP] 이미 처리된 건이에요')
+
+    const { error } = await looseDb
+      .from('reengagement_dispatches')
+      .update({
+        status: 'scheduled',
+        message: parsedInput.message,
+        approved_at: new Date().toISOString(),
+      })
+      .eq('id', parsedInput.dispatchId)
+      .eq('business_id', businessId)
+    if (error) throw new Error('[APP] 승인에 실패했어요. 다시 눌러주세요')
+
+    revalidatePath('/dashboard/reengagement')
+    revalidatePath('/dashboard')
+    return { success: true, dueAt: row.due_at }
+  })
+
+// 현장이 직접 적은 서비스명을 업체 서비스 항목으로 등록한다.
+// (현장이 실제로 파는 것을 사장님이 뒤늦게 알게 되는 통로)
+export const registerSuggestedServiceAction = action
+  .schema(z.object({
+    name:      z.string().min(1).max(60),
+    basePrice: z.number().int().min(0).max(100_000_000).optional(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { data: exists } = await db
+      .from('service_items')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('name', parsedInput.name)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (exists) return { success: true, alreadyExists: true }
+
+    const { error } = await db.from('service_items').insert({
+      business_id: businessId,
+      name:        parsedInput.name,
+      base_price:  parsedInput.basePrice ?? 0,
+    } as never)
+    if (error) {
+      console.error('[Reengagement] 서비스 등록 실패:', error)
+      throw new Error('[APP] 서비스를 등록하지 못했어요. 서비스 화면에서 추가해주세요')
+    }
+
+    revalidatePath('/dashboard/services')
+    revalidatePath('/dashboard/reengagement')
+    return { success: true, alreadyExists: false }
   })

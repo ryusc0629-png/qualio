@@ -102,6 +102,19 @@ export default async function FieldReportPage({ params }: Props) {
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((p) => ({ url: p.url, caption: p.caption ?? '' }))
 
+  // 현장에서 이미 골라둔 '다음에 제안할 서비스' — 다시 열었을 때 그대로 보여야 한다
+  let existingSuggestions: string[] = []
+  if (report?.id) {
+    const { data: rows } = (await db
+      .from('reengagement_dispatches' as never)
+      .select('service_name')
+      .eq('report_id' as never, report.id)
+      .in('status' as never, ['pending', 'scheduled'])) as unknown as {
+        data: { service_name: string | null }[] | null
+      }
+    existingSuggestions = (rows ?? []).map((r) => r.service_name).filter((n): n is string => !!n)
+  }
+
   // 업체 서비스 항목 조회 (AI 추천용)
   const { data: services } = await db
     .from('service_items')
@@ -156,6 +169,7 @@ export default async function FieldReportPage({ params }: Props) {
         name: s.name,
         basePrice: s.base_price,
       }))}
+      existingSuggestions={existingSuggestions}
     />
   )
 }
