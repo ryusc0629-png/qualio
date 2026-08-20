@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
 import { compressImage, mapWithConcurrency } from '@/lib/upload/image'
-import { readVideoMeta, checkVideo, VIDEO_MAX_MB } from '@/lib/upload/video'
+import { readVideoMeta, checkVideo, compressVideo } from '@/lib/upload/video'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -53,7 +53,7 @@ type PhotoSlot = { url: string; uploading: boolean; caption?: string }
 // 작업 전·후 각각 올릴 수 있는 장수. 대청소 현장은 5장으로 모자란다.
 // 이 사진이 그대로 시공사례 글로 넘어가므로 상한은 lib/config/photos.ts 한 곳에서 정한다.
 const MAX_PHOTOS = REPORT_PHOTO_MAX
-type VideoSlot = { url: string; uploading: boolean; thumbnailUrl?: string; duration?: number }
+type VideoSlot = { url: string; uploading: boolean; thumbnailUrl?: string; duration?: number; shrinkPercent?: number }
 
 interface BookingInfo {
   id: string
@@ -306,13 +306,6 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
     // 고르는 즉시 길이·가로세로·첫 프레임을 읽는다.
     // 올려보고 나서 실패를 알려주면 현장 회선에서 시간만 버린다.
     const meta = await readVideoMeta(file)
-    const verdict = checkVideo(file, meta)
-    if (!verdict.ok) {
-      toast.error(verdict.error ?? '이 영상은 올릴 수 없어요')
-      return
-    }
-    if (verdict.warning) toast.warning(verdict.warning)
-
     const thumbnailUrl = meta?.thumbnailUrl ?? ''
 
     const resetSlot = () =>
@@ -322,18 +315,43 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
         return next
       })
 
-    const ext = file.name.split('.').pop() ?? 'mp4'
+    // 큰 영상은 우리가 알아서 줄인다 — 사장님·직원에게 "줄여서 올리세요"라고 시키지 않는다.
+    // 영상 길이만큼 시간이 걸리므로 슬롯에 진행률을 보여준다(안 보여주면 멈춘 줄 안다).
+    setClips((prev) => {
+      const next = [...prev]
+      next[index] = { url: '', uploading: true, thumbnailUrl, duration: meta?.duration, shrinkPercent: 0 }
+      return next
+    })
+
+    const upload = await compressVideo(file, meta, (percent) => {
+      setClips((prev) => {
+        const next = [...prev]
+        if (next[index]?.uploading) next[index] = { ...next[index], shrinkPercent: percent }
+        return next
+      })
+    })
+
+    // 줄이고도 못 올릴 크기면 그때 알려준다 (줄이기가 안 되는 폰)
+    const verdict = checkVideo(upload, meta)
+    if (!verdict.ok) {
+      toast.error(verdict.error ?? '이 영상은 올릴 수 없어요')
+      resetSlot()
+      return
+    }
+    if (verdict.warning) toast.warning(verdict.warning)
+
+    const ext = upload.name.split('.').pop() ?? 'mp4'
     const path = `${businessId}/${booking.id}/clips/clip${index + 1}-${Date.now()}.${ext}`
 
     setClips((prev) => {
       const next = [...prev]
-      next[index] = { url: '', uploading: true, thumbnailUrl, duration: meta?.duration }
+      next[index] = { url: '', uploading: true, thumbnailUrl, duration: meta?.duration, shrinkPercent: undefined }
       return next
     })
 
     try {
       const supabase = createClient()
-      const { error } = await supabase.storage.from('report-photos').upload(path, file, { upsert: true })
+      const { error } = await supabase.storage.from('report-photos').upload(path, upload, { upsert: true })
 
       if (error) {
         console.error('[FieldReport] 영상 업로드 오류:', error)
@@ -852,15 +870,12 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
 
             <div className="space-y-1 text-[11px] text-amber-900">
               <p><b className="text-amber-950">무엇을</b> ① 더러운 곳 가까이 ② 작업하는 모습 ③ 깨끗해진 결과</p>
-              <p><b className="text-amber-950">몇 초</b> 한 개에 5~10초. 길게 찍어도 앞부분만 쓰여요</p>
+              <p><b className="text-amber-950">몇 초</b> 한 개에 5~10초면 딱 좋아요</p>
               <p><b className="text-amber-950">어떻게</b> 폰을 세워서. 눕혀서 찍으면 좌우가 잘려요</p>
             </div>
 
             <p className="text-[11px] text-amber-800 leading-relaxed border-t border-amber-200 pt-2">
-              한 개에 <b>{VIDEO_MAX_MB}MB</b>까지 올라가요. 10초면 보통 10~15MB예요.
-              <br />
-              계속 &ldquo;너무 커요&rdquo;가 뜨면 폰이 4K로 찍고 있는 거예요 —
-              카메라 설정에서 <b>FHD·1080p</b>로 바꿔주세요.
+              폰 설정은 건드리지 않으셔도 돼요. 찍은 대로 골라주시면 저희가 알아서 줄여서 올려요.
             </p>
           </div>
 
@@ -894,13 +909,18 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
                             <img src={slot.thumbnailUrl} alt="" className="w-full h-full object-cover opacity-50" />
                             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/30 rounded-xl">
                               <Loader2 className="h-5 w-5 text-white animate-spin" />
-                              <span className="text-[10px] text-white font-medium">올리는 중</span>
+                              {/* 줄이는 중에는 몇 %인지 보여준다 — 영상 길이만큼 걸려서 안 보여주면 멈춘 줄 안다 */}
+                              <span className="text-[10px] text-white font-medium">
+                                {slot?.shrinkPercent !== undefined ? `줄이는 중 ${slot.shrinkPercent}%` : '올리는 중'}
+                              </span>
                             </div>
                           </>
                         ) : (
                           <>
                             <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
-                            <span className="text-[10px] text-muted-foreground">올리는 중</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {slot?.shrinkPercent !== undefined ? `줄이는 중 ${slot.shrinkPercent}%` : '올리는 중'}
+                            </span>
                           </>
                         )
                       ) : hasVideo ? (
