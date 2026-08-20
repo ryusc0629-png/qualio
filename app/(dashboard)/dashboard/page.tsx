@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { countPendingOnboardingReports } from '@/lib/onboarding/pending-reports'
+import { getCareDueCustomers } from '@/lib/reports/care-due-list'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { QuoteLinkShare } from '@/components/dashboard/quote-link-share'
@@ -355,6 +356,16 @@ export default async function DashboardPage() {
     .eq('business_id', businessId)
     .eq('status', 'pending')
 
+  // 관리 시점이 된 현장 — 보고서에 적어둔 '앞으로 손봐야 할 것'의 때가 온 곳.
+  //
+  // 왜 홈에도 두나: 지금까지는 대표폰 푸시 하나뿐이었다. 푸시를 안 켰거나 알림을 한 번
+  // 지나치면 그걸로 끝이라, 근거(그 현장 기록)를 들고 먼저 연락할 기회가 조용히 사라졌다.
+  // 푸시는 그 순간을 알리는 것이고, 홈은 아직 안 한 일이 남아 있음을 보여주는 자리다.
+  //
+  // ⚠️ care_notified_at으로 거르면 안 된다 — 그건 '푸시를 보냈다'는 뜻이지 '연락했다'가 아니다.
+  // 사라지는 기준은 결과로 본다: 그 고객에게 앞으로 잡힌 방문이 생기면 목록에서 빠진다.
+  const careDue = await getCareDueCustomers(db as unknown as SupabaseClient, businessId, now)
+
   // 오늘 문단속 현장 현황 — 사이드바에서 내린 대신 홈 카드로 노출 (문제 있을 때만 눈에 띔)
   const lockupData = await getTodayLockupData(db as unknown as SupabaseClient, businessId)
   const lockup = summarizeLockup(lockupData.visits, lockupData.durationById, Date.now())
@@ -365,7 +376,7 @@ export default async function DashboardPage() {
     (doneReelCount ?? 0) > 0 || (pendingPortfolioCount ?? 0) > 0 || (pendingChannelCount ?? 0) > 0 ||
     fieldPriceChangedCount > 0 || (openClaimCount ?? 0) > 0 || (needsReviewCount ?? 0) > 0 ||
     (pendingMonthlyReportCount ?? 0) > 0 || (pendingReengagementCount ?? 0) > 0 ||
-    pendingOnboardingReports.length > 0 ||
+    pendingOnboardingReports.length > 0 || careDue.length > 0 ||
     missingVisitContractCount > 0
 
   // 오늘 현장 문단속 — 미마감이 있으면 상단에 빨간 카드로 크게, 정상이면 아래에 한 줄로만.
@@ -472,6 +483,32 @@ export default async function DashboardPage() {
                   </p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-blue-400 shrink-0" />
+              </div>
+            </Link>
+          )}
+          {careDue.length > 0 && (
+            <Link
+              href={
+                careDue.length === 1
+                  ? `/dashboard/clients/${careDue[0].customerId}`
+                  : '/dashboard/clients'
+              }
+            >
+              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 hover:bg-amber-100 transition-colors">
+                <RefreshCw className="h-4 w-4 text-amber-600 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-amber-900">
+                    {careDue.length === 1
+                      ? `${careDue[0].customerName}님 현장, 다시 볼 때가 됐어요`
+                      : `다시 연락드릴 곳이 ${careDue.length}곳 있어요`}
+                  </p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    {careDue.length === 1
+                      ? careDue[0].advice
+                      : '지난 보고서에 적어둔 관리 시점이 됐어요 — 그때 본 내용으로 먼저 연락해보세요'}
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-amber-400 shrink-0" />
               </div>
             </Link>
           )}

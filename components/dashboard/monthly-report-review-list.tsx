@@ -4,7 +4,19 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
 import { FileText, Copy, Check, Send, X } from 'lucide-react'
-import { sendMonthlyReportAction, skipMonthlyReportAction } from '@/lib/actions/monthly-reports'
+import {
+  sendMonthlyReportAction,
+  skipMonthlyReportAction,
+  markCustomerRequestDoneAction,
+} from '@/lib/actions/monthly-reports'
+
+/** 이번 달 현장에서 고객이 추가로 부탁한 것 — 보내기 전에 처리 여부를 표시한다 */
+export interface ReviewRequest {
+  bookingId: string
+  date: string
+  note: string
+  done: boolean
+}
 
 export interface ReviewItem {
   id: string
@@ -12,11 +24,76 @@ export interface ReviewItem {
   customerName: string
   period: string // 'YYYY-MM'
   completedVisits: number
+  requests: ReviewRequest[]
 }
 
 function periodLabel(period: string): string {
   const [, m] = period.split('-')
   return `${Number(m)}월`
+}
+
+function dayLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString('ko-KR', {
+    month: 'numeric',
+    day: 'numeric',
+    timeZone: 'Asia/Seoul',
+  })
+}
+
+/**
+ * 현장 요청 처리 표시 — 리포트를 보내기 전에 사장님이 한 번 누른다.
+ *
+ * 왜 이 자리인가: 이걸 안 누르면 거래처가 받는 리포트 상단이 "요청 5건 · 처리 1건"처럼
+ * 우리가 일을 안 한 것처럼 보인다. 현장 요청은 처리 여부를 적을 칸이 아예 없었기 때문이다.
+ * 체크를 현장 직원에게 시키지 않는 이유는 입력을 늘리면 요청 자체를 안 적게 되어서다.
+ */
+function RequestChecklist({ requests }: { requests: ReviewRequest[] }) {
+  const [state, setState] = useState(requests)
+
+  const { execute } = useAction(markCustomerRequestDoneAction, {
+    onError: ({ error }) => {
+      toast.error(error.serverError ?? '처리에 실패했어요')
+      // 서버가 거절했으면 화면도 되돌린다 — 눌린 채로 두면 처리한 줄 알게 된다
+      setState(requests)
+    },
+  })
+
+  if (state.length === 0) return null
+
+  const doneCount = state.filter((r) => r.done).length
+
+  const toggle = (bookingId: string, done: boolean) => {
+    setState((prev) => prev.map((r) => (r.bookingId === bookingId ? { ...r, done } : r)))
+    execute({ bookingId, done })
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+      <p className="text-xs font-semibold text-amber-900">
+        현장에서 받은 요청 {state.length}건 · 처리 {doneCount}건
+      </p>
+      <p className="mt-0.5 text-[11px] text-amber-800/80">
+        처리한 건에 체크해 주세요. 체크해야 리포트에 &lsquo;처리 완료&rsquo;로 나가요
+      </p>
+      <ul className="mt-2 space-y-1.5">
+        {state.map((r) => (
+          <li key={r.bookingId}>
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="checkbox"
+                checked={r.done}
+                onChange={(e) => toggle(r.bookingId, e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-600"
+              />
+              <span className="text-xs leading-relaxed text-slate-700">
+                <span className="text-slate-400">{dayLabel(r.date)}</span> {r.note}
+              </span>
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }
 
 function ReviewRow({
@@ -72,6 +149,9 @@ function ReviewRow({
           </p>
         </div>
       </div>
+
+      {/* 현장 요청 처리 체크 — 미리보기보다 위에 둔다(보고 나서 고치면 다시 봐야 한다) */}
+      <RequestChecklist requests={item.requests} />
 
       {/* 미리보기 / 링크 복사 */}
       <div className="flex gap-2">

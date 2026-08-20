@@ -36,6 +36,8 @@ export interface RequestLike {
   booking_id: string
   scheduled_at: string
   request: string
+  /** 처리한 시각. 사장님이 월간 리포트 검토 화면에서 체크한다 */
+  done_at?: string | null
 }
 
 export interface MonthlySummary {
@@ -66,7 +68,15 @@ export interface MonthlySummary {
     resolutionPhotos: string[]
   }[]
   /** 현장에서 고객이 추가로 요청한 것 */
-  requests: { date: string; note: string }[]
+  requests: { date: string; note: string; done: boolean }[]
+  /**
+   * 현장 요청 중 처리 표시가 된 건수.
+   *
+   * ⚠️ 상단 '처리' 지표는 반드시 issueResolvedCount + requestDoneCount로 세야 한다.
+   * 예전엔 클레임만 분자에 넣으면서 분모('요청사항')에는 현장 요청까지 더해,
+   * 현장 요청을 성실히 적을수록 처리를 안 한 것처럼 보였다. 되돌리지 말 것.
+   */
+  requestDoneCount: number
   /** 달을 넘긴 미해결 건 — 다음 달 계획에 그대로 올린다 */
   carriedOver: { date: string; title: string }[]
 }
@@ -126,7 +136,8 @@ export function buildMonthlySummary(input: {
   const requests = requestRows
     .filter((r) => r.request.trim())
     .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
-    .map((r) => ({ date: r.scheduled_at, note: r.request.trim() }))
+    .map((r) => ({ date: r.scheduled_at, note: r.request.trim(), done: !!r.done_at }))
+  const requestDoneCount = requests.filter((r) => r.done).length
 
   const carriedOver = issuesSorted
     .filter((i) => !isResolved(i))
@@ -143,6 +154,7 @@ export function buildMonthlySummary(input: {
     issueResolveRate: issues.length > 0 ? Math.round((resolvedCount / issues.length) * 100) : null,
     issues,
     requests,
+    requestDoneCount,
     carriedOver,
   }
 }

@@ -120,3 +120,30 @@ export const skipMonthlyReportAction = action
     revalidatePath('/dashboard')
     return { success: true }
   })
+
+// 현장 요청 '처리했어요' 표시 — 사장님이 월간 리포트를 보내기 전 검토 화면에서 누른다.
+//
+// 왜 여기서 누르나: 요청을 적는 사람(현장 직원)에게 체크를 하나 더 시키면 안 적게 되고,
+// 그러면 요청 자체가 사라진다(현장 앱은 입력을 늘리지 않는 것이 원칙). 사장님은 어차피
+// 보내기 전에 이 화면에서 내용을 읽으므로, 그 자리에서 한 번 누르는 게 가장 싸다.
+export const markCustomerRequestDoneAction = action
+  .schema(z.object({ bookingId: z.string().uuid(), done: z.boolean() }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    const { error } = await db
+      .from('bookings')
+      .update({
+        customer_request_done_at: parsedInput.done ? new Date().toISOString() : null,
+      } as never)
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', businessId)
+
+    if (error) {
+      console.error('[MonthlyReport] 현장 요청 처리 표시 실패:', error)
+      throw new Error('[APP] 처리에 실패했어요. 다시 눌러주세요')
+    }
+
+    revalidatePath('/dashboard/monthly-reports')
+    return { success: true }
+  })

@@ -70,7 +70,7 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
   const { data: bookingsRaw } = (await db
     .from('bookings')
     .select(
-      'id, scheduled_at, status, worker_id, memo, customer_request, contract_id, checkin_at, checkout_at, checklist_photos, quotes!quote_id(cleaning_type)' as never,
+      'id, scheduled_at, status, worker_id, memo, customer_request, customer_request_done_at, contract_id, checkin_at, checkout_at, checklist_photos, quotes!quote_id(cleaning_type)' as never,
     )
     .eq('business_id', businessId)
     .or(orFilter)
@@ -84,6 +84,7 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
           VisitLike & {
             memo: string | null
             customer_request: string | null
+            customer_request_done_at: string | null
             contract_id: string | null
             quotes: { cleaning_type: string | null } | null
           }
@@ -174,7 +175,12 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
     issues: issueRows ?? [],
     requests: bookings
       .filter((b) => b.customer_request)
-      .map((b) => ({ booking_id: b.id, scheduled_at: b.scheduled_at, request: b.customer_request! })),
+      .map((b) => ({
+        booking_id: b.id,
+        scheduled_at: b.scheduled_at,
+        request: b.customer_request!,
+        done_at: b.customer_request_done_at ?? null,
+      })),
   })
 
   // 다음에 손봐야 할 것 — 보고서에 적어둔 관리 소견 중 아직 안 지난 것
@@ -249,7 +255,11 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
               특이사항 = 직원이 현장에서 남긴 것
               미리한 조치 = 문제 되기 전에 짚어 알려드린 것(향후 관리 안내) */}
           <Metric value={`${summary.issueCount + summary.requests.length}건`} label="요청사항" />
-          <Metric value={`${summary.issueResolvedCount}건`} label="처리" accent />
+          {/* ⚠️ 분자는 클레임 처리 + 현장 요청 처리를 함께 센다.
+              분모('요청사항')에는 현장 요청이 들어가는데 분자에는 안 들어가던 시절,
+              직원이 현장 요청을 성실히 적을수록 우리가 일을 안 한 것처럼 보였다.
+              ⛔ issueResolvedCount 하나만 쓰던 형태로 되돌리지 말 것. */}
+          <Metric value={`${summary.issueResolvedCount + summary.requestDoneCount}건`} label="처리" accent />
           <Metric value={`${summary.siteNotes.length}건`} label="특이사항" />
           <Metric value={`${carePlans.length}건`} label="미리한 조치" />
         </section>
@@ -306,6 +316,11 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
                       {formatShortDate(r.date)}
                     </span>
                     <span className="text-[14px] font-semibold text-slate-900">현장 요청</span>
+                    {r.done && (
+                      <span className="rounded-sm border border-emerald-300 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+                        처리 완료
+                      </span>
+                    )}
                   </div>
                   <p className="text-[13px] leading-[1.7] text-slate-600 mt-1.5 whitespace-pre-wrap">{r.note}</p>
                 </li>
