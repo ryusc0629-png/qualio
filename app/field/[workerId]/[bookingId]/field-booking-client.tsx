@@ -422,11 +422,11 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
           <div className="rounded-xl bg-blue-50 border border-blue-100 p-4 flex items-start gap-2.5 text-sm text-blue-800">
             <Play className="h-4 w-4 mt-0.5 shrink-0" />
             <p>
+              {/* '나중에 뭐가 나타난다'는 안내는 지웠다 — 지금 할 일이 아니라 화면 설명이라 읽는 부담만 준다.
+                  대신 사진이 왜 필요한지(출근 도장)를 밝힌다. 그게 직원이 실제로 궁금한 것이다. */}
               {requiresLockup
                 ? '도착하면 문 여는 사진을 먼저 찍고, 맨 아래 초록 버튼을 눌러 작업을 시작하세요.'
                 : '현장에 도착하면 맨 아래 초록 버튼을 눌러 작업을 시작하세요.'}
-              <br />
-              <span className="text-blue-600">작업 보고서와 추가 서비스는 시작한 뒤에 나타나요.</span>
             </p>
           </div>
         )}
@@ -439,9 +439,12 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
               <p className="font-bold text-amber-900">문단속 인증 (필수)</p>
             </div>
             <div className="p-4 space-y-4">
+              {/* 왜 찍는지를 먼저 말한다 — '문단속'만으로는 남의 일 같지만, 출퇴근 도장이라고 하면 내 일이 된다 */}
               <p className="text-xs text-amber-800">
-                이 현장은 문단속이 중요해요. <span className="font-semibold">도착해서 문 열 때</span> 한 장,
-                <span className="font-semibold"> 다 끝내고 잠근 뒤</span> 한 장 찍어 올려주세요.
+                이 사진이 <span className="font-semibold">출퇴근 도장</span>이에요.
+                <span className="font-semibold"> 문 열 때</span> 한 장 올리면 출근,
+                <span className="font-semibold"> 다 끝내고 잠근 뒤</span> 한 장 올리면 퇴근으로 기록돼요.
+                잠금 사진 칸은 맨 아래에 있어요.
               </p>
 
               {/* ① 도착 · 문 오픈 */}
@@ -475,7 +478,7 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
                       )}
                     </div>
                   ))}
-                  {openPhotos.length < 5 && (
+                  {openPhotos.length < 1 && (
                     <button
                       type="button"
                       onClick={() => openInputRef.current?.click()}
@@ -491,7 +494,6 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
                   type="file"
                   accept="image/*"
                   capture="environment"
-                  multiple
                   className="hidden"
                   onChange={(e) => {
                     if (e.target.files?.length) uploadLockupPhotos(e.target.files, 'open', openPhotos, setOpenPhotos, saveOpenWithGeo)
@@ -500,70 +502,6 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
                 />
               </div>
 
-              {/* ② 마감 · 문 잠금 — 작업 중일 때만 (도착 단계에선 숨김) */}
-              {currentStatus === 'in_progress' && (
-              <div className="space-y-2 border-t border-amber-200 pt-3">
-                <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-900">
-                  <Lock className="h-4 w-4" />
-                  <span>② 마감 · 문 잠금 사진</span>
-                  {checkoutTime && (
-                    <span className="ml-auto flex items-center gap-1 text-xs font-semibold text-emerald-700">
-                      <CheckCircle className="h-3.5 w-3.5" /> 문단속 완료 {fmtKstTime(checkoutTime)}
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {lockupPhotos.map((photo) => (
-                    <div key={photo.url || 'up'} className="relative w-20 h-20 rounded-lg overflow-hidden border bg-white">
-                      {photo.uploading ? (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-                        </div>
-                      ) : (
-                        <>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={photo.url} alt="잠금 사진" className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => removeLockupPhoto(photo.url, lockupPhotos, setLockupPhotos, saveLockupNoGeo)}
-                            className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
-                          >
-                            <X className="h-3 w-3 text-white" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                  {lockupPhotos.length < 5 && (
-                    <button
-                      type="button"
-                      onClick={() => lockupInputRef.current?.click()}
-                      className="w-20 h-20 rounded-lg border-2 border-dashed border-amber-400/60 flex flex-col items-center justify-center gap-1 bg-white/50"
-                    >
-                      <Camera className="h-5 w-5 text-amber-600" />
-                      <span className="text-[10px] text-amber-700">사진 추가</span>
-                    </button>
-                  )}
-                </div>
-                <input
-                  ref={lockupInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files?.length) uploadLockupPhotos(e.target.files, 'lockup', lockupPhotos, setLockupPhotos, saveLockupWithGeo)
-                    e.target.value = ''
-                  }}
-                />
-                {!checkoutTime && (
-                  <p className="text-[11px] text-amber-700">
-                    나가기 전 꼭 올려주세요. 예상 시간이 지나도 안 올라오면 사장님께 알림이 가요.
-                  </p>
-                )}
-              </div>
-              )}
             </div>
           </div>
         )}
@@ -712,6 +650,75 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
             fallbackTotal={booking.finalPrice}
             onTotalChange={setLiveTotal}
           />
+        )}
+
+        {/* ② 마감 · 문 잠금 — 작업 순서상 맨 마지막이라 화면에서도 맨 아래에 둔다.
+            도착 단계에서 두 칸이 같이 보이면 "지금 뭘 찍으라는 거지?" 하고 헷갈린다. */}
+        {requiresLockup && currentStatus === 'in_progress' && (
+          <div className="rounded-xl border-2 border-amber-400 bg-amber-50 overflow-hidden">
+            <div className="px-4 py-3 flex items-center gap-2 border-b border-amber-200">
+              <Lock className="h-4 w-4 text-amber-600" />
+              <p className="font-bold text-amber-900">마지막 — 문 잠그고 사진 (퇴근 도장)</p>
+            </div>
+            <div className="p-4">
+            <div className="space-y-2">
+              {checkoutTime && (
+                <div className="flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                  <CheckCircle className="h-3.5 w-3.5" /> 퇴근 도장 찍혔어요 · {fmtKstTime(checkoutTime)}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {lockupPhotos.map((photo) => (
+                  <div key={photo.url || 'up'} className="relative w-20 h-20 rounded-lg overflow-hidden border bg-white">
+                    {photo.uploading ? (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    ) : (
+                      <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={photo.url} alt="잠금 사진" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removeLockupPhoto(photo.url, lockupPhotos, setLockupPhotos, saveLockupNoGeo)}
+                          className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
+                        >
+                          <X className="h-3 w-3 text-white" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+                {lockupPhotos.length < 1 && (
+                  <button
+                    type="button"
+                    onClick={() => lockupInputRef.current?.click()}
+                    className="w-20 h-20 rounded-lg border-2 border-dashed border-amber-400/60 flex flex-col items-center justify-center gap-1 bg-white/50"
+                  >
+                    <Camera className="h-5 w-5 text-amber-600" />
+                    <span className="text-[10px] text-amber-700">사진 추가</span>
+                  </button>
+                )}
+              </div>
+              <input
+                ref={lockupInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.length) uploadLockupPhotos(e.target.files, 'lockup', lockupPhotos, setLockupPhotos, saveLockupWithGeo)
+                  e.target.value = ''
+                }}
+              />
+              {!checkoutTime && (
+                <p className="text-[11px] text-amber-700">
+                  나가기 전 꼭 올려주세요. 예상 시간이 지나도 안 올라오면 사장님께 알림이 가요.
+                </p>
+              )}
+            </div>
+            </div>
+          </div>
         )}
 
         {/* 완료 상태 안내 */}
