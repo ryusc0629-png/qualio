@@ -29,8 +29,8 @@ function classify(e: unknown): AiFailure {
   return 'unknown'
 }
 
-/** Claude 호출 실패를 사장님용 문구로 바꾼다. 원인은 Sentry·로그에만 남는다. */
-export function toAiAppError(e: unknown, where: string): Error {
+/** 실패 원인을 로그·Sentry에만 남긴다(화면 문구는 만들지 않음). */
+function reportAiFailure(e: unknown, where: string): void {
   const kind = classify(e)
   console.error(`[AI] ${where} 실패 (${kind}):`, e)
 
@@ -39,8 +39,17 @@ export function toAiAppError(e: unknown, where: string): Error {
     level: kind === 'billing' || kind === 'config' ? 'fatal' : 'error',
     tags: { area: 'ai', ai_failure: kind, ai_where: where },
   })
+}
 
-  return new Error(MESSAGES[kind])
+/** 사장님 화면에 띄울 문구로만 바꾼다(보고는 하지 않음 — 이미 보고한 뒤에 쓴다). */
+function aiUserError(e: unknown): Error {
+  return new Error(MESSAGES[classify(e)])
+}
+
+/** Claude 호출 실패를 사장님용 문구로 바꾼다. 원인은 Sentry·로그에만 남는다. */
+export function toAiAppError(e: unknown, where: string): Error {
+  reportAiFailure(e, where)
+  return aiUserError(e)
 }
 
 /**
@@ -56,19 +65,54 @@ export function getClaude(where: string): Anthropic {
   const client = new Anthropic({ apiKey })
 
   const create = client.messages.create.bind(client.messages)
-  client.messages.create = (async (...args: Parameters<typeof create>) => {
-    try {
-      return await create(...args)
-    } catch (e) {
-      throw toAiAppError(e, where)
-    }
+  client.messages.create = ((...args: Parameters<typeof create>) => {
+    const original = create(...args)
+
+    // ⛔ async 함수로 감싸지 말 것. SDK의 스트리밍은 내부에서 create(...).withResponse()를 부르는데,
+    //    감싸는 순간 평범한 Promise가 되어 그 메서드가 사라진다. 실제로 2026-08-16~08-20 나흘 동안
+    //    시방서·상담 챗봇이 "withResponse is not a function"으로 통째로 죽어 있었다.
+    //    그래서 원본(APIPromise)을 그대로 두고, 기다리는 경로(then/catch)에서만 문구를 바꾼다.
+    const onRejectedDefault = (e: unknown): never => { throw toAiAppError(e, where) }
+
+    return new Proxy(original, {
+      get(target, prop) {
+        if (prop === 'then') {
+          return (
+            onFulfilled?: ((v: unknown) => unknown) | null,
+            onRejected?: ((r: unknown) => unknown) | null,
+          ) => target.then(onFulfilled, (e) => (onRejected ? onRejected(toAiAppError(e, where)) : onRejectedDefault(e)))
+        }
+        if (prop === 'catch') {
+          return (onRejected?: ((r: unknown) => unknown) | null) =>
+            target.then(undefined, (e) => (onRejected ? onRejected(toAiAppError(e, where)) : onRejectedDefault(e)))
+        }
+        // withResponse·asResponse 등 APIPromise 고유 메서드는 원본 그대로 넘긴다
+        const value = Reflect.get(target, prop, target)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    })
   }) as typeof client.messages.create
 
   const stream = client.messages.stream.bind(client.messages)
   client.messages.stream = ((...args: Parameters<typeof stream>) => {
     const s = stream(...args)
-    // 스트림 도중 끊긴 경우도 우리에게 알린다 (호출부는 자체 catch로 화면을 처리)
-    s.on('error', (e) => toAiAppError(e, `${where}(스트림)`))
+
+    // 'error' 리스너가 없으면 스트림 실패가 처리되지 않은 채 떠돈다 — 보고는 여기서 한 번만 한다
+    let reported = false
+    s.on('error', (e) => { reported = true; reportAiFailure(e, `${where}(스트림)`) })
+
+    // finalMessage()가 원본 오류를 그대로 던지면 화면엔 "요청 처리 중 오류가 발생했습니다"만 떠서
+    // 사장님이 무엇을 해야 할지 알 수 없다. 여기서 사장님용 문구로 바꾼다.
+    const finalMessage = s.finalMessage.bind(s)
+    s.finalMessage = async () => {
+      try {
+        return await finalMessage()
+      } catch (e) {
+        if (!reported) reportAiFailure(e, `${where}(스트림)`)
+        throw aiUserError(e)
+      }
+    }
+
     return s
   }) as typeof client.messages.stream
 
