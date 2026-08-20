@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { PLANS } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { formatMoney } from '@/lib/format/money'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 interface SuccessPageProps {
   searchParams: Promise<{
@@ -59,6 +61,20 @@ export default async function PaymentSuccessPage({ searchParams }: SuccessPagePr
   const claimsPaid = status === 'paid'
   const isPending = claimsPaid && !isActivated
 
+  // 실제로 결제된 금액 — 주소창의 ?amount= 는 손으로 바꿔 넣을 수 있으니 DB 주문에서 읽는다.
+  // 사장님이 카드 결제 문자와 대조하는 지점이라 공급가액·부가세로 쪼개 보여준다.
+  const { data: paidOrder } = (await (db as unknown as SupabaseClient)
+    .from('kcp_payment_orders')
+    .select('amount')
+    .eq('ordr_idxx', ordr ?? '')
+    .eq('status', 'paid')
+    .maybeSingle()) as unknown as { data: { amount: number } | null }
+
+  // 총액에서 되짚어 공급가액을 구한다(총액 = 공급가액 × 1.1)
+  const paidTotal = paidOrder?.amount ?? null
+  const paidSupply = paidTotal != null ? Math.round(paidTotal / 1.1) : null
+  const paidVat = paidTotal != null && paidSupply != null ? paidTotal - paidSupply : null
+
   const periodEndLabel = subscription?.current_period_end
     ? new Date(subscription.current_period_end).toLocaleDateString('ko-KR', {
         year: 'numeric',
@@ -87,6 +103,19 @@ export default async function PaymentSuccessPage({ searchParams }: SuccessPagePr
             <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground text-left space-y-1">
               {ordr && <p>주문번호: <span className="font-mono text-xs">{ordr}</span></p>}
               {periodEndLabel && <p>이용 기간: {periodEndLabel}까지</p>}
+              {paidTotal != null && paidSupply != null && paidVat != null && (
+                <div className="pt-2 mt-2 border-t space-y-1">
+                  <p className="flex justify-between">
+                    <span>이용료 (공급가액)</span><span>{formatMoney(paidSupply)}</span>
+                  </p>
+                  <p className="flex justify-between">
+                    <span>부가세 10%</span><span>{formatMoney(paidVat)}</span>
+                  </p>
+                  <p className="flex justify-between font-semibold text-foreground pt-1 border-t">
+                    <span>결제 금액</span><span>{formatMoney(paidTotal)}</span>
+                  </p>
+                </div>
+              )}
             </div>
             <Link href="/dashboard">
               <Button className="w-full" size="lg">대시보드로 이동하기</Button>

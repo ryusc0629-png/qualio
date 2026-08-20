@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { Check, Star, Loader2, ArrowUp, ArrowDown, CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { PAID_PLANS, PLANS, formatPrice, formatPriceWithVat } from '@/lib/config/plans'
+import { PAID_PLANS, PLANS, formatPrice, formatPriceWithVat, vatOf, withVat } from '@/lib/config/plans'
+import { formatMoney } from '@/lib/format/money'
 import { applyLifetimeDiscount, betaBadgeLabel, LAUNCH_DATE_LABEL, isBeforeLaunch } from '@/lib/config/beta'
 import { BILLING_COPY, IS_RECURRING_BILLING } from '@/lib/config/billing'
 import type { PlanId } from '@/lib/config/plans'
@@ -470,6 +471,28 @@ export function UpgradeForm({ businessId, currentPlan, businessName, nextPlan, c
 
       {/* 액션 버튼 */}
       <div className="flex flex-col items-center gap-3">
+        {/* 누르기 직전에 '실제로 얼마가 빠지는지'를 공급가액·부가세로 쪼개 보여준다.
+            결제창에 뜨는 숫자와 여기 숫자가 같아야 "왜 더 나왔지?"가 안 생긴다. */}
+        {showPaymentFlow && selectedPlanId && (() => {
+          const supply = chargeOf(PLANS[selectedPlanId].price)
+          return (
+            <div className="w-full max-w-sm rounded-xl border bg-muted/30 p-4 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">이용료 (공급가액)</span>
+                <span>{formatMoney(supply)}</span>
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-muted-foreground">부가세 10%</span>
+                <span>{formatMoney(vatOf(supply))}</span>
+              </div>
+              <div className="flex justify-between mt-2 pt-2 border-t font-bold">
+                <span>매달 결제되는 금액</span>
+                <span className="text-primary">{formatMoney(withVat(supply))}</span>
+              </div>
+            </div>
+          )
+        })()}
+
         <Button
           size="lg"
           className="w-full max-w-sm"

@@ -63,7 +63,7 @@ export async function notifyChargeFailed({ businessId, planLabel, amount }: Char
   const text = [
     '[퀄리오] 카드 결제가 되지 않았어요',
     '',
-    `${planLabel} 플랜 ${amountText} 결제에 실패했어요.`,
+    `${planLabel} 플랜 ${amountText}(부가세 포함) 결제에 실패했어요.`,
     '카드 유효기간이 지났거나 한도를 넘은 경우가 많아요.',
     '',
     '지금은 그대로 쓰실 수 있고, 7일 안에 카드를 다시 등록해주시면 계속 이어집니다.',

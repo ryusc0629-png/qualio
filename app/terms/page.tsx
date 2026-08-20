@@ -62,6 +62,11 @@ export default function TermsPage() {
             이용자는 서비스 내 설정에서 언제든지 구독을 해지할 수 있으며, 해지 시 다음 결제일부터
             자동 결제가 중단됩니다. 결제는 결제대행사 포트원(코리아포트원)을 통해 처리됩니다.
           </p>
+          {/* 부가세는 계약 금액의 일부라 약관 본문에 못 박는다 — 표에만 적으면 근거가 약하다 */}
+          <p className="text-muted-foreground leading-relaxed mb-3">
+            아래 표에 기재된 금액은 <b className="text-foreground">부가가치세가 포함되지 않은 공급가액</b>이며,
+            실제 청구 금액은 여기에 부가가치세 10%를 더한 금액입니다. 결제 수단과 관계없이 동일하게 적용됩니다.
+          </p>
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted">
