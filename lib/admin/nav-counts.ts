@@ -42,7 +42,7 @@ export async function getAdminNavCounts(): Promise<AdminNavCounts> {
         .select('id', { count: 'exact', head: true })
         .eq('contacted', false),
       // 아래 둘은 계산이 필요해 각자 모듈에서 가져온다
-      import('@/lib/admin/onboarding-gaps').then((m) => m.getOnboardingGaps()),
+      import('@/lib/admin/onboarding-gaps').then((m) => m.getActivationFunnel()),
       import('@/lib/admin/domain-outreach').then((m) => m.getDomainOutreachTargets()),
     ])
 
@@ -50,7 +50,7 @@ export async function getAdminNavCounts(): Promise<AdminNavCounts> {
       requests: requests.count ?? 0,
       bugReports: bugs.count ?? 0,
       academyInquiries: academy.count ?? 0,
-      onboardingGaps: gaps.length,
+      onboardingGaps: gaps.rows.length,
       domainOutreach: outreach.filter((t) => t.dueNow).length,
     }
   } catch (e) {

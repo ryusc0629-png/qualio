@@ -32,7 +32,7 @@ function buildGroups(counts: AdminNavCounts): NavGroup[] {
       items: [
         { href: '/admin/requests', label: '대행 요청', count: counts.requests },
         { href: '/admin/domain-outreach', label: '주소 권유', count: counts.domainOutreach },
-        { href: '/admin/onboarding-gaps', label: '첫 세팅 미완', count: counts.onboardingGaps },
+        { href: '/admin/onboarding-gaps', label: '견적 못 보낸 곳', count: counts.onboardingGaps },
         { href: '/admin/bug-reports', label: '오류 신고', count: counts.bugReports },
         { href: '/admin/refunds', label: '환불 처리' },
         { href: '/admin/academy-inquiries', label: '학원 제휴', count: counts.academyInquiries },
