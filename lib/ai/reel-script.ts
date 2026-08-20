@@ -167,3 +167,98 @@ export function scriptDuration(lines: ReelLine[]): number {
   return lines.reduce((sum, l) => sum + l.seconds, 0)
 }
 
+
+// ── 자막 쪼개기 ────────────────────────────────────────────
+//
+// 한 문장을 통째로 3초씩 띄우면 화면이 멈춘 것처럼 보인다.
+// 요즘 숏폼 자막은 1~2초마다 다음 조각으로 넘어가면서 계속 움직인다.
+// 그래서 '문장 = 음성 한 마디'는 그대로 두고, 화면에 뜨는 자막만 더 잘게 나눈다.
+// 조각들의 시간 합이 그 문장의 음성 길이와 같으므로 목소리와 어긋나지 않는다.
+
+/** 자막 한 조각이 화면에 머무는 목표 시간(초) */
+const TARGET_CAPTION_SECONDS = 1.4
+/** 이보다 짧게는 쪼개지 않는다 — 읽을 틈이 없다 */
+const MIN_CAPTION_SECONDS = 0.8
+/** 한 조각에 넣을 글자 수 상한 — 시간이 짧아도 글이 길면 한 줄에 안 들어간다 */
+const MAX_CAPTION_CHARS = 13
+
+export interface ReelCaption {
+  text: string
+  /** 영상 전체 기준 시작 시각(초) */
+  start: number
+  seconds: number
+  emphasis: boolean
+}
+
+/**
+ * 문장을 단어 경계에서 n조각으로 나눈다.
+ * 글자 수가 고르게 되도록 담되 순서는 그대로 둔다.
+ */
+function splitWords(text: string, pieces: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean)
+  if (pieces <= 1 || words.length <= 1) return [text]
+
+  const n = Math.min(pieces, words.length)
+  const perPiece = text.length / n
+  const out: string[] = []
+  let current: string[] = []
+
+  for (const word of words) {
+    current.push(word)
+    const remainingPieces = n - out.length - 1
+    const remainingWords = words.length - (out.reduce((s, p) => s + p.split(' ').length, 0) + current.length)
+    // 남은 조각마다 최소 한 단어는 남겨둬야 한다
+    const mustClose = remainingWords <= remainingPieces
+    if ((current.join(' ').length >= perPiece || mustClose) && out.length < n - 1) {
+      out.push(current.join(' '))
+      current = []
+    }
+  }
+  if (current.length > 0) out.push(current.join(' '))
+  return out
+}
+
+/**
+ * 나레이션 문장들 → 화면에 뜨는 자막 조각들.
+ *
+ * 문장의 음성 길이를 조각들이 글자 수 비율로 나눠 갖는다.
+ * 영상 클립 길이와는 아무 상관이 없다 — 영상은 뒤에 깔리는 배경일 뿐이다.
+ */
+export function toCaptions(lines: ReelLine[]): ReelCaption[] {
+  const captions: ReelCaption[] = []
+  let lineStart = 0
+
+  for (const line of lines) {
+    // 시간으로도 나누고 글자 수로도 나눠서, 둘 중 더 잘게 쪼개는 쪽을 따른다.
+    // (짧은 문장을 억지로 쪼개지 않도록 MIN_CAPTION_SECONDS로 상한을 건다)
+    const byTime = Math.round(line.seconds / TARGET_CAPTION_SECONDS)
+    const byLength = Math.ceil(line.text.length / MAX_CAPTION_CHARS)
+    const pieces = Math.max(
+      1,
+      Math.min(Math.max(byTime, byLength), Math.floor(line.seconds / MIN_CAPTION_SECONDS)),
+    )
+    const chunks = splitWords(line.text, pieces)
+    const totalChars = chunks.reduce((s, c) => s + c.length, 0) || 1
+
+    let offset = 0
+    chunks.forEach((text, i) => {
+      // 마지막 조각은 남은 시간을 전부 가져간다 — 반올림 오차가 쌓여 목소리와 어긋나지 않게
+      const seconds =
+        i === chunks.length - 1
+          ? line.seconds - offset
+          : Math.round(((line.seconds * text.length) / totalChars) * 100) / 100
+
+      captions.push({
+        text,
+        start: Math.round((lineStart + offset) * 100) / 100,
+        seconds: Math.round(seconds * 100) / 100,
+        emphasis: line.emphasis,
+      })
+      offset += seconds
+    })
+
+    lineStart += line.seconds
+  }
+
+  return captions
+}

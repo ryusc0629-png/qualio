@@ -1,4 +1,4 @@
-import type { ReelLine } from '@/lib/ai/reel-script'
+import { toCaptions, type ReelLine, type ReelCaption } from '@/lib/ai/reel-script'
 
 // 릴스 합성 — 나레이션이 뼈대다.
 //
@@ -48,100 +48,94 @@ const OUTRO_SECONDS = 2
 
 type Element = Record<string, unknown>
 
-/** 화면 구간 — 무엇을 띄우고, 어떤 문장들이 그 위에 올라가는지 */
-export interface Segment {
+/** 배경에 깔리는 화면 한 장(사진 또는 영상 클립) */
+export interface Visual {
+  kind: 'image' | 'video'
+  source: string
   start: number
   duration: number
-  lines: { line: ReelLine; start: number }[]
 }
 
-/**
- * 대본을 화면에 나눠 붙인다: 작업 전 사진 · 클립들 · 작업 후 사진.
- *
- * 첫 문장은 작업 전 사진 위에, 마지막 문장은 작업 후 사진 위에.
- * 가운데 문장들은 클립에 나누되 **클립이 실제로 몇 초짜리인지에 비례해서** 나눈다 —
- * 3초짜리와 15초짜리에 같은 분량을 얹으면 짧은 쪽이 계속 되감긴다.
- *
- * 클립이 1~2개뿐이어도 그대로 동작한다(그 개수만큼만 화면이 생긴다).
- */
-export function planSegments(lines: ReelLine[], clipDurations: number[]): Segment[] {
-  const usable = clipDurations.filter((d) => d > 0)
-  const first = lines.slice(0, 1)
-  const last = lines.length >= 3 ? lines.slice(-1) : []
-  const middle = lines.slice(first.length, lines.length - last.length)
-
-  // 클립이 하나도 없으면 사진 두 장에 전부 얹는다 (릴스를 못 만드는 것보단 낫다)
-  const groups: ReelLine[][] =
-    usable.length === 0
-      ? [first, [...middle, ...last]]
-      : [first, ...spreadByWeight(middle, usable), last]
-
-  const segments: Segment[] = []
-  let cursor = 0
-
-  for (const group of groups) {
-    // 문장이 하나도 안 배정된 화면은 최소 시간만 준다 (깜빡이고 지나가지 않게)
-    const duration = group.length > 0 ? group.reduce((s, l) => s + l.seconds, 0) : 1.5
-    let lineCursor = cursor
-    const placed = group.map((line) => {
-      const at = lineCursor
-      lineCursor += line.seconds
-      return { line, start: at }
-    })
-    segments.push({ start: cursor, duration, lines: placed })
-    cursor += duration
-  }
-
-  return segments
-}
+/** 작업 전·후 사진이 화면에 머무는 시간(초) */
+const PHOTO_SECONDS = 3
 
 /**
- * 문장들을 가중치(클립 길이)에 비례해 순서대로 나눠 담는다.
- * 순서는 절대 섞지 않는다 — 섞이면 말이 앞뒤가 안 맞는다.
- * 클립 수보다 문장이 적으면 뒤쪽 클립은 빈 채로 둔다(최소 시간만 받는다).
+ * 배경 화면을 깐다: 작업 전 사진 → 클립들 → 작업 후 사진.
+ *
+ * ★영상은 뒤에 깔리는 배경일 뿐이다. 자막이 무슨 말을 하고 있는지와 맞출 필요가 없다.
+ *  그래서 클립은 각자 원래 길이만큼 순서대로 나오고, 나레이션이 끝날 때까지 처음부터 다시 돈다.
+ *  (예전엔 자막 길이에 맞춰 클립을 늘렸다 줄였다 해서, 짧은 클립이 계속 되감기고
+ *   긴 클립은 앞부분만 잘려 나왔다.)
+ *
+ * 클립 길이를 모르면(예전 보고서) 기본값으로 잡는다 — 배경이라 조금 어긋나도 티가 안 난다.
  */
-function spreadByWeight(lines: ReelLine[], weights: number[]): ReelLine[][] {
-  const buckets: ReelLine[][] = weights.map(() => [])
-  if (lines.length === 0) return buckets
+export function planVisuals(
+  totalSeconds: number,
+  beforePhotoUrl: string,
+  clips: ReelClip[],
+  afterPhotoUrl: string,
+): Visual[] {
+  const out: Visual[] = []
+  const photo = Math.min(PHOTO_SECONDS, totalSeconds / 3)
 
-  const totalWeight = weights.reduce((a, b) => a + b, 0)
-  // 각 클립이 가져갈 문장 수 — 최소 1개씩은 주되, 문장이 모자라면 앞에서부터 채운다
-  const quota = weights.map((w) => Math.max(1, Math.round((lines.length * w) / totalWeight)))
+  // 앞사진
+  out.push({ kind: 'image', source: beforePhotoUrl, start: 0, duration: photo })
 
+  // 가운데 = 클립들이 순서대로, 다 돌면 처음부터 다시
+  const middleStart = photo
+  const middleEnd = Math.max(middleStart, totalSeconds - photo)
+  const usable = clips.filter((c) => c.url && c.duration > 0)
+
+  let cursor = middleStart
   let i = 0
-  for (let b = 0; b < buckets.length; b++) {
-    const remainingBuckets = buckets.length - b - 1
-    // 뒤 클립들에 최소 1개씩 남겨둔다
-    const maxTake = Math.max(0, lines.length - i - remainingBuckets)
-    const take = b === buckets.length - 1 ? lines.length - i : Math.min(quota[b], maxTake)
-    buckets[b] = lines.slice(i, i + take)
-    i += take
+  // 클립이 하나도 없으면 앞사진을 그만큼 더 오래 띄운다
+  if (usable.length === 0) {
+    out[0].duration = middleEnd
+  } else {
+    // 한 바퀴가 너무 짧아 무한히 도는 것을 막는 안전장치
+    const guard = 200
+    while (cursor < middleEnd - 0.05 && out.length < guard) {
+      const clip = usable[i % usable.length]
+      const duration = Math.min(clip.duration, middleEnd - cursor)
+      out.push({ kind: 'video', source: clip.url, start: Math.round(cursor * 100) / 100, duration: Math.round(duration * 100) / 100 })
+      cursor += duration
+      i++
+    }
   }
 
-  return buckets
+  // 뒷사진
+  out.push({
+    kind: 'image',
+    source: afterPhotoUrl,
+    start: Math.round(middleEnd * 100) / 100,
+    duration: Math.round((totalSeconds - middleEnd) * 100) / 100,
+  })
+
+  return out.filter((v) => v.duration > 0.05)
 }
 
-/** 자막 한 줄 — 화면 가운데, 한 줄, 흰색(강조는 노랑) */
-function captionElement(line: ReelLine, start: number): Element {
+/** 자막 한 조각 — 화면 가운데, 흰색(강조는 노랑) */
+function captionElement(cap: ReelCaption): Element {
   return {
     type: 'text',
     track: 3,
-    time: start,
-    duration: line.seconds,
+    time: cap.start,
+    duration: cap.seconds,
     width: '86%',
     height: 'auto',
     x_anchor: '50%',
     y_anchor: '50%',
     y: '50%',
-    text: line.text,
+    text: cap.text,
     font_family: FONT,
     font_weight: '800',
-    font_size: '6.2 vmin',
-    fill_color: line.emphasis ? EMPHASIS_COLOR : '#ffffff',
+    font_size: '6.6 vmin',
+    fill_color: cap.emphasis ? EMPHASIS_COLOR : '#ffffff',
     stroke_color: STROKE,
     stroke_width: '1.1 vmin',
     line_height: '135%',
-    animations: [{ time: 0, duration: 0.25, easing: 'quadratic-out', type: 'fade' }],
+    // 조각이 1~2초마다 바뀌므로 페이드는 짧게 — 길면 다음 조각과 겹쳐 보인다
+    animations: [{ time: 0, duration: 0.15, easing: 'quadratic-out', type: 'fade' }],
   }
 }
 
@@ -150,84 +144,74 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
   if (!apiKey) throw new Error('[APP] 영상 편집 서비스가 설정되지 않았어요')
 
   const fadeIn = [{ time: 0, duration: 0.4, easing: 'quadratic-out', type: 'fade' }]
-  const segments = planSegments(input.lines, input.clips.map((c) => c.duration))
-  const beforeSeg = segments[0]
-  const afterSeg = segments[segments.length - 1]
-  // 가운데 화면들 = 클립. 클립이 하나도 없으면 빈 배열이라 사진 두 장만 나간다.
-  const clipSegs = segments.slice(1, -1)
-  const narrationEnd = segments.reduce((s, seg) => s + seg.duration, 0)
+
+  // 전체 길이는 나레이션이 정한다 — 영상 클립 길이와는 무관하다
+  const narrationEnd = input.lines.reduce((s, l) => s + l.seconds, 0)
   const total = Math.round((narrationEnd + OUTRO_SECONDS) * 10) / 10
 
-  const visual: Element[] = [
-    // ── 작업 전 사진 ────────────────────────────────────
-    {
-      name: 'before-photo',
-      type: 'image',
-      track: 1,
-      time: beforeSeg.start,
-      duration: beforeSeg.duration,
-      width: '100%',
-      height: '100%',
-      x_anchor: '50%',
-      y_anchor: '50%',
-      fit: 'cover',
-      source: input.beforePhotoUrl,
-    },
-    // ── 작업 중 영상 클립 (1~3개) ───────────────────────
-    ...clipSegs.map((seg, i) => ({
-      name: `clip-${i + 1}`,
-      type: 'video',
-      track: 1,
-      time: seg.start,
-      duration: seg.duration,
-      width: '100%',
-      height: '100%',
-      x_anchor: '50%',
-      y_anchor: '50%',
-      fit: 'cover',
-      // 화면 길이가 나레이션을 따라가므로 클립이 그보다 짧을 수 있다(현장 안내는 '각 10초 이내'라
-      // 3~4초짜리도 올라온다). 반복해 채우지 않으면 남는 시간만큼 정지 화면이 되는데,
-      // 그 멈춘 구간에서 시청자가 나간다 — 이번 개편이 없애려던 바로 그 구간이다.
-      loop: true,
-      // 나레이션이 주인공이라 현장 소리는 배경으로만 깔린다.
-      // ⚠️ Creatomate volume은 0~100 퍼센트다(기본 '100%'). 0.12로 적으면 12%가 아니라
-      // 0.12%라 소리가 아예 안 들린다 — 예전 0.4도 같은 오해였다.
-      volume: '12%',
-      source: input.clips[i].url,
-    })),
-    // ── 작업 후 사진 ────────────────────────────────────
-    {
-      name: 'after-photo',
-      type: 'image',
-      track: 1,
-      time: afterSeg.start,
-      duration: afterSeg.duration,
-      width: '100%',
-      height: '100%',
-      x_anchor: '50%',
-      y_anchor: '50%',
-      fit: 'cover',
-      source: input.afterPhotoUrl,
-    },
-  ]
-
-  // ── 자막 — 대본 문장 그대로 ───────────────────────────
-  const captions: Element[] = segments.flatMap((seg) =>
-    seg.lines.map(({ line, start }) => captionElement(line, start)),
+  // ── 배경 화면 — 앞사진 → 클립들(다 돌면 처음부터 다시) → 뒷사진 ──
+  const visual: Element[] = planVisuals(
+    narrationEnd,
+    input.beforePhotoUrl,
+    input.clips,
+    input.afterPhotoUrl,
+  ).map((v, i) =>
+    v.kind === 'image'
+      ? {
+          name: `bg-${i}`,
+          type: 'image',
+          track: 1,
+          time: v.start,
+          duration: v.duration,
+          width: '100%',
+          height: '100%',
+          x_anchor: '50%',
+          y_anchor: '50%',
+          // cover = 세로 화면을 꽉 채운다. 가로로 찍은 영상은 좌우가 잘린다.
+          fit: 'cover',
+          source: v.source,
+        }
+      : {
+          name: `bg-${i}`,
+          type: 'video',
+          track: 1,
+          time: v.start,
+          duration: v.duration,
+          width: '100%',
+          height: '100%',
+          x_anchor: '50%',
+          y_anchor: '50%',
+          fit: 'cover',
+          // 마지막 한 바퀴는 중간에 잘릴 수 있다 — 배경이라 문제되지 않는다
+          loop: true,
+          // 나레이션이 주인공이라 현장 소리는 배경으로만 깔린다.
+          // ⚠️ Creatomate volume은 0~100 퍼센트다(기본 '100%'). 0.12로 적으면 12%가 아니라
+          // 0.12%라 소리가 아예 안 들린다 — 예전 0.4도 같은 오해였다.
+          volume: '12%',
+          source: v.source,
+        },
   )
 
-  // ── 나레이션 음성 — 문장마다 그 자막이 뜨는 시각에 정확히 얹는다 ──
+  // ── 자막 — 문장을 1~2초 조각으로 쪼개 계속 넘어가게 한다 ──
+  const captions: Element[] = toCaptions(input.lines).map(captionElement)
+
+  // ── 나레이션 음성 — 문장마다 제 시각에 얹는다 ──
   // 통 파일 하나로 깔면 자막과 조금씩 어긋나는데, 문장별로 놓으면 어긋날 수가 없다.
-  const spoken = segments.flatMap((seg) => seg.lines)
-  const audio: Element[] = input.narrationUrls.length === spoken.length
-    ? spoken.map(({ line, start }, i) => ({
-        type: 'audio',
-        track: 5,
-        time: start,
-        duration: line.seconds,
-        source: input.narrationUrls[i],
-      }))
-    : []
+  let spokenAt = 0
+  const audio: Element[] =
+    input.narrationUrls.length === input.lines.length
+      ? input.lines.map((line, i) => {
+          const time = Math.round(spokenAt * 100) / 100
+          spokenAt += line.seconds
+          return {
+            type: 'audio',
+            track: 5,
+            time,
+            duration: line.seconds,
+            source: input.narrationUrls[i],
+          }
+        })
+      : []
 
   // ── 업체명 아웃트로 ───────────────────────────────────
   const outro: Element[] = [

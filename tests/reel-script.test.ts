@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { planSegments } from '@/lib/creatomate/client'
-import { scriptDuration, type ReelLine } from '@/lib/ai/reel-script'
+import { planVisuals } from '@/lib/creatomate/client'
+import { toCaptions, scriptDuration, type ReelLine } from '@/lib/ai/reel-script'
 
-// 릴스는 '나레이션이 뼈대'다. 자막·음성·화면 길이가 어긋나면 말이 끊기거나
-// 소리 없이 화면만 멈춰 있는 구간이 생긴다(예전 구조가 딱 그랬고, 거기서 시청자가 나갔다).
-// 이 테스트는 세 가지가 항상 같은 시간축 위에 있도록 고정한다.
+// 릴스에서 시간을 정하는 건 오직 나레이션이다.
+// 자막은 문장을 1~2초 조각으로 쪼개 계속 넘어가고, 영상은 뒤에 깔리는 배경일 뿐이라
+// 자막이 무슨 말을 하는지와 맞출 필요가 없다.
+// (예전엔 자막 길이에 맞춰 클립을 늘렸다 줄였다 해서 짧은 클립이 계속 되감겼다)
 
 function line(text: string, seconds: number, emphasis = false): ReelLine {
   return { text, seconds, emphasis }
@@ -21,97 +22,124 @@ const 대본: ReelLine[] = [
   line('도배풀은 이렇게 잡으세요.', 2.5, true),
 ]
 
-describe('릴스 화면 배치', () => {
-  it('화면 5개(앞사진·클립3·뒷사진)로 나눈다', () => {
-    expect(planSegments(대본, [10, 10, 10])).toHaveLength(5)
+const 총길이 = scriptDuration(대본)
+
+describe('자막 조각내기', () => {
+  const caps = toCaptions(대본)
+
+  it('한 조각이 1~2초쯤만 머문다', () => {
+    for (const c of caps) {
+      expect(c.seconds).toBeGreaterThanOrEqual(0.5)
+      expect(c.seconds).toBeLessThanOrEqual(2.5)
+    }
   })
 
-  it('첫 문장은 작업 전 사진에, 마지막 문장은 작업 후 사진에 붙는다', () => {
-    const segs = planSegments(대본, [10, 10, 10])
-    expect(segs[0].lines.map((l) => l.line.text)).toEqual([대본[0].text])
-    expect(segs[segs.length - 1].lines.map((l) => l.line.text)).toEqual([대본[7].text])
+  it('문장 수보다 조각이 많다 — 통째로 띄우지 않는다', () => {
+    expect(caps.length).toBeGreaterThan(대본.length)
   })
 
-  it('말 순서가 섞이지 않는다 — 화면을 건너가도 대본 순서 그대로', () => {
-    const flat = planSegments(대본, [10, 10, 10]).flatMap((s) => s.lines.map((l) => l.line.text))
-    expect(flat).toEqual(대본.map((l) => l.text))
+  it('조각을 이어 붙이면 원래 문장이 그대로 나온다', () => {
+    // 글자가 빠지거나 순서가 바뀌면 말이 안 된다
+    const joined = caps.map((c) => c.text).join(' ')
+    expect(joined).toBe(대본.map((l) => l.text).join(' '))
   })
 
-  it('구간이 빈틈·겹침 없이 이어진다', () => {
-    const segs = planSegments(대본, [10, 10, 10])
+  it('빈틈·겹침 없이 이어지고, 전체 길이가 나레이션과 같다', () => {
     let cursor = 0
-    for (const seg of segs) {
-      expect(seg.start).toBeCloseTo(cursor, 5)
-      cursor += seg.duration
+    for (const c of caps) {
+      expect(c.start).toBeCloseTo(cursor, 1)
+      cursor += c.seconds
     }
-    // 화면 전체 길이 = 나레이션 전체 길이 (소리 없이 남는 화면이 없다)
-    expect(cursor).toBeCloseTo(scriptDuration(대본), 5)
+    expect(cursor).toBeCloseTo(총길이, 1)
   })
 
-  it('자막이 뜨는 시각은 그 화면 안에 들어간다 — 잘려 나가지 않는다', () => {
-    for (const seg of planSegments(대본, [10, 10, 10])) {
-      for (const { line: l, start } of seg.lines) {
-        expect(start).toBeGreaterThanOrEqual(seg.start - 1e-6)
-        expect(start + l.seconds).toBeLessThanOrEqual(seg.start + seg.duration + 1e-6)
+  it('한 문장에서 쪼개진 조각들은 그 문장의 음성 길이를 정확히 나눠 갖는다', () => {
+    // 여기가 어긋나면 뒤 문장부터 목소리와 자막이 밀린다
+    let ci = 0
+    let lineStart = 0
+    for (const l of 대본) {
+      let sum = 0
+      const start = caps[ci].start
+      while (ci < caps.length && caps[ci].start < lineStart + l.seconds - 1e-6) {
+        sum += caps[ci].seconds
+        ci++
       }
+      expect(start).toBeCloseTo(lineStart, 1)
+      expect(sum).toBeCloseTo(l.seconds, 1)
+      lineStart += l.seconds
     }
   })
 
-  it('문장이 적어도 화면 5개를 유지하고 빈 화면에 최소 시간을 준다', () => {
-    // 클립 3개에 문장 1개씩도 못 갈 만큼 짧은 대본
-    const 짧은대본 = [line('가', 2.2, true), line('나', 2.2), line('다', 2.2, true)]
-    const segs = planSegments(짧은대본, [10, 10, 10])
-    expect(segs).toHaveLength(5)
-    for (const seg of segs) expect(seg.duration).toBeGreaterThan(0)
+  it('강조 문장은 조각도 전부 강조로 남는다', () => {
+    expect(caps[0].emphasis).toBe(true)
+    expect(caps[caps.length - 1].emphasis).toBe(true)
+    expect(caps.some((c) => !c.emphasis)).toBe(true)
+  })
+
+  it('아주 짧은 문장은 억지로 쪼개지 않는다', () => {
+    const one = toCaptions([line('네', 1.0, false)])
+    expect(one).toHaveLength(1)
+    expect(one[0].text).toBe('네')
   })
 })
 
-describe('대본 길이', () => {
-  it('총 길이가 숏폼에 맞는 30초 안팎이다', () => {
-    const d = scriptDuration(대본)
-    expect(d).toBeGreaterThan(20)
-    expect(d).toBeLessThan(45)
-  })
-})
-
-describe('올린 영상 개수·길이에 맞추기', () => {
-  it('영상 1개만 올려도 만들어진다 (앞사진 · 클립1 · 뒷사진)', () => {
-    const segs = planSegments(대본, [9])
-    expect(segs).toHaveLength(3)
-    const flat = segs.flatMap((s) => s.lines.map((l) => l.line.text))
-    expect(flat).toEqual(대본.map((l) => l.text))
+describe('배경 화면 깔기', () => {
+  it('앞사진으로 시작해 뒷사진으로 끝난다', () => {
+    const v = planVisuals(총길이, 'before.jpg', [{ url: 'a.mp4', duration: 8 }], 'after.jpg')
+    expect(v[0].source).toBe('before.jpg')
+    expect(v[v.length - 1].source).toBe('after.jpg')
   })
 
-  it('영상 2개면 화면 4개가 된다', () => {
-    expect(planSegments(대본, [9, 9])).toHaveLength(4)
-  })
-
-  it('영상이 하나도 없으면 사진 두 장에 전부 얹는다', () => {
-    const segs = planSegments(대본, [])
-    expect(segs).toHaveLength(2)
-    const flat = segs.flatMap((s) => s.lines.map((l) => l.line.text))
-    expect(flat).toEqual(대본.map((l) => l.text))
-  })
-
-  it('짧은 영상엔 문장을 적게, 긴 영상엔 많이 얹는다', () => {
-    // 3초짜리와 15초짜리에 같은 분량을 얹으면 짧은 쪽이 계속 되감긴다
-    const segs = planSegments(대본, [3, 15, 15])
-    const [c1, c2, c3] = segs.slice(1, -1)
-    expect(c1.lines.length).toBeLessThanOrEqual(c2.lines.length)
-    expect(c1.duration).toBeLessThanOrEqual(c2.duration)
-    // 그래도 모든 클립은 최소 한 번은 화면에 나온다
-    expect(c3.duration).toBeGreaterThan(0)
-  })
-
-  it('영상 개수가 몇 개든 말 순서는 그대로다', () => {
-    for (const durations of [[5], [5, 5], [5, 5, 5], [2, 20, 7]]) {
-      const flat = planSegments(대본, durations).flatMap((s) => s.lines.map((l) => l.line.text))
-      expect(flat).toEqual(대본.map((l) => l.text))
+  it('나레이션 전체를 빈틈없이 덮는다', () => {
+    const v = planVisuals(
+      총길이,
+      'before.jpg',
+      [{ url: 'a.mp4', duration: 5 }, { url: 'b.mp4', duration: 4 }],
+      'after.jpg',
+    )
+    let cursor = 0
+    for (const item of v) {
+      expect(item.start).toBeCloseTo(cursor, 1)
+      cursor += item.duration
     }
+    expect(cursor).toBeCloseTo(총길이, 1)
   })
 
-  it('길이 기록이 없어 0으로 들어와도 그 클립은 빼고 만든다', () => {
-    const segs = planSegments(대본, [10, 0, 10])
-    expect(segs).toHaveLength(4) // 앞사진 + 클립2개 + 뒷사진
+  it('클립이 짧으면 처음부터 다시 돈다 — 한 클립을 늘려 되감지 않는다', () => {
+    const v = planVisuals(총길이, 'b.jpg', [{ url: 'a.mp4', duration: 3 }], 'a.jpg')
+    const videos = v.filter((x) => x.kind === 'video')
+    expect(videos.length).toBeGreaterThan(1)
+    // 마지막 한 바퀴만 잘리고 나머지는 원래 길이 그대로
+    for (const item of videos.slice(0, -1)) expect(item.duration).toBeCloseTo(3, 1)
+  })
+
+  it('영상이 하나도 없어도 사진 두 장으로 만들어진다', () => {
+    const v = planVisuals(총길이, 'b.jpg', [], 'a.jpg')
+    expect(v.every((x) => x.kind === 'image')).toBe(true)
+    const covered = v.reduce((s, x) => s + x.duration, 0)
+    expect(covered).toBeCloseTo(총길이, 1)
+  })
+
+  it('클립이 길면 남는 시간만큼만 잘라 쓴다', () => {
+    const v = planVisuals(총길이, 'b.jpg', [{ url: 'a.mp4', duration: 60 }], 'a.jpg')
+    const videos = v.filter((x) => x.kind === 'video')
+    expect(videos).toHaveLength(1)
+    expect(videos[0].duration).toBeLessThan(60)
+  })
+
+  it('길이가 0으로 들어온 클립은 건너뛴다 (예전 보고서)', () => {
+    const v = planVisuals(
+      총길이,
+      'b.jpg',
+      [{ url: 'x.mp4', duration: 0 }, { url: 'y.mp4', duration: 6 }],
+      'a.jpg',
+    )
+    expect(v.some((x) => x.source === 'x.mp4')).toBe(false)
+    expect(v.some((x) => x.source === 'y.mp4')).toBe(true)
+  })
+
+  it('클립이 아주 짧아도 무한히 돌지 않는다', () => {
+    const v = planVisuals(총길이, 'b.jpg', [{ url: 'a.mp4', duration: 0.2 }], 'a.jpg')
+    expect(v.length).toBeLessThan(210)
   })
 })
