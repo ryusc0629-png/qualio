@@ -13,6 +13,7 @@ import {
 import { sendOnMyWayForBooking } from '@/lib/kakao/on-my-way'
 import { ensureOnboardingDraft } from '@/lib/onboarding/draft-from-field'
 import { addMonths } from '@/lib/reports/care-due'
+import { syncFieldSuggestions } from '@/lib/reengagement/suggestion'
 import { generateAiReport } from '@/lib/ai/report-writer'
 import { geocodeAddress } from '@/lib/roadmap/geo'
 import { postBookingRevenue } from '@/lib/finance/post-booking-revenue'
@@ -483,6 +484,8 @@ export const fieldSaveReportAction = action
     // 앞으로 손봐야 할 것 + 몇 달 뒤에 사장님께 알릴지(0이면 알림 없음)
     careAdvice:      z.string().max(2000).optional(),
     careMonths:      z.number().int().min(0).max(24).optional(),
+    // 다음에 제안할 서비스 — 고객 문서엔 안 실린다. 대표가 승인하면 careMonths 뒤에 연락이 나간다.
+    suggestedServices: z.array(z.string().min(1).max(60)).max(10).optional(),
     aiReportData:    z.object({
       beforeStatus: z.string(),
       workDetails: z.string(),
@@ -548,6 +551,25 @@ export const fieldSaveReportAction = action
 
     if (allPhotos.length > 0) {
       await db.from('report_photos').insert(allPhotos)
+    }
+
+    // 다음에 제안할 서비스 → 재방문 대기열(검토 대기).
+    // 고객에게 지금 나가는 게 아니라 대표가 승인해야 움직인다.
+    if (parsedInput.suggestedServices !== undefined) {
+      const advice = (parsedInput.careAdvice ?? '').trim()
+      await syncFieldSuggestions({
+        db: db as unknown as SupabaseClient,
+        businessId: worker.business_id,
+        bookingId: parsedInput.bookingId,
+        reportId: report.id,
+        workerId: worker.id,
+        serviceNames: parsedInput.suggestedServices,
+        reason: advice || null,
+        dueAt:
+          parsedInput.careMonths && parsedInput.careMonths > 0
+            ? addMonths(parsedInput.careMonths)
+            : null,
+      })
     }
 
     // 정기계약의 '첫 방문'이면 초도 리포트 초안을 만들어 둔다.
@@ -1201,4 +1223,94 @@ export const fieldSaveChecklistPhotosAction = action
     if (error) throw new Error('[APP] 사진 저장에 실패했어요. 다시 시도해주세요')
 
     return { success: true }
+  })
+
+// ── 금일 특이사항 (정기 거래처 현장) ──────────────────────────────────────────
+//
+// 왜 이 액션이 필요한가:
+// 정기 현장은 매일 하는 작업이 똑같다. 그래서 '오늘 한 작업'을 매일 적게 하면 아무도 안 쓴다.
+// 거래처가 월간 보고서에서 실제로 보는 건 "무슨 문제가 있었고, 어떻게 했고, 해결됐나"다.
+// 그 한 덩어리를 현장에서 바로 남기게 한다.
+//
+// ★새 테이블을 만들지 않고 claims에 쌓는다 — 월간 보고서 '요청·처리 내역',
+//   홈 '미해결 클레임' 타일, 대표 알림이 전부 이미 claims를 보고 동작한다.
+//   여기에 얹으면 그 세 곳이 공짜로 따라온다. ⛔별도 표를 새로 만들지 말 것.
+export const fieldAddSiteIssueAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+    title:     z.string().min(1, '무슨 일인지 한 줄로 적어주세요').max(120),
+    content:   z.string().max(2000).optional(),
+    /** 어떻게 했는지 — 적었으면 그 자리에서 해결된 것으로 본다 */
+    resolution: z.string().max(2000).optional(),
+    photoUrls:           z.array(z.string().url()).max(10).optional(),
+    resolutionPhotoUrls: z.array(z.string().url()).max(10).optional(),
+    /** 월간 보고서까지 못 기다리는 건 — 사장님 폰으로 바로 알림 */
+    isUrgent:  z.boolean(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    const looseDb = db as unknown as SupabaseClient
+    const resolution = parsedInput.resolution?.trim() || null
+    const now = new Date().toISOString()
+
+    const { data: created, error } = await looseDb
+      .from('claims')
+      .insert({
+        business_id:    worker.business_id,
+        booking_id:     parsedInput.bookingId,
+        customer_name:  booking.customer_name,
+        customer_phone: booking.customer_phone,
+        title:          parsedInput.title.trim(),
+        content:        parsedInput.content?.trim() || null,
+        photo_urls:            parsedInput.photoUrls ?? [],
+        resolution,
+        resolution_photo_urls: parsedInput.resolutionPhotoUrls ?? [],
+        is_urgent:      parsedInput.isUrgent,
+        // 현장에서 이미 처리했으면 열어둘 이유가 없다 — 사장님 '할 일'만 늘어난다
+        status:         resolution ? 'resolved' : 'open',
+        resolved_at:    resolution ? now : null,
+        created_by_worker_id: worker.id,
+      })
+      .select('id')
+      .maybeSingle() as unknown as { data: { id: string } | null; error: unknown }
+
+    if (error) {
+      console.error('[Field] 특이사항 등록 실패:', error)
+      throw new Error('[APP] 등록하지 못했어요. 다시 눌러주세요')
+    }
+
+    // 급한 건만 즉시 알린다. 전부 알리면 알림이 흔해져서 정작 급한 걸 놓친다.
+    if (parsedInput.isUrgent) {
+      await sendPushToBusiness(worker.business_id, {
+        title: `급한 특이사항 · ${booking.customer_name}`,
+        body: `${worker.name} 기사님 — ${parsedInput.title.trim()}`,
+        url: '/dashboard/claims',
+        tag: `site-issue-${created?.id ?? parsedInput.bookingId}`,
+      }).catch((e) => console.error('[Field] 특이사항 푸시 실패:', e))
+    }
+
+    return { success: true, claimId: created?.id ?? null }
+  })
+
+/** 이 방문에서 현장이 올린 특이사항 — 화면에 목록으로 되돌려 보여준다 */
+export const fieldListSiteIssuesAction = action
+  .schema(z.object({
+    workerId:  z.string().uuid(),
+    bookingId: z.string().uuid(),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    const { data } = await (db as unknown as SupabaseClient)
+      .from('claims')
+      .select('id, title, content, resolution, photo_urls, resolution_photo_urls, is_urgent, status, created_at')
+      .eq('booking_id', parsedInput.bookingId)
+      .not('created_by_worker_id', 'is', null)
+      .order('created_at', { ascending: true })
+
+    return { issues: data ?? [] }
   })
