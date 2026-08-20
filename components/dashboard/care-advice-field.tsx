@@ -41,7 +41,7 @@ export function CareAdviceField({ advice, months, onAdviceChange, onMonthsChange
         value={advice}
         onChange={(e) => onAdviceChange(e.target.value)}
         rows={3}
-        placeholder="예: 바닥 왁스가 입구 쪽부터 벗겨지고 있어요. 이대로 두면 물기가 남아 미끄러워질 수 있습니다."
+        placeholder="예: 후드 기름때는 제거했지만 필터가 오래돼 교체가 필요해 보입니다."
         className="w-full rounded-xl border p-3 text-sm outline-none focus:border-primary resize-none"
       />
 

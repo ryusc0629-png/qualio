@@ -627,14 +627,18 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
         {/* 미리 챙긴 것 · 지켜볼 것 — 문제 생기기 전에 먼저 챙기는 예방 케어 */}
         <div className="rounded-xl bg-emerald-50/60 border border-emerald-100 p-4 space-y-2">
           <div>
-            <Label className="text-sm font-medium text-emerald-800">미리 챙긴 것 · 지켜볼 것</Label>
+            {/* ⚠️현장 앱(field-report-client)과 같은 칸(preventive_note)이다. 이름·설명·예시를 다르게 두면
+                한쪽은 '미리 해준 것'을, 다른 쪽은 '원래 있던 하자'를 적게 되어 같은 절에 성격이 다른 글이 섞인다.
+                문구를 고칠 땐 반드시 두 화면을 함께 고칠 것. */}
+            <Label className="text-sm font-medium text-emerald-800">하자·특이사항</Label>
             <p className="text-xs text-emerald-700">
-              아직 문제는 아니지만 미리 발견해 챙긴 것, 다음에 지켜볼 것을 적어두세요.
-              고객이 보는 리포트에 담겨 “문제 생기기 전에 봐준다”는 신뢰가 됩니다. (선택)
+              깨진 곳, 원래 있던 흠집, 눈에 띄는 이상을 적어두세요.
+              작업 전에 있던 문제를 적어두면 나중에 책임 시비가 안 생기고,
+              월간 보고서에 ‘현장에서 확인한 특이사항’으로 실립니다. (선택)
             </p>
           </div>
           <Textarea
-            placeholder="예: 줄눈에 곰팡이 올라오기 시작해 미리 잡아뒀어요. 배수구 물 빠짐이 조금 느려져 다음에 한 번 더 볼게요."
+            placeholder="예: 거실 창틀에 원래 흠집 있었어요. 3층 탕비실 배수구 물 빠짐이 느립니다."
             value={preventiveNote}
             onChange={(e) => setPreventiveNote(e.target.value)}
             rows={3}
@@ -661,7 +665,7 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
           {!aiReport ? (
             <>
               <Textarea
-                placeholder="예: 주방 기름때 심함, 화장실 곰팡이 제거, 후드 필터 교체 필요"
+                placeholder="예: 주방 후드 기름때 제거, 화장실 곰팡이 제거, 창틀·블라인드 먼지 제거"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}

@@ -855,12 +855,15 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           <div>
             <Label className="text-sm font-medium">하자·특이사항</Label>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              깨진 곳, 원래 있던 흠집, 미리 손봐둔 것을 한 줄만 적어주세요.
+              깨진 곳, 원래 있던 흠집, 눈에 띄는 이상을 한 줄만 적어주세요.
               작업 전에 있던 문제를 적어두면 나중에 책임 시비가 안 생겨요.
             </p>
           </div>
+          {/* ⚠️'미리 ~해뒀어요'는 여기 적지 않는다 — 이 칸은 월간 보고서에 '현장에서 확인한 특이사항'으로
+              실린다. 해준 일은 '오늘 한 작업'에, 앞으로 볼 것은 '앞으로 손봐야 할 것'에 나눠 적어야
+              세 칸이 겹치지 않는다. */}
           <Textarea
-            placeholder="예: 거실 창틀에 원래 흠집 있었어요. 3층 탕비실 배수구가 느려서 미리 뚫어뒀어요."
+            placeholder="예: 거실 창틀에 원래 흠집 있었어요. 3층 탕비실 배수구 물 빠짐이 느립니다."
             value={preventiveNote}
             onChange={(e) => setPreventiveNote(e.target.value)}
             rows={3}
@@ -1056,7 +1059,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           {!aiReport ? (
             <>
               <Textarea
-                placeholder="예: 주방 기름때 심함, 화장실 곰팡이 제거, 후드 필터 교체 필요"
+                placeholder="예: 주방 후드 기름때 제거, 화장실 곰팡이 제거, 창틀·블라인드 먼지 제거"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
