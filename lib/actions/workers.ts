@@ -6,7 +6,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { getWorkerLimit, type PlanId } from '@/lib/config/plans'
 import { isHoliday } from '@/lib/holidays/kr'
-import { marketDayRange } from '@/lib/format/datetime'
+import { marketDayRange, formatDateTime } from '@/lib/format/datetime'
 
 async function getBusinessId() {
   const authClient = await createClient()
@@ -136,13 +136,27 @@ export const updateBookingTimeAction = action
 
     const newScheduledAt = replaceKstTime(booking.scheduled_at, parsedInput.newTime)
 
+    const timeClash = await findContractClash(db, businessId, {
+      bookingId: parsedInput.bookingId,
+      contractId: booking.contract_id,
+      newScheduledAt,
+    })
+    if (timeClash) throw new Error(timeClash)
+
     const { error } = await db
       .from('bookings')
       .update({ scheduled_at: newScheduledAt })
       .eq('id', parsedInput.bookingId)
       .eq('business_id', businessId)
 
-    if (error) throw new Error('[APP] 시간 변경에 실패했습니다')
+    if (error) {
+      console.error('[Workers] 방문 시간 변경 실패:', error)
+      throw new Error(
+        error.code === '23505'
+          ? '[APP] 그 시간엔 같은 거래처 일정이 이미 있어요. 화면을 새로고침한 뒤 다시 바꿔주세요'
+          : '[APP] 시간을 못 바꿨어요. 잠시 뒤 다시 시도해주세요'
+      )
+    }
 
     // 정기계약 전체에 적용 — 앞으로의 미완료 방문 시각을 일괄 교체
     const contractId = booking.contract_id
@@ -314,6 +328,62 @@ export const clearHolidayVisitsAction = action
     return { success: true, clearedCount: cleared?.length ?? 0 }
   })
 
+// 정기 방문 겹침 안내 — DB에 (contract_id, scheduled_at) 유니크 인덱스가 걸려 있어서
+// 같은 계약의 방문을 '이미 방문이 있는 날짜·시각'으로 옮기면 저장이 거부된다.
+// '저장에 실패했습니다'만 띄우면 사장님은 이유도 다음 행동도 알 수 없으므로,
+// 옮기기 전에 겹치는 방문을 먼저 찾아 '왜 안 되는지 + 그럼 어떻게 하는지'를 문장으로 돌려준다.
+async function findContractClash(
+  db: Awaited<ReturnType<typeof getBusinessId>>['db'],
+  businessId: string,
+  opts: { bookingId: string; contractId: string | null; newScheduledAt: string }
+): Promise<string | null> {
+  if (!opts.contractId) return null
+
+  const { data: clash } = (await db
+    .from('bookings')
+    .select('id, customer_name, worker_id, deleted_at')
+    .eq('business_id', businessId)
+    .eq('contract_id' as never, opts.contractId)
+    .eq('scheduled_at', opts.newScheduledAt)
+    .neq('id', opts.bookingId)
+    .maybeSingle()) as unknown as {
+      data: {
+        id: string
+        customer_name: string | null
+        worker_id: string | null
+        deleted_at: string | null
+      } | null
+    }
+
+  if (!clash) return null
+
+  // 지운 방문도 유니크 인덱스 자리는 그대로 차지한다(소프트 삭제).
+  // 화면엔 안 보이니 '이미 있어요'라고 하면 사장님이 아무리 찾아도 못 찾는다 — 사실대로 알린다.
+  if (clash.deleted_at) {
+    return '[APP] 그 시간엔 예전에 지운 같은 거래처 방문이 남아 있어서 못 옮겨요. '
+      + '시간을 조금 다르게(예: 30분 뒤로) 잡아주세요.'
+  }
+
+  let workerName: string | null = null
+  if (clash.worker_id) {
+    const { data: worker } = (await db
+      .from('workers' as never)
+      .select('name')
+      .eq('id' as never, clash.worker_id)
+      .maybeSingle()) as unknown as { data: { name: string | null } | null }
+    workerName = worker?.name ?? null
+  }
+
+  const when = formatDateTime(opts.newScheduledAt, {
+    month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  })
+  const who = workerName ? `${workerName} 담당으로 ` : ''
+  const where = clash.customer_name ?? '같은 거래처'
+
+  return `[APP] ${when}에 ${where} 일정이 ${who}이미 있어요. 같은 곳은 같은 시간에 하나만 넣을 수 있어요. `
+    + '두 사람이 함께 가는 거면 그 일정을 눌러 담당자에 같이 넣어주시고, 따로 한 번 더 가는 거면 시간을 다르게 잡아주세요.'
+}
+
 // 예약 드래그앤드롭 — 날짜 + 담당자(단일) 동시 변경
 // 드래그로 배정하면 해당 담당자 1명으로 교체됨 (다중 배정은 상세 시트에서)
 export const assignBookingAction = action
@@ -325,12 +395,14 @@ export const assignBookingAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getBusinessId()
 
-    const { data: booking } = await db
+    const { data: booking } = (await db
       .from('bookings')
-      .select('scheduled_at')
+      .select('scheduled_at, contract_id')
       .eq('id', parsedInput.bookingId)
       .eq('business_id', businessId)
-      .maybeSingle()
+      .maybeSingle()) as unknown as {
+        data: { scheduled_at: string; contract_id: string | null } | null
+      }
 
     if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
 
@@ -346,6 +418,13 @@ export const assignBookingAction = action
       Date.UTC(year!, month! - 1, day!, kstHours, kstMinutes) - 9 * 60 * 60 * 1000
     ).toISOString()
 
+    const clash = await findContractClash(db, businessId, {
+      bookingId: parsedInput.bookingId,
+      contractId: booking.contract_id,
+      newScheduledAt,
+    })
+    if (clash) throw new Error(clash)
+
     const { error } = await db
       .from('bookings')
       .update({
@@ -355,7 +434,15 @@ export const assignBookingAction = action
       .eq('id', parsedInput.bookingId)
       .eq('business_id', businessId)
 
-    if (error) throw new Error('[APP] 저장에 실패했습니다')
+    if (error) {
+      console.error('[Workers] 예약 이동 실패:', error)
+      // 23505 = 유니크 위반. 사전 검사와 저장 사이에 다른 방문이 끼어든 드문 경우.
+      throw new Error(
+        error.code === '23505'
+          ? '[APP] 그 시간엔 같은 거래처 일정이 이미 있어요. 화면을 새로고침한 뒤 다시 옮겨주세요'
+          : '[APP] 일정을 못 옮겼어요. 잠시 뒤 다시 시도해주세요'
+      )
+    }
 
     // booking_workers 동기화 — 드래그 배정은 단일 담당자로 교체
     await db.from('booking_workers' as never).delete().eq('booking_id' as never, parsedInput.bookingId)
@@ -386,11 +473,16 @@ export const assignBookingAndPropagateAction = action
 
     const { data: booking } = await db
       .from('bookings')
-      .select('scheduled_at, customer_phone, customer_id')
+      .select('scheduled_at, customer_phone, customer_id, contract_id')
       .eq('id', parsedInput.bookingId)
       .eq('business_id', businessId)
       .maybeSingle() as unknown as {
-        data: { scheduled_at: string; customer_phone: string | null; customer_id: string | null } | null
+        data: {
+          scheduled_at: string
+          customer_phone: string | null
+          customer_id: string | null
+          contract_id: string | null
+        } | null
       }
 
     if (!booking) throw new Error('[APP] 예약 정보를 찾을 수 없습니다')
@@ -403,11 +495,28 @@ export const assignBookingAndPropagateAction = action
       Date.UTC(year!, month! - 1, day!, kst.getUTCHours(), kst.getUTCMinutes()) - 9 * 60 * 60 * 1000
     ).toISOString()
 
-    await db
+    const clash = await findContractClash(db, businessId, {
+      bookingId: parsedInput.bookingId,
+      contractId: booking.contract_id,
+      newScheduledAt,
+    })
+    if (clash) throw new Error(clash)
+
+    const { error: moveError } = await db
       .from('bookings')
       .update({ worker_id: parsedInput.workerId, scheduled_at: newScheduledAt } as never)
       .eq('id', parsedInput.bookingId)
       .eq('business_id', businessId)
+
+    // 여기서 실패해도 아래 전파가 계속되면 '배정했어요' 토스트만 뜨고 실제론 안 옮겨진다 — 멈춘다
+    if (moveError) {
+      console.error('[Workers] 거래처 전체 배정 중 예약 이동 실패:', moveError)
+      throw new Error(
+        moveError.code === '23505'
+          ? '[APP] 그 시간엔 같은 거래처 일정이 이미 있어요. 화면을 새로고침한 뒤 다시 옮겨주세요'
+          : '[APP] 일정을 못 옮겼어요. 잠시 뒤 다시 시도해주세요'
+      )
+    }
 
     // 같은 거래처(전화번호)의 '앞으로 예정된' 일정 전부를 같은 담당자로 배정.
     // 앞으로 예정 = 아직 안 끝난 상태(confirmed/in_progress). 완료·취소·노쇼는 기록이라 건드리지 않음.

@@ -322,12 +322,13 @@ export function BookingDetailSheet({
           : '시간을 변경했어요!',
       )
     },
-    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+    // 못 바꾸는 이유(같은 거래처 일정이 이미 있는 등)는 문장이 길어 기본 4초로는 다 못 읽는다
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요', { duration: 8000 }),
   })
 
   // 날짜 변경 액션 (날짜만, 팀원 유지)
   const { execute: changeDate, isPending: datePending } = useAction(assignBookingAction, {
-    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
+    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요', { duration: 8000 }),
   })
 
   // 팀원 배정 액션

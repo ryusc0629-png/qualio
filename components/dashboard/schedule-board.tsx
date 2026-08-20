@@ -464,21 +464,21 @@ export function ScheduleBoard({
     useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 8 } }),
   )
 
+  // 못 옮긴 이유(같은 거래처 일정이 이미 있는 등)는 문장이 길어 기본 시간(4초)엔 다 못 읽는다
+  const showMoveError = (message: string | undefined) => {
+    toast.error(message ?? '일정을 못 옮겼어요. 잠시 뒤 다시 시도해주세요', { duration: 8000 })
+    setBookings(initialBookings) // 롤백
+  }
+
   const { execute: assignBooking } = useAction(assignBookingAction, {
-    onError: ({ error }) => {
-      toast.error(error.serverError ?? '저장에 실패했어요. 다시 시도해주세요')
-      setBookings(initialBookings) // 롤백
-    },
+    onError: ({ error }) => showMoveError(error.serverError),
   })
 
   const { execute: assignAndPropagate } = useAction(assignBookingAndPropagateAction, {
     onSuccess: ({ data }) => {
       toast.success(`이 거래처 일정 ${data?.assignedCount ?? 0}건을 배정했어요`)
     },
-    onError: ({ error }) => {
-      toast.error(error.serverError ?? '저장에 실패했어요. 다시 시도해주세요')
-      setBookings(initialBookings) // 롤백
-    },
+    onError: ({ error }) => showMoveError(error.serverError),
   })
 
   // 공휴일에 남아 있는 정기 방문 정리 — 계약에 '공휴일엔 쉬어요'를 켜기 전에 이미 깔린 방문용
