@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { GeoMeasureButton } from './geo-measure-button'
+import { getAdminBusinessIds } from '@/lib/admin/auth'
 import { classifyGeoQuestion } from '@/lib/geo/questions'
 
 // AI 검색 노출률 카드(GEO Phase 1) — 소비자 질문을 AI 검색에 던져 우리 업체가
@@ -95,7 +96,14 @@ function TrendChart({ points }: { points: { pct: number; label: string }[] }) {
 
 export async function GeoShareCard({ businessId }: { businessId: string }) {
   const db = createServiceClient()
-  const measureEnabled = !!(process.env.PERPLEXITY_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY)
+  // '지금 측정하기'는 본사(퀄리오) 계정에만 보인다.
+  //
+  // ⛔고객사에는 절대 노출하지 말 것. 한 번 누를 때마다 90번의 외부 호출(1,609원)이 나간다.
+  //   사장님이 궁금해서 몇 번 눌러보는 것만으로 그 달 원가가 몇 배가 된다.
+  //   고객사는 **월 1회 크론 측정만** 쓴다.
+  //   본사 계정에만 두는 건 문구·엔진 구성을 바꿔가며 우리가 직접 확인해야 하기 때문이다.
+  const keyReady = !!(process.env.PERPLEXITY_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY)
+  const measureEnabled = keyReady && (await getAdminBusinessIds()).includes(businessId)
 
   // 업체명 — 검색어가 '브랜드(우리 이름) 질문'인지 가려내는 데 쓴다
   const { data: bizRow } = await db
@@ -195,7 +203,11 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
           {measureEnabled ? (
             <GeoMeasureButton />
           ) : (
-            <p className="text-xs text-muted-foreground">노출률 측정 기능을 준비하고 있어요. 곧 열립니다.</p>
+            <p className="text-xs text-muted-foreground">
+              {keyReady
+                ? '매달 한 번 자동으로 재서 여기에 보여드려요.'
+                : '노출률 측정 기능을 준비하고 있어요. 곧 열립니다.'}
+            </p>
           )}
         </div>
       </div>
@@ -277,7 +289,7 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
           <p className="font-semibold text-sm">🔎 AI 검색 노출률</p>
           <p className="text-xs text-muted-foreground mt-1">
             {formatKstDate(latest.checked_at)} 측정 · 손님 검색어 {latest.total}개 기준
-            {measureEnabled && ' · 매달 자동 측정돼요'}
+            {keyReady && ' · 매달 자동 측정돼요'}
           </p>
         </div>
         {measureEnabled && <GeoMeasureButton label="다시 측정하기" />}

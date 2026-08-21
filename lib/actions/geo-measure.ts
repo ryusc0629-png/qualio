@@ -7,7 +7,15 @@ import { runGeoCheck } from '@/lib/geo/run-check'
 import { isAdminEmail } from '@/lib/admin/auth'
 import { revalidatePath } from 'next/cache'
 
-// "지금 측정하기" 버튼 — 사장님이 즉시 AI 검색 노출률을 측정한다.
+// "지금 측정하기" — 본사(퀄리오) 계정 전용.
+//
+// ⛔고객사에는 노출하지 않는다. 한 번 누를 때마다 90번의 외부 호출(1,609원)이 나가서,
+//   궁금해서 몇 번 눌러보는 것만으로 그 달 원가가 몇 배가 된다.
+//   고객사는 **월 1회 크론 측정만** 쓴다(app/api/cron/geo-measure).
+//   본사에만 두는 건 문구·엔진 구성을 바꿔가며 우리가 직접 확인해야 하기 때문이다.
+//
+// ⚠️화면에서 버튼을 숨기는 것만으로는 부족하다 — 액션 주소를 알면 그냥 부를 수 있다.
+//   여기서 막는 게 진짜 방어선이다.
 export const runGeoCheckAction = action
   .schema(z.object({}))
   .action(async () => {
@@ -23,6 +31,11 @@ export const runGeoCheckAction = action
       .maybeSingle()
 
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
+
+    // 본사 계정만 — 고객사는 크론이 월 1회 재준다
+    if (!isAdminEmail(user.email)) {
+      throw new Error('[APP] 노출률은 매달 한 번 자동으로 측정돼요')
+    }
 
     // 글이 한 편도 없으면 재봐야 0%다 — AI 검색은 '읽을 글'이 있어야 인용한다.
     // 측정 1회가 90번의 외부 호출이라, 결과가 뻔한 데 쓰면 돈만 나가고
@@ -57,9 +70,10 @@ export const runGeoCheckAction = action
     //
     // 본사(관리자) 계정은 잠금을 두지 않는다. 다트클린은 우리가 직접 운영하는 계정이라
     // 검색어·문구를 바꿔가며 그때그때 확인해야 하는데, 잠금이 걸리면 매번 기다려야 한다.
-    const isAdmin = isAdminEmail(user.email)
+    // 본사 계정만 여기까지 오므로 잠금은 두지 않는다 —
+    // 검색어·문구를 바꿔가며 그때그때 확인해야 한다
     const { skipped, result } = await runGeoCheck(db, profile.business_id, {
-      minIntervalHours: isAdmin ? 0 : 1,
+      minIntervalHours: 0,
     })
 
     if (skipped === 'too-soon') {
