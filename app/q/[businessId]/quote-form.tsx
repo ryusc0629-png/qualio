@@ -517,6 +517,8 @@ export function QuoteForm({ businessId, businessName, businessLogoUrl, services,
   const [notes, setNotes] = useState('')
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
+  // 광고 문자 수신 동의 — 고른 손님에게만 나중에 안내 문자가 나간다(기본은 안 고른 상태)
+  const [marketingConsent, setMarketingConsent] = useState(false)
 
   // 현재 서비스에 맞는 스텝 순서
   const stepSequence = isConsultMode
@@ -723,6 +725,7 @@ export function QuoteForm({ businessId, businessName, businessLogoUrl, services,
         customer_name:  customerName.trim(),
         customer_phone: clean,
         notes:          notes.trim() || undefined,
+        marketing_consent: marketingConsent,
       })
       return
     }
@@ -745,6 +748,7 @@ export function QuoteForm({ businessId, businessName, businessLogoUrl, services,
       extra_notes:    combinedNotes || undefined,
       customer_name:  customerName.trim(),
       customer_phone: clean,
+      marketing_consent: marketingConsent,
       ac_selections:   isAcMode   && Object.keys(acSelections).length   > 0 ? acSelections   : undefined,
       unit_selections: isUnitMode && Object.keys(unitSelections).length > 0 ? unitSelections : undefined,
       unit_variant:    selectedUnitVariant ?? undefined,
@@ -1063,8 +1067,24 @@ export function QuoteForm({ businessId, businessName, businessLogoUrl, services,
               >
                 {isConsultMode ? '상담 요청 보내기 →' : '내 견적서 바로 받기 →'}
               </button>
+
+              {/* 광고 수신 동의 — 반드시 '고르지 않은 상태'로 둔다.
+                  미리 체크해두면 동의를 받은 게 아니라 몰래 넣은 게 된다(위법).
+                  안 고르면 안내 문자는 영영 안 나가고, 사장님이 직접 전화하게 된다. */}
+              <label className="flex items-start gap-2 pt-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={marketingConsent}
+                  onChange={(e) => setMarketingConsent(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-600"
+                />
+                <span className="text-[11px] text-zinc-500 leading-relaxed">
+                  청소 시기 안내·혜택 소식을 문자로 받아볼게요 (선택)
+                </span>
+              </label>
+
               <p className="text-[11px] text-zinc-400 text-center leading-relaxed">
-                🔒 전화번호는 예약 확인에만 사용돼요. 광고 문자는 보내지 않습니다.
+                🔒 전화번호는 예약 확인에만 사용돼요. 위에 동의하지 않으시면 광고 문자는 보내지 않습니다.
               </p>
             </div>
           )}

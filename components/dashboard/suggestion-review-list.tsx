@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
-import { Sparkles, CalendarClock, Check, X, Plus, HardHat, Copy } from 'lucide-react'
+import { Sparkles, CalendarClock, Check, X, Plus, HardHat, Copy, Phone } from 'lucide-react'
 import { approveSuggestionAction, registerSuggestedServiceAction, skipReengagementAction } from '@/lib/actions/reengagement'
 
 // 현장에서 올린 '다음에 제안할 서비스' 검토 카드.
@@ -25,6 +25,8 @@ export interface SuggestionItem {
   unregistered: boolean
   /** 자동 문자를 못 보낸 이유 — 있으면 사장님이 직접 연락해야 한다 */
   failReason?: string | null
+  /** 이 손님이 문자 수신에 동의했는지. 아니면 그날 알림만 가고 사장님이 직접 연락한다 */
+  smsAllowed: boolean
 }
 
 function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: string) => void }) {
@@ -33,7 +35,11 @@ function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: st
 
   const { execute: approve, isPending: isApproving } = useAction(approveSuggestionAction, {
     onSuccess: () => {
-      toast.success(`${item.dueLabel}에 ${item.customerName}님께 문자가 나가요`)
+      toast.success(
+        item.smsAllowed
+          ? `${item.dueLabel}에 ${item.customerName}님께 문자가 나가요`
+          : `${item.dueLabel}에 알려드릴게요. 그때 전화하시면 됩니다`
+      )
       onDone(item.id)
     },
     onError: ({ error }) => toast.error(error.serverError ?? '승인하지 못했어요. 다시 눌러주세요'),
@@ -73,7 +79,9 @@ function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: st
               <CalendarClock className="h-3 w-3 shrink-0" />
               {item.dueLabel}에 발송
             </span>
-            <span>{item.customerPhone}</span>
+            <a href={`tel:${item.customerPhone}`} className="underline underline-offset-2">
+              {item.customerPhone}
+            </a>
           </p>
         </div>
       </div>
@@ -101,27 +109,48 @@ function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: st
         </div>
       )}
 
+      {/* 문자 수신에 동의 안 한 손님 — 6개월 뒤에 알면 늦으니 지금 알려준다.
+          견적 폼에 "동의 안 하시면 광고 문자 안 보냅니다"라고 약속했으므로 예외를 두지 않는다. */}
+      {!item.smsAllowed && !item.failReason && (
+        <p className="text-xs bg-slate-50 border rounded-lg p-3 text-muted-foreground">
+          이 손님은 <b>문자 수신에 동의하지 않으셨어요.</b> 문자는 안 나가고,
+          <b> {item.dueLabel}에 알림</b>으로 알려드릴게요. 그때 전화 한 통이면 됩니다
+        </p>
+      )}
+
       {/* 자동 발송이 막힌 건 — 왜 못 보내는지와 무엇을 하면 되는지를 그 자리에서 알린다 */}
       {item.failReason && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
           <p className="text-sm text-amber-900">{item.failReason}</p>
-          <button
-            type="button"
-            onClick={async () => {
-              await navigator.clipboard.writeText(msg)
-              toast.success('문구를 복사했어요. 카톡이나 문자로 보내주세요')
-            }}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-amber-300 bg-white text-xs font-medium text-amber-800 hover:bg-amber-100"
-          >
-            <Copy className="h-3.5 w-3.5" />
-            문구 복사
-          </button>
+          <div className="flex gap-2">
+            {/* 전화가 먼저다 — 재구매 제안은 문자보다 통화가 훨씬 잘 된다 */}
+            <a
+              href={`tel:${item.customerPhone}`}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-amber-600 text-xs font-semibold text-white hover:bg-amber-700"
+            >
+              <Phone className="h-3.5 w-3.5" />
+              전화하기
+            </a>
+            <button
+              type="button"
+              onClick={async () => {
+                await navigator.clipboard.writeText(msg)
+                toast.success('문구를 복사했어요. 카톡으로 보내주세요')
+              }}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-amber-300 bg-white text-xs font-medium text-amber-800 hover:bg-amber-100"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              문구 복사
+            </button>
+          </div>
         </div>
       )}
 
       <div className="space-y-1.5">
         <p className="text-xs text-muted-foreground">
-          {item.failReason ? '준비된 문구예요 (수정 가능)' : `${item.dueLabel}에 이 문자가 나갑니다 (수정 가능)`}
+          {item.failReason || !item.smsAllowed
+            ? '그날 쓰실 문구를 준비해 뒀어요 (수정 가능)'
+            : `${item.dueLabel}에 이 문자가 나갑니다 (수정 가능)`}
         </p>
         <textarea
           value={msg}
@@ -129,9 +158,11 @@ function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: st
           rows={8}
           className="w-full rounded-lg border p-3 text-sm leading-relaxed outline-none focus:border-emerald-400 resize-none bg-slate-50 whitespace-pre-wrap"
         />
-        <p className="text-[11px] text-muted-foreground">
-          광고 문자라 (광고) 표기와 수신거부 주소는 지우면 안 돼요. 법으로 정해져 있어요
-        </p>
+        {item.smsAllowed && (
+          <p className="text-[11px] text-muted-foreground">
+            광고 문자라 (광고) 표기와 수신거부 주소는 지우면 안 돼요. 법으로 정해져 있어요
+          </p>
+        )}
       </div>
 
       <div className="flex gap-2">
@@ -153,7 +184,11 @@ function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: st
             className="flex-1 inline-flex items-center justify-center gap-1.5 h-11 rounded-lg bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors disabled:opacity-60"
           >
             <Check className="h-4 w-4" />
-            {isApproving ? '처리 중...' : `${item.dueLabel}에 보내기`}
+            {isApproving
+              ? '처리 중...'
+              : item.smsAllowed
+                ? `${item.dueLabel}에 보내기`
+                : `${item.dueLabel}에 알려주기`}
           </button>
         )}
         <button

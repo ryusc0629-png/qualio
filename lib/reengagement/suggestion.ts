@@ -14,6 +14,7 @@ import { createOptOutToken } from '@/lib/reengagement/optout-token'
 /** 광고 문자 한 통. 표기 3종은 여기서 항상 붙는다. */
 export function buildSuggestionMessage(p: {
   businessName: string
+  businessPhone?: string | null
   customerName: string
   serviceName: string
   reason?: string | null
@@ -34,13 +35,17 @@ export function buildSuggestionMessage(p: {
 
   if (reason) lines.push('', reason)
 
-  lines.push(
-    '',
-    `이제 ${p.serviceName} 하실 때가 된 것 같아 연락드렸어요.`,
-    '필요하시면 편하게 연락 주세요.',
-    '',
-    `무료수신거부 ${p.optOutUrl}`,
-  )
+  lines.push('', `이제 ${p.serviceName} 하실 때가 된 것 같아 연락드렸어요.`)
+
+  // 발신번호는 퀄리오 번호라 답장이 업체에 닿지 않는다.
+  // 업체 번호를 본문에 적어 손님이 '전화'로 오게 한다 — 이 한 줄이 없으면 문의가 증발한다.
+  if (p.businessPhone) {
+    lines.push(`문의는 ${p.businessPhone}로 전화 주세요. (이 번호로 답장은 받지 못해요)`)
+  } else {
+    lines.push('필요하시면 편하게 연락 주세요.')
+  }
+
+  lines.push('', `무료수신거부 ${p.optOutUrl}`)
 
   return lines.join('\n')
 }
@@ -92,7 +97,7 @@ export async function syncFieldSuggestions(opts: {
   // 고객·업체 정보 — 문자 문구에 들어간다
   const { data: booking } = (await db
     .from('bookings')
-    .select('customer_name, customer_phone, customer_id, scheduled_at, businesses!business_id(name)')
+    .select('customer_name, customer_phone, customer_id, scheduled_at, businesses!business_id(name, phone)')
     .eq('id', bookingId)
     .maybeSingle()) as unknown as {
       data: {
@@ -100,7 +105,7 @@ export async function syncFieldSuggestions(opts: {
         customer_phone: string | null
         customer_id: string | null
         scheduled_at: string
-        businesses: { name: string } | { name: string }[] | null
+        businesses: { name: string; phone: string | null } | { name: string; phone: string | null }[] | null
       } | null
     }
 
@@ -108,6 +113,7 @@ export async function syncFieldSuggestions(opts: {
 
   const biz = Array.isArray(booking.businesses) ? booking.businesses[0] : booking.businesses
   const businessName = biz?.name ?? '저희 업체'
+  const businessPhone = biz?.phone ?? null
   const customerName = booking.customer_name ?? '고객'
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
   const optOutToken = createOptOutToken(businessId, booking.customer_phone)
@@ -130,6 +136,7 @@ export async function syncFieldSuggestions(opts: {
     channel:          'sms',
     message: buildSuggestionMessage({
       businessName,
+      businessPhone,
       customerName,
       serviceName,
       reason,

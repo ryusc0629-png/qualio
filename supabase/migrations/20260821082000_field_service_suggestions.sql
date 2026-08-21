@@ -41,12 +41,22 @@ create unique index if not exists reengagement_dispatches_report_service_uniq
 create index if not exists idx_red_due
   on public.reengagement_dispatches (status, due_at);
 
--- 광고성 문자(정보통신망법 제50조) — 사전 동의 기록.
-alter table public.customers
-  add column if not exists marketing_consent_at timestamptz;
+-- 광고성 문자(정보통신망법 제50조)의 동의·거부 기록.
+--
+-- 왜 고객 표(customers)가 아니라 전화번호 기준의 별도 표인가:
+--   동의는 견적 폼에서 받는데 그 시점엔 고객 행이 아직 없고,
+--   수신거부는 우리 고객 목록에 없는 사람이 눌러도 반드시 지켜져야 한다.
+--   둘 다 '이 번호로 광고를 보내도 되나'를 묻는 것이라 번호를 열쇠로 둔다.
+create table if not exists public.marketing_consents (
+  id          uuid primary key default gen_random_uuid(),
+  business_id uuid not null references public.businesses(id) on delete cascade,
+  phone       text not null,
+  source      text not null default 'quote_form',
+  created_at  timestamptz not null default now(),
+  unique (business_id, phone)
+);
+alter table public.marketing_consents enable row level security;
 
--- 수신거부는 고객 DB 행이 없어도 반드시 지켜져야 하므로 전화번호 기준으로 따로 쌓는다.
--- (문자를 받은 사람이 우리 고객 목록에 없을 수 있는데, 그렇다고 거부를 못 받으면 위법이다)
 create table if not exists public.marketing_optouts (
   id          uuid primary key default gen_random_uuid(),
   business_id uuid not null references public.businesses(id) on delete cascade,

@@ -73,6 +73,19 @@ export default async function ReengagementPage() {
     .is('deleted_at', null)
   const registeredNames = new Set((svcRows ?? []).map((s) => s.name))
 
+  // 이 손님에게 문자를 보낼 수 있는지 — 동의했고 거부한 적 없어야 한다.
+  // 6개월 뒤에야 "못 보냈어요"를 알리면 늦다. 승인 화면에서 미리 알려준다.
+  const [{ data: consentRows }, { data: optoutRows }] = await Promise.all([
+    looseDb.from('marketing_consents').select('phone').eq('business_id', businessId),
+    looseDb.from('marketing_optouts').select('phone').eq('business_id', businessId),
+  ]) as unknown as [{ data: { phone: string }[] | null }, { data: { phone: string }[] | null }]
+  const consented = new Set((consentRows ?? []).map((r) => r.phone))
+  const optedOut = new Set((optoutRows ?? []).map((r) => r.phone))
+  const smsAllowed = (phone: string) => {
+    const p = phone.replace(/[^0-9]/g, '')
+    return consented.has(p) && !optedOut.has(p)
+  }
+
   const suggestions: SuggestionItem[] = (sugRows ?? [])
     .filter((r) => !!r.service_name)
     .map((r) => {
@@ -90,6 +103,7 @@ export default async function ReengagementPage() {
         message: r.message,
         unregistered: !registeredNames.has(r.service_name!),
         failReason: r.fail_reason,
+        smsAllowed: smsAllowed(r.customer_phone),
       }
     })
 

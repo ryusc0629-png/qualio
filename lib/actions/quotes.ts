@@ -10,6 +10,8 @@ import { sendQuoteToCustomer } from '@/lib/kakao/quote-delivery'
 import { sendPushToBusiness } from '@/lib/push/web-push'
 import { isBusinessService } from '@/lib/utils'
 import { findCustomerIdByPhone } from '@/lib/actions/_customer-lookup'
+import { recordMarketingConsent } from '@/lib/reengagement/consent'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { inputToUtcIso } from '@/lib/format/datetime'
 import { normalizeChannel } from '@/lib/utils/marketing-channels'
 import { parseVolumeTiers, unitPriceForSize, volumeRatioForSize } from '@/lib/quote/volume-tiers'
@@ -76,6 +78,9 @@ const calculateAndCreateQuoteSchema = z.object({
   unit_variant: z.string().max(50).optional(),
   // 유입 채널(?ch=) — 어느 홍보 채널에서 온 견적인지 오더에 도장 찍기용
   channel: z.string().max(50).optional(),
+  // 광고 문자 수신 동의 — 손님이 폼에서 직접 고른 경우에만 true.
+  // 이게 없으면 나중에 안내 문자를 보내지 않는다(폼에 그렇게 적어뒀다).
+  marketing_consent: z.boolean().optional(),
 })
 
 export const calculateAndCreateQuoteAction = publicAction
@@ -91,6 +96,15 @@ export const calculateAndCreateQuoteAction = publicAction
       .maybeSingle()
 
     if (!business) throw new Error('[APP] 존재하지 않는 업체입니다')
+
+    // 손님이 '안내 문자 받아볼게요'를 고른 경우에만 동의로 기록한다
+    if (parsedInput.marketing_consent && parsedInput.customer_phone) {
+      await recordMarketingConsent(
+        db as unknown as SupabaseClient,
+        parsedInput.business_id,
+        parsedInput.customer_phone,
+      )
+    }
 
     // 사장님 본인 번호로 들어온 견적은 테스트로 보고 통계에서 자동 제외
     const onlyDigits = (p: string | null | undefined) => (p ?? '').replace(/[^0-9]/g, '')
@@ -837,6 +851,7 @@ const consultationRequestSchema = z.object({
   notes:          z.string().max(500).optional(),
   // 유입 채널(?ch=) — 제안서 QR·전단지 QR 등 오프라인 영업 유입도 리드에 채널로 남긴다
   channel:        z.string().max(50).optional(),
+  marketing_consent: z.boolean().optional(),
 })
 
 export const createConsultationRequestAction = publicAction
@@ -854,6 +869,10 @@ export const createConsultationRequestAction = publicAction
 
     const phone = parsedInput.customer_phone.replace(/[^0-9]/g, '')
     const name = parsedInput.customer_name.trim()
+
+    if (parsedInput.marketing_consent) {
+      await recordMarketingConsent(db as unknown as SupabaseClient, parsedInput.business_id, phone)
+    }
     const companyInput = parsedInput.company_name?.trim()
     const noteText = parsedInput.notes?.trim()
     // 규모 단위는 서비스 단위를 따른다(개수로 받는 서비스는 '개', 그 외는 '평')
