@@ -15,6 +15,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { inputToUtcIso } from '@/lib/format/datetime'
 import { normalizeChannel } from '@/lib/utils/marketing-channels'
 import { parseVolumeTiers, unitPriceForSize, volumeRatioForSize } from '@/lib/quote/volume-tiers'
+import { shouldOfferTiers } from '@/lib/quote/tier-config'
 
 // 공개 폼용 액션 클라이언트 (인증 불필요)
 const publicAction = createSafeActionClient({
@@ -198,16 +199,17 @@ export const calculateAndCreateQuoteAction = publicAction
     }
 
     // 이 서비스에 3단계 플랜이 설정됐는지 — 미설정이면 단일 금액으로 안내한다.
-    // 판단 기준은 서비스 자체의 플랜 구성뿐이다(포함 항목 tier_*_items · 직접 가격 tier_*_price).
-    // 예전엔 quote_tier_services(플랜별 서비스 묶음)도 함께 봤는데, 그 화면을 없애면서
-    // 함께 걷어냈다 — 전 업체 통틀어 한 건도 쓰지 않던 경로였다.
-    const plansConfigured =
-      (service.tier_good_items?.length   ?? 0) > 0 ||
-      (service.tier_better_items?.length ?? 0) > 0 ||
-      (service.tier_best_items?.length   ?? 0) > 0 ||
-      service.tier_good_price   != null ||
-      service.tier_better_price != null ||
-      service.tier_best_price   != null
+    //
+    // ★판단 기준은 **추천·프리미엄에 고유한 내용이 있는지**뿐이다. 기본 플랜만 채운 건
+    //   3단계를 팔겠다는 뜻이 아니다 — "이 서비스에 뭐가 포함되나"를 적는 자연스러운 행동이다.
+    //
+    // ⚠️예전엔 기본 항목(tier_good_items)만 있어도 3단계로 판정했다. 그러면 추천·프리미엄이
+    //   기본가 × 1.2 / × 1.5로 자동 생성돼 고객에게 나가는데, 정작 그 플랜에 **추가되는 항목이
+    //   한 줄도 없다.** "기본보다 +36만원인데 뭐가 더 들어가는지 안 적힌" 카드가 되어
+    //   근거 없이 비싼 선택지로 읽히고, 업체가 의도한 적도 없는 금액이 나간다.
+    //   (2026-08-21 다트클린 '상업시설 대청소'에서 실제로 발생 — 기본 5개만 적었는데 3단계 노출)
+    // ⛔기본 항목·기본 가격을 이 조건에 다시 넣지 말 것.
+    const plansConfigured = shouldOfferTiers(service)
 
     // DEFAULT_TIERS 상수라 항상 찾아진다
     const goodTier   = tiers.find((t) => t.tier === 'good')!
@@ -226,6 +228,9 @@ export const calculateAndCreateQuoteAction = publicAction
       goodPrice = applyDiscount(roundToThousand(baseCalc), 'good')
       betterPrice = null
       bestPrice = null
+      // 3단계로 안 나가도 '기본 플랜에 뭐가 포함되나'는 그대로 보여준다 —
+      // 업체가 적어둔 항목이라 AI 설명도 이걸 근거로 써야 지어내지 않는다.
+      goodNames = service.tier_good_items ?? []
     } else {
       // 서비스별 직접 가격(tier_*_price)이 있으면 그 값 우선, 없으면 기본가 × 배수.
       // 직접 가격은 원/평(평당) 또는 정액 단가이므로 평당이면 평수만큼 곱한다.

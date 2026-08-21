@@ -226,8 +226,12 @@ function TierItemsEditor({
             />
             <span className="text-[11px] text-muted-foreground">원{unitSuffix}</span>
           </div>
+          {/* 이 안내가 "비워둬도 그 금액으로 팔린다"로 읽히면 안 된다 —
+              추천·프리미엄이 통째로 비어 있으면 3단계 자체가 안 나간다. 조건을 함께 적는다. */}
           {autoPrice ? (
-            <span className="text-[10px] text-muted-foreground">비워두면 자동 {autoPrice.toLocaleString()}원{unitSuffix}</span>
+            <span className="text-[10px] text-muted-foreground">
+              항목을 넣으면 자동 {autoPrice.toLocaleString()}원{unitSuffix}
+            </span>
           ) : null}
         </div>
       ) : (
@@ -775,8 +779,11 @@ export function EditServiceButton({
                     많이 쓰는 구성 불러오기
                   </Button>
                 </div>
+                {/* ★"비워두면 자동으로 채웁니다"는 '안 채우면 알아서 팔린다'로 읽혔다.
+                    실제로는 추천·프리미엄이 비어 있으면 3단계를 아예 안 보낸다 — 그 사실을 그대로 적는다. */}
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  입력하시면 견적서에 정확한 포함 항목이 표시됩니다. 비워두면 자동으로 채웁니다.
+                  <b className="text-foreground">추천·프리미엄에 항목을 넣어야 3단계 견적으로 나갑니다.</b>{' '}
+                  기본만 채우시면 고객에게는 <b className="text-foreground">금액 하나</b>와 포함 항목만 보여요.
                 </p>
                 <p className="text-xs text-amber-600 mt-1">
                   ✏️ 짧은 명사형으로 입력해주세요 — &ldquo;필터 세척&rdquo; O, &ldquo;필터를 세척해드립니다&rdquo; X
