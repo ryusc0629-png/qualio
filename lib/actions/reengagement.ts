@@ -85,11 +85,16 @@ export const skipReengagementAction = action
 // 현장 직원이 고르면 검토 대기(pending)로 쌓인다. 대표가 여기서 승인해야(scheduled)
 // 정해진 날짜에 문자가 나간다. 승인 전에는 고객에게 아무것도 가지 않는다.
 
-// 승인 — 문구를 확정하고 발송 예약 상태로 바꾼다
+// 승인 — 문구를 확정하고 발송 예약 상태로 바꾼다.
+//
+// channel은 사장님이 건별로 고른다:
+//   'sms'    그날 문자가 자동으로 나간다. 편하지만 건당 요금이 든다(LMS)
+//   'manual' 그날 알림만 받고 사장님이 전화한다. 돈이 안 들고, 재구매는 통화가 더 잘 된다
 export const approveSuggestionAction = action
   .schema(z.object({
     dispatchId: z.string().uuid(),
     message:    z.string().min(10, '문구를 적어주세요').max(1000),
+    channel:    z.string().refine((v) => ['sms', 'manual'].includes(v), '보내는 방법을 골라주세요'),
   }))
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getBusinessId()
@@ -110,6 +115,7 @@ export const approveSuggestionAction = action
       .update({
         status: 'scheduled',
         message: parsedInput.message,
+        channel: parsedInput.channel,
         approved_at: new Date().toISOString(),
       })
       .eq('id', parsedInput.dispatchId)

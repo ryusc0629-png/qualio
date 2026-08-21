@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
-import { Sparkles, CalendarClock, Check, X, Plus, HardHat, Copy, Phone } from 'lucide-react'
+import { Sparkles, CalendarClock, Check, X, Plus, HardHat, Copy, Phone, MessageSquare } from 'lucide-react'
 import { approveSuggestionAction, registerSuggestedServiceAction, skipReengagementAction } from '@/lib/actions/reengagement'
 
 // 현장에서 올린 '다음에 제안할 서비스' 검토 카드.
@@ -31,12 +31,14 @@ export interface SuggestionItem {
 
 function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: string) => void }) {
   const [msg, setMsg] = useState(item.message)
+  // 방금 누른 버튼이 문자였는지 — 성공 안내 문구를 맞게 띄우기 위해서만 쓴다
+  const pickedSms = useRef(false)
   const [registered, setRegistered] = useState(!item.unregistered)
 
   const { execute: approve, isPending: isApproving } = useAction(approveSuggestionAction, {
     onSuccess: () => {
       toast.success(
-        item.smsAllowed
+        pickedSms.current
           ? `${item.dueLabel}에 ${item.customerName}님께 문자가 나가요`
           : `${item.dueLabel}에 알려드릴게요. 그때 전화하시면 됩니다`
       )
@@ -148,9 +150,7 @@ function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: st
 
       <div className="space-y-1.5">
         <p className="text-xs text-muted-foreground">
-          {item.failReason || !item.smsAllowed
-            ? '그날 쓰실 문구를 준비해 뒀어요 (수정 가능)'
-            : `${item.dueLabel}에 이 문자가 나갑니다 (수정 가능)`}
+          그날 쓰실 문구예요 (수정 가능) — 전화로 말씀하실 때 그대로 읽으셔도 됩니다
         </p>
         <textarea
           value={msg}
@@ -164,6 +164,20 @@ function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: st
           </p>
         )}
       </div>
+
+      {/* 문자 발송은 '고르는 것'으로 둔다 — 편한 대신 건당 요금이 붙기 때문.
+          기본은 무료인 '알려주세요'이고, 문자는 동의한 손님에게만 선택지로 보인다. */}
+      {!item.failReason && item.smsAllowed && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => { pickedSms.current = true; approve({ dispatchId: item.id, message: msg, channel: 'sms' }) }}
+          className="w-full inline-flex items-center justify-center gap-1.5 h-11 rounded-lg border border-emerald-300 bg-white text-sm font-medium text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-60"
+        >
+          <MessageSquare className="h-4 w-4" />
+          {isApproving ? '처리 중...' : `${item.dueLabel}에 문자로 자동 발송 (문자 요금 1건)`}
+        </button>
+      )}
 
       <div className="flex gap-2">
         {item.failReason ? (
@@ -180,15 +194,11 @@ function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: st
           <button
             type="button"
             disabled={busy}
-            onClick={() => approve({ dispatchId: item.id, message: msg })}
+            onClick={() => { pickedSms.current = false; approve({ dispatchId: item.id, message: msg, channel: 'manual' }) }}
             className="flex-1 inline-flex items-center justify-center gap-1.5 h-11 rounded-lg bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors disabled:opacity-60"
           >
             <Check className="h-4 w-4" />
-            {isApproving
-              ? '처리 중...'
-              : item.smsAllowed
-                ? `${item.dueLabel}에 보내기`
-                : `${item.dueLabel}에 알려주기`}
+            {isApproving ? '처리 중...' : `${item.dueLabel}에 알려주세요`}
           </button>
         )}
         <button

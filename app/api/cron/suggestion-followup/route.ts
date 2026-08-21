@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
   // 승인을 깜빡한 제안이 그날 조용히 지나가면, 현장이 적어둔 기회가 통째로 사라진다.
   const { data: due } = (await looseDb
     .from('reengagement_dispatches')
-    .select('id, business_id, status, customer_id, customer_phone, customer_name, service_name, message, notified_at')
+    .select('id, business_id, status, channel, customer_id, customer_phone, customer_name, service_name, message, notified_at')
     .eq('source', 'field')
     .in('status', ['scheduled', 'pending'])
     .lte('due_at', now.toISOString())
@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
           id: string
           business_id: string
           status: string
+          channel: string
           customer_id: string | null
           customer_phone: string
           customer_name: string | null
@@ -81,6 +82,22 @@ export async function GET(request: NextRequest) {
           .update({
             notified_at: now.toISOString(),
             fail_reason: '오늘이 연락드리기로 한 날이에요. 전화하시거나, 문자로 보내려면 승인해주세요',
+          })
+          .eq('id', row.id)
+        held++
+        heldByBusiness.set(row.business_id, (heldByBusiness.get(row.business_id) ?? 0) + 1)
+        continue
+      }
+
+      // 사장님이 '알림만 받기'로 승인한 건 — 문자를 보내지 않는다(요금이 안 든다).
+      // 문자는 편하지만 건당 요금이 붙는다. 어느 쪽인지는 승인할 때 사장님이 골랐다.
+      if (row.channel !== 'sms') {
+        await looseDb
+          .from('reengagement_dispatches')
+          .update({
+            status: 'pending',
+            notified_at: now.toISOString(),
+            fail_reason: '오늘이 연락드리기로 한 날이에요. 준비된 문구로 전화 한 통이면 됩니다',
           })
           .eq('id', row.id)
         held++
