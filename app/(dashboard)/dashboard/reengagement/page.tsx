@@ -28,6 +28,9 @@ export default async function ReengagementPage() {
     .from('reengagement_dispatches')
     .select('id, customer_name, customer_phone, last_service, months_since, message')
     .eq('business_id', businessId)
+    // ⚠️ source를 안 거르면 현장 제안(source='field')이 아래 구역에도 똑같이 뜬다.
+    //    같은 건이 두 번 보이면 사장님은 "두 번 연락해야 하나?" 하고 헷갈린다.
+    .eq('source', 'auto_90d')
     .eq('status', 'pending')
     .order('created_at', { ascending: false })) as unknown as {
     data:

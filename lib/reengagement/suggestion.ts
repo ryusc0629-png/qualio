@@ -73,10 +73,16 @@ export async function syncFieldSuggestions(opts: {
 
   const { data: existing } = (await db
     .from('reengagement_dispatches')
-    .select('id, service_name, status')
+    .select('id, service_name, status, reason, approved_at')
     .eq('business_id', businessId)
     .eq('report_id', reportId)) as unknown as {
-      data: Array<{ id: string; service_name: string | null; status: string }> | null
+      data: Array<{
+        id: string
+        service_name: string | null
+        status: string
+        reason: string | null
+        approved_at: string | null
+      }> | null
     }
 
   const rows = existing ?? []
@@ -92,7 +98,19 @@ export async function syncFieldSuggestions(opts: {
 
   const kept = new Set(rows.map((r) => r.service_name).filter(Boolean) as string[])
   const toAdd = names.filter((n) => !kept.has(n))
-  if (toAdd.length === 0) return 0
+
+  // 현장이 문장을 고쳐 다시 저장하면 대기열 문구도 따라가야 한다.
+  // 아직 사장님이 승인하지 않은 건만 갈아끼운다 — 승인 때 손본 문구를 덮으면 안 된다.
+  const toRefresh = rows.filter(
+    (r) =>
+      r.status === 'pending' &&
+      !r.approved_at &&
+      r.service_name &&
+      names.includes(r.service_name) &&
+      (r.reason ?? '') !== (reason ?? ''),
+  )
+
+  if (toAdd.length === 0 && toRefresh.length === 0) return 0
 
   // 고객·업체 정보 — 문자 문구에 들어간다
   const { data: booking } = (await db
@@ -119,6 +137,27 @@ export async function syncFieldSuggestions(opts: {
   const optOutToken = createOptOutToken(businessId, booking.customer_phone)
   const optOutUrl = optOutToken ? `${appUrl}/unsubscribe/${optOutToken}` : `${appUrl}/unsubscribe`
 
+  const messageFor = (serviceName: string) =>
+    buildSuggestionMessage({
+      businessName,
+      businessPhone,
+      customerName,
+      serviceName,
+      reason,
+      lastServicedAt: booking.scheduled_at,
+      optOutUrl,
+    })
+
+  // 문장이 바뀐 건은 근거와 문구를 함께 갈아끼운다. 근거만 고치면 문자에 옛 문장이 그대로 나간다.
+  for (const r of toRefresh) {
+    await db
+      .from('reengagement_dispatches')
+      .update({ reason, message: messageFor(r.service_name!) })
+      .eq('id', r.id)
+  }
+
+  if (toAdd.length === 0) return 0
+
   const inserts = toAdd.map((serviceName) => ({
     business_id:      businessId,
     customer_id:      booking.customer_id,
@@ -134,15 +173,7 @@ export async function syncFieldSuggestions(opts: {
     due_at:           dueAt,
     status:           'pending',
     channel:          'sms',
-    message: buildSuggestionMessage({
-      businessName,
-      businessPhone,
-      customerName,
-      serviceName,
-      reason,
-      lastServicedAt: booking.scheduled_at,
-      optOutUrl,
-    }),
+    message:          messageFor(serviceName),
   }))
 
   const { error } = await db.from('reengagement_dispatches').insert(inserts)

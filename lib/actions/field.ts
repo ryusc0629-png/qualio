@@ -515,6 +515,9 @@ export const fieldSaveReportAction = action
     if (parsedInput.aiReportData) {
       upsertData.ai_report_data = parsedInput.aiReportData
     }
+    // 다듬은 '앞으로 손봐야 할 것' — 고객에게 나가는 제안 문구도 이 문장을 쓴다
+    let polishedAdvice: string | null = null
+
     // 향후 관리 안내 — 비우면 알림도 함께 지운다
     if (parsedInput.careAdvice !== undefined) {
       let advice = parsedInput.careAdvice.trim()
@@ -543,6 +546,8 @@ export const fieldSaveReportAction = action
         advice && parsedInput.careMonths && parsedInput.careMonths > 0
           ? addMonths(parsedInput.careMonths)
           : null
+      // 다듬은 문장을 아래 제안 문구에서도 써야 한다. 원문을 다시 읽으면 메모체가 그대로 나간다.
+      polishedAdvice = advice
     }
 
     const { data: report, error: reportError } = await db
@@ -580,7 +585,9 @@ export const fieldSaveReportAction = action
     // 다음에 제안할 서비스 → 재방문 대기열(검토 대기).
     // 고객에게 지금 나가는 게 아니라 대표가 승인해야 움직인다.
     if (parsedInput.suggestedServices !== undefined) {
-      const advice = (parsedInput.careAdvice ?? '').trim()
+      // ⚠️ parsedInput.careAdvice(원문)를 쓰면 안 된다 — 그건 현장이 적은 메모체 그대로다.
+      //    이 문장은 고객에게 나가는 안내에 그대로 실린다.
+      const advice = (polishedAdvice ?? '').trim()
       const added = await syncFieldSuggestions({
         db: db as unknown as SupabaseClient,
         businessId: worker.business_id,
