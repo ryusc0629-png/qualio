@@ -4,6 +4,8 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { recommendServiceTierItems } from '@/lib/ai/service-tier-items'
+import { spendQuota } from '@/lib/ratelimit/daily-quota'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { markSeoStale } from '@/lib/seo/stale'
 import { revalidatePath } from 'next/cache'
 
@@ -106,6 +108,9 @@ export const aiSuggestServiceTierItemsAction = action
       .maybeSingle()
 
     if (!service) throw new Error('[APP] 서비스를 찾을 수 없습니다')
+
+    // 하루 한도 — 사장님이 직접 누르는 버튼이라 폭주 가능성이 있다
+    await spendQuota(db as unknown as SupabaseClient, 'setup', profile.business_id)
 
     const items = await recommendServiceTierItems({
       name: service.name,

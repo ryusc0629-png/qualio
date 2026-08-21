@@ -5,6 +5,8 @@ import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateSpecSheet } from '@/lib/ai/spec-sheet'
 import { extractQuoteFromMeeting } from '@/lib/ai/extract-quote-from-meeting'
+import { spendQuota } from '@/lib/ratelimit/daily-quota'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { getNextQuoteNumber } from '@/lib/utils/quote-number'
 import { mergeAddressDetail } from '@/lib/address/format'
@@ -137,6 +139,9 @@ export const generateSpecAction = action
       ? await getLeadMeetingText(db, businessId, parsedInput.leadId)
       : null
 
+    // 하루 한도 — 사장님이 직접 누르는 버튼이라 폭주 가능성이 있다
+    await spendQuota(db as unknown as SupabaseClient, 'document', businessId)
+
     const specContent = await generateSpecSheet({
       businessName: business?.name ?? '청소업체',
       clientName:   parsedInput.clientName,
@@ -165,6 +170,8 @@ export const extractQuoteFromMeetingAction = action
     if (!meetingText) {
       throw new Error('[APP] 불러올 상담 기록이 없어요. 먼저 상담 기록(미팅·방문·메모 등)을 저장해주세요')
     }
+
+    await spendQuota(db as unknown as SupabaseClient, 'document', businessId)
 
     const fields = await extractQuoteFromMeeting(meetingText)
     return { fields }
