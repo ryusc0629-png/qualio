@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { Heading2, Bold, List } from 'lucide-react'
@@ -14,6 +14,9 @@ interface RichTextEditorProps {
 
 // 청소 사장님용 쉬운 서식 편집기 — ## ** 같은 기호 없이 워드처럼 편집
 export function RichTextEditor({ value, onChange, disabled }: RichTextEditorProps) {
+  // 편집기가 마지막으로 내보낸 본문 — 사장님이 직접 친 변경인지, 밖에서 통째로 바뀐 값인지 구분하는 기준
+  const lastEmitted = useRef(value)
+
   const editor = useEditor({
     extensions: [StarterKit.configure({ heading: { levels: [2, 3] } })],
     content: markdownToHtml(value),
@@ -25,9 +28,20 @@ export function RichTextEditor({ value, onChange, disabled }: RichTextEditorProp
       },
     },
     onUpdate: ({ editor }) => {
-      onChange(htmlToMarkdown(editor.getHTML()))
+      const markdown = htmlToMarkdown(editor.getHTML())
+      lastEmitted.current = markdown
+      onChange(markdown)
     },
   })
+
+  // 밖에서 본문이 통째로 바뀌면 편집기 내용도 갈아끼운다.
+  // tiptap의 content 옵션은 편집기를 만들 때 딱 한 번만 쓰이기 때문에, 이 처리가 없으면
+  // 부모가 본문을 새로 넣어줘도 편집칸은 처음 값 그대로 남는다(실제로 그런 버그가 있었다).
+  useEffect(() => {
+    if (!editor || value === lastEmitted.current) return
+    lastEmitted.current = value
+    editor.commands.setContent(markdownToHtml(value), { emitUpdate: false })
+  }, [value, editor])
 
   useEffect(() => {
     if (editor) editor.setEditable(!disabled)

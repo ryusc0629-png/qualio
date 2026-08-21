@@ -3,7 +3,7 @@
 import { ArrowLeft } from 'lucide-react'
 import { PostEditor } from '../post-editor'
 
-// 전체 화면 편집 페이지에서 다룰 포스트 형태 (수정 모드일 때만 전달)
+// 전체 화면 편집 페이지에서 다룰 포스트 형태
 export interface EditablePost {
   id: string
   title: string
@@ -18,14 +18,12 @@ export interface EditablePost {
 
 interface EditorShellProps {
   businessId: string
-  post?: EditablePost
-  remainingToday: number
-  dailyLimit: number
+  post: EditablePost
 }
 
-// '직접 작성'·'수정'을 좁은 인라인 패널 대신 전체 화면에서 편집하도록 감싸는 클라이언트 래퍼.
-// 저장·취소하면 목록으로 되돌아간다(전체 이동이라 새 글이 목록에 바로 반영됨).
-export function EditorShell({ businessId, post, remainingToday, dailyLimit }: EditorShellProps) {
+// 이미 만들어진 글의 '수정'을 좁은 인라인 패널 대신 전체 화면에서 편집하도록 감싸는 클라이언트 래퍼.
+// 저장·취소하면 목록으로 되돌아간다(전체 이동이라 고친 내용이 목록에 바로 반영됨).
+export function EditorShell({ businessId, post }: EditorShellProps) {
   const backToList = () => window.location.replace('/dashboard/marketing')
 
   return (
@@ -43,8 +41,6 @@ export function EditorShell({ businessId, post, remainingToday, dailyLimit }: Ed
         post={post}
         onClose={backToList}
         onSaved={backToList}
-        remainingToday={remainingToday}
-        dailyLimit={dailyLimit}
       />
     </div>
   )
