@@ -253,8 +253,9 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           afterPhotoUrls: after.filter((p) => !p.uploading && p.url).map((p) => p.url),
           aiReportData: report,
           // 다듬은 문장을 바로 저장한다 — 여기서 안 넣으면 화면엔 다듬은 글이,
-          // DB엔 현장이 쓴 메모체가 남아 고객 문서로 옛 문장이 나간다
-          ...(polishedAdvice ? { careAdvice: polishedAdvice } : {}),
+          // DB엔 현장이 쓴 메모체가 남아 고객 문서로 옛 문장이 나간다.
+          // 이미 다듬은 글이라고 알려줘서 저장 쪽에서 또 다듬지 않게 한다.
+          ...(polishedAdvice ? { careAdvice: polishedAdvice, careAdvicePolished: true } : {}),
         })
       }
     },

@@ -22,6 +22,55 @@ const FALLBACK: AiReport = {
   recommendedServices: [],
 }
 
+/**
+ * '앞으로 손봐야 할 것' 한 줄만 고객이 읽을 문장으로 다듬는다.
+ *
+ * 왜 따로 있나: 일회성 현장은 보고서를 만들 때 같이 다듬지만(generateAiReport),
+ * 정기 거래처 현장은 '오늘 한 작업' 자체를 안 받아서 그 경로를 안 탄다.
+ * 그런데 이 글은 정기 쪽에서도 월간 보고서에 **그대로 인쇄**된다
+ * (app/q/.../monthly-report). 그래서 저장 시점에 한 번 더 걸러준다.
+ *
+ * ⚠️ 실패하면 원문을 그대로 돌려준다. 현장 직원이 저장을 못 하는 것보다
+ *    말투가 거친 문장이 남는 편이 낫다 — 저장을 막는 일은 절대 없어야 한다.
+ */
+export async function polishCareAdvice(raw: string): Promise<string> {
+  const text = raw.trim()
+  if (!text) return ''
+  if (!process.env.ANTHROPIC_API_KEY) return text
+
+  try {
+    const client = getClaude('care-advice')
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 512,
+      messages: [
+        {
+          role: 'user',
+          content: `아래는 청소 현장 직원이 '앞으로 손봐야 할 것'에 적은 메모입니다.
+이 글은 고객(거래처)이 받는 작업 보고서에 그대로 실립니다. 말투만 다듬어 주세요.
+
+## 규칙
+- 친절하고 전문적인 ~요 체. "~해 보임", "~있음", "~함" 같은 메모체를 남기지 마세요
+- **원문에 없는 사실·원인·기간·비용을 보태지 마세요.** 문장만 다듬는 것입니다
+- 겁주지 말고 담담하게. 지금 당장의 하자가 아니라 '앞으로 지켜볼 것'이라는 톤
+- 1~3문장. 다듬은 문장만 출력하고 다른 말은 붙이지 마세요
+
+## 원문
+${text}`,
+        },
+      ],
+    })
+
+    const polished = textFrom(response).trim()
+    // 빈 응답·이상하게 긴 응답은 믿지 않는다(원문 유지)
+    if (!polished || polished.length > text.length * 4 + 200) return text
+    return polished
+  } catch (e) {
+    console.error('[ReportWriter] 관리 안내 다듬기 실패 — 원문 그대로 저장:', e)
+    return text
+  }
+}
+
 export async function generateAiReport(
   workerMemo: string,
   serviceItems?: { name: string; basePrice: number }[],

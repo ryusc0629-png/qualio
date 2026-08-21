@@ -14,7 +14,7 @@ import { sendOnMyWayForBooking } from '@/lib/kakao/on-my-way'
 import { ensureOnboardingDraft } from '@/lib/onboarding/draft-from-field'
 import { addMonths } from '@/lib/reports/care-due'
 import { syncFieldSuggestions } from '@/lib/reengagement/suggestion'
-import { generateAiReport } from '@/lib/ai/report-writer'
+import { generateAiReport, polishCareAdvice } from '@/lib/ai/report-writer'
 import { geocodeAddress } from '@/lib/roadmap/geo'
 import { postBookingRevenue } from '@/lib/finance/post-booking-revenue'
 import { assertReportSendable } from '@/lib/utils/report-send-guard'
@@ -485,6 +485,8 @@ export const fieldSaveReportAction = action
     afterPhotoCaptions:  z.array(z.string().max(100)).max(10).optional(),
     // 앞으로 손봐야 할 것 + 몇 달 뒤에 사장님께 알릴지(0이면 알림 없음)
     careAdvice:      z.string().max(2000).optional(),
+    // 보고서를 만들면서 이미 다듬은 문장이면 여기서 또 다듬지 않는다(같은 글을 두 번 쓰는 낭비).
+    careAdvicePolished: z.boolean().optional(),
     careMonths:      z.number().int().min(0).max(24).optional(),
     // 다음에 제안할 서비스 — 고객 문서엔 안 실린다. 대표가 승인하면 careMonths 뒤에 연락이 나간다.
     suggestedServices: z.array(z.string().min(1).max(60)).max(10).optional(),
@@ -515,7 +517,27 @@ export const fieldSaveReportAction = action
     }
     // 향후 관리 안내 — 비우면 알림도 함께 지운다
     if (parsedInput.careAdvice !== undefined) {
-      const advice = parsedInput.careAdvice.trim()
+      let advice = parsedInput.careAdvice.trim()
+
+      // 이 글은 고객 문서(작업 보고서 '향후 관리 안내' · 월간 보고서 '다음 달 계획')에
+      // **그대로 인쇄**된다. 일회성 현장은 보고서를 만들 때 같이 다듬지만, 정기 거래처 현장은
+      // '오늘 한 작업'을 안 받아서 그 경로를 안 탄다 → 메모체가 그대로 거래처에 나갔다.
+      // 여기서 한 번 더 걸러 양쪽을 같은 말투로 맞춘다.
+      //
+      // ⚠️ 내용이 실제로 바뀐 저장에서만 부른다. 매번 부르면 이미 다듬은 문장을 계속
+      //    다시 쓰게 되고(문장이 조금씩 흔들린다), 저장할 때마다 돈과 시간이 든다.
+      if (advice && !parsedInput.careAdvicePolished) {
+        const { data: prev } = await db
+          .from('reports')
+          .select('care_advice')
+          .eq('booking_id', parsedInput.bookingId)
+          .maybeSingle() as { data: { care_advice: string | null } | null }
+
+        if ((prev?.care_advice ?? '').trim() !== advice) {
+          advice = await polishCareAdvice(advice)
+        }
+      }
+
       upsertData.care_advice = advice || null
       upsertData.care_due_at =
         advice && parsedInput.careMonths && parsedInput.careMonths > 0
