@@ -89,6 +89,10 @@ export function CurrentPlanCard({
                   hasLifetimeDiscount ? applyLifetimeDiscount(plan.price, lifetimeDiscountRate) : plan.price
                 )}
               </b>
+              {/* 세무 처리할 때 "계산서 어디 있지?" 하고 찾게 되는 자리라 여기 적어둔다 */}
+              <span className="block mt-0.5">
+                카드 매출전표가 증빙이라 세금계산서는 따로 발행되지 않아요
+              </span>
             </p>
           )}
           {isPaid && periodEndLabel && (

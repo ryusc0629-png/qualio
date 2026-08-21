@@ -116,6 +116,12 @@ export default async function PaymentSuccessPage({ searchParams }: SuccessPagePr
                   </p>
                 </div>
               )}
+              {/* 결제 직후가 "세금계산서 주세요"가 가장 많이 나오는 지점이라 여기서 먼저 답한다 */}
+              <p className="pt-2 mt-2 border-t text-xs leading-relaxed">
+                <b className="text-foreground">세금계산서는 따로 발행되지 않아요.</b>{' '}
+                카드 매출전표가 세금계산서를 대신하는 증빙이라 중복 발행이 안 됩니다.
+                카드 전표만으로 매입세액 공제를 그대로 받으실 수 있어요.
+              </p>
             </div>
             <Link href="/dashboard">
               <Button className="w-full" size="lg">대시보드로 이동하기</Button>

@@ -183,6 +183,11 @@ export default async function PricingPage() {
                 q: '결제 수단은 무엇을 지원하나요?',
                 a: BILLING_COPY.faqMethod,
               },
+              {
+                // 사업자 고객이라 습관적으로 요청한다 — 미리 답해두면 그 문의 자체가 줄어든다
+                q: '세금계산서를 발행해 주시나요?',
+                a: BILLING_COPY.faqTaxInvoice,
+              },
             ].map((item) => (
               <div key={item.q} className="border-b pb-6">
                 <h3 className="font-medium mb-2">{item.q}</h3>

@@ -67,6 +67,12 @@ export default function TermsPage() {
             아래 표에 기재된 금액은 <b className="text-foreground">부가가치세가 포함되지 않은 공급가액</b>이며,
             실제 청구 금액은 여기에 부가가치세 10%를 더한 금액입니다. 결제 수단과 관계없이 동일하게 적용됩니다.
           </p>
+          {/* 세금계산서는 계약 조건이라 약관 본문에 둔다 — FAQ에만 있으면 "못 들었다"가 된다 */}
+          <p className="text-muted-foreground leading-relaxed mb-3">
+            구독료는 신용카드로 결제되며, 발급되는 <b className="text-foreground">신용카드 매출전표가 세금계산서를 갈음하는
+            적격증빙</b>입니다. 「부가가치세법」 제33조에 따라 신용카드 매출전표를 발급한 거래에 대해서는
+            세금계산서를 중복하여 발급하지 않습니다.
+          </p>
           <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted">
