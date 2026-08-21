@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { formatDate } from '@/lib/format/datetime'
+import { formatPhone } from '@/lib/format/phone'
 import { createOptOutToken } from '@/lib/reengagement/optout-token'
 
 // 현장에서 올린 '다음에 제안할 서비스'를 재방문 대기열에 반영하고,
@@ -40,7 +41,9 @@ export function buildSuggestionMessage(p: {
   // 발신번호는 퀄리오 번호라 답장이 업체에 닿지 않는다.
   // 업체 번호를 본문에 적어 손님이 '전화'로 오게 한다 — 이 한 줄이 없으면 문의가 증발한다.
   if (p.businessPhone) {
-    lines.push(`문의는 ${p.businessPhone}로 전화 주세요. (이 번호로 답장은 받지 못해요)`)
+    // 업체 정보에 하이픈 없이 저장된 번호가 많다. 그대로 쓰면 01029122881처럼 붙어 나와
+    // 손님이 한눈에 못 읽는다 — 보이는 곳에서는 항상 하이픈을 넣는다.
+    lines.push(`문의는 ${formatPhone(p.businessPhone)}로 전화 주세요. (이 번호로 답장은 받지 못해요)`)
   } else {
     lines.push('필요하시면 편하게 연락 주세요.')
   }

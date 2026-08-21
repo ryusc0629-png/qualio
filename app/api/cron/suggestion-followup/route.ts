@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { sendPushToBusiness } from '@/lib/push/web-push'
 import { sendCareCheckAlimtalk, isCareCheckTemplateReady } from '@/lib/kakao/alimtalk'
 import { canSendMarketingSms } from '@/lib/reengagement/consent'
+import { formatPhone } from '@/lib/format/phone'
 
 // Vercel Cron(daily-maintenance에서 호출):
 // 현장에서 올리고 대표가 승인한 '다음에 제안할 서비스'의 날짜가 되면 고객에게 알린다.
@@ -85,7 +86,7 @@ async function trySendCareCheck(
       // 현장이 적은 근거가 이 안내의 알맹이다. 없으면 문자로 넘긴다 —
       // 내용 없는 안내는 받는 쪽에 아무 정보가 아니다.
       checkNote:     (row.reason ?? '').trim().slice(0, 200) || '작업 시 확인된 사항',
-      businessPhone: biz.phone,
+      businessPhone: formatPhone(biz.phone),
       reportUrl:     `${appUrl}/q/${row.business_id}/report/${row.report_id}`,
     })
     if (!ok) return 'unavailable'

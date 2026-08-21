@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
 import { Sparkles, CalendarClock, Check, X, Plus, HardHat, Copy, Phone, MessageSquare } from 'lucide-react'
 import { approveSuggestionAction, registerSuggestedServiceAction, skipReengagementAction } from '@/lib/actions/reengagement'
+import { formatPhone } from '@/lib/format/phone'
 
 // 현장에서 올린 '다음에 제안할 서비스' 검토 카드.
 //
@@ -82,7 +83,7 @@ function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: st
               {item.dueLabel}에 발송
             </span>
             <a href={`tel:${item.customerPhone}`} className="underline underline-offset-2">
-              {item.customerPhone}
+              {formatPhone(item.customerPhone)}
             </a>
           </p>
         </div>
