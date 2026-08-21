@@ -129,8 +129,6 @@ interface ScheduleSlot {
   geoTargeted?: boolean     // GEO 측정 '안 잡히는 질문'을 공략하는 슬롯 (AI 검색 우선)
 }
 
-const DAYS_KO = ['일', '월', '화', '수', '목', '금', '토']
-
 // 고정 계획표(postPlan) + 실제 발행 글로 달력을 만든다.
 // 계획은 서버에서 월 1회 확정·저장돼 불변이므로, 예정 주제가 렌더마다 바뀌지 않는다.
 // 발행된 날짜엔 실제 글을, 그 외 계획된 날짜엔 계획 주제를 표시한다.
@@ -181,6 +179,20 @@ function buildSchedule(plan: PostPlan | null, posts: Post[]): ScheduleSlot[] {
     })
   }
   return result
+}
+
+// 한 줄로 이어진 글 목록의 한 칸 — 이미 올라간 글(post)과 앞으로 올라갈 글(plan)을 같은 목록에서 다룬다
+type TimelineRow =
+  | { kind: 'post'; key: string; date: Date; post: Post }
+  | { kind: 'plan'; key: string; date: Date; slot: ScheduleSlot }
+
+// 날짜칩 표기 — KST 기준 '8/15'와 아랫줄('금', 다른 해면 '25년')
+function dateChip(date: Date, currentYear: number) {
+  const md = new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', timeZone: 'Asia/Seoul' })
+    .format(date).replace(/\s/g, '').replace(/\.$/, '').replace('.', '/')
+  const year = Number(new Intl.DateTimeFormat('en-CA', { year: 'numeric', timeZone: 'Asia/Seoul' }).format(date))
+  const weekday = new Intl.DateTimeFormat('ko-KR', { weekday: 'short', timeZone: 'Asia/Seoul' }).format(date)
+  return { md, sub: year === currentYear ? weekday : `${String(year).slice(2)}년` }
 }
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
@@ -402,22 +414,11 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   // 오름차순 정렬 (오래된 글 위 → 최신 글 아래) + 오늘 위치로 자동 스크롤
   const sortedPosts = [...posts].sort((a, b) => new Date(a.published_at).getTime() - new Date(b.published_at).getTime())
   const postListRef = useRef<HTMLDivElement>(null)
-  const scheduleListRef = useRef<HTMLDivElement>(null)
 
   // 컨테이너 내부 스크롤만 조정 (페이지 전체 스크롤 건드리지 않음)
+  // 지난 글 → 오늘 → 앞으로 올라갈 글이 한 목록이라, 열자마자 '오늘' 자리가 보이게 맞춘다
   const scrollToToday = useCallback(() => {
     requestAnimationFrame(() => {
-      // 1) 자동 발행 일정 — 오늘 날짜 항목으로 스크롤
-      const scheduleContainer = scheduleListRef.current
-      if (scheduleContainer) {
-        const todayDay = new Date(Date.now() + 9 * 60 * 60 * 1000).getDate()
-        const todayEl = document.getElementById(`schedule-day-${todayDay}`)
-        if (todayEl) {
-          scheduleContainer.scrollTop = todayEl.offsetTop - scheduleContainer.offsetTop
-        }
-      }
-
-      // 2) 전체 발행 포스트 목록
       const container = postListRef.current
       if (!container) return
 
@@ -442,10 +443,14 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
       if (todayFirst) {
         const el = document.getElementById(`post-${todayFirst.id}`)
         if (el) container.scrollTop = el.offsetTop - container.offsetTop
-      } else {
-        // 오늘 글이 없으면 맨 아래(최신)로
-        container.scrollTop = container.scrollHeight
+        return
       }
+
+      // 오늘 올라간 글이 없으면 '오늘 예정' 칸으로, 그것도 없으면 맨 아래로
+      const todayDay = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCDate()
+      const todaySlot = document.getElementById(`schedule-day-${todayDay}`)
+      if (todaySlot) container.scrollTop = todaySlot.offsetTop - container.offsetTop
+      else container.scrollTop = container.scrollHeight
     })
   }, [sortedPosts])
 
@@ -528,7 +533,6 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
     return p.published && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
   }).length
   const progressPct = autoPostLimit > 0 ? Math.min((postsThisMonth / autoPostLimit) * 100, 100) : 0
-  const currentMonth = now.getMonth() + 1
   const schedule = buildSchedule(postPlan, posts)
 
   // 아직 채널에 안 올린 글 (포트폴리오 제외, 채널 콘텐츠 있고 완료 처리 안 된 것)
@@ -623,8 +627,16 @@ const { execute: deletePost, isPending: isDeleting } = useAction(deletePostActio
   }, [isPublishing])
 
 const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/posts/${slug}` : null
-  const publishedCount = schedule.filter((s) => s.status === 'published').length
   const upcomingCount = schedule.filter((s) => s.status === 'upcoming' || s.status === 'today').length
+
+  // 글 목록 하나로 합치기 — 이미 올라간 글(오래된 순) 뒤에 앞으로 올라갈 글(날짜 순)을 이어 붙인다.
+  // 예전엔 '발행 일정'과 '전체 발행 포스트'가 따로 있어 이번 달 글이 두 곳에 똑같이 보였다.
+  const upcomingSlots = schedule.filter((s) => !s.post)
+  const timeline: TimelineRow[] = [
+    ...sortedPosts.map((p): TimelineRow => ({ kind: 'post', key: p.id, date: new Date(p.published_at), post: p })),
+    ...upcomingSlots.map((s): TimelineRow => ({ kind: 'plan', key: `plan-${s.day}`, date: s.date, slot: s })),
+  ]
+  const currentYear = now.getFullYear()
 
   // 채널별 복사 버튼 (네이버/당근/인스타/이미지) — 작업물 허브와 전체 목록에서 공용
   const renderChannelButtons = (post: Post) => (
@@ -870,66 +882,132 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
         </div>
       </div>
 
-      {/* ── 월간 발행 일정표 ── */}
+      {/* ── 내 홈페이지 글 — 이미 올라간 글과 앞으로 올라갈 글을 한 목록으로 ──
+           (예전엔 '발행 일정'과 '전체 발행 포스트' 두 박스로 나뉘어 이번 달 글이 양쪽에 똑같이 보였다) */}
       <div className="rounded-xl border bg-white overflow-hidden">
-        <div className="px-5 py-3.5 border-b bg-slate-50 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-primary" />
-            <p className="font-semibold text-sm">{currentMonth}월 자동 발행 일정</p>
+        <div className="px-4 sm:px-5 py-3 border-b bg-slate-50 flex items-center justify-between gap-2 flex-wrap">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-primary shrink-0" />
+              <p className="font-semibold text-sm">내 홈페이지 글</p>
+              {isLoadingSuggestions && (
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" />주제 불러오는 중
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              올라간 글 {posts.length}편{upcomingCount > 0 ? ` · 앞으로 올라갈 글 ${upcomingCount}편` : ''}
+            </p>
           </div>
-          {isLoadingSuggestions && (
-            <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <Loader2 className="h-3 w-3 animate-spin" />주제 불러오는 중
-            </span>
+          {landingUrl && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleCopyLanding}
+                className="inline-flex items-center gap-1 h-9 px-2.5 rounded-lg text-xs font-medium text-slate-700 bg-white border hover:bg-slate-100 transition-colors"
+                title="홈페이지 주소 복사하기"
+              >
+                {landingCopied
+                  ? <><Check className="h-3.5 w-3.5 text-emerald-600" />복사됨</>
+                  : <><Copy className="h-3.5 w-3.5" />링크 복사</>}
+              </button>
+              <a
+                href={landingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 h-9 px-3 rounded-lg text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
+                title="새 창에서 내 홈페이지 보기"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />홈페이지 열기
+              </a>
+            </div>
           )}
         </div>
 
-        {schedule.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-muted-foreground">
-            이번 달 남은 발행 일정이 없어요
+        {timeline.length === 0 ? (
+          <div className="px-5 py-10 text-center text-sm text-muted-foreground">
+            아직 올라간 글이 없어요. 아래 &lsquo;지금 발행&rsquo;을 누르면 첫 글이 올라가요
           </div>
         ) : (
-          <div ref={scheduleListRef} className="divide-y max-h-80 overflow-y-auto">
-            {schedule.map((slot, i) => {
-              const dayName = DAYS_KO[slot.date.getDay()]
-              const url = slot.post ? postUrl(slot.post.slug) : null
-              return (
-                <div
-                  key={i}
-                  id={`schedule-day-${slot.day}`}
-                  className={`flex items-center gap-4 px-5 py-3 ${
-                    slot.status === 'today' ? 'bg-blue-50' : 'hover:bg-slate-50'
-                  }`}
-                >
-                  {/* 날짜 */}
-                  <div className={`w-14 shrink-0 text-center rounded-lg py-1.5 ${
-                    slot.status === 'published' ? 'bg-emerald-100'
-                    : slot.status === 'today' ? 'bg-blue-100'
-                    : 'bg-slate-100'
-                  }`}>
-                    <p className={`text-xs font-semibold ${
-                      slot.status === 'published' ? 'text-emerald-700'
-                      : slot.status === 'today' ? 'text-blue-700'
-                      : 'text-slate-500'
-                    }`}>{currentMonth}/{slot.day}</p>
-                    <p className={`text-xs ${
-                      slot.status === 'published' ? 'text-emerald-600'
-                      : slot.status === 'today' ? 'text-blue-600'
-                      : 'text-slate-400'
-                    }`}>{dayName}</p>
-                  </div>
+          <div ref={postListRef} className="divide-y max-h-[560px] overflow-y-auto overscroll-contain">
+            {timeline.flatMap((row, i) => {
+              const chip = dateChip(row.date, currentYear)
+              const nodes = []
 
-                  {/* 주제 */}
+              // 앞으로 올라갈 글이 시작되는 자리에 구분 줄 하나 (색 범례 대신 말로 알려줌)
+              if (row.kind === 'plan' && timeline[i - 1]?.kind !== 'plan') {
+                nodes.push(
+                  <div key="upcoming-divider" className="px-4 sm:px-5 py-2 bg-slate-50 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Clock className="h-3.5 w-3.5" />여기부터는 앞으로 올라갈 글이에요
+                  </div>
+                )
+              }
+
+              // ① 이미 올라간 글 — 열기·수정·삭제와 채널 복사 버튼
+              if (row.kind === 'post') {
+                const post = row.post
+                const url = postUrl(post.slug)
+                nodes.push(
+                  <div key={row.key} id={`post-${post.id}`} className="flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-slate-50">
+                    <div className="w-14 shrink-0 text-center rounded-lg py-1.5 bg-emerald-100">
+                      <p className="text-xs font-semibold text-emerald-700">{chip.md}</p>
+                      <p className="text-xs text-emerald-600">{chip.sub}</p>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-sm truncate">{post.title}</p>
+                        {post.post_type === 'portfolio' && (
+                          <Badge variant="secondary" className="text-xs shrink-0 bg-amber-100 text-amber-700">
+                            <Camera className="h-3 w-3 mr-1" />시공사례
+                          </Badge>
+                        )}
+                        {!post.published && <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">비공개</Badge>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {renderChannelButtons(post)}
+                      {url && (
+                        <a href={url} target="_blank" rel="noopener noreferrer" title="올라간 글 보기">
+                          <Button size="icon" variant="ghost" className="h-8 w-8"><ExternalLink className="h-3.5 w-3.5" /></Button>
+                        </a>
+                      )}
+                      <a
+                        href={`/dashboard/marketing/write?id=${post.id}`}
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                        title="제목·내용 수정하기"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />수정
+                      </a>
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" disabled={isDeleting}
+                        onClick={() => { if (confirm('포스트를 삭제할까요?')) deletePost({ id: post.id }) }}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )
+                return nodes
+              }
+
+              // ② 앞으로 올라갈 글 — 아직 글이 없으니 주제와 발행 시각만
+              const slot = row.slot
+              const isToday = slot.status === 'today'
+              nodes.push(
+                <div
+                  key={row.key}
+                  id={`schedule-day-${slot.day}`}
+                  className={`flex items-center gap-3 px-4 sm:px-5 py-3 ${isToday ? 'bg-blue-50' : ''}`}
+                >
+                  <div className={`w-14 shrink-0 text-center rounded-lg py-1.5 ${isToday ? 'bg-blue-100' : 'bg-slate-100'}`}>
+                    <p className={`text-xs font-semibold ${isToday ? 'text-blue-700' : 'text-slate-500'}`}>{chip.md}</p>
+                    <p className={`text-xs ${isToday ? 'text-blue-600' : 'text-slate-400'}`}>{chip.sub}</p>
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm truncate ${
-                      slot.status === 'published' ? 'font-medium text-foreground'
-                      : slot.status === 'today' ? 'font-medium text-blue-800'
-                      : 'text-muted-foreground'
-                    }`}>
+                    <p className={`text-sm truncate ${isToday ? 'font-medium text-blue-800' : 'text-muted-foreground'}`}>
                       {slot.topicLabel}
                     </p>
                     {/* GEO 약점 공략 배지 — AI 검색에서 아직 안 잡히는 질문을 우선 발행 */}
-                    {slot.status !== 'published' && slot.geoTargeted && (
+                    {slot.geoTargeted && (
                       <div className="mt-1">
                         <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5">
                           🔎 AI 검색 공략
@@ -937,7 +1015,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                       </div>
                     )}
                     {/* 실제 검색량·경쟁도 배지 — 데이터가 있을 때만 (근거 있는 주제 선정) */}
-                    {slot.status !== 'published' && slot.monthlySearches !== undefined && (
+                    {slot.monthlySearches !== undefined && (
                       <div className="flex items-center gap-1.5 mt-1">
                         <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5">
                           🔍 월 {slot.monthlySearches.toLocaleString()}회
@@ -953,38 +1031,17 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                         )}
                       </div>
                     )}
-                    {slot.status === 'today' && (
-                      <p className="text-xs text-blue-500 mt-0.5">오늘 오전 9시 발행 예정</p>
-                    )}
                   </div>
-
-                  {/* 상태 */}
-                  <div className="shrink-0 flex items-center gap-2">
-                    {slot.status === 'published' && (
-                      <>
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                        {url && (
-                          <a href={url} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-                          </a>
-                        )}
-                      </>
-                    )}
-                    {slot.status === 'today' && <Clock className="h-4 w-4 text-blue-500 animate-pulse" />}
-                    {slot.status === 'upcoming' && <Clock className="h-4 w-4 text-slate-300" />}
+                  <div className={`shrink-0 flex items-center gap-1 text-[11px] font-medium ${isToday ? 'text-blue-600' : 'text-slate-400'}`}>
+                    <Clock className={`h-3.5 w-3.5 ${isToday ? 'animate-pulse' : ''}`} />
+                    {isToday ? '오늘 9시 발행' : '발행 예정'}
                   </div>
                 </div>
               )
+              return nodes
             })}
           </div>
         )}
-
-        {/* 범례 */}
-        <div className="px-5 py-2.5 border-t bg-slate-50 flex items-center gap-5 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" />발행 완료</span>
-          <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-blue-400" />오늘 예정</span>
-          <span className="flex items-center gap-1"><Clock className="h-3 w-3 text-slate-300" />예정</span>
-        </div>
       </div>
 
       {/* 자동 발행 시간이 지났는데 오늘 글이 아직이면 — 직접 발행하도록 안내 */}
@@ -1032,97 +1089,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
         </p>
       )}
 
-      {/* ── 발행된 포스트 목록 ── */}
-      {posts.length > 0 && (
-        <div className="rounded-xl border bg-white overflow-hidden">
-          <div className="px-4 sm:px-5 py-2.5 border-b bg-slate-50 flex items-center justify-between gap-2">
-            <p className="font-semibold text-sm shrink-0">전체 발행 포스트 ({posts.length}건)</p>
-            {landingUrl && (
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleCopyLanding}
-                  className="inline-flex items-center gap-1 h-9 px-2.5 rounded-lg text-xs font-medium text-slate-700 bg-white border hover:bg-slate-100 transition-colors"
-                  title="홈페이지 주소 복사하기"
-                >
-                  {landingCopied
-                    ? <><Check className="h-3.5 w-3.5 text-emerald-600" />복사됨</>
-                    : <><Copy className="h-3.5 w-3.5" />링크 복사</>}
-                </button>
-                <a
-                  href={landingUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 h-9 px-3 rounded-lg text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
-                  title="새 창에서 내 홈페이지 보기"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />홈페이지 열기
-                </a>
-              </div>
-            )}
-          </div>
-          <div ref={postListRef} className="divide-y max-h-[480px] overflow-y-auto">
-            {sortedPosts.map((post) => {
-              const url = postUrl(post.slug)
-              return (
-                <div key={post.id} id={`post-${post.id}`}>
-                  <div className="flex items-center gap-3 px-5 py-3 hover:bg-slate-50">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-sm truncate">{post.title}</p>
-                      {post.post_type === 'portfolio' && (
-                        <Badge variant="secondary" className="text-xs shrink-0 bg-amber-100 text-amber-700">
-                          <Camera className="h-3 w-3 mr-1" />시공사례
-                        </Badge>
-                      )}
-                      {!post.published && <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground">비공개</Badge>}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{new Date(post.published_at).toLocaleDateString('ko-KR')}</p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {renderChannelButtons(post)}
-                    {url && (
-                      <a href={url} target="_blank" rel="noopener noreferrer">
-                        <Button size="icon" variant="ghost" className="h-8 w-8"><ExternalLink className="h-3.5 w-3.5" /></Button>
-                      </a>
-                    )}
-                    <a
-                      href={`/dashboard/marketing/write?id=${post.id}`}
-                      className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
-                      title="제목·내용 수정하기"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />수정
-                    </a>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" disabled={isDeleting}
-                      onClick={() => { if (confirm('포스트를 삭제할까요?')) deletePost({ id: post.id }) }}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {posts.length === 0 && (
-        <div className="rounded-lg border bg-card p-10 text-center space-y-3">
-          <p className="text-sm text-muted-foreground">아직 포스트가 없어요. 첫 번째 포스트를 만들어보세요!</p>
-          {landingUrl && (
-            <a
-              href={landingUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-lg text-sm font-semibold text-white bg-primary hover:bg-primary/90 transition-colors"
-            >
-              <ExternalLink className="h-4 w-4" />내 홈페이지 열기
-            </a>
-          )}
-        </div>
-      )}
-
-      {/* 홈페이지 링크는 '전체 발행 포스트' 헤더의 '홈페이지 열기·링크 복사' 버튼으로 이동 */}
+      {/* 글 목록은 위 '내 홈페이지 글' 한 곳으로 합쳤다 (홈페이지 열기·링크 복사도 그 헤더에 있음) */}
 
       {/* 당근마켓용 글 모달 */}
       {daangnPost && daangnPost.daangn_content && (
