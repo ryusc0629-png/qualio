@@ -350,13 +350,18 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
     completed:   'bg-emerald-100 text-emerald-700',
   }
 
-  // 보고서에서 남은 할 일 — 현장을 떠나기 전에 뭘 더 해야 하는지 카드에 그대로 보여준다
-  const reportSteps = [
-    { label: '작업 전 사진', done: reportProgress.beforeCount > 0 },
-    { label: '작업 중 영상', done: reportProgress.clipCount >= 3 },
-    { label: '작업 후 사진', done: reportProgress.afterCount > 0 },
-    { label: '하자·특이사항', done: reportProgress.hasNotes },
-  ]
+  // 보고서에서 남은 할 일 — 현장을 떠나기 전에 뭘 더 해야 하는지 카드에 그대로 보여준다.
+  //
+  // ⚠️ 정기 현장은 보고서에 이 칸들이 아예 없다(특이사항 하나만 받는다). 그래서 목록을 띄우면
+  //    있지도 않은 칸을 영원히 '미완'으로 보여주게 된다. 정기는 목록 자체를 안 만든다.
+  const reportSteps = isRecurring
+    ? []
+    : [
+        { label: '작업 전 사진', done: reportProgress.beforeCount > 0 },
+        { label: '작업 중 영상', done: reportProgress.clipCount >= 3 },
+        { label: '작업 후 사진', done: reportProgress.afterCount > 0 },
+        { label: '하자·특이사항', done: reportProgress.hasNotes },
+      ]
 
   // 문단속 현장인데 아직 도착 사진이 없으면 → 시작 버튼이 곧장 카메라를 열고, 사진 올리면 자동 시작
   const hasArrivalPhoto = openPhotos.some((p) => p.url)
@@ -647,13 +652,16 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {reportSentAt
                     ? '고객에게 발송 완료'
-                    : '작업 사진과 하자·특이사항을 기록해주세요. 고객에게 그대로 발송돼요'}
+                    : isRecurring
+                      ? '오늘 특이사항을 남겨주세요. 월말에 거래처로 가는 보고서에 들어가요'
+                      : '작업 사진과 하자·특이사항을 기록해주세요. 고객에게 그대로 발송돼요'}
                 </p>
               </div>
               <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 -rotate-90" />
             </div>
 
             {/* 남은 할 일 — 무엇이 비었는지 열어보지 않고 알 수 있게 */}
+            {reportSteps.length > 0 && (
             <div className="px-4 py-3 grid grid-cols-2 gap-x-3 gap-y-2">
               {reportSteps.map((s) => (
                 <div key={s.label} className="flex items-center gap-1.5 text-xs">
@@ -668,9 +676,11 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
                 </div>
               ))}
             </div>
+            )}
 
-            {/* 아직 영상을 안 올렸으면 지금 찍어야 할 3컷을 알려준다 — 현장을 떠나면 다시 못 찍는다 */}
-            {currentStatus === 'in_progress' && reportProgress.clipCount < 3 && (
+            {/* 아직 영상을 안 올렸으면 지금 찍어야 할 3컷을 알려준다 — 현장을 떠나면 다시 못 찍는다.
+                ⚠️ 정기 현장엔 영상 칸이 없다. 찍을 데도 없는데 찍으라고 하면 안 된다. */}
+            {!isRecurring && currentStatus === 'in_progress' && reportProgress.clipCount < 3 && (
               <div className="mx-4 mb-4 rounded-lg bg-amber-50 border border-amber-200 p-3 space-y-1.5">
                 <div className="flex items-center gap-1.5">
                   <Film className="h-4 w-4 text-amber-600 shrink-0" />
