@@ -471,7 +471,8 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       afterPhotoCaptions: after.filter(withCaption).map((p) => (p.caption ?? '').trim()),
       careAdvice,
       careMonths,
-      suggestedServices,
+      // 정기 현장은 제안을 받지 않는다 — 빈 배열을 보내면 '전부 지워라'가 되므로 아예 안 보낸다
+      ...(isRecurringSite ? {} : { suggestedServices }),
       aiReportData: aiReport ? {
         ...aiReport,
         // 선택된 서비스만 저장
@@ -1064,8 +1065,9 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             onAdviceChange={setCareAdvice}
             onMonthsChange={setCareMonths}
             serviceItems={serviceItems}
-            suggestions={suggestedServices}
-            onSuggestionsChange={setSuggestedServices}
+            {...(isRecurringSite
+              ? {}
+              : { suggestions: suggestedServices, onSuggestionsChange: setSuggestedServices })}
             hideAdvice={!isRecurringSite}
           />
         </div>
@@ -1102,7 +1104,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
                 <Label className="text-xs font-medium text-muted-foreground">다음에 올 직원이 알아야 할 것</Label>
                 <p className="text-xs text-muted-foreground">고객 정보에 저장돼요 (고객에게는 안 보여요)</p>
                 <Textarea
-                  placeholder="예: 현관 비밀번호 1234#, 강아지 있어요"
+                  placeholder="예: 3층 회의실은 화요일만 열려요. 자재는 지하 창고에 둡니다"
                   value={nextVisitNote}
                   onChange={(e) => setNextVisitNote(e.target.value)}
                   rows={2}

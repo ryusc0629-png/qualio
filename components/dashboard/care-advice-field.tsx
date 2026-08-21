@@ -236,7 +236,9 @@ export function CareAdviceField({
 
       {showTiming && (
         <div className="space-y-1.5 pt-1">
-          <p className="text-xs text-muted-foreground">언제쯤 다시 연락드릴까요?</p>
+          <p className="text-xs text-muted-foreground">
+            {canSuggest ? '언제쯤 다시 연락드릴까요?' : '언제쯤 사장님께 알려드릴까요?'}
+          </p>
           <div className="grid grid-cols-4 gap-2">
             {PERIODS.map((p) => {
               const on = months === p.months
@@ -259,7 +261,9 @@ export function CareAdviceField({
             <p className="text-[11px] text-muted-foreground inline-flex items-start gap-1">
               <BellRing className="h-3 w-3 shrink-0 mt-0.5" />
               <span>
-                고객에게 지금 가지 않아요. {months}개월 뒤에 사장님이 확인하고 연락드려요
+                {canSuggest
+                  ? `고객에게 지금 가지 않아요. ${months}개월 뒤에 사장님이 확인하고 연락드려요`
+                  : `고객에게 가지 않아요. ${months}개월 뒤에 사장님께만 알림이 가요`}
               </span>
             </p>
           )}
