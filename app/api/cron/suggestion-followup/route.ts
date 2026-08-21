@@ -3,10 +3,16 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { SolapiMessageService } from 'solapi'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendPushToBusiness } from '@/lib/push/web-push'
+import { sendCareCheckAlimtalk } from '@/lib/kakao/alimtalk'
 import { canSendMarketingSms } from '@/lib/reengagement/consent'
 
 // Vercel Cron(daily-maintenance에서 호출):
-// 현장에서 올리고 대표가 승인한 '다음에 제안할 서비스'의 날짜가 되면 고객에게 광고 문자를 보낸다.
+// 현장에서 올리고 대표가 승인한 '다음에 제안할 서비스'의 날짜가 되면 고객에게 알린다.
+//
+// 보내는 순서 — 싸고 잘 읽히는 것부터:
+//   1) 점검 시기 안내 알림톡 (승인되면). 정보성이라 동의가 필요 없고 건당 요금이 가장 싸다
+//   2) 사장님이 '알림만'으로 승인했으면 → 그날 대표 폰 알림. 요금 0원
+//   3) 사장님이 '문자'로 승인했고 손님이 동의했으면 → 광고 문자(LMS). 건당 요금이 붙는다
 //
 // ★ 문자는 '받아보겠다고 고른 손님'에게만 나간다.
 //
@@ -23,6 +29,87 @@ import { canSendMarketingSms } from '@/lib/reengagement/consent'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * 점검 시기 안내 알림톡 시도.
+ *
+ * 'sent'        보냈다
+ * 'optout'      수신거부한 번호 — 아무것도 보내지 않고 목록에서 내린다
+ * 'unavailable' 템플릿이 아직 승인 전이거나 보낼 재료가 없다 → 호출한 쪽에서 기존 경로로
+ */
+async function trySendCareCheck(
+  db: SupabaseClient,
+  row: {
+    id: string
+    business_id: string
+    customer_id: string | null
+    customer_name: string | null
+    service_name: string | null
+    reason: string | null
+    report_id: string | null
+  },
+  phone: string,
+  now: Date,
+): Promise<'sent' | 'optout' | 'unavailable'> {
+  if (!process.env.SOLAPI_TEMPLATE_ID_CARE_CHECK) return 'unavailable'
+
+  const { data: optout } = (await db
+    .from('marketing_optouts')
+    .select('id')
+    .eq('business_id', row.business_id)
+    .eq('phone', phone)
+    .maybeSingle()) as unknown as { data: { id: string } | null }
+
+  if (optout) {
+    await db
+      .from('reengagement_dispatches')
+      .update({ status: 'skipped', fail_reason: '고객이 수신거부했어요' })
+      .eq('id', row.id)
+    return 'optout'
+  }
+
+  const { data: biz } = (await db
+    .from('businesses')
+    .select('name, phone')
+    .eq('id', row.business_id)
+    .maybeSingle()) as unknown as { data: { name: string; phone: string | null } | null }
+
+  if (!biz?.phone || !row.service_name) return 'unavailable'
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+
+  try {
+    const ok = await sendCareCheckAlimtalk({
+      customerPhone: phone,
+      customerName:  row.customer_name ?? '고객',
+      businessName:  biz.name,
+      checkItem:     row.service_name,
+      // 현장이 적은 근거가 이 안내의 알맹이다. 없으면 문자로 넘긴다 —
+      // 내용 없는 안내는 받는 쪽에 아무 정보가 아니다.
+      checkNote:     (row.reason ?? '').trim().slice(0, 200) || '작업 시 확인된 사항',
+      businessPhone: biz.phone,
+      reportUrl:     `${appUrl}/q/${row.business_id}/report/${row.report_id}`,
+    })
+    if (!ok) return 'unavailable'
+  } catch (e) {
+    console.error('[Cron] suggestion-followup 알림톡 실패 — 문자로 넘김:', row.id, e)
+    return 'unavailable'
+  }
+
+  await db
+    .from('reengagement_dispatches')
+    .update({ status: 'sent', sent_at: now.toISOString(), channel: 'alimtalk', fail_reason: null })
+    .eq('id', row.id)
+
+  if (row.customer_id) {
+    await db
+      .from('customers')
+      .update({ reengagement_sent_at: now.toISOString() })
+      .eq('id', row.customer_id)
+  }
+
+  return 'sent'
+}
+
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -37,7 +124,7 @@ export async function GET(request: NextRequest) {
   // 승인을 깜빡한 제안이 그날 조용히 지나가면, 현장이 적어둔 기회가 통째로 사라진다.
   const { data: due } = (await looseDb
     .from('reengagement_dispatches')
-    .select('id, business_id, status, channel, customer_id, customer_phone, customer_name, service_name, message, notified_at')
+    .select('id, business_id, status, channel, customer_id, customer_phone, customer_name, service_name, reason, message, report_id, notified_at')
     .eq('source', 'field')
     .in('status', ['scheduled', 'pending'])
     .lte('due_at', now.toISOString())
@@ -52,7 +139,9 @@ export async function GET(request: NextRequest) {
           customer_phone: string
           customer_name: string | null
           service_name: string | null
+          reason: string | null
           message: string
+          report_id: string | null
           notified_at: string | null
         }>
       | null
@@ -87,6 +176,16 @@ export async function GET(request: NextRequest) {
         held++
         heldByBusiness.set(row.business_id, (heldByBusiness.get(row.business_id) ?? 0) + 1)
         continue
+      }
+
+      // 알림톡이 승인돼 있으면 그걸로 보낸다 — 문자보다 건당 요금이 훨씬 싸다.
+      // 정보성 안내라 수신 동의가 필요 없다(작업 보고서에서 이미 이 시점을 고지했다).
+      // 다만 수신거부한 번호는 어떤 경우에도 제외한다 — 그건 우리 약속이다.
+      if (row.report_id) {
+        const alimtalkSent = await trySendCareCheck(looseDb, row, phone, now)
+        if (alimtalkSent === 'sent') { sent++; continue }
+        if (alimtalkSent === 'optout') continue
+        // 'unavailable'이면 아래 기존 경로(알림만 / 문자)로 내려간다
       }
 
       // 사장님이 '알림만 받기'로 승인한 건 — 문자를 보내지 않는다(요금이 안 든다).

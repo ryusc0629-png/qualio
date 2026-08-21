@@ -635,6 +635,69 @@ export async function sendReviewClaimedAlimtalk(params: ReviewClaimedParams): Pr
   })
 }
 
+// ── 작업 후 점검 시기 안내 ──────────────────────────────────────────
+//
+// 2026-08-16에 반려된 '재방문 유도'와는 사실관계가 다르다. 그 템플릿은 근거 없이
+// "오래 안 오셨네요"를 보내는 순수 광고였다. 이건 셋이 다르다:
+//   1) 수신자가 작업을 의뢰한 사실이 있고
+//   2) 그 작업 보고서에 "○년 ○월쯤 점검을 권해드립니다. 그때 저희가 먼저 연락드리겠습니다"라고
+//      이미 고지한 뒤이며(고객이 그 문서를 받았다)
+//   3) 문안에 가격·할인·예약 유도가 하나도 없다. 버튼도 판촉이 아니라 그 보고서를 여는 링크다.
+//
+// ⚠️ 이 템플릿에 "지금 예약하시면", "할인", "문의 주세요" 같은 문구를 절대 넣지 말 것.
+//    한 문장만 들어가도 광고성이 되어 반려되고, 반려되면 문자(LMS)로 되돌아간다(건당 요금 발생).
+//
+// 승인 전에는 SOLAPI_TEMPLATE_ID_CARE_CHECK가 비어 있어 자동으로 건너뛴다.
+
+export interface CareCheckParams {
+  customerPhone: string
+  customerName:  string
+  businessName:  string
+  checkItem:     string  // 점검 항목 (예: 후드 필터 교체)
+  checkNote:     string  // 작업 시 확인된 내용 (현장 직원이 적은 근거)
+  businessPhone: string  // 업체 연락처
+  reportUrl:     string  // 지난 작업 보고서 전체 주소
+}
+
+/** 점검 시기 안내 — 보냈으면 true, 템플릿 미설정이면 false(문자로 폴백) */
+export async function sendCareCheckAlimtalk(params: CareCheckParams): Promise<boolean> {
+  const apiKey     = process.env.SOLAPI_API_KEY
+  const apiSecret  = process.env.SOLAPI_API_SECRET
+  const sender     = process.env.SOLAPI_SENDER_PHONE
+  const templateId = process.env.SOLAPI_TEMPLATE_ID_CARE_CHECK
+  const pfId       = process.env.SOLAPI_KAKAO_PF_ID
+
+  if (!apiKey || !apiSecret || !sender || !templateId || !pfId) return false
+
+  const service = new SolapiMessageService(apiKey, apiSecret)
+  await service.sendOne({
+    to:   params.customerPhone,
+    from: sender,
+    type: 'ATA',
+    kakaoOptions: {
+      pfId,
+      templateId,
+      variables: {
+        '#{업체명}':     params.businessName,
+        '#{고객명}':     params.customerName,
+        '#{점검항목}':   params.checkItem,
+        '#{안내내용}':   params.checkNote,
+        '#{업체연락처}': params.businessPhone,
+        '#{링크}':       qPathVar(params.reportUrl),
+      },
+      buttons: [
+        {
+          buttonType: 'WL' as const,
+          buttonName: '지난 작업 보고서 보기',
+          linkMo: params.reportUrl,
+          linkPc: params.reportUrl,
+        },
+      ],
+    },
+  })
+  return true
+}
+
 // ── 거래처 보고서 2종 ───────────────────────────────────────────────
 //
 // 재방문 유도·견적 팔로업과 달리 이 둘은 통과 가능성이 높다.
