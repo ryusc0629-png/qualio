@@ -77,7 +77,9 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
       {/* 무료분이 얼마나 남았는지 · 이번 달 추가로 쓴 게 얼마인지.
           결제창을 또 띄우지 않고 다음 정기결제에 얹히므로, 얼마가 붙는지는 미리 보여야 한다. */}
       <div className="rounded-lg bg-muted/40 border px-3 py-2.5 text-xs space-y-1">
-        {usage.freeLeft > 0 ? (
+        {!Number.isFinite(usage.freeLeft) ? (
+          <p className="text-muted-foreground">본사 계정이라 제한 없이 만들 수 있어요</p>
+        ) : usage.freeLeft > 0 ? (
           <p>
             <span className="font-semibold text-foreground">무료 {usage.freeLeft}편</span>
             <span className="text-muted-foreground"> 남았어요 (가입하면 {REEL_FREE_QUOTA}편을 그냥 드려요)</span>

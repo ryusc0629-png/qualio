@@ -1,6 +1,7 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { REEL_FREE_QUOTA, reelPriceFor } from './pricing'
+import { getAdminBusinessIds } from '@/lib/admin/auth'
 
 export { REEL_FREE_QUOTA, REEL_UNIT_PRICE, reelPriceFor } from './pricing'
 
@@ -23,6 +24,22 @@ export interface ReelUsage {
   pendingAmount: number
 }
 
+/**
+ * 본사(퀄리오) 계정인지 — 여기는 요금을 물리지 않는다.
+ *
+ * 다트클린은 우리가 직접 운영하는 계정이라 문구·화질·톤을 바꿔가며 계속 만들어봐야 한다.
+ * 무료 5편에 걸리면 그때마다 우리 돈이 우리한테 청구되는 꼴이라 의미가 없다.
+ */
+async function isInternalBusiness(businessId: string): Promise<boolean> {
+  try {
+    return (await getAdminBusinessIds()).includes(businessId)
+  } catch (err) {
+    // 판정에 실패하면 '고객사'로 본다 — 잘못해서 과금을 빠뜨리는 쪽보다 낫다
+    console.error('[Reel] 본사 계정 판정 실패:', err)
+    return false
+  }
+}
+
 /** 이 업체의 홍보 영상 사용 현황 */
 export async function getReelUsage(db: SupabaseClient, businessId: string): Promise<ReelUsage> {
   const { data } = (await db
@@ -32,10 +49,12 @@ export async function getReelUsage(db: SupabaseClient, businessId: string): Prom
 
   const rows = data ?? []
   const unbilled = rows.filter((r) => r.billed_at === null && r.amount > 0)
+  // 본사 계정은 무료 편수를 무제한으로 보여준다(실제로도 안 물린다)
+  const internal = await isInternalBusiness(businessId)
 
   return {
     made: rows.length,
-    freeLeft: Math.max(0, REEL_FREE_QUOTA - rows.length),
+    freeLeft: internal ? Number.POSITIVE_INFINITY : Math.max(0, REEL_FREE_QUOTA - rows.length),
     pendingCount: unbilled.length,
     pendingAmount: unbilled.reduce((s, r) => s + r.amount, 0),
   }
@@ -60,7 +79,8 @@ export async function recordReelCharge(
       .select('id', { count: 'exact', head: true })
       .eq('business_id', businessId)
 
-    const amount = reelPriceFor(count ?? 0)
+    // 본사 계정은 언제나 0원 — 우리 돈이 우리한테 청구되는 걸 막는다
+    const amount = (await isInternalBusiness(businessId)) ? 0 : reelPriceFor(count ?? 0)
 
     const { error } = await db
       .from('reel_charges')
