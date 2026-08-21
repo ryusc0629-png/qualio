@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { Film, Clock, Download } from 'lucide-react'
 import { ReelShareButtons } from './reel-share-buttons'
+import { ReelMakeNowButton } from './reel-make-now-button'
 
 // 현장이 올린 재료로 만들어진 홍보 영상이 여기로 온다.
 //
@@ -26,7 +27,7 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
     .from('reports')
     .select('id, reel_status, reel_url, reel_queued_at, booking_id')
     .eq('business_id', businessId)
-    .in('reel_status', ['queued', 'processing', 'done'])
+    .in('reel_status', ['queued', 'processing', 'done', 'failed'])
     .order('reel_queued_at', { ascending: false, nullsFirst: false })
     .limit(12)) as { data: ReelRow[] | null }
 
@@ -98,9 +99,15 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{names.get(r.booking_id) ?? '현장'}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {r.reel_status === 'processing' ? '만드는 중이에요' : '내일 아침에 만들어져요'}
+                  {r.reel_status === 'processing'
+                    ? '만드는 중이에요'
+                    : r.reel_status === 'failed'
+                      ? '못 만들었어요. 다시 눌러보세요'
+                      : '내일 아침에 만들어져요'}
                 </p>
               </div>
+              {/* 기다리기 싫으면 지금 만든다 — 오늘 찍은 걸 오늘 올리고 싶을 때 */}
+              {r.reel_status !== 'processing' && <ReelMakeNowButton reportId={r.id} />}
             </div>
           ))}
         </div>
