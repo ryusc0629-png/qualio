@@ -56,31 +56,48 @@ export async function activateSubscription(
 }
 
 /**
- * 결제가 끝나면 자동 글쓰기를 켠다.
+ * 자동 글쓰기를 켠다. **세팅이 끝난 업체만.**
  *
- * 왜 여기인가: 예전엔 **마케팅 화면에 들어가야** 켜졌다(post-list.tsx가 열릴 때 목표를 설정).
+ * 왜 자동으로 켜나: 예전엔 마케팅 화면에 들어가야 켜졌다(post-list.tsx가 열릴 때 목표를 설정).
  * 그래서 그 메뉴를 한 번도 안 눌러본 업체는 영영 안 켜졌고, 실제로 32곳 중 13곳이 그 상태였다.
- * 글이 없으니 홈페이지도 비고 AI 검색에도 안 잡혀서, 결국 "퀄리오 써도 별거 없네"가 된다.
+ * 글이 없으니 홈페이지도 비고 AI 검색에도 안 잡혀 "퀄리오 써도 별거 없네"가 된다.
  *
- * 결제는 모든 고객이 반드시 거치는 지점이고, 자동 글쓰기는 그 요금에 포함된 기능이다.
- * 그러니 돈을 받은 시점에 켜주는 게 맞다 — 사장님이 메뉴를 찾아 들어갈 이유가 없어야 한다.
+ * ⚠️왜 '세팅된 업체만'인가: 글을 쓰려면 재료가 있어야 한다.
+ *   서비스 항목이 하나도 없으면 무슨 청소를 하는 업체인지조차 몰라서 글이 뻔한 소리가 되고,
+ *   그런 글은 검색에도 안 잡히면서 토큰만 나간다. 가입만 해두고 아무것도 안 한 계정이
+ *   대부분 이 상태다 — 거기에 매달 24편씩 쓰는 건 돈만 태우는 일이다.
  *
- * ⚠️이미 켜져 있으면 건드리지 않는다. 플랜을 올렸으면 새 한도로 올려준다(내리지는 않는다 —
- *   이번 달에 이미 그만큼 쓸 계획이었을 수 있다. 다음 달 자동청구에서 자연스럽게 맞춰진다).
+ * ⛔조건을 '결제했으면 무조건'으로 되돌리지 말 것.
  */
-export async function enableAutoPost(db: SupabaseClient, businessId: string, planId: PlanId): Promise<void> {
+export async function enableAutoPost(
+  db: SupabaseClient,
+  businessId: string,
+  planId: PlanId,
+): Promise<void> {
   try {
     const limit = getAutoPostLimit(planId)
     if (limit <= 0) return
 
-    const { data: biz } = (await db
-      .from('businesses')
-      .select('monthly_post_target')
-      .eq('id', businessId)
-      .maybeSingle()) as { data: { monthly_post_target: number | null } | null }
+    const [{ data: biz }, { count: serviceCount }] = await Promise.all([
+      db
+        .from('businesses')
+        .select('monthly_post_target')
+        .eq('id', businessId)
+        .maybeSingle() as unknown as Promise<{ data: { monthly_post_target: number | null } | null }>,
+      db
+        .from('service_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', businessId)
+        .eq('is_active', true)
+        .is('deleted_at', null),
+    ])
 
+    // 이미 켜져 있으면 건드리지 않는다 (플랜을 올렸으면 새 한도로 올린다 — 내리지는 않는다)
     const current = biz?.monthly_post_target ?? 0
     if (current >= limit) return
+
+    // 쓸 재료가 없으면 켜지 않는다. 서비스를 등록하는 시점에 다시 불린다.
+    if ((serviceCount ?? 0) === 0) return
 
     await db
       .from('businesses')
@@ -88,7 +105,6 @@ export async function enableAutoPost(db: SupabaseClient, businessId: string, pla
       .eq('id', businessId)
   } catch (err) {
     // 여기서 실패해도 결제는 이미 끝났다 — 구독 활성화를 막으면 안 된다.
-    // 못 켜졌으면 마케팅 화면에 들어갈 때 예전 경로로 켜진다.
     console.error('[Activate] 자동 글쓰기 켜기 실패:', businessId, err)
   }
 }

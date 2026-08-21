@@ -4,6 +4,21 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { recommendServiceTierItems } from '@/lib/ai/service-tier-items'
+import { enableAutoPost } from '@/lib/payments/activate'
+import type { PlanId } from '@/lib/config/plans'
+
+/** 이 업체의 현재 플랜으로 자동 글쓰기를 켠다 (재료가 생긴 시점에 부른다) */
+async function activateAutoPost(db: SupabaseClient, businessId: string): Promise<void> {
+  const { data: sub } = (await db
+    .from('subscriptions')
+    .select('plan')
+    .eq('business_id', businessId)
+    .eq('status', 'active')
+    .maybeSingle()) as { data: { plan: string } | null }
+
+  if (!sub?.plan) return
+  await enableAutoPost(db, businessId, sub.plan as PlanId)
+}
 import { spendQuota } from '@/lib/ratelimit/daily-quota'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { markSeoStale } from '@/lib/seo/stale'
@@ -158,6 +173,10 @@ export const createServiceItemAction = action
 
     // 홍보 페이지 문구도 이 서비스로 만들어진 것 → 다시 만들라고 표시
     await markSeoStale(db, profile.business_id)
+
+    // 이제 글을 쓸 재료가 생겼으니 자동 글쓰기를 켠다.
+    // (결제·가입이 서비스 등록보다 먼저인 경우가 대부분이라 여기가 실제 시작점이다)
+    await activateAutoPost(db as unknown as SupabaseClient, profile.business_id)
 
     revalidatePath('/dashboard/services')
     return { success: true }

@@ -565,7 +565,26 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
     }
   )
 
-  const { execute: saveTarget } = useAction(setMonthlyTargetAction)
+  // 자동 글쓰기 켜기/끄기 — 화면에 들어오기만 하면 켜지던 것을 사장님이 정하도록 바꿨다.
+  // ⚠️예전엔 이 화면을 열면 무조건 켜졌다. 그래서 마케팅 메뉴를 안 눌러본 업체는 영영 안 켜졌고,
+  //   반대로 세팅이 안 끝난 업체가 잠깐 들렀다는 이유로 켜지기도 했다.
+  const [autoPostOn, setAutoPostOn] = useState(initialTarget > 0)
+  const { execute: saveTarget, isPending: isSavingTarget } = useAction(setMonthlyTargetAction, {
+    onSuccess: () => {
+      toast.success(autoPostOn ? '자동 글쓰기를 켰어요. 내일 아침부터 올라가요' : '자동 글쓰기를 껐어요')
+      window.location.reload()
+    },
+    onError: ({ error }) => {
+      setAutoPostOn((v) => !v) // 실패했으면 화면을 원래대로 되돌린다
+      toast.error(error.serverError ?? '설정을 저장하지 못했어요')
+    },
+  })
+
+  const toggleAutoPost = () => {
+    const next = !autoPostOn
+    setAutoPostOn(next)
+    saveTarget({ target: next ? autoPostLimit : 0 })
+  }
 
   useEffect(() => {
     // 서버가 이번 달 주제를 이미 넘겨줬으면 재조회하지 않음 (한 달간 고정 — 스피너 없음)
@@ -576,7 +595,6 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
       if (cached) setSuggestions(cached.suggestions)
       else fetchSuggestions({}) // 그 달 첫 방문에만 생성 (이후엔 서버·DB에 고정 저장돼 재사용)
     }
-    if (initialTarget !== autoPostLimit) saveTarget({ target: autoPostLimit })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -873,6 +891,27 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
         )}
       </div>
 
+      {/* 자동 글쓰기가 꺼져 있으면 가장 먼저 보이게 — 이게 꺼져 있으면 이 화면의 나머지가 전부 0이다 */}
+      {!autoPostOn && (
+        <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 space-y-2.5">
+          <p className="font-bold text-amber-900">자동 글쓰기가 꺼져 있어요</p>
+          <p className="text-xs text-amber-800 leading-relaxed">
+            켜두시면 <b>매일 아침 9시</b>에 홍보 글이 한 편씩 알아서 올라가요.
+            글이 쌓이는 만큼 네이버·구글 검색과 AI 검색에 우리 업체가 잡히기 시작합니다.
+            <br />
+            지금은 아무 글도 안 올라가고 있어요.
+          </p>
+          <Button
+            type="button"
+            className="w-full h-11"
+            disabled={isSavingTarget}
+            onClick={toggleAutoPost}
+          >
+            {isSavingTarget ? '켜는 중...' : `자동 글쓰기 켜기 (월 ${autoPostLimit}편)`}
+          </Button>
+        </div>
+      )}
+
       {/* ── 상단 통계 카드 ── */}
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-xl border bg-white p-4 text-center">
@@ -884,7 +923,11 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           <p className="text-xs text-muted-foreground mt-0.5">예정된 발행</p>
         </div>
         <div className="rounded-xl border bg-white p-4 text-center">
-          <p className="text-2xl font-bold text-slate-400">{autoPostLimit}</p>
+          {/* ⚠️플랜 한도가 아니라 '실제로 설정된 값'을 보여준다.
+              예전엔 autoPostLimit을 띄워서, 꺼져 있어도 "월 목표 24"로 보였다(화면이 거짓말했다) */}
+          <p className={`text-2xl font-bold ${autoPostOn ? 'text-slate-400' : 'text-slate-300'}`}>
+            {autoPostOn ? autoPostLimit : 0}
+          </p>
           <p className="text-xs text-muted-foreground mt-0.5">월 목표</p>
         </div>
       </div>
@@ -893,10 +936,28 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
       <div className="space-y-1.5">
         <div className="flex justify-between text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
-            <Zap className="h-3 w-3 text-primary" />
-            매일 오전 9시 자동 발행 중 — <span className="font-medium">{getPlanLabel(planId)}</span> 플랜
+            <Zap className={`h-3 w-3 ${autoPostOn ? 'text-primary' : 'text-slate-300'}`} />
+            {autoPostOn ? (
+              <>매일 오전 9시 자동 발행 중 — <span className="font-medium">{getPlanLabel(planId)}</span> 플랜</>
+            ) : (
+              <span className="text-slate-500">자동 글쓰기가 꺼져 있어요</span>
+            )}
           </span>
-          <span>{Math.round(progressPct)}%</span>
+          <span className="flex items-center gap-2">
+            {autoPostOn && (
+              <button
+                type="button"
+                className="underline text-muted-foreground hover:text-foreground disabled:opacity-50"
+                disabled={isSavingTarget}
+                onClick={() => {
+                  if (confirm('자동 글쓰기를 끌까요?\n\n끄면 내일부터 글이 올라가지 않아요.')) toggleAutoPost()
+                }}
+              >
+                끄기
+              </button>
+            )}
+            {Math.round(progressPct)}%
+          </span>
         </div>
         <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
           <div className="h-full rounded-full bg-primary transition-all duration-700" style={{ width: `${progressPct}%` }} />
