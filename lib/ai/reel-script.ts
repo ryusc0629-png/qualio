@@ -111,9 +111,9 @@ ${material}
 - 업체 자랑·홍보 문구 금지. 시청자가 집에서 따라 할 수 있는 정보여야 한다.
 - "저희가 잘합니다", "믿고 맡기세요" 같은 문장 금지
 - 이모지·특수기호·괄호 금지. 소리 내어 읽을 문장이라 읽히지 않는 기호는 넣지 마라
-- 각 문장은 한국어 15~30자. 한 문장에 정보 하나만
-- 총 7~10문장
-- 존댓말 구어체. 실제로 말하듯이
+- 각 문장은 한국어 15~28자. 한 문장에 정보 하나만
+- 총 8~11문장
+- 존댓말 구어체. 실제로 말하듯이. 빠르게 읽힐 문장이라 군더더기 없이 짧게
 
 ## 출력 형식 (JSON 배열만)
 [
@@ -175,12 +175,16 @@ export function scriptDuration(lines: ReelLine[]): number {
 // 그래서 '문장 = 음성 한 마디'는 그대로 두고, 화면에 뜨는 자막만 더 잘게 나눈다.
 // 조각들의 시간 합이 그 문장의 음성 길이와 같으므로 목소리와 어긋나지 않는다.
 
-/** 자막 한 조각이 화면에 머무는 목표 시간(초) */
-const TARGET_CAPTION_SECONDS = 1.4
+/**
+ * 자막 한 조각이 화면에 머무는 목표 시간(초).
+ *
+ * 짧을수록 화면이 계속 움직여 긴박해 보인다. 다만 0.6초 밑으로 내려가면 못 읽는다.
+ */
+const TARGET_CAPTION_SECONDS = 1.1
 /** 이보다 짧게는 쪼개지 않는다 — 읽을 틈이 없다 */
-const MIN_CAPTION_SECONDS = 0.8
+const MIN_CAPTION_SECONDS = 0.65
 /** 한 조각에 넣을 글자 수 상한 — 시간이 짧아도 글이 길면 한 줄에 안 들어간다 */
-const MAX_CAPTION_CHARS = 13
+const MAX_CAPTION_CHARS = 11
 
 export interface ReelCaption {
   text: string
@@ -229,17 +233,28 @@ export function toCaptions(lines: ReelLine[]): ReelCaption[] {
   let lineStart = 0
 
   for (const line of lines) {
-    // 시간으로도 나누고 글자 수로도 나눠서, 둘 중 더 잘게 쪼개는 쪽을 따른다.
-    // (짧은 문장을 억지로 쪼개지 않도록 MIN_CAPTION_SECONDS로 상한을 건다)
+    // 시간으로도 나누고 글자 수로도 나눠서, 둘 중 더 잘게 쪼개는 쪽을 따른다
     const byTime = Math.round(line.seconds / TARGET_CAPTION_SECONDS)
     const byLength = Math.ceil(line.text.length / MAX_CAPTION_CHARS)
-    const pieces = Math.max(
-      1,
-      Math.min(Math.max(byTime, byLength), Math.floor(line.seconds / MIN_CAPTION_SECONDS)),
-    )
-    const chunks = splitWords(line.text, pieces)
-    const totalChars = chunks.reduce((s, c) => s + c.length, 0) || 1
+    const wanted = Math.max(1, byTime, byLength)
 
+    // ⚠️조각 수만 정하고 끝내면 안 된다. 조각마다 글자 수가 달라서 짧은 조각이
+    //   0.2초처럼 못 읽을 만큼 스쳐 지나갈 수 있다. 실제로 나눠보고 가장 짧은 조각이
+    //   최소 시간을 넘는, 그러면서 가장 잘게 쪼갠 경우를 고른다.
+    let chunks: string[] = [line.text]
+    for (let n = wanted; n >= 1; n--) {
+      const candidate = splitWords(line.text, n)
+      const total = candidate.reduce((sum, c) => sum + c.length, 0) || 1
+      const shortest = Math.min(
+        ...candidate.map((c) => (line.seconds * c.length) / total),
+      )
+      if (n === 1 || shortest >= MIN_CAPTION_SECONDS) {
+        chunks = candidate
+        break
+      }
+    }
+
+    const totalChars = chunks.reduce((sum, c) => sum + c.length, 0) || 1
     let offset = 0
     chunks.forEach((text, i) => {
       // 마지막 조각은 남은 시간을 전부 가져간다 — 반올림 오차가 쌓여 목소리와 어긋나지 않게

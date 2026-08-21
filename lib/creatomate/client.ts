@@ -30,6 +30,12 @@ interface ReelInput {
    * 비어 있으면 자막만 나가고 무음이 된다.
    */
   narrationUrls: string[]
+  /**
+   * 배경음악 주소. 없으면 안 깐다.
+   * ⚠️ 반드시 저작권이 정리된 트랙이어야 한다 — 인스타·유튜브는 음원을 자동으로 식별해
+   *    수익을 가져가거나 영상을 내린다. 아무 노래나 넣지 말 것.
+   */
+  musicUrl?: string | null
   webhookUrl: string
 }
 
@@ -45,6 +51,12 @@ const STROKE = '#000000'
 const EMPHASIS_COLOR = '#FFD60A'
 /** 업체명 아웃트로 길이 */
 const OUTRO_SECONDS = 2
+/**
+ * 배경음악 크기. Creatomate volume은 0~100 퍼센트 문자열이다.
+ *
+ * 8%는 "있는 줄 모르겠는데 빼면 허전한" 수준이다. 이보다 키우면 나레이션을 갉아먹는다.
+ */
+const MUSIC_VOLUME = '8%'
 
 type Element = Record<string, unknown>
 
@@ -195,6 +207,27 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
   // ── 자막 — 문장을 1~2초 조각으로 쪼개 계속 넘어가게 한다 ──
   const captions: Element[] = toCaptions(input.lines).map(captionElement)
 
+  // ── 배경음악 — 목소리를 덮지 않게 아주 작게 깐다 ──
+  // 나레이션이 주인공이라 비트는 '밑에 깔리는 맥박' 정도여야 한다.
+  // 크게 넣으면 말이 안 들리고, 그러면 정보가 안 전달돼 영상을 만든 이유가 사라진다.
+  const music: Element[] = input.musicUrl
+    ? [{
+        type: 'audio',
+        track: 6,
+        time: 0,
+        duration: total,
+        source: input.musicUrl,
+        // 짧은 트랙이면 끝까지 반복해서 채운다
+        loop: true,
+        volume: MUSIC_VOLUME,
+        // 끝에서 뚝 끊기면 어설프다 — 마지막 1초는 서서히 줄인다
+        animations: [
+          { time: 0, duration: 0.6, easing: 'linear', type: 'fade' },
+          { time: total - 1, duration: 1, easing: 'linear', type: 'fade', reversed: true },
+        ],
+      }]
+    : []
+
   // ── 나레이션 음성 — 문장마다 제 시각에 얹는다 ──
   // 통 파일 하나로 깔면 자막과 조금씩 어긋나는데, 문장별로 놓으면 어긋날 수가 없다.
   let spokenAt = 0
@@ -269,7 +302,7 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
     width: 1080,
     height: 1920,
     duration: total,
-    elements: [...visual, ...captions, ...audio, ...outro],
+    elements: [...visual, ...music, ...captions, ...audio, ...outro],
   }
 
   const res = await fetch('https://api.creatomate.com/v1/renders', {

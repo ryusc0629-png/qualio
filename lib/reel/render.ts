@@ -14,6 +14,21 @@ import { REEL_PROCESSING, REEL_FAILED } from './queue'
 /** 클립 길이 기록이 없는 예전 보고서에 쓰는 기본값(초) */
 const DEFAULT_CLIP_SECONDS = 8
 
+/**
+ * 문장 끝에서 당겨내는 시간(초).
+ *
+ * mp3 파일 끝에는 인코더가 붙이는 짧은 여백이 있어서, 문장을 그대로 이어 붙이면
+ * 사이가 살짝 뜬다. 그만큼만 당겨 말이 딱 붙게 한다.
+ * ⚠️이 값을 키우면 말끝이 잘린다 — 0.2초를 넘기지 말 것.
+ */
+const TAIL_TRIM_SECONDS = 0.12
+/** 아무리 당겨도 이보다 짧아지지는 않게 (아주 짧은 문장 보호) */
+const MIN_LINE_SECONDS = 0.8
+
+// 배경음악은 REEL_MUSIC_URL 환경변수에 트랙 주소를 넣으면 켜진다.
+// ⛔값이 없으면 안 깐다 — 아무 노래나 넣으면 인스타·유튜브가 음원을 식별해
+//   수익을 가져가거나 영상을 내린다. 저작권이 정리된 트랙만 넣을 것.
+
 interface ReelSource {
   id: string
   business_id: string
@@ -140,10 +155,15 @@ export async function renderReelForReport(
       // 전부 올라갔을 때만 음성을 쓴다 — 일부만 올라가면 중간에 목소리가 끊긴다
       if (uploaded.length === spoken.length) {
         narrationUrls = uploaded
-        // 문장 끝에 숨 돌릴 틈을 조금 준다. 붙여 놓으면 다음 문장이 겹쳐 들린다.
+        // ⛔문장 사이에 틈을 주지 않는다. 예전엔 0.35초씩 넣었는데, 숏폼에서 그 빈틈이
+        //   곧 이탈 지점이다. 말이 끊기지 않고 계속 밀어붙여야 끝까지 본다.
+        //   mp3 끝에 붙는 인코더 여백만 조금 당겨 문장이 딱 붙게 한다.
         lines = draft.map((l, i) => ({
           ...l,
-          seconds: Math.round((spoken[i].seconds + 0.35) * 100) / 100,
+          seconds: Math.max(
+            MIN_LINE_SECONDS,
+            Math.round((spoken[i].seconds - TAIL_TRIM_SECONDS) * 100) / 100,
+          ),
         }))
       }
     }
@@ -158,6 +178,7 @@ export async function renderReelForReport(
       businessName: business.name as string,
       lines,
       narrationUrls,
+      musicUrl: process.env.REEL_MUSIC_URL || null,
       webhookUrl: `${appUrl}/api/creatomate/webhook`,
     })
 

@@ -27,10 +27,12 @@ const 총길이 = scriptDuration(대본)
 describe('자막 조각내기', () => {
   const caps = toCaptions(대본)
 
-  it('한 조각이 1~2초쯤만 머문다', () => {
+  it('한 조각이 1~2초쯤만 머문다 — 못 읽을 만큼 스쳐 지나가지 않는다', () => {
+    // 조각 수만 정하고 글자 수 비례로 나누면 짧은 조각이 0.2초처럼 나온다.
+    // 그건 화면에 떴다 사라지는 것이지 자막이 아니다.
     for (const c of caps) {
-      expect(c.seconds).toBeGreaterThanOrEqual(0.5)
-      expect(c.seconds).toBeLessThanOrEqual(2.5)
+      expect(c.seconds, `"${c.text}"가 너무 빨리 지나감`).toBeGreaterThanOrEqual(0.6)
+      expect(c.seconds, `"${c.text}"가 너무 오래 머묾`).toBeLessThanOrEqual(2.2)
     }
   })
 
