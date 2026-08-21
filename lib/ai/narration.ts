@@ -6,10 +6,16 @@
 //
 // 실패해도 릴스 자체는 만들어야 한다(자막은 남는다). 그래서 던지지 않고 null을 돌려준다.
 
-import { mp3DurationSeconds } from '@/lib/ai/mp3-duration'
+import { trimWavSilence } from '@/lib/ai/wav'
 
-/** 여성 톤 — 청소·생활정보 릴스에서 가장 무난하다 */
-const VOICE = 'nova'
+/**
+ * 목소리. 남성 톤이 기본이다 — 청소업은 현장 신뢰가 중요해서 낮고 단단한 목소리가 맞는다.
+ *
+ * 바꿔보고 싶으면 REEL_VOICE 환경변수로 갈아끼운다(배포 없이 가능).
+ *   남성: onyx(낮고 묵직) · ash(또렷하고 힘참) · echo(담백) · ballad(부드러움)
+ *   여성: nova(밝음) · shimmer(차분) · coral(친근)
+ */
+const VOICE = process.env.REEL_VOICE || 'onyx'
 const MODEL = 'gpt-4o-mini-tts'
 
 /**
@@ -24,9 +30,9 @@ const SPEED = 1.15
 /** 합성이 오래 걸리면 포기하고 무음으로 간다 (릴스는 부가 기능) */
 const TTS_TIMEOUT_MS = 60_000
 
-/** 한 문장의 음성과 그 실제 길이 */
+/** 한 문장의 음성과 그 실제 길이 (앞뒤 무음을 잘라낸 뒤) */
 export interface NarrationClip {
-  mp3: Buffer
+  wav: Buffer
   seconds: number
 }
 
@@ -54,15 +60,21 @@ export async function synthesizeLines(texts: string[]): Promise<NarrationClip[] 
       const i = cursor++
       if (i >= texts.length) return
 
-      const mp3 = await synthesizeNarration(texts[i])
-      if (!mp3) return
+      const raw = await synthesizeNarration(texts[i])
+      if (!raw) return
 
-      const seconds = mp3DurationSeconds(mp3)
-      if (seconds === null || seconds <= 0) {
-        console.error('[Narration] 합성된 음성 길이를 못 읽었어요:', texts[i].slice(0, 20))
+      // 파일 앞뒤에 붙은 무음을 잘라낸다 — 안 자르면 문장 사이가 떠서 '숨 쉬는 시간'이 된다
+      const trimmed = trimWavSilence(raw)
+      if (!trimmed) {
+        console.error('[Narration] 음성이 비었거나 읽을 수 없어요:', texts[i].slice(0, 20))
         return
       }
-      clips[i] = { mp3, seconds }
+      if (trimmed.trimmedHead > 0.01 || trimmed.trimmedTail > 0.01) {
+        console.log(
+          `[Narration] 무음 제거 앞 ${trimmed.trimmedHead}s / 뒤 ${trimmed.trimmedTail}s → ${trimmed.seconds}s`,
+        )
+      }
+      clips[i] = { wav: trimmed.wav, seconds: trimmed.seconds }
     }
   }
 
@@ -99,14 +111,16 @@ export async function synthesizeNarration(text: string): Promise<Buffer | null> 
         model: MODEL,
         voice: VOICE,
         input: speech,
-        response_format: 'mp3',
+        // ⚠️wav로 받는다 — mp3는 압축돼 있어 어디가 무음인지 알려면 디코딩이 필요한데
+        //   서버리스에는 ffmpeg이 없다. wav는 샘플이 그대로라 훑기만 하면 된다.
+        response_format: 'wav',
         speed: SPEED,
         // 광고 성우 톤이면 광고로 읽혀 넘긴다. 아는 사람이 급하게 알려주는 말투라야 끝까지 본다.
         // ⛔숨소리·뜸 들이기를 금지한다 — 숏폼에서 그 빈틈이 곧 이탈 지점이다.
         instructions:
           '한국어로 또박또박, 빠르고 힘있게 읽어주세요. ' +
-          '숨소리를 내지 마세요. 문장 사이에 쉬지 말고 바로 이어서 읽으세요. ' +
-          '뜸 들이거나 말끝을 늘이지 마세요. ' +
+          '숨소리를 내지 마세요. 시작하자마자 바로 말하고, 말이 끝나면 바로 멈추세요. ' +
+          '앞뒤로 뜸 들이지 말고, 말끝을 늘이지 마세요. ' +
           '광고를 읽는 성우 톤이 아니라, 현장을 아는 사람이 급하게 알려주듯 단정하게.',
       }),
       signal: AbortSignal.timeout(TTS_TIMEOUT_MS),

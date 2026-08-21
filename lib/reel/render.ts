@@ -15,15 +15,14 @@ import { REEL_PROCESSING, REEL_FAILED } from './queue'
 const DEFAULT_CLIP_SECONDS = 8
 
 /**
- * 문장 끝에서 당겨내는 시간(초).
+ * 문장과 문장 사이에 두는 틈(초).
  *
- * mp3 파일 끝에는 인코더가 붙이는 짧은 여백이 있어서, 문장을 그대로 이어 붙이면
- * 사이가 살짝 뜬다. 그만큼만 당겨 말이 딱 붙게 한다.
- * ⚠️이 값을 키우면 말끝이 잘린다 — 0.2초를 넘기지 말 것.
+ * 0이면 딱 붙어서 말이 몰아치듯 나간다. 사장님 요청이 "숨쉬는 시간을 없애달라"였고,
+ * 앞뒤 무음은 이미 wav에서 정확히 잘라내므로 여기서 더 줄 이유가 없다.
+ * ⚠️예전엔 여기서 0.12초를 '감으로' 당겼다 — 실제 무음 길이는 파일마다 달라서
+ *   어떤 문장은 여백이 남고 어떤 문장은 말끝이 씹혔다.
  */
-const TAIL_TRIM_SECONDS = 0.12
-/** 아무리 당겨도 이보다 짧아지지는 않게 (아주 짧은 문장 보호) */
-const MIN_LINE_SECONDS = 0.8
+const GAP_SECONDS = 0.06
 
 /**
  * 배경음악 트랙.
@@ -101,11 +100,11 @@ export async function renderReelForReport(
   if (!before) return markFailed('작업 전 사진 없음')
   if (!after) return markFailed('작업 후 사진 없음')
 
-  const { data: business } = await db
+  const { data: business } = (await db
     .from('businesses')
-    .select('name')
+    .select('name, phone')
     .eq('id', report.business_id)
-    .maybeSingle()
+    .maybeSingle()) as { data: { name: string; phone: string | null } | null }
   if (!business) return markFailed('업체 정보 없음')
 
   // 서비스명 (대본 맥락용)
@@ -149,10 +148,10 @@ export async function renderReelForReport(
     if (spoken) {
       const uploaded: string[] = []
       for (const [i, clip] of spoken.entries()) {
-        const path = `${report.business_id}/${report.booking_id}/narration/${stamp}-${i}.mp3`
+        const path = `${report.business_id}/${report.booking_id}/narration/${stamp}-${i}.wav`
         const { error: upErr } = await db.storage
           .from('report-photos')
-          .upload(path, clip.mp3, { contentType: 'audio/mpeg', upsert: true })
+          .upload(path, clip.wav, { contentType: 'audio/wav', upsert: true })
         if (upErr) {
           console.error('[Reel] 나레이션 업로드 실패:', upErr)
           break
@@ -163,15 +162,11 @@ export async function renderReelForReport(
       // 전부 올라갔을 때만 음성을 쓴다 — 일부만 올라가면 중간에 목소리가 끊긴다
       if (uploaded.length === spoken.length) {
         narrationUrls = uploaded
-        // ⛔문장 사이에 틈을 주지 않는다. 예전엔 0.35초씩 넣었는데, 숏폼에서 그 빈틈이
-        //   곧 이탈 지점이다. 말이 끊기지 않고 계속 밀어붙여야 끝까지 본다.
-        //   mp3 끝에 붙는 인코더 여백만 조금 당겨 문장이 딱 붙게 한다.
+        // 앞뒤 무음을 이미 잘라낸 길이라 그대로 쓰면 말이 딱 붙는다.
+        // 숏폼에서 문장 사이의 빈틈이 곧 이탈 지점이다.
         lines = draft.map((l, i) => ({
           ...l,
-          seconds: Math.max(
-            MIN_LINE_SECONDS,
-            Math.round((spoken[i].seconds - TAIL_TRIM_SECONDS) * 100) / 100,
-          ),
+          seconds: Math.round((spoken[i].seconds + GAP_SECONDS) * 100) / 100,
         }))
       }
     }
@@ -183,7 +178,8 @@ export async function renderReelForReport(
       beforePhotoUrl: before.url,
       clips,
       afterPhotoUrl: after.url,
-      businessName: business.name as string,
+      businessName: business.name,
+      businessPhone: business.phone,
       lines,
       narrationUrls,
       musicUrl: process.env.REEL_MUSIC_URL ?? DEFAULT_MUSIC_URL,

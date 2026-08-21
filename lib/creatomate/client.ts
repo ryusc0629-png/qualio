@@ -20,6 +20,8 @@ interface ReelInput {
   clips: ReelClip[]
   afterPhotoUrl: string
   businessName: string
+  /** 업체 대표번호 — 마지막 화면에 띄운다. 없으면 안 띄운다 */
+  businessPhone: string | null
   /**
    * 나레이션 대본 — 한 줄이 자막 한 컷이자 음성 한 마디.
    * seconds는 합성된 mp3의 '실제' 길이여야 한다(추정값이 아니라).
@@ -43,6 +45,8 @@ interface CreatomateRender {
   id: string
   status: string
   url?: string
+  width?: number
+  height?: number
 }
 
 const FONT = 'Gothic A1'
@@ -63,6 +67,15 @@ const OUTRO_SECONDS = 2
 const MUSIC_VOLUME = '15%'
 
 type Element = Record<string, unknown>
+
+/** 010-1234-5678 꼴로 끊어준다 — 붙어 있으면 화면에서 읽고 외우기 어렵다 */
+function formatPhone(raw: string): string {
+  const d = raw.replace(/[^0-9]/g, '')
+  if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`
+  if (d.length === 10) return d.startsWith('02') ? `${d.slice(0, 2)}-${d.slice(2, 6)}-${d.slice(6)}` : `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`
+  if (d.length === 9 && d.startsWith('02')) return `${d.slice(0, 2)}-${d.slice(2, 5)}-${d.slice(5)}`
+  return raw.trim()
+}
 
 /** 배경에 깔리는 화면 한 장(사진 또는 영상 클립) */
 export interface Visual {
@@ -260,7 +273,10 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
         })
       : []
 
-  // ── 업체명 아웃트로 ───────────────────────────────────
+  // ── 마지막 화면 — 업체명 + 연락처 ────────────────────
+  // 영상을 다 본 사람이 "그래서 어디로 연락하지?"에서 막히면 앞의 30초가 통째로 헛것이 된다.
+  // ⚠️번호가 없는 업체도 있다 — 그때는 빈 자리를 만들지 말고 업체명만 가운데에 띄운다.
+  const hasPhone = !!input.businessPhone?.trim()
   const outro: Element[] = [
     {
       type: 'shape',
@@ -284,33 +300,76 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
       height: 'auto',
       x_anchor: '50%',
       y_anchor: '50%',
-      y: '46%',
+      y: hasPhone ? '38%' : '46%',
       x_alignment: '50%',
       text: input.businessName,
       font_family: FONT,
-      font_size: '10 vmin',
+      font_size: '9 vmin',
       font_weight: '900',
       fill_color: '#ffffff',
       animations: fadeIn,
     },
-    {
-      type: 'text',
-      track: 3,
-      time: narrationEnd,
-      duration: OUTRO_SECONDS,
-      width: '90%',
-      height: 'auto',
-      x_anchor: '50%',
-      y_anchor: '0%',
-      y: '56%',
-      x_alignment: '50%',
-      text: '믿고 맡기는 깨끗함',
-      font_family: FONT,
-      font_size: '4.5 vmin',
-      font_weight: '700',
-      fill_color: '#19E68C',
-      animations: fadeIn,
-    },
+    ...(hasPhone
+      ? [
+          {
+            type: 'text',
+            track: 3,
+            time: narrationEnd,
+            duration: OUTRO_SECONDS,
+            width: '90%',
+            height: 'auto',
+            x_anchor: '50%',
+            y_anchor: '0%',
+            y: '47%',
+            x_alignment: '50%',
+            text: '문의는 아래 연락처로 주세요',
+            font_family: FONT,
+            font_size: '4.2 vmin',
+            font_weight: '700',
+            fill_color: '#cbd5e1',
+            animations: fadeIn,
+          },
+          {
+            name: 'business-phone',
+            type: 'text',
+            track: 4,
+            time: narrationEnd,
+            duration: OUTRO_SECONDS,
+            width: '90%',
+            height: 'auto',
+            x_anchor: '50%',
+            y_anchor: '0%',
+            y: '55%',
+            x_alignment: '50%',
+            text: formatPhone(input.businessPhone!),
+            font_family: FONT,
+            font_size: '8 vmin',
+            font_weight: '900',
+            fill_color: EMPHASIS_COLOR,
+            letter_spacing: '0.2 vmin',
+            animations: fadeIn,
+          },
+        ]
+      : [
+          {
+            type: 'text',
+            track: 3,
+            time: narrationEnd,
+            duration: OUTRO_SECONDS,
+            width: '90%',
+            height: 'auto',
+            x_anchor: '50%',
+            y_anchor: '0%',
+            y: '56%',
+            x_alignment: '50%',
+            text: '믿고 맡기는 깨끗함',
+            font_family: FONT,
+            font_size: '4.5 vmin',
+            font_weight: '700',
+            fill_color: '#19E68C',
+            animations: fadeIn,
+          },
+        ]),
   ]
 
   const source = {
@@ -327,7 +386,15 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ source, webhook_url: input.webhookUrl }),
+    body: JSON.stringify({
+      source,
+      webhook_url: input.webhookUrl,
+      // ⚠️명시하지 않으면 계정 설정에 따라 축소돼 나온다 —
+      //   실제로 1080×1920을 요청했는데 270×480(정확히 1/4)으로 나와 글자가 뭉개졌다.
+      render_scale: 1,
+      max_width: 1080,
+      max_height: 1920,
+    }),
   })
 
   if (!res.ok) {
@@ -339,6 +406,11 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
   const data = (await res.json()) as CreatomateRender[] | CreatomateRender
   const render = Array.isArray(data) ? data[0] : data
   if (!render?.id) throw new Error('[APP] 영상 편집 요청에 실패했어요')
+
+  // 실제로 어떤 크기로 렌더되는지 남긴다 — 요청과 다르게 나오면 여기서만 드러난다
+  console.log(
+    `[Creatomate] 렌더 요청 ${render.id} · ${render.width ?? '?'}×${render.height ?? '?'} · ${total}초`,
+  )
 
   return render.id
 }

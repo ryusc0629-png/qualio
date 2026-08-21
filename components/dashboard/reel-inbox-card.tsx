@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { Film, Clock, Download } from 'lucide-react'
 import { ReelShareButtons } from './reel-share-buttons'
 import { ReelMakeNowButton } from './reel-make-now-button'
+import { ReelAutoRefresh } from './reel-auto-refresh'
 
 // 현장이 올린 재료로 만들어진 홍보 영상이 여기로 온다.
 //
@@ -48,8 +49,13 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
     }
   }
 
+  // 만드는 중인 게 있을 때만 화면을 스스로 갱신한다 —
+  // 완성 알림은 폰으로 가는데 PC 화면이 '만드는 중'에 멈춰 있으면 고장 난 것처럼 보인다
+  const pending = rows.some((r) => r.reel_status === 'processing' || r.reel_status === 'queued')
+
   return (
     <div className="rounded-xl border bg-card p-5 space-y-4">
+      {pending && <ReelAutoRefresh />}
       <div className="flex items-start gap-3">
         <div className="h-10 w-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
           <Film className="h-5 w-5 text-rose-600" />
