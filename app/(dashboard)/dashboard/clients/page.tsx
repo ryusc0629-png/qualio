@@ -213,6 +213,7 @@ export default async function ClientsPage({
     { data: pendingQuotes },
     { data: serviceItems },
     { data: cancelledQuotes },
+    { data: openBookings },
   ] = await Promise.all([
     db.from('customers')
       .select('id, name, phone, address, category, type, notes, lead_id, sales_stage, created_at')
@@ -270,6 +271,14 @@ export default async function ClientsPage({
       .eq('is_test' as never, false as never)
       .order('created_at', { ascending: false })
       .limit(30),
+
+    // 아직 안 끝난 일감 — 앞으로 잡힌 방문과 지금 진행 중인 방문.
+    // '완료된 고객'을 가르는 기준이 된다. 취소·완료는 열린 일감이 아니다.
+    db.from('bookings')
+      .select('customer_phone, scheduled_at')
+      .eq('business_id', businessId)
+      .in('status', ['confirmed', 'in_progress'])
+      .is('deleted_at', null),
   ])
 
   // 폼 서비스 선택용 — 이름+가격+단위, 이름 기준 중복 제거 (첫 항목 유지)
@@ -401,6 +410,75 @@ export default async function ClientsPage({
   const { live: individualLive, dormant: individualDormant } = splitDormant(individualCustomers)
   const { live: companyLive, dormant: companyDormant } = splitDormant(companyCustomers)
   const dormantCount = individualDormant.length + companyDormant.length
+
+  // ── 진행 중 / 완료 ──
+  //
+  // 잡버·서비스타이탄은 '고객'과 '일감'을 절대 같은 목록에 안 섞는다. 고객은 영구히 남는
+  // 주소록이고, 완료되는 건 고객이 아니라 그 사람에게 걸린 일감(Job)이다. 우리 화면은
+  // 둘을 한 목록에 섞어놔서, 일이 끝난 고객과 오늘 손댈 고객이 똑같이 생겼다.
+  //
+  // 그래서 페이지를 새로 만들어 옮기는 대신(⛔7월에 두 페이지를 하나로 합친 이유가 있다)
+  // 같은 화면 안에서 '열린 일감이 있는가'로 갈라 생김새를 다르게 한다.
+  // 오늘(KST) 0시 — 오늘 예정된 방문은 아직 안 끝난 일이므로 열린 일감에 든다
+  // eslint-disable-next-line react-hooks/purity
+  const todayKST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const todayStartKST = new Date(`${todayKST}T00:00:00+09:00`).toISOString()
+  const openWorkPhones = new Set(
+    ((openBookings ?? []) as { customer_phone: string | null; scheduled_at: string | null }[])
+      .filter(b => (b.scheduled_at ?? '') >= todayStartKST)
+      .map(b => normalizePhone(b.customer_phone))
+      .filter(Boolean)
+  )
+  const pendingQuotePhones = new Set(
+    ((pendingQuotes ?? []) as PendingQuoteRow[]).map(q => normalizePhone(q.customer_phone)).filter(Boolean)
+  )
+
+  // 열린 일감 = 살아 있는 정기계약 · 앞으로 잡힌(또는 지금 하는) 방문 · 답 기다리는 견적
+  function hasOpenWork(c: CustomerRow): boolean {
+    if ((contractMap[c.id] ?? []).some(k => k.status === 'active')) return true
+    const key = normalizePhone(c.phone)
+    if (!key) return false
+    return openWorkPhones.has(key) || pendingQuotePhones.has(key)
+  }
+
+  const individualActive = individualLive.filter(hasOpenWork)
+  const individualDone = individualLive.filter(c => !hasOpenWork(c))
+  const companyActive = companyLive.filter(hasOpenWork)
+  const companyDone = companyLive.filter(c => !hasOpenWork(c))
+
+  // 완료된 곳은 카드가 아니라 한 줄로 — 목록에서 눈이 안 걸리게 확실히 낮춘다.
+  // 지우거나 다른 페이지로 보내지 않는다. 이름을 누르면 이력·견적서가 그대로 있다.
+  function doneRow(customer: CustomerRow) {
+    const customerContracts = contractMap[customer.id] ?? []
+    const bookingLtv = customer.phone ? (bookingMap[normalizePhone(customer.phone)]?.ltv ?? 0) : 0
+    const ltv = bookingLtv + contractAccruedRevenue(customerContracts)
+    const last = customer.phone ? (bookingMap[normalizePhone(customer.phone)]?.lastDate ?? '') : ''
+    return (
+      <div key={`done-${customer.id}`} className="flex items-center gap-2 px-4 py-2.5">
+        <Link href={`/dashboard/clients/${customer.id}`} className="text-sm text-muted-foreground hover:text-foreground truncate">
+          {customer.name}
+        </Link>
+        {last && (
+          <span className="text-xs text-muted-foreground/70 shrink-0">
+            {new Date(last).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', timeZone: 'Asia/Seoul' })} 완료
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          {ltv > 0 && <span className="text-xs tabular-nums text-muted-foreground">{ltv.toLocaleString('ko-KR')}원</span>}
+          {customer.phone && (
+            <CallLink
+              phone={customer.phone}
+              className="w-7 h-7 rounded-full bg-muted flex items-center justify-center hover:bg-muted-foreground/20 transition-colors"
+              iconClassName="h-3.5 w-3.5 text-muted-foreground"
+            />
+          )}
+          <Link href={`/dashboard/clients/${customer.id}`} className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border">
+            이력<ChevronRight className="h-3 w-3" />
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   const activeLeads = sortLeads(
     (leads ?? []).filter(l => l.customer_type === 'company' && !CLOSED_LEAD_STATUSES.has(l.status) && !registeredLeadIds.has(l.id) && matchesSearch(l.company_name, l.phone, l.address))
@@ -643,13 +721,13 @@ export default async function ClientsPage({
             </div>
           )}
 
-          {individualLive.length === 0 && (pendingQuotes ?? []).length === 0 && individualLeads.length === 0 ? (
+          {individualActive.length === 0 && individualDone.length === 0 && (pendingQuotes ?? []).length === 0 && individualLeads.length === 0 ? (
             <div className="bg-white rounded-xl border border-dashed p-8 text-center space-y-2">
               <p className="text-sm text-muted-foreground">아직 개인 고객이 없어요</p>
               <p className="text-xs text-muted-foreground">고객 링크를 공유하면 견적 요청이 자동으로 들어와요</p>
             </div>
           ) : (
-            individualLive.slice(0, showAll ? undefined : LIST_LIMIT).map((customer) => {
+            individualActive.slice(0, showAll ? undefined : LIST_LIMIT).map((customer) => {
               const booking = customer.phone ? bookingMap[normalizePhone(customer.phone)] : undefined
               const customerContracts = contractMap[customer.id] ?? []
               const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
@@ -753,13 +831,30 @@ export default async function ClientsPage({
               )
             })
           )}
-          {!showAll && individualLive.length > LIST_LIMIT && (
+          {!showAll && individualActive.length > LIST_LIMIT && (
             <Link
               href={href({ all: '1' })}
               className="block w-full text-center text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-xl py-3"
             >
-              나머지 {individualLive.length - LIST_LIMIT}명 더 보기
+              나머지 {individualActive.length - LIST_LIMIT}명 더 보기
             </Link>
+          )}
+
+          {/* 완료 — 다음 일정이 없는 곳. 카드가 아니라 한 줄로 낮춰 진행 중인 곳과 확실히 갈린다 */}
+          {individualDone.length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs text-muted-foreground px-1 mb-1.5">
+                완료 ({individualDone.length}명) · 다음 일정이 없는 곳이에요
+              </p>
+              <div className="rounded-xl border bg-muted/20 divide-y">
+                {individualDone.slice(0, showAll ? undefined : LIST_LIMIT).map(doneRow)}
+              </div>
+              {!showAll && individualDone.length > LIST_LIMIT && (
+                <Link href={href({ all: '1' })} className="block w-full text-center text-xs text-muted-foreground hover:text-foreground mt-1.5">
+                  나머지 {individualDone.length - LIST_LIMIT}명 더 보기
+                </Link>
+              )}
+            </div>
           )}
         </section>
       )}
@@ -775,7 +870,7 @@ export default async function ClientsPage({
             </div>
           )}
 
-          {activeLeads.length === 0 && companyLive.length === 0 ? (
+          {activeLeads.length === 0 && companyActive.length === 0 && companyDone.length === 0 ? (
             <div className="bg-white rounded-xl border border-dashed p-8 text-center space-y-2">
               <p className="text-sm text-muted-foreground">영업 중인 법인 거래처가 없어요</p>
               <p className="text-xs text-muted-foreground">위 &lsquo;고객 추가&rsquo; 버튼으로 거래처를 등록하세요</p>
@@ -849,10 +944,10 @@ export default async function ClientsPage({
           )}
 
           {/* 등록된 거래처(법인 고객, type='recurring') — 계약 유무는 각 카드의 배지로 표시 */}
-          {companyLive.length > 0 && (
+          {companyActive.length > 0 && (
             <div className="mt-3 space-y-2">
               <p className="text-xs text-muted-foreground px-1">등록된 거래처</p>
-              {companyLive.slice(0, showAll ? undefined : LIST_LIMIT).map((customer) => {
+              {companyActive.slice(0, showAll ? undefined : LIST_LIMIT).map((customer) => {
                 const customerContracts = contractMap[customer.id] ?? []
                 const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
                 const hasAnyContract = customerContracts.length > 0
@@ -952,12 +1047,29 @@ export default async function ClientsPage({
                   </div>
                 )
               })}
-              {!showAll && companyLive.length > LIST_LIMIT && (
+              {!showAll && companyActive.length > LIST_LIMIT && (
                 <Link
                   href={href({ all: '1' })}
                   className="block w-full text-center text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-xl py-3"
                 >
-                  나머지 {companyLive.length - LIST_LIMIT}곳 더 보기
+                  나머지 {companyActive.length - LIST_LIMIT}곳 더 보기
+                </Link>
+              )}
+            </div>
+          )}
+
+          {/* 완료된 거래처 — 다음 일정이 없는 곳. 한 줄로 낮춘다 */}
+          {companyDone.length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs text-muted-foreground px-1 mb-1.5">
+                완료 ({companyDone.length}곳) · 다음 일정이 없는 곳이에요
+              </p>
+              <div className="rounded-xl border bg-muted/20 divide-y">
+                {companyDone.slice(0, showAll ? undefined : LIST_LIMIT).map(doneRow)}
+              </div>
+              {!showAll && companyDone.length > LIST_LIMIT && (
+                <Link href={href({ all: '1' })} className="block w-full text-center text-xs text-muted-foreground hover:text-foreground mt-1.5">
+                  나머지 {companyDone.length - LIST_LIMIT}곳 더 보기
                 </Link>
               )}
             </div>
