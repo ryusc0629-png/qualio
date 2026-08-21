@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { chargeBillingKey } from './portone'
 import { PLANS } from '@/lib/config/plans'
 import { getChargeAmount } from './pricing'
+import { getPendingReelAmount, markReelChargesBilled } from '@/lib/reel/charges'
 import { notifyChargeFailed } from './charge-failed-notify'
 import type { PlanId } from '@/lib/config/plans'
 
@@ -62,10 +63,22 @@ export async function chargeDueSubscriptions(): Promise<ChargeSummary> {
     }
 
     // beta(무료) 등 유료 아님 → 스킵. 금액은 평생 할인까지 반영된 실제 청구액
-    const { amount } = await getChargeAmount(sub.business_id, effectivePlan)
-    if (!amount || amount <= 0) continue
+    const { supplyAmount, amount: planAmount } = await getChargeAmount(sub.business_id, effectivePlan)
+    if (!planAmount || planAmount <= 0) continue
+
+    // 홍보 영상 건별 사용료를 이번 청구에 얹는다.
+    // ⚠️요금제 금액과 같은 규칙으로 계산한다 — 공급가액끼리 더한 뒤 부가세를 한 번만 얹는다.
+    //   (각각 부가세를 붙여 더하면 원 단위가 어긋나 세금계산서와 안 맞는다)
+    // ⚠️getChargeAmount에는 넣지 않는다 — 그 함수는 신규 가입 결제창에서 금액을 검증하는 데도
+    //   쓰이는데, 거기에 사용료가 섞이면 정상 결제가 "금액이 올바르지 않습니다"로 튕긴다.
+    const reel = await getPendingReelAmount(db as unknown as SupabaseClient, sub.business_id)
+    const supplyTotal = supplyAmount + reel.amount
+    const amount = supplyTotal + Math.round(supplyTotal * 0.1)
 
     const planLabel = PLANS[effectivePlan]?.label ?? effectivePlan
+    const orderName = reel.ids.length > 0
+      ? `퀄리오 ${planLabel} 플랜 정기결제 (홍보 영상 ${reel.ids.length}편 포함)`
+      : `퀄리오 ${planLabel} 플랜 정기결제`
 
     // ★중복 청구 방지 — 주문번호를 (구독 × 이용기간)으로 고정해 PK로 선점한다.
     //   daily-maintenance는 하위 작업을 병렬로 돌리고, 크론은 재시도·수동 호출로 겹칠 수 있다.
@@ -97,7 +110,7 @@ export async function chargeDueSubscriptions(): Promise<ChargeSummary> {
         billingKey: sub.billing_key,
         planId: effectivePlan,
         amount,
-        orderName: `퀄리오 ${planLabel} 플랜 정기결제`,
+        orderName,
       })
 
       if (r.ok) {
@@ -115,6 +128,9 @@ export async function chargeDueSubscriptions(): Promise<ChargeSummary> {
         await (db as unknown as SupabaseClient).from('kcp_payment_orders')
           .update({ status: 'paid', paid_at: now.toISOString() })
           .eq('ordr_idxx', ordrIdxx)
+        // ★결제가 성공한 뒤에만 '받은 돈'으로 표시한다.
+        //   먼저 표시했다가 결제가 실패하면 그 돈은 영영 못 받는다.
+        await markReelChargesBilled(db as unknown as SupabaseClient, reel.ids, ordrIdxx)
         charged++
       } else {
         // 청구 실패 → past_due 로 표시. 서비스 즉시 차단은 하지 않고 7일 유예를 준다.

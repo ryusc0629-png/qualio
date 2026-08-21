@@ -3,6 +3,9 @@ import { Film, Clock, Download } from 'lucide-react'
 import { ReelShareButtons } from './reel-share-buttons'
 import { ReelMakeNowButton } from './reel-make-now-button'
 import { ReelAutoRefresh } from './reel-auto-refresh'
+import { getReelUsage } from '@/lib/reel/charges'
+import { REEL_FREE_QUOTA, REEL_UNIT_PRICE } from '@/lib/reel/pricing'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 // 현장이 올린 재료로 만들어진 홍보 영상이 여기로 온다.
 //
@@ -32,6 +35,8 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
     .in('reel_status', ['queued', 'processing', 'done', 'failed'])
     .order('reel_queued_at', { ascending: false, nullsFirst: false })
     .limit(12)) as { data: ReelRow[] | null }
+
+  const usage = await getReelUsage(db as unknown as SupabaseClient, businessId)
 
   const rows = data ?? []
   const done = rows.filter((r) => r.reel_status === 'done' && r.reel_url)
@@ -67,6 +72,31 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
             현장에서 찍어 올린 영상으로 자동으로 만들어져요. 확인하고 올리기만 하시면 돼요
           </p>
         </div>
+      </div>
+
+      {/* 무료분이 얼마나 남았는지 · 이번 달 추가로 쓴 게 얼마인지.
+          결제창을 또 띄우지 않고 다음 정기결제에 얹히므로, 얼마가 붙는지는 미리 보여야 한다. */}
+      <div className="rounded-lg bg-muted/40 border px-3 py-2.5 text-xs space-y-1">
+        {usage.freeLeft > 0 ? (
+          <p>
+            <span className="font-semibold text-foreground">무료 {usage.freeLeft}편</span>
+            <span className="text-muted-foreground"> 남았어요 (가입하면 {REEL_FREE_QUOTA}편을 그냥 드려요)</span>
+          </p>
+        ) : (
+          <p className="text-muted-foreground">
+            무료 {REEL_FREE_QUOTA}편을 다 쓰셨어요. 이제 한 편에{' '}
+            <span className="font-semibold text-foreground">{REEL_UNIT_PRICE.toLocaleString()}원</span>이에요
+          </p>
+        )}
+        {usage.pendingCount > 0 && (
+          <p className="text-muted-foreground">
+            이번 달 {usage.pendingCount}편 ·{' '}
+            <span className="font-semibold text-foreground">
+              {usage.pendingAmount.toLocaleString()}원
+            </span>{' '}
+            — 다음 결제에 함께 청구돼요 (부가세 별도)
+          </p>
+        )}
       </div>
 
       {rows.length === 0 ? (

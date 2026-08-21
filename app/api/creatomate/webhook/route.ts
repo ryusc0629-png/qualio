@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendPushToBusiness } from '@/lib/push/web-push'
 import { REEL_DONE, REEL_FAILED } from '@/lib/reel/queue'
+import { recordReelCharge } from '@/lib/reel/charges'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 interface CreatomateWebhookPayload {
   id: string
@@ -32,12 +34,15 @@ export async function POST(req: NextRequest) {
       .from('reports')
       .update({ reel_status: REEL_DONE, reel_url: payload.url, reel_error: null } as never)
       .eq('reel_render_id' as never, payload.id)
-      .select('business_id, booking_id')
-      .maybeSingle() as { data: { business_id: string; booking_id: string } | null }
+      .select('id, business_id, booking_id')
+      .maybeSingle() as { data: { id: string; business_id: string; booking_id: string } | null }
 
     // 완성됐다고 알려주지 않으면 대표가 대시보드를 열어볼 이유가 없다.
     // 알림이 실패해도 영상은 이미 만들어졌으므로 웹훅은 성공으로 응답한다.
     if (report?.business_id) {
+      // 완성된 편만 이용 기록에 남긴다(무료분이면 0원). 실패한 건엔 돈을 물리지 않는다.
+      await recordReelCharge(db as unknown as SupabaseClient, report.business_id, report.id)
+
       try {
         const { data: booking } = await db
           .from('bookings')
