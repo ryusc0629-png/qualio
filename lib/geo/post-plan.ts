@@ -9,6 +9,12 @@ import { deriveKeyword } from '@/lib/geo/weak-topics'
 
 type Db = ReturnType<typeof createServiceClient>
 
+// 주제가 아직 안 정해진 슬롯에 달력이 보여주는 문구.
+// ⚠️이건 '화면에 뜨는 안내'지 글 제목이 아니다. 발행 경로는 반드시 hasPlannedTopic()으로
+//   걸러서 이 문구가 제목으로 나가지 않게 한다 — 실제로 한 업체에 이 제목의 글이
+//   3편 올라갔다(2026-08-19·20·21).
+export const AUTO_TOPIC_LABEL = '최적 주제를 자동으로 선택해요'
+
 export interface PlanSlot {
   day: number              // 발행 예정 '일'(1~31)
   label: string            // 카피라이팅된 발행 제목 — 달력 표시 & 실제 발행 제목이 동일
@@ -113,7 +119,7 @@ async function buildMonthlyPlan(db: Db, businessId: string, ctx: PlanContext): P
 
   const slots: PlanSlot[] = futureDays.map((day, i) => {
     if (queue.length === 0) {
-      return { day, label: '최적 주제를 자동으로 선택해요', topic: '', keyword: null, geoTargeted: false }
+      return { day, label: AUTO_TOPIC_LABEL, topic: '', keyword: null, geoTargeted: false }
     }
     // 주제가 날짜보다 적으면 순환(현 시점 데이터로는 거의 발생하지 않음)
     return { ...queue[i % queue.length], day }
@@ -178,4 +184,10 @@ export function pickTodayPlanSlot(plan: PostPlan | null, today: number, publishe
     .filter((s) => s.day <= today && !publishedDays.has(s.day))
     .sort((a, b) => a.day - b.day)
   return overdue[0] ?? null
+}
+
+// 이 슬롯에 '실제 주제'가 들어 있는지. 빈 슬롯을 계획으로 취급하면
+// 안내 문구(AUTO_TOPIC_LABEL)가 그대로 글 제목이 되어 고객 홈페이지에 올라간다.
+export function hasPlannedTopic(slot: PlanSlot | null): boolean {
+  return !!slot && !!slot.topic.trim() && slot.label !== AUTO_TOPIC_LABEL
 }

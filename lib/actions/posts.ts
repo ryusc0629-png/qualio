@@ -10,7 +10,7 @@ import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContent
 import type { PlanId } from '@/lib/config/plans'
 import { fetchRecentJobCases, fetchRecentCasePhotos, POST_PHOTO_COUNT } from '@/lib/ai/job-cases'
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
-import { getOrCreatePostPlan, pickTodayPlanSlot } from '@/lib/geo/post-plan'
+import { getOrCreatePostPlan, pickTodayPlanSlot, hasPlannedTopic } from '@/lib/geo/post-plan'
 import { getRelatedKeywords } from '@/lib/keyword/naver-searchad'
 import { checkAutoPostReadiness } from '@/lib/marketing/auto-post-readiness'
 import { acquireAutoPostLock, releaseAutoPostLock } from '@/lib/marketing/auto-post-lock'
@@ -384,7 +384,9 @@ export const publishTodayAction = action
         realCases,
         keyword,
         relatedKeywords,
-        titleOverride: todaySlot?.label, // 계획표에 확정된 제목 그대로 발행(달력과 일치)
+        // 계획표에 확정된 제목 그대로 발행(달력과 일치). 빈 슬롯이면 넘기지 않는다 —
+        // 안내 문구('최적 주제를 자동으로 선택해요')가 글 제목으로 나간 적이 있다
+        titleOverride: hasPlannedTopic(todaySlot) ? todaySlot!.label : undefined,
       })
 
       // slug 중복 방지

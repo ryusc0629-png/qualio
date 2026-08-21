@@ -5,7 +5,7 @@ import { fetchRecentJobCases, fetchRecentCasePhotos, POST_PHOTO_COUNT } from '@/
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 import { notifyIndexNowForPosts } from '@/lib/seo/indexnow'
 import { pickWeakGeoTopic } from '@/lib/geo/weak-topics'
-import { getOrCreatePostPlan, pickTodayPlanSlot } from '@/lib/geo/post-plan'
+import { getOrCreatePostPlan, pickTodayPlanSlot, hasPlannedTopic } from '@/lib/geo/post-plan'
 import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContentEnabled } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { checkAutoPostReadiness } from '@/lib/marketing/auto-post-readiness'
@@ -318,7 +318,8 @@ export async function GET(request: NextRequest) {
       const publishedTitlesThisRun: string[] = []
       try {
         for (let i = 0; i < toPublish; i++) {
-          const planned = todaySlot ? { topic: todaySlot.topic, keyword: todaySlot.keyword, title: todaySlot.label } : null
+          // 주제가 안 정해진 빈 슬롯은 계획으로 쓰지 않는다 — 안내 문구가 글 제목이 되어 버린다
+          const planned = hasPlannedTopic(todaySlot) ? { topic: todaySlot!.topic, keyword: todaySlot!.keyword, title: todaySlot!.label } : null
           const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas }, services ?? [], publishedTitles, month, model, channelsEnabled, realCases, planned)
           publishedTitlesThisRun.push(title)
           console.log(`[Cron] 자동 발행 완료 (${i + 1}/${toPublish}): ${business.name} — "${title}"`)
