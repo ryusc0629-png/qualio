@@ -394,7 +394,8 @@ export const publishTodayAction = action
         titleOverride: hasPlannedTopic(todaySlot) && !isTitleTaken(todaySlot!.label, neighborTitles)
           ? todaySlot!.label
           : undefined,
-        avoidTitles: neighborTitles,
+        // 이웃 업체 제목 + 이번 달 자기가 쓴 제목 — 둘 다 피한다
+        avoidTitles: [...neighborTitles, ...publishedTitles],
       })
 
       // slug 중복 방지

@@ -482,11 +482,16 @@ export async function generateTopicSuggestions(input: {
   recentTitles?: string[]  // 이미 발행한 제목들 — 중복(유사 주제 포함) 방지용
   address?: string | null  // 지역+서비스 롱테일 키워드 생성용
   skipKeywordData?: boolean // 자동 발행 등 검색량 배지가 필요 없는 경로 — 네이버 API 호출 생략(지연·의존성 제거)
+  // 받을 주제 개수 (기본 10). 계획표는 그 달 발행일 수만큼 필요하다 —
+  // 모자라면 같은 주제를 돌려쓰게 되고, 그러면 같은 제목이 한 달에 두세 번 나간다.
+  count?: number
 }): Promise<TopicSuggestion[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) throw new Error('[APP] AI 기능을 사용하려면 API 키가 필요합니다')
 
   const client = getClaude('geo-content')
+
+  const count = Math.min(Math.max(input.count ?? 10, 5), 24)
 
   const serviceNames = input.services.map((s) => s.name).join(', ')
   const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
@@ -501,7 +506,7 @@ export async function generateTopicSuggestions(input: {
 
   const message = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1400,
+    max_tokens: Math.min(400 + count * 110, 3200),
     messages: [
       {
         role: 'user',
@@ -514,7 +519,8 @@ ${region ? `지역: ${region}` : ''}
 현재 월: ${currentMonthName}${avoidBlock}
 
 규칙:
-- 이미 발행한 주제와 겹치거나 비슷한 주제는 절대 추천하지 말 것 (서로 다른 주제 10개)
+- 이미 발행한 주제와 겹치거나 비슷한 주제는 절대 추천하지 말 것 (서로 다른 주제 ${count}개)
+- 추천끼리도 서로 겹치면 안 된다. 공간(가정·사무실·상가·공장)·상황(입주·이사·계절·사고)·대상(에어컨·바닥·주방·화장실·창문)을 골고루 흩어 ${count}개를 채울 것
 - 이 달에 실제로 검색이 많아지는 계절적 요인을 반영할 것
 - 업체가 제공하는 서비스와 관련된 주제 우선
 - [대상 공간 구분] "정기청소/정기 관리"는 상업시설·사무실·공장·상가·병원 등 '업무(비주거) 공간' 반복 관리 서비스다. 이 주제는 반드시 업무공간 관점으로 잡을 것(가정집 정기청소로 오해 금지). 가정집은 입주청소·이사청소 등 1회성 주제로만 다룰 것
@@ -522,7 +528,7 @@ ${region ? `지역: ${region}` : ''}
 - reason은 10~15자 이내 짧게 (예: "이사 시즌 검색 급증", "여름철 에어컨 필수")
 - keyword: 그 주제의 '대표 검색어'를 1~2단어로 짧게(네이버 검색량이 많은 형태, 공백 최소). 긴 문장·설명형 금지.${region ? ` 지역이 뚜렷하면 지역+서비스 (예: "${region.split(' ').pop()}에어컨청소").` : ''} 예: "에어컨청소", "곰팡이제거", "입주청소"
 
-반드시 아래 JSON 배열로만 응답하세요 (10개):
+반드시 아래 JSON 배열로만 응답하세요 (${count}개):
 [
   { "title": "포스트 제목", "reason": "이 달 인기 이유", "topic": "AI에게 전달할 작성 주제", "keyword": "핵심 검색어" },
   ...

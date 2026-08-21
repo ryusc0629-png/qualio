@@ -112,7 +112,8 @@ async function publishOnePost(
     model,
     realCases,
     titleOverride: plannedTitle, // 계획표에 확정된 제목 그대로 발행(달력과 일치)
-    avoidTitles: neighborTitles,
+    // 이웃 업체 제목 + 이번 달 자기가 쓴 제목 — 둘 다 피한다
+    avoidTitles: [...neighborTitles, ...publishedTitles],
   })
 
   // slug 중복 방지

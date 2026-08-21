@@ -109,6 +109,9 @@ async function buildMonthlyPlan(db: Db, businessId: string, ctx: PlanContext): P
         currentMonth: ctx.currentMonthNum,
         address: ctx.address,
         recentTitles: neighborTitles,
+        // 남은 날짜를 다 덮을 만큼 받는다. 예전엔 10개만 받아 24일치에 돌려썼고,
+        // 그래서 같은 제목이 한 달에 두세 번 나갔다(8/14·8/18 재발행이 그 결과다).
+        count: futureDays.length - queue.length,
       })
       for (const s of suggestions) {
         queue.push({
@@ -125,12 +128,15 @@ async function buildMonthlyPlan(db: Db, businessId: string, ctx: PlanContext): P
     }
   }
 
+  // ⛔주제가 모자라도 돌려쓰지 않는다. 남는 날짜는 비운 채 두고, 그날 발행 직전에
+  //   그때까지 쓴 제목을 피해 새로 정한다. 돌려쓰면 같은 제목이 한 달에 두세 번 나가고,
+  //   그건 검색에서 자기 글끼리 순위를 깎는 짓이다.
   const slots: PlanSlot[] = futureDays.map((day, i) => {
-    if (queue.length === 0) {
+    const picked = queue[i]
+    if (!picked) {
       return { day, label: AUTO_TOPIC_LABEL, topic: '', keyword: null, geoTargeted: false }
     }
-    // 주제가 날짜보다 적으면 순환(현 시점 데이터로는 거의 발생하지 않음)
-    return { ...queue[i % queue.length], day }
+    return { ...picked, day }
   })
 
   // 4) 약점 슬롯의 제목을 카피라이팅된 지역 롱테일 제목으로 일괄 치환(1회 호출).
