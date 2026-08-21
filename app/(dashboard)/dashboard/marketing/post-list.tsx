@@ -7,6 +7,7 @@ import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/por
 import { dismissReelAction } from '@/lib/actions/reports'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import Link from 'next/link'
 import { FileText, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send, SkipForward, Save, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getPlanLabel } from '@/lib/config/plans'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
@@ -103,6 +104,11 @@ interface PostListProps {
   businessId: string
   monthlyTarget: number
   autoPostLimit: number
+  /** 자동 글쓰기를 켤 수 있는 상태인지 + 뭐가 비었는지 */
+  autoPostReadiness?: {
+    ready: boolean
+    items: { label: string; why: string; href: string; done: boolean }[]
+  }
   planId: string
   isTodayComplete: boolean
   pendingPortfolios?: PendingPortfolio[]
@@ -409,7 +415,7 @@ function ReelCard({
   )
 }
 
-export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], initialSuggestions = null, naverBlogId = null, danggeunBusinessUrl = null, postPlan = null }: PostListProps) {
+export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, autoPostReadiness, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], initialSuggestions = null, naverBlogId = null, danggeunBusinessUrl = null, postPlan = null }: PostListProps) {
   const [posts] = useState(initialPosts)
   // 오름차순 정렬 (오래된 글 위 → 최신 글 아래) + 오늘 위치로 자동 스크롤
   const sortedPosts = [...posts].sort((a, b) => new Date(a.published_at).getTime() - new Date(b.published_at).getTime())
@@ -901,14 +907,46 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
             <br />
             지금은 아무 글도 안 올라가고 있어요.
           </p>
-          <Button
-            type="button"
-            className="w-full h-11"
-            disabled={isSavingTarget}
-            onClick={toggleAutoPost}
-          >
-            {isSavingTarget ? '켜는 중...' : `자동 글쓰기 켜기 (월 ${autoPostLimit}편)`}
-          </Button>
+          {autoPostReadiness && !autoPostReadiness.ready ? (
+            /* 재료가 없으면 켜는 버튼 대신 '뭘 채워야 하는지'를 보여준다.
+               ⛔버튼만 띄우고 눌렀을 때 막으면, 사장님은 뭘 해야 할지 모른 채 막히기만 한다. */
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-amber-900">
+                이것부터 채워주세요 — 그래야 글을 쓸 수 있어요
+              </p>
+              {autoPostReadiness.items.map((item) => (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className={`flex items-start gap-2 rounded-lg border bg-white px-3 py-2.5 ${
+                    item.done ? 'border-emerald-200' : 'border-amber-300 hover:border-amber-400'
+                  }`}
+                >
+                  {item.done ? (
+                    <Check className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+                  ) : (
+                    <span className="h-4 w-4 rounded-full border-2 border-amber-400 mt-0.5 shrink-0" />
+                  )}
+                  <span className="flex-1 min-w-0">
+                    <span className={`block text-sm font-medium ${item.done ? 'text-emerald-800' : 'text-amber-950'}`}>
+                      {item.label}
+                    </span>
+                    {!item.done && <span className="block text-xs text-amber-800 mt-0.5">{item.why}</span>}
+                  </span>
+                  {!item.done && <span className="text-xs text-amber-900 shrink-0 mt-0.5">채우기 →</span>}
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <Button
+              type="button"
+              className="w-full h-11"
+              disabled={isSavingTarget}
+              onClick={toggleAutoPost}
+            >
+              {isSavingTarget ? '켜는 중...' : `자동 글쓰기 켜기 (월 ${autoPostLimit}편)`}
+            </Button>
+          )}
         </div>
       )}
 

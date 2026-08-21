@@ -12,17 +12,8 @@ import { fetchRecentJobCases, fetchRecentCasePhotos, POST_PHOTO_COUNT } from '@/
 import { generateAndSaveChannelContent } from '@/lib/ai/channel-content'
 import { getOrCreatePostPlan, pickTodayPlanSlot } from '@/lib/geo/post-plan'
 import { getRelatedKeywords } from '@/lib/keyword/naver-searchad'
-import { consumeDailyQuota, getDailyUsage, POST_DRAFT_SCOPE, POST_DRAFT_DAILY_LIMIT } from '@/lib/ratelimit/daily-quota'
-
-// 한도를 1회 차감하고, 다 썼으면 사장님이 이해할 수 있는 문구로 막는다.
-async function spendPostDraftQuota(db: Parameters<typeof consumeDailyQuota>[0], businessId: string) {
-  const allowed = await consumeDailyQuota(db, POST_DRAFT_SCOPE, businessId, POST_DRAFT_DAILY_LIMIT)
-  if (!allowed) {
-    throw new Error(
-      `[APP] 오늘은 글을 ${POST_DRAFT_DAILY_LIMIT}편까지 만들 수 있어요. 내일 다시 만들 수 있습니다`,
-    )
-  }
-}
+import { checkAutoPostReadiness } from '@/lib/marketing/auto-post-readiness'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 // 공통: 현재 유저의 business_id 조회
 async function getBusinessId() {
@@ -40,143 +31,6 @@ async function getBusinessId() {
   if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
   return { db, businessId: profile.business_id }
 }
-
-// AI 포스트 자동 생성 액션
-export const generatePostAction = action
-  .schema(z.object({
-    topic: z.string().max(300).optional(),
-    imageUrl: z.string().url().optional(),
-    suggestedTitle: z.string().max(200).optional(), // 추천 카드 제목 고정용
-    keyword: z.string().max(100).optional(), // 추천 주제의 핵심 검색어 (본문·태그 최적화용)
-  }))
-  .action(async ({ parsedInput }) => {
-    const { db, businessId } = await getBusinessId()
-    await spendPostDraftQuota(db, businessId)
-
-    // 업체 정보 + 서비스 + 구독 플랜 조회
-    const [businessResult, servicesResult, subResult] = await Promise.all([
-      db
-        .from('businesses')
-        .select('name, address, description, service_areas, slug' as never)
-        .eq('id', businessId)
-        .maybeSingle() as unknown as Promise<{ data: { name: string; address: string | null; description: string | null; service_areas: string[] | null; slug: string | null } | null }>,
-      db
-        .from('service_items')
-        .select('name, base_price, unit')
-        .eq('business_id', businessId)
-        .eq('is_active', true)
-        .is('deleted_at', null),
-      db
-        .from('subscriptions')
-        .select('plan')
-        .eq('business_id', businessId)
-        .eq('status', 'active')
-        .maybeSingle(),
-    ])
-
-    if (!businessResult.data) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
-
-    const business = businessResult.data
-    const services = servicesResult.data ?? []
-    // 플랜별 능력 — 심층 글 모델 / SNS 채널 원고 포함 여부
-    const planId = ((subResult.data?.plan as PlanId) ?? 'beta')
-    const model = getPostModel(planId)
-    const channelsEnabled = isChannelContentEnabled(planId)
-    // 실제 작업 사례(익명) — 글 고유성 근거
-    const realCases = await fetchRecentJobCases(db, businessId)
-
-    // 핵심 검색어가 있으면 연관 검색어까지 조회 → 본문·태그를 실제 검색어에 맞춤
-    const keyword = parsedInput.keyword
-    const relatedStats = keyword ? await getRelatedKeywords(keyword) : []
-    const relatedKeywords = relatedStats.map((r) => r.keyword)
-    const seoKeywords = keyword ? [keyword, ...relatedKeywords] : undefined
-
-    // AI 포스트 생성
-    const postContent = await generatePostContent({
-      businessName: business.name,
-      address: business.address,
-      description: business.description,
-      services,
-      topic: parsedInput.topic,
-      imageUrl: parsedInput.imageUrl,
-      serviceAreas: business.service_areas,
-      model,
-      realCases,
-      keyword,
-      relatedKeywords,
-    })
-
-    // 추천 카드에서 발행한 경우 → 기획 단계 제목 그대로 사용
-    if (parsedInput.suggestedTitle) {
-      postContent.title = parsedInput.suggestedTitle
-    }
-
-    // slug 중복 방지 — 같은 slug가 이미 있으면 숫자 붙이기
-    const baseSlug = postContent.slug
-    let slug = baseSlug
-    const { data: existing } = await db
-      .from('biz_posts')
-      .select('slug')
-      .eq('business_id', businessId)
-      .eq('slug', slug)
-      .maybeSingle()
-
-    if (existing) {
-      slug = `${baseSlug}-${Date.now().toString(36)}`
-    }
-
-    // keyPoints/faqs를 content 앞에 JSON 메타 블록으로 저장
-    const metaBlock = (postContent.keyPoints?.length || postContent.faqs?.length)
-      ? `\`\`\`json\n${JSON.stringify({ keyPoints: postContent.keyPoints ?? [], faqs: postContent.faqs ?? [] })}\n\`\`\`\n`
-      : ''
-    const fullContent = metaBlock + postContent.content
-
-    // 이미지 — 공개 승인된 작업보고의 진짜 비포/애프터 사진만 싣는다(자동발행과 동일 규칙).
-    // 실사진이 없으면 사진 없이 글만 나간다 — 사진은 글별 '수정'에서 직접 올릴 수 있다.
-    const casePhotos = await fetchRecentCasePhotos(db, businessId)
-    const imageUrls = [...casePhotos.before, ...casePhotos.after].slice(0, POST_PHOTO_COUNT)
-    // 대표 이미지(커버)는 '결과'가 드러나는 애프터 사진을 우선 — 눈길을 끄는 게 애프터라서.
-    const coverUrl = casePhotos.after[0] ?? imageUrls[0] ?? null
-
-    // DB 저장
-    const { data: post, error } = await db
-      .from('biz_posts')
-      .insert({
-        business_id: businessId,
-        slug,
-        title: postContent.title,
-        content: fullContent,
-        summary: postContent.summary,
-        image_url: coverUrl,
-        image_urls: imageUrls,
-        ai_generated: true,
-        published: true,
-      })
-      .select('id, slug')
-      .single()
-
-    if (error) throw new Error('[APP] 포스트 저장에 실패했습니다')
-
-    // 네이버·당근·인스타 채널 텍스트 자동 생성 (플랜에 포함된 경우만, 실패해도 GEO 발행은 유지)
-    if (channelsEnabled) {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
-      await generateAndSaveChannelContent(db, post.id, {
-        businessName: business.name,
-        address: business.address,
-        geoTitle: postContent.title,
-        geoContent: fullContent,
-        seoKeywords,
-        // 견적 링크는 슬러그(깔끔) 우선, 없으면 UUID 폴백 — 둘 다 /q 라우트가 처리
-        quoteBaseUrl: `${appUrl}/q/${business.slug ?? businessId}`,
-      })
-    }
-
-    // 네이버·빙에 새 글 색인 알림 (빠른 검색 노출)
-    await notifyIndexNowForPosts(db, businessId, [post.slug])
-
-    revalidatePath('/dashboard/marketing')
-    return { success: true, postId: post.id, slug: post.slug, postContent }
-  })
 
 // 포스트 수동 저장 액션
 export const savePostAction = action
@@ -277,68 +131,6 @@ export const savePostAction = action
     return { success: true }
   })
 
-// 현장 메모 + 사진 → 읽기 좋은 글 초안 생성 (저장 안 함, 편집기에서 검토 후 저장)
-// 사장님이 사진 올리고 아무렇게나 메모하면, 사진을 보고 전문가 톤으로 다듬어 초안을 만들어 준다.
-export const generatePostFromNotesAction = action
-  .schema(z.object({
-    notes: z.string().min(1, '현장 메모를 입력해주세요').max(2000),
-    imageUrls: z.array(z.string().url()).max(10).optional(),
-  }))
-  .action(async ({ parsedInput }) => {
-    const { db, businessId } = await getBusinessId()
-    await spendPostDraftQuota(db, businessId)
-
-    const [businessResult, servicesResult, subResult] = await Promise.all([
-      db
-        .from('businesses')
-        .select('name, address, description, service_areas' as never)
-        .eq('id', businessId)
-        .maybeSingle() as unknown as Promise<{ data: { name: string; address: string | null; description: string | null; service_areas: string[] | null } | null }>,
-      db
-        .from('service_items')
-        .select('name, base_price, unit')
-        .eq('business_id', businessId)
-        .eq('is_active', true)
-        .is('deleted_at', null),
-      db
-        .from('subscriptions')
-        .select('plan')
-        .eq('business_id', businessId)
-        .eq('status', 'active')
-        .maybeSingle(),
-    ])
-
-    if (!businessResult.data) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
-
-    const business = businessResult.data
-    const services = servicesResult.data ?? []
-    const planId = ((subResult.data?.plan as PlanId) ?? 'beta')
-    const model = getPostModel(planId)
-
-    // 사진(비전) + 메모를 핵심 재료로 초안 작성 — 저장·이미지 자동생성은 하지 않음(실사진 사용)
-    const postContent = await generatePostContent({
-      businessName: business.name,
-      address: business.address,
-      description: business.description,
-      services,
-      fieldNotes: parsedInput.notes,
-      imageUrls: parsedInput.imageUrls,
-      serviceAreas: business.service_areas,
-      model,
-    })
-
-    // 남은 횟수를 함께 돌려줘 편집기가 새로고침 없이 "오늘 n번 남음"을 갱신하게 한다
-    const usedToday = await getDailyUsage(db, POST_DRAFT_SCOPE, businessId)
-
-    return {
-      success: true,
-      title: postContent.title,
-      summary: postContent.summary,
-      content: postContent.content,
-      remainingToday: Math.max(0, POST_DRAFT_DAILY_LIMIT - usedToday),
-      dailyLimit: POST_DRAFT_DAILY_LIMIT,
-    }
-  })
 
 // 이번 달 인기 주제 추천 액션
 export const getTopicSuggestionsAction = action
@@ -424,6 +216,16 @@ export const setMonthlyTargetAction = action
 
     if (parsedInput.target > limit) {
       throw new Error(`[APP] 현재 플랜(${planId})에서는 최대 월 ${limit}건까지 설정할 수 있어요`)
+    }
+
+    // 재료가 없으면 켤 수 없다 — 화면에서 버튼을 숨기는 것만으론 부족하다(액션은 그냥 부를 수 있다).
+    // 끄는 건 언제든 되어야 하므로 켤 때만 본다.
+    if (parsedInput.target > 0) {
+      const { ready, items } = await checkAutoPostReadiness(db as unknown as SupabaseClient, businessId)
+      if (!ready) {
+        const missing = items.filter((i) => !i.done).map((i) => i.label).join(', ')
+        throw new Error(`[APP] ${missing}을(를) 먼저 채워주세요. 그래야 글을 쓸 수 있어요`)
+      }
     }
 
     const { error } = await db

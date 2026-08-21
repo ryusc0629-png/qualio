@@ -8,6 +8,8 @@ import { ChannelLinksCard } from './channel-links-card'
 import { ChannelPerformanceCard } from './channel-performance-card'
 import { MarketingPeriodSelector } from './period-selector'
 import { GeoShareCard } from '@/components/dashboard/geo-share-card'
+import { checkAutoPostReadiness } from '@/lib/marketing/auto-post-readiness'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { ReelInboxCard } from '@/components/dashboard/reel-inbox-card'
 import { AiCrawlerCard } from '@/components/dashboard/ai-crawler-card'
 import { GoogleProfileCard } from '@/components/dashboard/google-profile-card'
@@ -151,6 +153,9 @@ export default async function MarketingPage({
       ? business.topic_suggestions
       : null
 
+  // 자동 글쓰기를 켤 수 있는 상태인가 — 재료(서비스·지역)가 없으면 켜는 버튼을 안 보여준다
+  const autoPostReadiness = await checkAutoPostReadiness(db as unknown as SupabaseClient, profile.business_id)
+
   return (
     <div className="max-w-3xl space-y-6">
       <div>
@@ -176,6 +181,7 @@ export default async function MarketingPage({
         businessSlug={business?.slug ?? null}
         businessId={profile.business_id}
         monthlyTarget={business?.monthly_post_target ?? 0}
+        autoPostReadiness={autoPostReadiness}
         autoPostLimit={autoPostLimit}
         planId={planId}
         isTodayComplete={isTodayComplete}
