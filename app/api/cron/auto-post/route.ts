@@ -9,6 +9,7 @@ import { getOrCreatePostPlan, pickTodayPlanSlot } from '@/lib/geo/post-plan'
 import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContentEnabled } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { checkAutoPostReadiness } from '@/lib/marketing/auto-post-readiness'
+import { acquireAutoPostLock, releaseAutoPostLock } from '@/lib/marketing/auto-post-lock'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // Vercel Cron: 매일 00:00 UTC (한국 오전 9시) 실행
@@ -304,12 +305,27 @@ export async function GET(request: NextRequest) {
       // 실제 작업 사례(익명) — 글 고유성 근거 (업체당 1회 조회)
       const realCases = await fetchRecentJobCases(db, business.id)
 
+      // ★자리 맡기 — 위 '하루 상한' 가드만으로는 못 막는다.
+      //   글 한 편에 40초~5분이 걸려서, 그 사이에 시작한 다른 실행은 아직 0건으로 읽는다.
+      //   드라이버가 둘(pg_cron 재시도 + Vercel cron)이라 실제로 같은 글이 두 번 올라갔다.
+      //   수동 '지금 발행'과도 같은 락을 쓰므로 서로 겹치지 않는다.
+      if (!(await acquireAutoPostLock(db as unknown as SupabaseClient, business.id))) {
+        console.log(`[Cron] auto-post 다른 실행이 작성 중이라 건너뜀 business=${business.id}`)
+        results.push({ businessId: business.id, action: 'skipped-locked' })
+        continue
+      }
+
       const publishedTitlesThisRun: string[] = []
-      for (let i = 0; i < toPublish; i++) {
-        const planned = todaySlot ? { topic: todaySlot.topic, keyword: todaySlot.keyword, title: todaySlot.label } : null
-        const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas }, services ?? [], publishedTitles, month, model, channelsEnabled, realCases, planned)
-        publishedTitlesThisRun.push(title)
-        console.log(`[Cron] 자동 발행 완료 (${i + 1}/${toPublish}): ${business.name} — "${title}"`)
+      try {
+        for (let i = 0; i < toPublish; i++) {
+          const planned = todaySlot ? { topic: todaySlot.topic, keyword: todaySlot.keyword, title: todaySlot.label } : null
+          const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas }, services ?? [], publishedTitles, month, model, channelsEnabled, realCases, planned)
+          publishedTitlesThisRun.push(title)
+          console.log(`[Cron] 자동 발행 완료 (${i + 1}/${toPublish}): ${business.name} — "${title}"`)
+        }
+      } finally {
+        // 실패했더라도 반드시 풀어준다 — 안 풀면 다음 실행이 6분간 막힌다
+        await releaseAutoPostLock(db as unknown as SupabaseClient, business.id)
       }
 
       results.push({ businessId: business.id, action: 'posted', count: toPublish, titles: publishedTitlesThisRun })
