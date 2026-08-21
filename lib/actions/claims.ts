@@ -5,6 +5,8 @@ import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
 import { sendPushToWorker } from '@/lib/push/web-push'
+import { formatPhone } from '@/lib/format/phone'
+import { marketDayRange, toMarketYmd } from '@/lib/format/datetime'
 import { generateClaimReplies } from '@/lib/ai/claim-reply'
 import { spendQuota } from '@/lib/ratelimit/daily-quota'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -137,6 +139,39 @@ export const createClaimAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getAuthenticatedBusinessId()
 
+    // 담당자를 또 고르게 하지 않는다 — 앞으로 잡힌 방문이 있으면 그 방문 담당자가 곧 담당자다.
+    // (정기 거래처는 일정 배정에서 이미 정해져 있는데 클레임에서 다시 묻는 건 같은 걸 두 번 묻는 것)
+    // 예정 방문이 없을 때만 '미정'으로 남고, 그때는 사장님이 고르면 된다.
+    let bookingId = parsedInput.booking_id ?? null
+    let assignedWorkerId: string | null = null
+
+    if (parsedInput.customer_phone) {
+      // 번호 형식이 두 가지로 섞여 저장돼 있어 그대로 비교하면 방문을 못 찾는다
+      const digits = parsedInput.customer_phone.replace(/[^0-9]/g, '')
+      const phoneVariants = [...new Set([parsedInput.customer_phone, digits, formatPhone(digits)])]
+
+      // ⚠️ '앞으로 잡힌' 방문이어야 한다. 오늘 0시(KST)로 자르지 않으면 몇 주 전에 완료 처리를
+      //    안 한 유령 예약이 가장 먼저 걸려서, 엉뚱한 사람에게 클레임이 배정된다.
+      const todayStart = marketDayRange(toMarketYmd()).from
+
+      const { data: nextVisit } = (await db
+        .from('bookings')
+        .select('id, worker_id')
+        .eq('business_id', businessId)
+        .in('customer_phone', phoneVariants)
+        .in('status', ['confirmed', 'in_progress'])
+        .gte('scheduled_at', todayStart)
+        .is('deleted_at', null)
+        .order('scheduled_at', { ascending: true })
+        .limit(1)) as unknown as { data: { id: string; worker_id: string | null }[] | null }
+
+      const visit = nextVisit?.[0]
+      if (visit) {
+        bookingId = bookingId ?? visit.id
+        assignedWorkerId = visit.worker_id
+      }
+    }
+
     const { error } = await db.from('claims' as never).insert({
       business_id:    businessId,
       customer_name:  parsedInput.customer_name,
@@ -144,7 +179,8 @@ export const createClaimAction = action
       title:          parsedInput.title,
       content:        parsedInput.content ?? null,
       is_urgent:      parsedInput.is_urgent ?? false,
-      booking_id:     parsedInput.booking_id ?? null,
+      booking_id:     bookingId,
+      assigned_worker_id: assignedWorkerId,
       photo_urls:     parsedInput.photo_urls ?? [],
       status:         'open',
     } as never)
@@ -152,6 +188,17 @@ export const createClaimAction = action
     if (error) {
       console.error('[createClaimAction] DB 오류:', error)
       throw new Error('[APP] 클레임 등록에 실패했어요. 다시 시도해주세요')
+    }
+
+    // 다음 방문 담당자에게 바로 알린다. 현장 앱 작업 화면에도 뜨지만,
+    // 이미 배정이 끝난 방문이면 직원이 그 화면을 다시 안 열 수도 있다.
+    if (assignedWorkerId && bookingId) {
+      await sendPushToWorker(assignedWorkerId, {
+        title: parsedInput.is_urgent ? '🚨 긴급 클레임 처리 요청' : '고객 요청이 접수됐어요',
+        body: `${parsedInput.customer_name} · ${parsedInput.title}`,
+        url: `/field/${assignedWorkerId}/${bookingId}`,
+        tag: 'claim-new',
+      }).catch((e) => console.error('[createClaimAction] 푸시 실패:', e))
     }
     revalidatePath('/dashboard')
     revalidatePath('/dashboard/claims')

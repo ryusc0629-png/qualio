@@ -78,10 +78,12 @@ interface Props {
   ownerMemo?: string | null
   /** 이 현장에서 알아야 할 것 — 지난 방문 직원들이 쌓아온 고객 메모 */
   customerNotes?: string | null
+  /** 고객이 알려온 미해결 문제 — 사장님이 대시보드에서 접수한 것 */
+  openClaims?: { title: string; content: string | null; isUrgent: boolean }[]
   existingChecklistPhotos: Record<string, string[]>
 }
 
-export function FieldBookingClient({ workerId, businessId, booking, reportSentAt, reportProgress, notifyOnMyWay, onMyWaySentAt, requiresLockup, isRecurring, existingOpenPhotoUrls, existingLockupPhotoUrls, checkinAt, checkoutAt, checklistItems, existingChecklistPhotos, ownerMemo, customerNotes }: Props) {
+export function FieldBookingClient({ workerId, businessId, booking, reportSentAt, reportProgress, notifyOnMyWay, onMyWaySentAt, requiresLockup, isRecurring, existingOpenPhotoUrls, existingLockupPhotoUrls, checkinAt, checkoutAt, checklistItems, existingChecklistPhotos, ownerMemo, customerNotes, openClaims = [] }: Props) {
   const [currentStatus, setCurrentStatus] = useState(booking.status)
   const [onMyWaySent, setOnMyWaySent] = useState(!!onMyWaySentAt)
   // 도착 사진 → 작업 자동 시작이 한 번만 실행되도록 (사진 여러 장 올려도 중복 시작 방지)
@@ -440,12 +442,34 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
             이 두 값은 예전부터 저장되고 있었는데 현장 앱 어디에도 안 보여줬다.
             사장님이 예약에 적은 부탁도, 지난 직원이 남긴 현장 요령도 직원은 못 봤다.
             맨 위에 두는 이유: 작업을 시작하기 '전에' 알아야 쓸모가 있다. */}
-        {(ownerMemo?.trim() || noteLines.length > 0) && (
+        {(ownerMemo?.trim() || noteLines.length > 0 || openClaims.length > 0) && (
           <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-4 space-y-3">
             <div className="flex items-center gap-1.5">
               <Info className="h-4 w-4 text-blue-700 shrink-0" />
               <p className="text-sm font-bold text-blue-900">읽고 시작해주세요</p>
             </div>
+
+            {/* 고객 불만이 가장 먼저다 — 오늘 그걸 못 챙기면 나머지를 다 해도 소용없다 */}
+            {openClaims.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold text-rose-700">고객이 알려온 문제</p>
+                <ul className="space-y-1.5">
+                  {openClaims.map((c, i) => (
+                    <li key={i} className="rounded-lg border border-rose-200 bg-white px-3 py-2">
+                      <p className="text-sm font-semibold text-rose-900">
+                        {c.isUrgent && <span className="mr-1">🚨</span>}
+                        {c.title}
+                      </p>
+                      {c.content?.trim() && (
+                        <p className="text-xs text-rose-800/90 mt-0.5 whitespace-pre-wrap leading-relaxed">
+                          {c.content.trim()}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {ownerMemo?.trim() && (
               <div className="space-y-1">
