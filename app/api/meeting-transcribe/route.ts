@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { transcribeAudio } from '@/lib/ai/transcribe'
 import { summarizeMeeting } from '@/lib/ai/meeting-summary'
+import { spendQuota } from '@/lib/ratelimit/daily-quota'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 // 미팅 녹음 → 받아쓰기 → 회의록 요약
 // 오디오는 브라우저가 Supabase Storage('meeting-audio')로 직접 올린다(Vercel 4.5MB 요청 한도 우회).
@@ -48,6 +50,25 @@ export async function POST(request: NextRequest) {
       { error: '녹음이 너무 길어요. 100분 안쪽으로 나눠서 정리해주세요' },
       { status: 413 },
     )
+  }
+
+  // 하루 한도 — 받아쓰기가 원가의 대부분이라(1시간 녹음 674원) 여기만 촘촘히 막는다.
+  // ★차감은 실제로 돈이 나가기 '직전'에 한다. 위쪽 검증(파일 없음·용량 초과)에서
+  //   막힌 건 돈이 안 나갔으므로 한도를 깎으면 안 된다.
+  const { data: profile } = await db
+    .from('profiles')
+    .select('business_id')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (profile?.business_id) {
+    try {
+      await spendQuota(db as unknown as SupabaseClient, 'meeting', profile.business_id)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message.replace('[APP] ', '') : '오늘 한도를 다 쓰셨어요'
+      // 오디오는 남겨둔다 — 내일 다시 정리할 수 있어야 한다
+      return NextResponse.json({ error: msg, path }, { status: 429 })
+    }
   }
 
   try {

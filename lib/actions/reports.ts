@@ -6,8 +6,9 @@ import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendWorkCompleteAlimtalk, sendReviewRequestAlimtalk } from '@/lib/kakao/alimtalk'
 import { generateAiReport, polishCareAdvice } from '@/lib/ai/report-writer'
-import { createPortfolioDraft } from '@/lib/actions/portfolio'
+import { spendQuota } from '@/lib/ratelimit/daily-quota'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { createPortfolioDraft } from '@/lib/actions/portfolio'
 import { assertReportSendable } from '@/lib/utils/report-send-guard'
 import { ensureOnboardingDraft } from '@/lib/onboarding/draft-from-field'
 import { addMonths } from '@/lib/reports/care-due'
@@ -277,6 +278,17 @@ export const ownerGenerateAiReportAction = action
     const authClient = await createClient()
     const { data: { user } } = await authClient.auth.getUser()
     if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    // 하루 한도 — 폭주해도 원가가 터지지 않게 하는 안전장치(평소엔 닿지 않는 높이)
+    const db = createServiceClient()
+    const { data: profile } = await db
+      .from('profiles')
+      .select('business_id')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (profile?.business_id) {
+      await spendQuota(db as unknown as SupabaseClient, 'report', profile.business_id)
+    }
 
     const result = await generateAiReport(
       parsedInput.memo,

@@ -6,6 +6,8 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getClaimBookingLabels } from '@/lib/utils/claim-booking'
 import { sendPushToWorker } from '@/lib/push/web-push'
 import { generateClaimReplies } from '@/lib/ai/claim-reply'
+import { spendQuota } from '@/lib/ratelimit/daily-quota'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 
 // 인증 + business_id 조회 헬퍼 (crm.ts와 동일 패턴)
@@ -212,6 +214,9 @@ export const generateClaimRepliesAction = action
       data: { customer_name: string; title: string; content: string | null; is_urgent: boolean } | null
     }
     if (!claim) throw new Error('[APP] 클레임을 찾을 수 없습니다')
+
+    // 하루 한도 — 폭주해도 원가가 터지지 않게 하는 안전장치다(평소엔 닿지 않는 높이)
+    await spendQuota(db as unknown as SupabaseClient, 'claim', businessId)
 
     const { data: business } = await db
       .from('businesses')

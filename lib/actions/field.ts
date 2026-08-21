@@ -20,6 +20,7 @@ import { postBookingRevenue } from '@/lib/finance/post-booking-revenue'
 import { assertReportSendable } from '@/lib/utils/report-send-guard'
 import { sendPushToBusiness } from '@/lib/push/web-push'
 import { queueReelForBooking } from '@/lib/reel/queue'
+import { spendQuota } from '@/lib/ratelimit/daily-quota'
 
 // workers 테이블 타입 (Supabase 타입 아직 미생성)
 interface WorkerRow {
@@ -838,6 +839,9 @@ export const fieldGetBookingItemsAction = action
   }))
   .action(async ({ parsedInput }) => {
     const { db, worker } = await verifyWorker(parsedInput.workerId)
+
+    // 하루 한도 — 사장님 화면과 같은 한도를 쓴다(현장에서 눌러도 같은 지갑에서 나간다)
+    await spendQuota(db as unknown as SupabaseClient, 'report', worker.business_id)
     await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
 
     const [itemsRes, changesRes] = await Promise.all([

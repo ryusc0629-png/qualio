@@ -2,6 +2,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { toMarketYmd } from '@/lib/format/datetime'
 import { checkRateLimit } from './check'
+import { QUOTAS, type QuotaKey } from './quotas'
 
 // 업체별 "하루 몇 번까지" 한도.
 //
@@ -16,11 +17,8 @@ import { checkRateLimit } from './check'
 // (Vercel은 UTC로 도니 날짜 계산은 반드시 toMarketYmd를 거칠 것)
 const WINDOW_SEC = 36 * 60 * 60
 
-// 글 만들기(주제 생성 + 현장 메모 초안)가 함께 쓰는 하루 한도와 카운터 이름.
-// 5편은 상한이지 권장량이 아니다 — 검색 노출만 보면 하루 한두 편이 가장 좋다.
-// ★이 숫자를 바꾸면 화면 문구도 같이 바뀐다(서버가 dailyLimit으로 내려보냄).
-export const POST_DRAFT_SCOPE = 'post-draft'
-export const POST_DRAFT_DAILY_LIMIT = 5
+// 글 만들기 한도는 quotas.ts에 있다(테스트에서도 읽어야 해서 server-only 밖으로 뺐다).
+export { POST_DRAFT_SCOPE, POST_DRAFT_DAILY_LIMIT } from './quotas'
 
 type Db = SupabaseClient
 
@@ -60,4 +58,26 @@ export async function getDailyUsage(
   // 윈도우가 이미 지난 행은 다음 호출 때 1로 리셋되므로 0으로 본다
   if (new Date(data.reset_at).getTime() < Date.now()) return 0
   return data.count
+}
+
+// ── 나머지 자동 작성 기능들의 하루 한도 ──────────────────────
+// 숫자와 근거는 ./quotas.ts 에 있다(테스트에서도 읽어야 해서 server-only 밖으로 뺐다).
+
+export { QUOTAS, type QuotaKey } from './quotas'
+
+/**
+ * 한도를 1회 차감한다. 다 썼으면 사장님이 이해할 수 있는 문구로 막는다.
+ */
+export async function spendQuota(
+  db: Db,
+  key: QuotaKey,
+  businessId: string,
+): Promise<void> {
+  const { scope, limit, label } = QUOTAS[key]
+  const allowed = await consumeDailyQuota(db, scope, businessId, limit)
+  if (!allowed) {
+    throw new Error(
+      `[APP] 오늘은 ${label}를 ${limit}번까지 할 수 있어요. 내일 다시 하실 수 있습니다`,
+    )
+  }
 }
