@@ -33,21 +33,26 @@ export async function GET(request: NextRequest) {
   const looseDb = db as unknown as SupabaseClient
   const now = new Date()
 
+  // 승인된 것(scheduled)만이 아니라 아직 검토 안 한 것(pending)도 함께 본다.
+  // 승인을 깜빡한 제안이 그날 조용히 지나가면, 현장이 적어둔 기회가 통째로 사라진다.
   const { data: due } = (await looseDb
     .from('reengagement_dispatches')
-    .select('id, business_id, customer_id, customer_phone, customer_name, service_name, message')
-    .eq('status', 'scheduled')
+    .select('id, business_id, status, customer_id, customer_phone, customer_name, service_name, message, notified_at')
+    .eq('source', 'field')
+    .in('status', ['scheduled', 'pending'])
     .lte('due_at', now.toISOString())
     .limit(200)) as unknown as {
     data:
       | Array<{
           id: string
           business_id: string
+          status: string
           customer_id: string | null
           customer_phone: string
           customer_name: string | null
           service_name: string | null
           message: string
+          notified_at: string | null
         }>
       | null
   }
@@ -68,6 +73,21 @@ export async function GET(request: NextRequest) {
     const phone = row.customer_phone.replace(/[^0-9]/g, '')
 
     try {
+      // 아직 승인 안 한 제안 — 문자는 못 보낸다. 오늘이 그날이라는 것만 한 번 알린다.
+      if (row.status === 'pending') {
+        if (row.notified_at) continue // 이미 알렸다. 매일 같은 건으로 폰이 울리면 안 된다
+        await looseDb
+          .from('reengagement_dispatches')
+          .update({
+            notified_at: now.toISOString(),
+            fail_reason: '오늘이 연락드리기로 한 날이에요. 전화하시거나, 문자로 보내려면 승인해주세요',
+          })
+          .eq('id', row.id)
+        held++
+        heldByBusiness.set(row.business_id, (heldByBusiness.get(row.business_id) ?? 0) + 1)
+        continue
+      }
+
       // 문자를 보내도 되는 번호인지 — 동의했고 거부한 적 없어야 한다
       const allowed = await canSendMarketingSms(looseDb, row.business_id, phone)
 
@@ -77,6 +97,7 @@ export async function GET(request: NextRequest) {
           .from('reengagement_dispatches')
           .update({
             status: 'pending',
+            notified_at: now.toISOString(),
             fail_reason: '이 손님은 문자 수신에 동의하지 않으셨어요. 전화나 카톡으로 직접 연락해주세요',
           })
           .eq('id', row.id)
@@ -126,8 +147,8 @@ export async function GET(request: NextRequest) {
   for (const [businessId, count] of heldByBusiness) {
     try {
       await sendPushToBusiness(businessId, {
-        title: '직접 연락드릴 곳이 있어요 📞',
-        body: `${count}곳은 자동 문자를 보낼 수 없어요. 목록에서 문구를 복사해 연락해주세요`,
+        title: '오늘 연락드릴 곳이 있어요 📞',
+        body: `${count}곳은 전화로 연락하셔야 해요. 준비된 문구를 보고 전화 한 통이면 됩니다`,
         url: '/dashboard/reengagement',
         tag: 'suggestion-followup',
       })

@@ -16,7 +16,9 @@ alter table public.reengagement_dispatches
   add column if not exists worker_id    uuid references public.workers(id) on delete set null,
   add column if not exists report_id    uuid references public.reports(id) on delete cascade,
   add column if not exists approved_at  timestamptz,
-  add column if not exists fail_reason  text;
+  add column if not exists fail_reason  text,
+  -- 그날이 됐다고 대표에게 알린 시각. 매일 같은 건으로 폰이 울리지 않게 한 번만 알린다.
+  add column if not exists notified_at  timestamptz;
 
 -- status: pending(검토 대기) / scheduled(승인·발송 예약) / sent / skipped / failed
 alter table public.reengagement_dispatches

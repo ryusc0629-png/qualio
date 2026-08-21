@@ -581,7 +581,7 @@ export const fieldSaveReportAction = action
     // 고객에게 지금 나가는 게 아니라 대표가 승인해야 움직인다.
     if (parsedInput.suggestedServices !== undefined) {
       const advice = (parsedInput.careAdvice ?? '').trim()
-      await syncFieldSuggestions({
+      const added = await syncFieldSuggestions({
         db: db as unknown as SupabaseClient,
         businessId: worker.business_id,
         bookingId: parsedInput.bookingId,
@@ -594,6 +594,16 @@ export const fieldSaveReportAction = action
             ? addMonths(parsedInput.careMonths)
             : null,
       })
+
+      // 현장이 올린 걸 사장님이 모르면 대기열에서 그대로 늙는다 — 새로 생긴 것만 알린다
+      if (added > 0) {
+        await sendPushToBusiness(worker.business_id, {
+          title: '현장에서 제안이 올라왔어요 💡',
+          body: `${booking.customer_name}님 현장에 ${parsedInput.suggestedServices[0]}${added > 1 ? ` 외 ${added - 1}건` : ''}을 추천했어요. 확인하고 승인해주세요`,
+          url: '/dashboard/reengagement',
+          tag: 'field-suggestion',
+        }).catch((e) => console.error('[Field] 제안 푸시 실패:', e))
+      }
     }
 
     // 정기계약의 '첫 방문'이면 초도 리포트 초안을 만들어 둔다.
