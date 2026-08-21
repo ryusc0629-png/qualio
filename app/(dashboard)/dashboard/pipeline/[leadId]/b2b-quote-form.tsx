@@ -358,11 +358,23 @@ export function B2bQuoteForm({ leadId, customerId, clientName, clientAddress, bu
     onError: ({ error }) => toast.error(error.serverError ?? '초안 생성에 실패했습니다'),
   })
 
+  // 상담에서 "○○ 포함/미포함 두 가지로 나눠 드리기로" 정한 경우, 그 안 이름들.
+  // 견적서를 대신 두 장 만들지는 않는다 — 금액이 달라 사장님이 직접 잡아야 하므로 안내만 한다.
+  const [variantNames, setVariantNames] = useState<string[]>([])
+  // 자동 채우기 기록 id — 저장할 때 함께 보내 '자동으로 채운 값 vs 사장님이 고친 값'을 짝지어 남긴다
+  const [autofillLogId, setAutofillLogId] = useState<string | undefined>(undefined)
+
   // 미팅 기록에서 뽑은 값으로 '빈칸만' 채운다 (사용자가 이미 입력한 값은 건드리지 않음)
   const applyExtracted = (f: ExtractedQuoteFields) => {
     let filled = 0
 
     if (f.jobType) setJobType(f.jobType)
+
+    // 두 가지 안으로 나눠 내기로 한 상담이면, 이 장을 첫 번째 안으로 이름 붙여 둔다
+    if (f.quoteVariants.length >= 2) {
+      setVariantNames(f.quoteVariants)
+      if (!title) { setTitle(f.quoteVariants[0]); filled++ }
+    }
 
     // 서비스 항목: 아직 이름이 하나도 없을 때(기본 빈 줄만)만 통째로 교체
     if (!items.some((it) => it.name.trim()) && f.serviceItems.length > 0) {
@@ -393,7 +405,10 @@ export function B2bQuoteForm({ leadId, customerId, clientName, clientAddress, bu
 
   const { execute: executeExtract, isPending: extracting } = useAction(extractQuoteFromMeetingAction, {
     onSuccess: ({ data }) => {
-      if (data?.fields) applyExtracted(data.fields)
+      if (data?.fields) {
+        applyExtracted(data.fields)
+        setAutofillLogId(data.autofillLogId ?? undefined)
+      }
       else toast.error('불러오지 못했어요. 다시 시도해주세요')
     },
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
@@ -443,6 +458,8 @@ export function B2bQuoteForm({ leadId, customerId, clientName, clientAddress, bu
     jobType,
     // 금액 입력 방식을 함께 저장 — 재열람·미리보기에서 방식이 유지됨
     amountMode,
+    // 상담 기록에서 자동으로 채워 시작한 견적서면 그 기록과 짝지어 남긴다
+    autofillLogId,
   })
 
   const handleSave = () => {
@@ -527,6 +544,23 @@ export function B2bQuoteForm({ leadId, customerId, clientName, clientAddress, bu
                 </span>
               </span>
             </button>
+          )}
+
+          {/* 상담에서 견적서를 두 가지 안으로 나눠 드리기로 한 경우 — 대신 만들지 않고 순서만 알려준다
+              (안마다 금액이 달라 사장님이 직접 잡아야 하는 부분이라, 자동으로 두 장을 만들면 오히려 헷갈림) */}
+          {variantNames.length >= 2 && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <p className="text-sm font-medium text-amber-900">
+                상담에서 견적서를 {variantNames.length}가지로 나눠 드리기로 하셨어요
+              </p>
+              <p className="mt-1 text-[12px] text-amber-800">
+                {variantNames.join(' / ')}
+              </p>
+              <p className="mt-1.5 text-[11px] text-amber-800">
+                지금 이 장은 <span className="font-medium">{variantNames[0]}</span>으로 이름을 넣어뒀어요.
+                저장한 뒤 <span className="font-medium">견적서 추가</span>로 나머지 안을 한 장 더 만드시면 돼요.
+              </p>
+            </div>
           )}
 
           {/* 작업 유형 — 정기 계약 vs 일회성 작업 (청소 주기는 정기에만 해당) */}

@@ -5,6 +5,7 @@ import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { generateSpecSheet } from '@/lib/ai/spec-sheet'
 import { extractQuoteFromMeeting } from '@/lib/ai/extract-quote-from-meeting'
+import type { QuoteVocabulary } from '@/lib/ai/extract-quote-from-meeting'
 import { spendQuota } from '@/lib/ratelimit/daily-quota'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
@@ -54,6 +55,8 @@ const saveB2bQuoteSchema = z.object({
     (v) => ['itemized', 'lump'].includes(v),
     { message: '유효하지 않은 금액 입력 방식입니다' },
   ).optional(),
+  // 이 견적서가 '상담 기록에서 자동 채우기'로 시작됐으면 그 기록 id — 사장님이 고친 결과를 짝지어 남긴다
+  autofillLogId: z.string().uuid().optional(),
 })
 
 const generateSpecSchema = z.object({
@@ -94,13 +97,19 @@ async function getAuth() {
   return { db, businessId: profile.business_id }
 }
 
-// 이 리드의 최근 상담 기록(요약 우선, 없으면 원문)을 하나의 텍스트로 모음 — 없으면 null
+// 이 리드의 최근 상담 기록을 하나의 텍스트로 모음 — 없으면 null
 // 미팅뿐 아니라 방문·메모·전화 상담도 포함(내용은 같은 상담 텍스트라 자동채우기 대상). 견적 로그(quote)는 제외.
+//
+// ★ withTranscript: 정리본(content)에 더해 녹음 원문(transcript)까지 붙일지.
+//   정리본은 원문의 33~58%로 줄어들면서 평수·인원·제외 범위 같은 '견적에 꼭 필요한 숫자'가 먼저 사라진다.
+//   그래서 자동 채우기처럼 기계가 읽는 곳에만 원문을 함께 넘긴다.
+//   사장님이 화면에서 읽는 회의록은 그대로 짧은 정리본이다(읽고 고치는 시간이 늘면 안 되므로).
 const MEETING_LIKE_TYPES = ['meeting', 'visit', 'note', 'call'] as const
 async function getLeadMeetingText(
   db: ReturnType<typeof createServiceClient>,
   businessId: string,
   leadId: string,
+  withTranscript = false,
 ): Promise<string | null> {
   const { data: meetings } = await db
     .from('lead_activities')
@@ -114,11 +123,80 @@ async function getLeadMeetingText(
   if (!meetings || meetings.length === 0) return null
 
   const text = meetings
-    .map((m) => (m.content?.trim() || m.transcript?.trim() || ''))
+    .map((m) => {
+      const summary = m.content?.trim() ?? ''
+      const transcript = m.transcript?.trim() ?? ''
+      if (!withTranscript) return summary || transcript
+      // 정리본과 원문이 둘 다 있고 서로 다를 때만 원문을 덧붙인다(같은 글을 두 번 넣지 않도록)
+      if (summary && transcript && summary !== transcript) {
+        return `[상담 정리본]\n${summary}\n\n[녹음 원문]\n${transcript}`
+      }
+      return summary || transcript
+    })
     .filter(Boolean)
     .join('\n\n---\n\n')
 
   return text.trim() || null
+}
+
+// 이 업체가 평소 쓰는 견적 어휘(항목명·단위)를 모은다 — 등록 서비스 항목 + 지난 견적서
+// 이걸 안 주면 자동 채우기가 항목명을 자유 문장으로 짓고 단위도 제멋대로 붙는다.
+// (실제로 저장된 견적 항목 54개의 단위는 원·주·품·월·평 순인데 코드 기본값은 '식'이었다)
+const MAX_ITEM_NAME_LEN = 20   // 문장처럼 긴 항목명은 어휘로 쓸 수 없어 제외
+const MAX_VOCAB_ITEMS = 25
+
+async function getQuoteVocabulary(
+  db: ReturnType<typeof createServiceClient>,
+  businessId: string,
+): Promise<QuoteVocabulary | null> {
+  const [{ data: services }, { data: pastQuotes }] = await Promise.all([
+    db.from('service_items').select('name').eq('business_id', businessId).limit(40),
+    db
+      .from('b2b_quotes')
+      .select('items, job_type' as never)
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false })
+      .limit(30) as unknown as Promise<{
+        data: { items: { name?: string; unit?: string }[] | null; job_type: string | null }[] | null
+      }>,
+  ])
+
+  const names: string[] = []
+  const addName = (raw: unknown) => {
+    if (typeof raw !== 'string') return
+    // 견적서 복제로 생긴 '(복사)' 꼬리표는 떼고 원래 이름으로 센다
+    const name = raw.trim().replace(/\s*\(복사\)\s*$/, '').trim()
+    if (!name || name.length > MAX_ITEM_NAME_LEN) return
+    if (!names.includes(name)) names.push(name)
+  }
+
+  // 등록해 둔 서비스 항목이 우선 — 사장님이 직접 정한 이름이라 가장 정확하다
+  for (const s of services ?? []) addName((s as { name: string | null }).name)
+
+  // 지난 견적서에서 쓴 단위를 작업 유형별로 센다
+  const recurringUnits = new Map<string, number>()
+  const oneOffUnits = new Map<string, number>()
+  for (const q of pastQuotes ?? []) {
+    const bucket = q.job_type === 'one_off' ? oneOffUnits : recurringUnits
+    for (const item of q.items ?? []) {
+      addName(item?.name)
+      const unit = typeof item?.unit === 'string' ? item.unit.trim() : ''
+      if (unit) bucket.set(unit, (bucket.get(unit) ?? 0) + 1)
+    }
+  }
+
+  const topUnits = (m: Map<string, number>) =>
+    [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([unit]) => unit)
+
+  const vocab: QuoteVocabulary = {
+    itemNames: names.slice(0, MAX_VOCAB_ITEMS),
+    recurringUnits: topUnits(recurringUnits),
+    oneOffUnits: topUnits(oneOffUnits),
+  }
+
+  // 재료가 하나도 없으면(갓 가입한 업체) 어휘 문단을 아예 붙이지 않는다
+  const isEmpty = !vocab.itemNames.length && !vocab.recurringUnits.length && !vocab.oneOffUnits.length
+  return isEmpty ? null : vocab
 }
 
 // 시방서 AI 생성
@@ -136,7 +214,7 @@ export const generateSpecAction = action
     // 리드에 미팅 기록이 있으면 시방서가 실제 미팅 내용을 따라가도록 함께 주입
     // (단, 견적 항목에 없는 서비스는 미팅에 나와도 시방서에 넣지 않음 — spec-sheet.ts 가드레일)
     const meetingNotes = parsedInput.leadId
-      ? await getLeadMeetingText(db, businessId, parsedInput.leadId)
+      ? await getLeadMeetingText(db, businessId, parsedInput.leadId, true)
       : null
 
     // 하루 한도 — 사장님이 직접 누르는 버튼이라 폭주 가능성이 있다
@@ -166,15 +244,35 @@ export const extractQuoteFromMeetingAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getAuth()
 
-    const meetingText = await getLeadMeetingText(db, businessId, parsedInput.leadId)
+    // 기계가 읽는 입력이라 녹음 원문까지 함께 넘긴다(정리본에서 사라진 숫자를 되살리기 위해)
+    const meetingText = await getLeadMeetingText(db, businessId, parsedInput.leadId, true)
     if (!meetingText) {
       throw new Error('[APP] 불러올 상담 기록이 없어요. 먼저 상담 기록(미팅·방문·메모 등)을 저장해주세요')
     }
 
     await spendQuota(db as unknown as SupabaseClient, 'document', businessId)
 
-    const fields = await extractQuoteFromMeeting(meetingText)
-    return { fields }
+    const vocab = await getQuoteVocabulary(db, businessId)
+    const fields = await extractQuoteFromMeeting(meetingText, vocab)
+
+    // 무엇을 채웠는지 기록해 둔다 — 저장 시점에 사장님이 고친 값과 짝지어진다.
+    // 기록 실패가 자동 채우기를 막으면 안 되므로 조용히 넘어간다(부가 작업).
+    let autofillLogId: string | null = null
+    const { data: log, error: logError } = await (db as unknown as SupabaseClient)
+      .from('quote_autofill_logs')
+      .insert({
+        business_id:  businessId,
+        lead_id:      parsedInput.leadId,
+        extracted:    fields,
+        source_chars: meetingText.length,
+      })
+      .select('id')
+      .single() as { data: { id: string } | null; error: unknown }
+
+    if (logError) console.error('[B2bQuotes] 자동 채우기 기록 실패:', logError)
+    else autofillLogId = log?.id ?? null
+
+    return { fields, autofillLogId }
   })
 
 // 견적서 저장
@@ -277,6 +375,32 @@ export const saveB2bQuoteAction = action
         // 주소 보강 실패는 견적서 저장을 막지 않는다(부가 작업)
         if (addrError) console.error('[B2bQuotes] 주소 상세 동기화 실패:', addrError)
       }
+    }
+
+    // 자동 채우기로 시작한 견적서면, 사장님이 최종 저장한 값을 같은 행에 남긴다.
+    // 자동으로 채운 값과 이 값의 차이가 "매번 다시 고치시는 칸"을 알려준다.
+    if (parsedInput.autofillLogId) {
+      const { error: logError } = await (db as unknown as SupabaseClient)
+        .from('quote_autofill_logs')
+        .update({
+          quote_id: quoteId ?? null,
+          saved: {
+            jobType:      payload.job_type,
+            serviceItems: parsedInput.items.map((it) => ({ name: it.name, unit: it.unit })),
+            siteName:     payload.site_name,
+            siteAddress:  payload.site_address,
+            siteArea:     payload.site_area,
+            frequency:    payload.frequency,
+            workerCount:  payload.worker_count,
+            conditions:   payload.conditions,
+            title:        payload.title,
+          },
+          saved_at: new Date().toISOString(),
+        })
+        .eq('id', parsedInput.autofillLogId)
+        .eq('business_id', businessId)
+      // 기록 실패는 견적서 저장을 막지 않는다(부가 작업)
+      if (logError) console.error('[B2bQuotes] 자동 채우기 결과 기록 실패:', logError)
     }
 
     if (isCustomer) revalidatePath(`/dashboard/clients/${parsedInput.customerId}`)
