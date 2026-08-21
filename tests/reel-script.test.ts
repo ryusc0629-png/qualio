@@ -7,19 +7,19 @@ import { toCaptions, scriptDuration, type ReelLine } from '@/lib/ai/reel-script'
 // 자막이 무슨 말을 하는지와 맞출 필요가 없다.
 // (예전엔 자막 길이에 맞춰 클립을 늘렸다 줄였다 해서 짧은 클립이 계속 되감겼다)
 
-function line(text: string, seconds: number, emphasis = false): ReelLine {
-  return { text, seconds, emphasis }
+function line(text: string, seconds: number, keyword = ''): ReelLine {
+  return { text, seconds, keyword }
 }
 
 const 대본: ReelLine[] = [
-  line('입주청소 끝났는데 하얀 가루가 떨어진다고요?', 3.5, true),
+  line('입주청소 끝났는데 하얀 가루가 떨어진다고요?', 3.5, '하얀 가루'),
   line('그건 벽지 붙일 때 쓴 도배풀입니다.', 3.0),
   line('물로 닦아도 마르면 또 올라옵니다.', 3.0),
   line('오늘 현장에서도 창틀 아래가 그랬습니다.', 3.2),
   line('걸레에 탄산수를 적셔 닦아보세요.', 2.8),
   line('기포가 풀을 녹여 힘이 덜 듭니다.', 2.8),
   line('시간이 지나도 다시 올라오지 않습니다.', 3.0),
-  line('도배풀은 이렇게 잡으세요.', 2.5, true),
+  line('도배풀은 이렇게 잡으세요.', 2.5, '도배풀은'),
 ]
 
 const 총길이 = scriptDuration(대본)
@@ -72,14 +72,23 @@ describe('자막 조각내기', () => {
     }
   })
 
-  it('강조 문장은 조각도 전부 강조로 남는다', () => {
-    expect(caps[0].emphasis).toBe(true)
-    expect(caps[caps.length - 1].emphasis).toBe(true)
-    expect(caps.some((c) => !c.emphasis)).toBe(true)
+  it('핵심 낱말이 든 조각만 강조된다 — 문장 전체가 노래지지 않는다', () => {
+    // 전부 노랗면 그건 강조가 아니라 그냥 노란 자막이다
+    const 강조 = caps.filter((c) => c.emphasis)
+    expect(강조.length).toBeGreaterThan(0)
+    expect(강조.length).toBeLessThan(caps.length / 2)
+    for (const c of 강조) {
+      expect(c.text.includes('하얀 가루') || c.text.includes('도배풀은')).toBe(true)
+    }
+  })
+
+  it('핵심 낱말이 없는 문장은 조각이 전부 흰색이다', () => {
+    const 낱말없음 = toCaptions([line('그건 벽지 붙일 때 쓴 도배풀입니다.', 3.0)])
+    expect(낱말없음.every((c) => !c.emphasis)).toBe(true)
   })
 
   it('아주 짧은 문장은 억지로 쪼개지 않는다', () => {
-    const one = toCaptions([line('네', 1.0, false)])
+    const one = toCaptions([line('네', 1.0)])
     expect(one).toHaveLength(1)
     expect(one[0].text).toBe('네')
   })

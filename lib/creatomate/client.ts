@@ -151,8 +151,14 @@ function captionElement(cap: ReelCaption): Element {
     font_weight: '800',
     font_size: '6.6 vmin',
     fill_color: cap.emphasis ? EMPHASIS_COLOR : '#ffffff',
+    // 밝은 벽·햇빛 든 창처럼 흰 배경 위에서도 읽히게 검은 테두리를 두른다.
+    // 청소 현장은 흰 벽·흰 타일이 많아 테두리가 없으면 글자가 사라진다.
     stroke_color: STROKE,
-    stroke_width: '1.1 vmin',
+    stroke_width: '1.3 vmin',
+    // 테두리만으로 부족한 밝은 화면을 위해 옅은 그림자를 하나 더 깐다
+    shadow_color: 'rgba(0,0,0,0.45)',
+    shadow_blur: '1.6 vmin',
+    shadow_y: '0.4 vmin',
     line_height: '135%',
     // 조각이 1~2초마다 바뀌므로 페이드는 짧게 — 길면 다음 조각과 겹쳐 보인다
     animations: [{ time: 0, duration: 0.15, easing: 'quadratic-out', type: 'fade' }],

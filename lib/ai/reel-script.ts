@@ -15,8 +15,13 @@ export interface ReelLine {
   text: string
   /** 이 문장에 줄 시간(초) — 글자 수에서 계산한다 */
   seconds: number
-  /** 강조 문장이면 자막을 노란색으로 (첫 후킹 문장과 마지막 문장) */
-  emphasis: boolean
+  /**
+   * 이 문장에서 가장 중요한 낱말. 이 낱말이 들어간 자막 조각만 노란색이 된다.
+   *
+   * ⚠️문장을 통째로 노랗게 칠하지 않는다 — 전부 노랗면 그건 강조가 아니라 그냥 노란 자막이다.
+   * 없으면 빈 문자열(그 문장은 전부 흰색).
+   */
+  keyword: string
 }
 
 export interface ReelScriptInput {
@@ -41,6 +46,8 @@ const MIN_LINE_SECONDS = 1.8
 const MAX_LINE_SECONDS = 4.5
 /** 아웃트로까지 합쳐 이 길이를 넘기면 문장을 덜어낸다 */
 const MAX_TOTAL_SECONDS = 35
+/** 노랗게 강조하는 자막 조각의 최대 개수 */
+const MAX_EMPHASIS = 4
 const OUTRO_SECONDS = 2
 
 function secondsFor(text: string): number {
@@ -52,12 +59,12 @@ function secondsFor(text: string): number {
 // 지어낸 사실이 없도록 전부 '항상 참'인 문장으로만 짠다.
 function fallbackLines(cleaningType: string): ReelLine[] {
   return [
-    { text: `${cleaningType}, 어디까지 해야 끝일까요?`, seconds: 0, emphasis: true },
-    { text: '눈에 보이는 곳만 닦으면 금방 다시 티가 납니다.', seconds: 0, emphasis: false },
-    { text: '손이 잘 안 닿는 구석부터 잡아야 오래갑니다.', seconds: 0, emphasis: false },
-    { text: '오늘도 순서대로 하나씩 짚었습니다.', seconds: 0, emphasis: false },
-    { text: '이렇게 해두면 다음 청소가 훨씬 쉬워집니다.', seconds: 0, emphasis: false },
-    { text: '깨끗하게 오래 쓰고 싶다면 이 순서를 기억하세요.', seconds: 0, emphasis: true },
+    { text: `${cleaningType}, 어디까지 해야 끝일까요?`, seconds: 0, keyword: '어디까지' },
+    { text: '눈에 보이는 곳만 닦으면 금방 다시 티가 납니다.', seconds: 0, keyword: '' },
+    { text: '손이 잘 안 닿는 구석부터 잡아야 오래갑니다.', seconds: 0, keyword: '구석부터' },
+    { text: '오늘도 순서대로 하나씩 짚었습니다.', seconds: 0, keyword: '' },
+    { text: '이렇게 해두면 다음 청소가 훨씬 쉬워집니다.', seconds: 0, keyword: '' },
+    { text: '깨끗하게 오래 쓰고 싶다면 이 순서를 기억하세요.', seconds: 0, keyword: '기억하세요' },
   ].map((l) => ({ ...l, seconds: secondsFor(l.text) }))
 }
 
@@ -117,10 +124,13 @@ ${material}
 
 ## 출력 형식 (JSON 배열만)
 [
-  { "text": "문장", "emphasis": true },
+  { "text": "문장", "keyword": "낱말" },
   ...
 ]
-emphasis는 첫 문장과 마지막 문장만 true, 나머지는 false.
+keyword는 그 문장에서 **화면에 노랗게 강조할 낱말 하나**다.
+- 반드시 그 문장 안에 **글자 그대로 들어 있는** 낱말이어야 한다(바꿔 쓰지 마라)
+- 문장의 핵심이 되는 명사·동사 하나만. 조사는 빼라
+- 강조할 게 딱히 없는 문장은 빈 문자열("")로 둬라. 전부 강조하면 강조가 아니다
 JSON 배열만 출력해라. 다른 텍스트는 절대 넣지 마라.`,
         },
       ],
@@ -131,7 +141,7 @@ JSON 배열만 출력해라. 다른 텍스트는 절대 넣지 마라.`,
     const jsonMatch = text.match(/\[[\s\S]*\]/)
     if (!jsonMatch) return fallbackLines(input.cleaningType)
 
-    const parsed = JSON.parse(jsonMatch[0]) as { text?: unknown; emphasis?: unknown }[]
+    const parsed = JSON.parse(jsonMatch[0]) as { text?: unknown; keyword?: unknown }[]
     const lines = parsed
       .filter((l) => l && typeof l.text === 'string' && l.text.trim().length >= 4)
       .slice(0, 10)
@@ -142,7 +152,11 @@ JSON 배열만 출력해라. 다른 텍스트는 절대 넣지 마라.`,
           .replace(/\s+/g, ' ')
           .trim()
           .slice(0, 40)
-        return { text: clean, seconds: secondsFor(clean), emphasis: l.emphasis === true }
+        // 문장에 실제로 들어 있는 낱말만 강조로 인정한다 —
+        // 모델이 문장을 바꿔 쓴 낱말을 주면 어느 조각도 안 맞아 강조가 통째로 사라진다
+        const raw = typeof l.keyword === 'string' ? l.keyword.trim() : ''
+        const keyword = raw && clean.includes(raw) ? raw : ''
+        return { text: clean, seconds: secondsFor(clean), keyword }
       })
 
     if (lines.length < 5) return fallbackLines(input.cleaningType)
@@ -154,8 +168,14 @@ JSON 배열만 출력해라. 다른 텍스트는 절대 넣지 마라.`,
       trimmed.splice(trimmed.length - 2, 1)
     }
 
-    // 강조는 처음과 끝 하나씩만 — 전부 노랑이면 강조가 아니다
-    return trimmed.map((l, i) => ({ ...l, emphasis: i === 0 || i === trimmed.length - 1 }))
+    // 강조가 너무 많으면 눈이 아프고 강조 효과가 사라진다 — 앞에서부터 4개까지만 남긴다
+    let marked = 0
+    return trimmed.map((l) => {
+      if (!l.keyword) return l
+      if (marked >= MAX_EMPHASIS) return { ...l, keyword: '' }
+      marked++
+      return l
+    })
   } catch (err) {
     console.error('[ReelScript] 대본 생성 실패:', err)
     return fallbackLines(input.cleaningType)
@@ -267,7 +287,8 @@ export function toCaptions(lines: ReelLine[]): ReelCaption[] {
         text,
         start: Math.round((lineStart + offset) * 100) / 100,
         seconds: Math.round(seconds * 100) / 100,
-        emphasis: line.emphasis,
+        // 핵심 낱말이 들어간 조각만 노랗게 — 문장 전체가 아니다
+        emphasis: !!line.keyword && text.includes(line.keyword),
       })
       offset += seconds
     })
