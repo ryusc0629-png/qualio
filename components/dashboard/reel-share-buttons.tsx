@@ -1,8 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Download, Share2 } from 'lucide-react'
+import { Download, Share2, Loader2 } from 'lucide-react'
 
 // 완성된 홍보 영상을 손에 쥐여주는 버튼.
 //
@@ -14,8 +15,17 @@ import { Download, Share2 } from 'lucide-react'
 export function ReelShareButtons({ url, label }: { url: string; label: string }) {
   const fileName = `${label.replace(/[^\p{L}\p{N}]+/gu, '-')}.mp4`
 
+  // 영상 파일(수 MB)을 먼저 받아와야 공유 창이 뜨기 때문에 누른 뒤 몇 초 조용하다.
+  // 그 사이 사장님이 한 번 더 누르면 브라우저가 '앞 공유가 안 끝났다'며 거부하는데,
+  // 정작 화면엔 공유 창이 멀쩡히 떠 있어서 빨간 오류만 보고 겁먹게 된다.
+  // 그래서 진행 중에는 버튼을 아예 못 누르게 막고 무슨 일이 일어나는지 글로 알린다.
+  const [sharing, setSharing] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+
   // 폰에서는 공유 시트를 띄워 인스타·틱톡 앱으로 바로 넘긴다
   const share = async () => {
+    if (sharing) return
+    setSharing(true)
     try {
       const res = await fetch(url)
       const blob = await res.blob()
@@ -33,14 +43,19 @@ export function ReelShareButtons({ url, label }: { url: string; label: string })
       await navigator.clipboard.writeText(url)
       toast.success('영상 주소를 복사했어요')
     } catch (err) {
-      // 사용자가 공유 시트를 닫은 것뿐이면 오류로 알리지 않는다
-      if (err instanceof DOMException && err.name === 'AbortError') return
+      // 공유 시트를 닫았거나(AbortError) 앞 공유가 아직 안 끝난 것뿐이면(InvalidStateError)
+      // 실패가 아니다 — 오류로 알리면 잘 되고 있는 공유 창을 사장님이 닫아버린다
+      if (err instanceof DOMException && (err.name === 'AbortError' || err.name === 'InvalidStateError')) return
       console.error('[Reel] 공유 실패:', err)
       toast.error('공유하지 못했어요. 아래 내려받기를 눌러주세요')
+    } finally {
+      setSharing(false)
     }
   }
 
   const download = async () => {
+    if (downloading) return
+    setDownloading(true)
     try {
       const res = await fetch(url)
       const blob = await res.blob()
@@ -54,18 +69,26 @@ export function ReelShareButtons({ url, label }: { url: string; label: string })
       console.error('[Reel] 내려받기 실패:', err)
       // 막히면 새 탭에서 열어 길게 눌러 저장하게 한다
       window.open(url, '_blank', 'noopener')
+    } finally {
+      setDownloading(false)
     }
   }
 
   return (
     <div className="flex gap-2">
-      <Button type="button" className="flex-1 h-11 gap-1.5" onClick={share}>
-        <Share2 className="h-4 w-4" />
-        인스타에 올리기
+      <Button type="button" className="flex-1 h-11 gap-1.5" onClick={share} disabled={sharing}>
+        {sharing ? (
+          <><Loader2 className="h-4 w-4 animate-spin" />영상 준비 중이에요...</>
+        ) : (
+          <><Share2 className="h-4 w-4" />인스타에 올리기</>
+        )}
       </Button>
-      <Button type="button" variant="outline" className="h-11 gap-1.5" onClick={download}>
-        <Download className="h-4 w-4" />
-        내려받기
+      <Button type="button" variant="outline" className="h-11 gap-1.5" onClick={download} disabled={downloading}>
+        {downloading ? (
+          <><Loader2 className="h-4 w-4 animate-spin" />받는 중...</>
+        ) : (
+          <><Download className="h-4 w-4" />내려받기</>
+        )}
       </Button>
     </div>
   )
