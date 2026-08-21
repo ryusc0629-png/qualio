@@ -7,7 +7,8 @@ import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/por
 import { dismissReelAction } from '@/lib/actions/reports'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { FileText, Plus, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send, SkipForward, Save, ChevronUp } from 'lucide-react'
+import { FileText, ExternalLink, Trash2, Loader2, Zap, CheckCircle2, Clock, CalendarDays, Play, Copy, X, ImageIcon, Download, Camera, Check, XIcon, Pencil, Film, ListChecks, Send, SkipForward, Save, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react'
+import { getPlanLabel } from '@/lib/config/plans'
 import { ScrollLock } from '@/lib/hooks/use-scroll-lock'
 import type { PostPlan } from '@/lib/geo/post-plan'
 import { copyRichText, markdownToPlain } from '@/lib/utils/rich-text'
@@ -107,7 +108,6 @@ interface PostListProps {
   pendingPortfolios?: PendingPortfolio[]
   doneReels?: DoneReel[]
   // 오늘 글을 몇 편 더 만들 수 있는지 (하루 한도 — 원가 보호 + 몰아쓰기로 인한 검색 순위 하락 방지)
-  draftRemainingToday: number
   // 서버가 이번 달 저장된 주제를 넘겨줌 — 있으면 재조회·스피너 없이 바로 표시
   initialSuggestions?: TopicSuggestion[] | null
   // 사장님 네이버 블로그 아이디 — '블로그 열기'가 이 블로그 글쓰기로 연결 (없으면 일반 글쓰기)
@@ -409,7 +409,7 @@ function ReelCard({
   )
 }
 
-export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], draftRemainingToday, initialSuggestions = null, naverBlogId = null, danggeunBusinessUrl = null, postPlan = null }: PostListProps) {
+export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], initialSuggestions = null, naverBlogId = null, danggeunBusinessUrl = null, postPlan = null }: PostListProps) {
   const [posts] = useState(initialPosts)
   // 오름차순 정렬 (오래된 글 위 → 최신 글 아래) + 오늘 위치로 자동 스크롤
   const sortedPosts = [...posts].sort((a, b) => new Date(a.published_at).getTime() - new Date(b.published_at).getTime())
@@ -527,6 +527,12 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
     }
   }
 
+  // 목록에서 보고 있는 달 (0 = 이번 달, -1 = 지난 달)
+  const [monthOffset, setMonthOffset] = useState(0)
+  // KST 기준 'YYYY-MM' — Vercel(UTC)에서도 한국 날짜로 달을 가른다
+  const monthKeyOf = (d: Date) =>
+    new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', timeZone: 'Asia/Seoul' }).format(d).slice(0, 7)
+
   const now = new Date()
   const postsThisMonth = posts.filter((p) => {
     const d = new Date(p.published_at)
@@ -629,14 +635,29 @@ const { execute: deletePost, isPending: isDeleting } = useAction(deletePostActio
 const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/posts/${slug}` : null
   const upcomingCount = schedule.filter((s) => s.status === 'upcoming' || s.status === 'today').length
 
+  // 목록은 '한 달치'만 보여준다 — 글은 홈페이지에 계속 쌓이므로, 대시보드에서 몇 년치를
+  // 스크롤할 이유가 없다. 지난 달이 필요하면 화살표로 한 달씩 거슬러 올라간다.
+  const viewDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
+  const viewMonthKey = monthKeyOf(viewDate)
+  const monthPosts = sortedPosts.filter((p) => monthKeyOf(new Date(p.published_at)) === viewMonthKey)
+  // 발행 계획은 이번 달 것만 있으므로 지난 달을 볼 땐 예정 줄이 없다
+  const upcomingSlots = monthOffset === 0 ? schedule.filter((s) => !s.post) : []
+
   // 글 목록 하나로 합치기 — 이미 올라간 글(오래된 순) 뒤에 앞으로 올라갈 글(날짜 순)을 이어 붙인다.
   // 예전엔 '발행 일정'과 '전체 발행 포스트'가 따로 있어 이번 달 글이 두 곳에 똑같이 보였다.
-  const upcomingSlots = schedule.filter((s) => !s.post)
   const timeline: TimelineRow[] = [
-    ...sortedPosts.map((p): TimelineRow => ({ kind: 'post', key: p.id, date: new Date(p.published_at), post: p })),
+    ...monthPosts.map((p): TimelineRow => ({ kind: 'post', key: p.id, date: new Date(p.published_at), post: p })),
     ...upcomingSlots.map((s): TimelineRow => ({ kind: 'plan', key: `plan-${s.day}`, date: s.date, slot: s })),
   ]
   const currentYear = now.getFullYear()
+  // 가장 오래된 글이 있는 달보다 더 뒤로는 못 가게 (빈 달만 계속 나오는 걸 막는다)
+  const oldestMonthKey = sortedPosts.length > 0 ? monthKeyOf(new Date(sortedPosts[0].published_at)) : viewMonthKey
+  const canGoPrev = viewMonthKey > oldestMonthKey
+  const canGoNext = monthOffset < 0
+  const goMonth = (delta: number) => {
+    setMonthOffset((v) => v + delta)
+    if (postListRef.current) postListRef.current.scrollTop = 0
+  }
 
   // 채널별 복사 버튼 (네이버/당근/인스타/이미지) — 작업물 허브와 전체 목록에서 공용
   const renderChannelButtons = (post: Post) => (
@@ -873,7 +894,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
         <div className="flex justify-between text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Zap className="h-3 w-3 text-primary" />
-            매일 오전 9시 자동 발행 중 — <span className="font-medium">{planId}</span> 플랜
+            매일 오전 9시 자동 발행 중 — <span className="font-medium">{getPlanLabel(planId)}</span> 플랜
           </span>
           <span>{Math.round(progressPct)}%</span>
         </div>
@@ -885,8 +906,8 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
       {/* ── 내 홈페이지 글 — 이미 올라간 글과 앞으로 올라갈 글을 한 목록으로 ──
            (예전엔 '발행 일정'과 '전체 발행 포스트' 두 박스로 나뉘어 이번 달 글이 양쪽에 똑같이 보였다) */}
       <div className="rounded-xl border bg-white overflow-hidden">
-        <div className="px-4 sm:px-5 py-3 border-b bg-slate-50 flex items-center justify-between gap-2 flex-wrap">
-          <div className="min-w-0">
+        <div className="px-4 sm:px-5 py-3 border-b bg-slate-50 space-y-2.5">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               <CalendarDays className="h-4 w-4 text-primary shrink-0" />
               <p className="font-semibold text-sm">내 홈페이지 글</p>
@@ -896,11 +917,7 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                 </span>
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              올라간 글 {posts.length}편{upcomingCount > 0 ? ` · 앞으로 올라갈 글 ${upcomingCount}편` : ''}
-            </p>
-          </div>
-          {landingUrl && (
+            {landingUrl && (
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
@@ -922,12 +939,46 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
                 <ExternalLink className="h-3.5 w-3.5" />홈페이지 열기
               </a>
             </div>
-          )}
+            )}
+          </div>
+
+          {/* 달 이동 — 한 달치만 보여주고, 지난 달은 화살표로 거슬러 올라간다 */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="inline-flex items-center rounded-lg border bg-white p-0.5">
+              <button
+                type="button"
+                onClick={() => goMonth(-1)}
+                disabled={!canGoPrev}
+                className="h-8 w-8 flex items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                title="지난 달 보기"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="px-2 text-sm font-semibold min-w-[104px] text-center">
+                {viewDate.getFullYear()}년 {viewDate.getMonth() + 1}월
+              </span>
+              <button
+                type="button"
+                onClick={() => goMonth(1)}
+                disabled={!canGoNext}
+                className="h-8 w-8 flex items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                title="다음 달 보기"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              올라간 글 {monthPosts.length}편
+              {monthOffset === 0 && upcomingCount > 0 ? ` · 앞으로 올라갈 글 ${upcomingCount}편` : ''}
+            </p>
+          </div>
         </div>
 
         {timeline.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-muted-foreground">
-            아직 올라간 글이 없어요. 아래 &lsquo;지금 발행&rsquo;을 누르면 첫 글이 올라가요
+            {monthOffset === 0
+              ? '아직 올라간 글이 없어요. 아래 ‘지금 발행’을 누르면 첫 글이 올라가요'
+              : `${viewDate.getMonth() + 1}월엔 올라간 글이 없어요`}
           </div>
         ) : (
           <div ref={postListRef} className="divide-y max-h-[560px] overflow-y-auto overscroll-contain">
@@ -1069,16 +1120,11 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
               : <><Play className="h-4 w-4" />지금 발행</>
           }
         </Button>
-        <Button asChild variant="outline" className="gap-2">
-          <a href="/dashboard/marketing/write">
-            <Plus className="h-4 w-4" />직접 작성
-          </a>
-        </Button>
       </div>
 
-      {/* 오늘 남은 만들기 횟수 + 몰아 쓰지 말아야 하는 이유 */}
+      {/* 하루 한두 편이 가장 좋은 이유 — 글이 매일 자동으로 나가는 이유를 납득시킨다 */}
       <p className="text-xs text-muted-foreground -mt-1">
-        오늘 글을 <span className="font-semibold text-foreground">{draftRemainingToday}편</span> 더 만들 수 있어요.
+        글은 매일 오전 9시에 한 편씩 자동으로 올라가요.
         하루에 몰아서 올리면 네이버·구글이 &lsquo;찍어낸 글&rsquo;로 보고 홈페이지 순위를 낮추기 때문에, 매일 한두 편씩 꾸준히 올리는 게 검색에 가장 잘 잡혀요.
       </p>
 

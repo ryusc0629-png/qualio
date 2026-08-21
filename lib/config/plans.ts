@@ -171,6 +171,12 @@ export function getPlanPrice(planId: PlanId): number {
   return PLANS[planId].price
 }
 
+// 플랜 ID → 사장님에게 보여줄 한글 이름 ('scale' → '확장').
+// ⛔화면에 plan id(scale·pro)를 그대로 쓰지 말 것 — 사장님은 영어 코드값을 모른다.
+export function getPlanLabel(planId: string): string {
+  return (PLANS as Record<string, { label: string } | undefined>)[planId]?.label ?? planId
+}
+
 // 플랜별 월 자동 발행 한도 조회
 export function getAutoPostLimit(planId: PlanId): number {
   return PLANS[planId].autoPostLimit
