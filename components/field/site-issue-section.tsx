@@ -56,7 +56,7 @@ export function SiteIssueSection({ workerId, businessId, bookingId }: Props) {
       <div>
         <p className="text-sm font-medium">금일 특이사항</p>
         <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-          오늘 눈에 띈 문제가 있으면 적어주세요. 월말에 거래처로 가는 보고서에 그대로 들어가요.
+          오늘 특이사항이 있으면 적어주세요. 사진을 함께 남기면 월말에 거래처로 가는 보고서에 그대로 실려요.
           <br />
           <span className="text-muted-foreground/80">특별한 일이 없었으면 안 적으셔도 돼요.</span>
         </p>
@@ -227,12 +227,12 @@ function IssueForm({ workerId, businessId, bookingId, onDone, onCancel }: Props 
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="예: 3층 탕비실 배수구 물 빠짐이 느림"
+          placeholder="예: 3층 탕비실 배수구 물 빠짐이 느림 / 회의실이 유난히 어질러져 있었어요"
           className="w-full h-12 rounded-lg border px-3 text-sm outline-none focus:border-primary bg-white"
         />
       </div>
 
-      <PhotoRow label="문제 사진" hint="(선택)" photos={problemPhotos} setter={setProblemPhotos} inputRef={problemRef} kind="before" />
+      <PhotoRow label="특이사항 사진" hint="(선택)" photos={problemPhotos} setter={setProblemPhotos} inputRef={problemRef} kind="before" />
 
       <div className="space-y-1.5">
         <p className="text-xs font-medium">자세한 내용 <span className="font-normal text-muted-foreground">(선택)</span></p>
