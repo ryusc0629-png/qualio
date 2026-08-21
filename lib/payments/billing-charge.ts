@@ -4,6 +4,7 @@ import { chargeBillingKey } from './portone'
 import { PLANS } from '@/lib/config/plans'
 import { getChargeAmount } from './pricing'
 import { getPendingReelAmount, markReelChargesBilled } from '@/lib/reel/charges'
+import { enableAutoPost } from './activate'
 import { notifyChargeFailed } from './charge-failed-notify'
 import type { PlanId } from '@/lib/config/plans'
 
@@ -131,6 +132,8 @@ export async function chargeDueSubscriptions(): Promise<ChargeSummary> {
         // ★결제가 성공한 뒤에만 '받은 돈'으로 표시한다.
         //   먼저 표시했다가 결제가 실패하면 그 돈은 영영 못 받는다.
         await markReelChargesBilled(db as unknown as SupabaseClient, reel.ids, ordrIdxx)
+        // 플랜을 올렸으면 자동 글쓰기 한도도 새 플랜에 맞춘다(내리지는 않는다)
+        await enableAutoPost(db as unknown as SupabaseClient, sub.business_id, effectivePlan)
         charged++
       } else {
         // 청구 실패 → past_due 로 표시. 서비스 즉시 차단은 하지 않고 7일 유예를 준다.

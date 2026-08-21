@@ -6,6 +6,8 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendPushToBusiness } from '@/lib/push/web-push'
 import { getAdminBusinessIds, isAdminEmail } from '@/lib/admin/auth'
 import { BETA_SEATS, BETA_LIFETIME_DISCOUNT_RATE } from '@/lib/config/beta'
+import { enableAutoPost } from '@/lib/payments/activate'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 // 한국 전화번호 검증: 하이픈 제거 후 010/011/02/031... 형식 확인
 //
@@ -154,6 +156,11 @@ export const createBusinessAction = action
         status: 'active',
       })
     }
+
+    // 6. 자동 글쓰기 켜기 — 베타는 결제를 안 거치므로 여기가 유일한 지점이다.
+    //    (유료는 결제 성공 시 activateSubscription이 켠다)
+    //    ⚠️예전엔 마케팅 화면에 들어가야 켜져서, 그 메뉴를 안 눌러본 업체는 영영 안 켜졌다.
+    await enableAutoPost(db as unknown as SupabaseClient, businessId, 'beta')
 
     // 7. 신규 업체가 실제로 생성된 경우에만 본사(관리자) 폰에 즉시 알림
     //    — 재시도로 기존 업체를 재사용했거나, 관리자 본인이 만든 업체면 보내지 않는다.
