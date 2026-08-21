@@ -29,6 +29,13 @@ export interface IssueLike {
   /** 접수 사진(어디가 문제인지) / 처리 후 사진 — 위치와 결과는 사진이 문장보다 빠르다 */
   photo_urls?: string[] | null
   resolution_photo_urls?: string[] | null
+  /**
+   * 현장 직원이 스스로 발견해 올린 건인지(claims.created_by_worker_id).
+   *
+   * ★ 이걸로 '요청사항'과 '특이사항'을 가른다. 거래처가 말한 것과 우리가 찾아낸 것은
+   *   성격이 정반대다. 섞으면 직원이 성실히 적을수록 "거래처가 요청을 많이 한 달"로 보인다.
+   */
+  createdByWorker?: boolean
 }
 
 /** 현장에서 고객이 추가로 요청한 것 — 방문에 붙어 있다 */
@@ -59,6 +66,16 @@ export interface MonthlySummary {
   issueResolveRate: number | null
   /** 접수·처리 내역 — 날짜 순 */
   issues: {
+    date: string
+    title: string
+    detail: string | null
+    resolution: string | null
+    resolved: boolean
+    photos: string[]
+    resolutionPhotos: string[]
+  }[]
+  /** 현장이 스스로 발견해 올린 것 — 거래처 요청이 아니라 우리가 찾은 것 */
+  fieldIssues: {
     date: string
     title: string
     detail: string | null
@@ -122,8 +139,8 @@ export function buildMonthlySummary(input: {
   // 문제·요청 — '처리됨'의 기준은 status가 resolved이거나 resolved_at이 찍힌 것
   const isResolved = (i: IssueLike) => i.status === 'resolved' || !!i.resolved_at
   const issuesSorted = [...issueRows].sort((a, b) => a.created_at.localeCompare(b.created_at))
-  const resolvedCount = issuesSorted.filter(isResolved).length
-  const issues = issuesSorted.map((i) => ({
+
+  const toEntry = (i: IssueLike) => ({
     date: i.created_at,
     title: (i.title ?? '').trim() || '요청 접수',
     detail: i.content?.trim() || null,
@@ -131,7 +148,17 @@ export function buildMonthlySummary(input: {
     resolved: isResolved(i),
     photos: i.photo_urls ?? [],
     resolutionPhotos: i.resolution_photo_urls ?? [],
-  }))
+  })
+
+  // ★ 거래처가 말한 것(사장님이 접수)과 현장이 찾은 것을 가른다.
+  //   '요청사항·처리'는 앞의 것만 센다 — 우리가 알아서 찾아 고친 걸 '요청'으로 세면
+  //   거래처 눈에는 우리가 일을 만든 것처럼 보인다.
+  const ownerIssues = issuesSorted.filter((i) => !i.createdByWorker)
+  const fieldIssueRows = issuesSorted.filter((i) => i.createdByWorker)
+
+  const resolvedCount = ownerIssues.filter(isResolved).length
+  const issues = ownerIssues.map(toEntry)
+  const fieldIssues = fieldIssueRows.map(toEntry)
 
   const requests = requestRows
     .filter((r) => r.request.trim())
@@ -139,6 +166,7 @@ export function buildMonthlySummary(input: {
     .map((r) => ({ date: r.scheduled_at, note: r.request.trim(), done: !!r.done_at }))
   const requestDoneCount = requests.filter((r) => r.done).length
 
+  // 달을 넘긴 미해결은 출처와 무관하게 다음 달 계획에 올린다 — 안 끝난 건 안 끝난 것이다
   const carriedOver = issuesSorted
     .filter((i) => !isResolved(i))
     .map((i) => ({ date: i.created_at, title: (i.title ?? '').trim() || '요청 접수' }))
@@ -153,6 +181,7 @@ export function buildMonthlySummary(input: {
     issueResolvedCount: resolvedCount,
     issueResolveRate: issues.length > 0 ? Math.round((resolvedCount / issues.length) * 100) : null,
     issues,
+    fieldIssues,
     requests,
     requestDoneCount,
     carriedOver,

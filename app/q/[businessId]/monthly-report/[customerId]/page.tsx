@@ -148,7 +148,7 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
   const { data: issueRows } = (bookingIds.length > 0
     ? await db
         .from('claims' as never)
-        .select('id, title, content, status, resolution, created_at, resolved_at, photo_urls, resolution_photo_urls')
+        .select('id, title, content, status, resolution, created_at, resolved_at, photo_urls, resolution_photo_urls, created_by_worker_id')
         .eq('business_id' as never, businessId)
         .in('booking_id' as never, bookingIds)
     : { data: [] }) as unknown as {
@@ -163,6 +163,7 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
           resolved_at: string | null
           photo_urls: string[] | null
           resolution_photo_urls: string[] | null
+          created_by_worker_id: string | null
         }>
       | null
   }
@@ -172,7 +173,7 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
     reports: reportRows,
     workerNames: workerMap,
     now: new Date(),
-    issues: issueRows ?? [],
+    issues: (issueRows ?? []).map((r) => ({ ...r, createdByWorker: !!r.created_by_worker_id })),
     requests: bookings
       .filter((b) => b.customer_request)
       .map((b) => ({
@@ -260,7 +261,11 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
               직원이 현장 요청을 성실히 적을수록 우리가 일을 안 한 것처럼 보였다.
               ⛔ issueResolvedCount 하나만 쓰던 형태로 되돌리지 말 것. */}
           <Metric value={`${summary.issueResolvedCount + summary.requestDoneCount}건`} label="처리" accent />
-          <Metric value={`${summary.siteNotes.length}건`} label="특이사항" />
+          {/* ★ 특이사항 = 현장이 스스로 찾은 것. 정기 현장은 '금일 특이사항'(claims)으로 적고,
+              일회성 현장은 보고서의 하자·특이사항 칸(preventive_note)에 적는다. 둘 다 센다.
+              ⛔ preventive_note만 세던 형태로 되돌리지 말 것 — 정기 현장은 그 칸이 아예 없어
+                 거래처 문서에 '특이사항 0건'이 나갔다(2026-08-21). */}
+          <Metric value={`${summary.siteNotes.length + summary.fieldIssues.length}건`} label="특이사항" />
           <Metric value={`${carePlans.length}건`} label="미리한 조치" />
         </section>
 
@@ -337,22 +342,62 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
           </Section>
         )}
 
-        {/* ── 현장에서 확인한 것 — 직원이 매 방문 남긴 특이사항이 여기로 모인다 ── */}
-        {summary.siteNotes.length > 0 && (
+        {/* ── 현장에서 확인한 것 — 거래처가 말하지 않았는데 우리가 찾아낸 것들.
+             정기 현장은 '금일 특이사항'(claims), 일회성은 보고서의 하자·특이사항 칸에 적는다.
+             둘은 적는 화면만 다를 뿐 성격이 같아 한 절에 모은다 ── */}
+        {(summary.siteNotes.length > 0 || summary.fieldIssues.length > 0) && (
           <Section icon={<CircleAlert className="h-4 w-4" />} title="현장에서 확인한 것">
             <p className="text-[12px] text-slate-500 mb-3">
-              문제가 되기 전에 미리 챙긴 것과, 다음에 지켜볼 부분이에요
+              요청하지 않으셨지만 저희가 확인해 챙긴 부분이에요
             </p>
-            <ul className="space-y-3.5">
-              {summary.siteNotes.map((n, i) => (
-                <li key={i} className="flex gap-3.5">
-                  <span className="mt-0.5 shrink-0 rounded-md bg-emerald-50 px-2 py-0.5 text-[12px] font-semibold text-emerald-700 print:bg-emerald-50">
-                    {formatShortDate(n.date)}
-                  </span>
-                  <p className="text-[14px] leading-[1.65] text-slate-700 whitespace-pre-wrap">{n.note}</p>
-                </li>
-              ))}
-            </ul>
+
+            {summary.fieldIssues.length > 0 && (
+              <ul className="divide-y divide-slate-200 border-y border-slate-200 mb-3.5">
+                {summary.fieldIssues.map((it, i) => (
+                  <li key={`field-${i}`} className="py-3.5">
+                    <div className="flex items-start gap-3.5">
+                      <span className="mt-0.5 shrink-0 rounded-md bg-emerald-50 px-2 py-0.5 text-[12px] font-semibold text-emerald-700 print:bg-emerald-50">
+                        {formatShortDate(it.date)}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[14px] font-semibold text-slate-800">{it.title}</p>
+                        {it.detail && (
+                          <p className="text-[13px] leading-[1.65] text-slate-600 mt-1 whitespace-pre-wrap">{it.detail}</p>
+                        )}
+                        {it.resolution && (
+                          <p className="text-[13px] leading-[1.65] text-slate-700 mt-1.5">
+                            <span className="font-semibold text-emerald-700">조치</span> {it.resolution}
+                          </p>
+                        )}
+                        {it.photos.length > 0 && (
+                          <div className="mt-2">
+                            <ReportPhotoSection photos={it.photos.map((u) => ({ url: u, caption: '확인' }))} />
+                          </div>
+                        )}
+                        {it.resolutionPhotos.length > 0 && (
+                          <div className="mt-2">
+                            <ReportPhotoSection photos={it.resolutionPhotos.map((u) => ({ url: u, caption: '조치 후' }))} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {summary.siteNotes.length > 0 && (
+              <ul className="space-y-3.5">
+                {summary.siteNotes.map((n, i) => (
+                  <li key={i} className="flex gap-3.5">
+                    <span className="mt-0.5 shrink-0 rounded-md bg-emerald-50 px-2 py-0.5 text-[12px] font-semibold text-emerald-700 print:bg-emerald-50">
+                      {formatShortDate(n.date)}
+                    </span>
+                    <p className="text-[14px] leading-[1.65] text-slate-700 whitespace-pre-wrap">{n.note}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
           </Section>
         )}
 
