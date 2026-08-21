@@ -171,7 +171,7 @@ function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: st
         <button
           type="button"
           disabled={busy}
-          onClick={() => { pickedSms.current = true; approve({ dispatchId: item.id, message: msg, channel: 'sms' }) }}
+          onClick={() => { pickedSms.current = true; approve({ dispatchId: item.id, ...(msg !== item.message ? { message: msg } : {}), channel: 'sms' }) }}
           className="w-full inline-flex items-center justify-center gap-1.5 h-11 rounded-lg border border-emerald-300 bg-white text-sm font-medium text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-60"
         >
           <MessageSquare className="h-4 w-4" />
@@ -194,7 +194,7 @@ function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: st
           <button
             type="button"
             disabled={busy}
-            onClick={() => { pickedSms.current = false; approve({ dispatchId: item.id, message: msg, channel: 'manual' }) }}
+            onClick={() => { pickedSms.current = false; approve({ dispatchId: item.id, ...(msg !== item.message ? { message: msg } : {}), channel: 'manual' }) }}
             className="flex-1 inline-flex items-center justify-center gap-1.5 h-11 rounded-lg bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700 transition-colors disabled:opacity-60"
           >
             <Check className="h-4 w-4" />

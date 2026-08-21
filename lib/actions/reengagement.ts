@@ -93,7 +93,10 @@ export const skipReengagementAction = action
 export const approveSuggestionAction = action
   .schema(z.object({
     dispatchId: z.string().uuid(),
-    message:    z.string().min(10, '문구를 적어주세요').max(1000),
+    // 사장님이 화면에서 문구를 '직접 고쳤을 때만' 보낸다.
+    // 안 고쳤는데도 보내면, 화면을 띄워둔 사이 서버에서 갱신된 문구(현장이 문장을 다듬은 결과)를
+    // 낡은 화면 값으로 덮어쓴다. 실제로 그렇게 메모체가 되살아났다(2026-08-21).
+    message:    z.string().min(10, '문구를 적어주세요').max(1000).optional(),
     channel:    z.string().refine((v) => ['sms', 'manual'].includes(v), '보내는 방법을 골라주세요'),
   }))
   .action(async ({ parsedInput }) => {
@@ -114,7 +117,8 @@ export const approveSuggestionAction = action
       .from('reengagement_dispatches')
       .update({
         status: 'scheduled',
-        message: parsedInput.message,
+        // 안 고쳤으면 서버에 있는 최신 문구를 그대로 둔다
+        ...(parsedInput.message ? { message: parsedInput.message } : {}),
         channel: parsedInput.channel,
         approved_at: new Date().toISOString(),
       })
