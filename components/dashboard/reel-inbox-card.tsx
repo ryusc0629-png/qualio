@@ -15,6 +15,7 @@ interface ReelRow {
   reel_status: string | null
   reel_url: string | null
   reel_queued_at: string | null
+  reel_error: string | null
   booking_id: string
 }
 
@@ -26,7 +27,7 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
 
   const { data } = (await db
     .from('reports')
-    .select('id, reel_status, reel_url, reel_queued_at, booking_id')
+    .select('id, reel_status, reel_url, reel_queued_at, reel_error, booking_id')
     .eq('business_id', businessId)
     .in('reel_status', ['queued', 'processing', 'done', 'failed'])
     .order('reel_queued_at', { ascending: false, nullsFirst: false })
@@ -111,6 +112,10 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
                       ? '못 만들었어요. 다시 눌러보세요'
                       : '내일 아침에 만들어져요'}
                 </p>
+                {/* 왜 실패했는지 보여준다 — 사장님이 고칠 수 있는 문제일 수 있다 */}
+                {r.reel_status === 'failed' && r.reel_error && (
+                  <p className="text-[11px] text-rose-600 mt-1 break-words">{r.reel_error}</p>
+                )}
               </div>
               {/* 기다리기 싫으면 지금 만든다 — 오늘 찍은 걸 오늘 올리고 싶을 때 */}
               {r.reel_status !== 'processing' && <ReelMakeNowButton reportId={r.id} />}

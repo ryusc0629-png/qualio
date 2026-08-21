@@ -7,6 +7,10 @@ interface CreatomateWebhookPayload {
   id: string
   status: 'succeeded' | 'failed'
   url?: string
+  // 실패했을 때 이유가 여기 담겨 온다. 이름이 판마다 달라서 셋 다 받아둔다.
+  error_message?: string
+  errorMessage?: string
+  error?: string
 }
 
 export async function POST(req: NextRequest) {
@@ -22,7 +26,7 @@ export async function POST(req: NextRequest) {
     // 어느 업체 것인지 알아야 대표에게 알릴 수 있다
     const { data: report } = await db
       .from('reports')
-      .update({ reel_status: REEL_DONE, reel_url: payload.url } as never)
+      .update({ reel_status: REEL_DONE, reel_url: payload.url, reel_error: null } as never)
       .eq('reel_render_id' as never, payload.id)
       .select('business_id, booking_id')
       .maybeSingle() as { data: { business_id: string; booking_id: string } | null }
@@ -49,9 +53,15 @@ export async function POST(req: NextRequest) {
       }
     }
   } else if (payload.status === 'failed') {
+    // ⚠️이유를 버리지 말 것. 예전엔 상태만 바꿔서 화면에 "못 만들었어요"만 뜨고
+    //   무엇이 문제인지 아무도 알 수 없었다(로그에도 안 남았다).
+    const reason =
+      payload.error_message ?? payload.errorMessage ?? payload.error ?? '알 수 없는 이유'
+    console.error('[Creatomate] 렌더 실패:', payload.id, reason, JSON.stringify(payload).slice(0, 1000))
+
     await db
       .from('reports')
-      .update({ reel_status: REEL_FAILED } as never)
+      .update({ reel_status: REEL_FAILED, reel_error: reason } as never)
       .eq('reel_render_id' as never, payload.id)
   }
 
