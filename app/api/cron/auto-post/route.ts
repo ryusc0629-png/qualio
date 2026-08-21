@@ -8,6 +8,8 @@ import { pickWeakGeoTopic } from '@/lib/geo/weak-topics'
 import { getOrCreatePostPlan, pickTodayPlanSlot } from '@/lib/geo/post-plan'
 import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContentEnabled } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
+import { checkAutoPostReadiness } from '@/lib/marketing/auto-post-readiness'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 // Vercel Cron: 매일 00:00 UTC (한국 오전 9시) 실행
 // 1회 실행 시 오늘 발행해야 할 건수만큼 반복 발행 (스케일 플랜 하루 2건 지원)
@@ -227,6 +229,22 @@ export async function GET(request: NextRequest) {
 
       if (needed === 0) {
         results.push({ businessId: business.id, action: 'skipped' })
+        continue
+      }
+
+      // 재료(서비스 항목·지역)가 없으면 발행하지 않는다.
+      //
+      // 없어도 글은 '써지긴' 한다 — 하지만 프롬프트에 '청소 서비스' + '위치 정보 없음'만 들어가서
+      // 무슨 청소를 하는 어느 동네 업체인지 알 수 없는 뻔한 글이 된다.
+      // 그런 글은 지역 검색에 안 잡히고(그게 이 기능의 전부다) AI가 인용할 이유도 없다.
+      // 토큰만 나가고, 품질 낮은 글이 쌓이면 나중에 제대로 쓴 글의 평가까지 깎인다.
+      //
+      // ⚠️설정(monthly_post_target)은 건드리지 않는다 — 재료를 채우면 다음 날 알아서 다시 나간다.
+      const readiness = await checkAutoPostReadiness(db as unknown as SupabaseClient, business.id)
+      if (!readiness.ready) {
+        const missing = readiness.items.filter((i) => !i.done).map((i) => i.label).join(', ')
+        console.log(`[Cron] auto-post 재료 부족으로 건너뜀 business=${business.id} (${missing})`)
+        results.push({ businessId: business.id, action: 'skipped-not-ready' })
         continue
       }
 

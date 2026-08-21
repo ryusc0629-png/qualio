@@ -11,6 +11,7 @@ import { WeeklyChart } from '@/components/dashboard/weekly-chart'
 import { OnboardingChecklist } from '@/components/dashboard/onboarding-checklist'
 import { InstallPrompt } from '@/components/pwa/install-prompt'
 import { BetaWelcomeBanner } from '@/components/dashboard/beta-welcome-banner'
+import { checkAutoPostReadiness } from '@/lib/marketing/auto-post-readiness'
 import { QualioImpactCard } from '@/components/dashboard/qualio-impact-card'
 import { getTodayLockupData, summarizeLockup } from '@/lib/lockup/today'
 import {
@@ -370,8 +371,12 @@ export default async function DashboardPage() {
   const lockupData = await getTodayLockupData(db as unknown as SupabaseClient, businessId)
   const lockup = summarizeLockup(lockupData.visits, lockupData.durationById, Date.now())
 
+  // 자동 글쓰기가 재료 부족으로 멈춰 있는지 — 마케팅 메뉴를 안 들어가면 모르니 홈에서도 알린다
+  const autoPostReadiness = await checkAutoPostReadiness(db as unknown as SupabaseClient, businessId)
+  const autoPostBlocked = !autoPostReadiness.ready
+
   // 알림 배너 여부
-  const hasAlerts = (pendingQuoteCount ?? 0) > 0 || unreportedCount > 0 ||
+  const hasAlerts = autoPostBlocked || (pendingQuoteCount ?? 0) > 0 || unreportedCount > 0 ||
     (unreviewedCount ?? 0) > 0 || (unassignedCount ?? 0) > 0 || todayFollowUpCount > 0 ||
     (doneReelCount ?? 0) > 0 || (pendingPortfolioCount ?? 0) > 0 || (pendingChannelCount ?? 0) > 0 ||
     fieldPriceChangedCount > 0 || (openClaimCount ?? 0) > 0 || (needsReviewCount ?? 0) > 0 ||
@@ -454,6 +459,24 @@ export default async function DashboardPage() {
       {/* 액션 알림 */}
       {hasAlerts && (
         <div className="space-y-2">
+          {/* 자동 글쓰기가 멈춰 있으면 가장 먼저 — 이게 막히면 홍보가 통째로 0이다.
+              ⚠️문구는 마케팅 화면 체크리스트와 같은 이름을 쓴다(서비스 항목 / 사업장 주소 또는 출장 지역) */}
+          {autoPostBlocked && (
+            <Link href={autoPostReadiness.items.find((i) => !i.done)?.href ?? '/dashboard/settings'}>
+              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 hover:bg-amber-100 transition-colors">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-amber-900">
+                    {autoPostReadiness.items.filter((i) => !i.done).map((i) => i.label).join(', ')}을(를) 채워주세요
+                  </p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    이게 없으면 홍보 글이 안 올라가요 — 채우시면 다음 날 아침부터 자동으로 시작됩니다
+                  </p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-amber-400 shrink-0" />
+              </div>
+            </Link>
+          )}
           {missingVisitContractCount > 0 && (
             <Link href="/dashboard/contracts">
               <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 hover:bg-red-100 transition-colors">

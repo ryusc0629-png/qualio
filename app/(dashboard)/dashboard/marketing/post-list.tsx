@@ -897,8 +897,45 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
         )}
       </div>
 
-      {/* 자동 글쓰기가 꺼져 있으면 가장 먼저 보이게 — 이게 꺼져 있으면 이 화면의 나머지가 전부 0이다 */}
-      {!autoPostOn && (
+      {/* 자동 글쓰기 상태 — 세 가지로 갈린다.
+          ★재료 부족이 최우선이다. 켜져 있어도 재료가 없으면 크론이 건너뛰므로 실제로는 안 나간다.
+            그때 "발행 중"이라고 보여주면 화면이 또 거짓말을 하게 된다. */}
+      {autoPostReadiness && !autoPostReadiness.ready ? (
+        <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 space-y-2.5">
+          <p className="font-bold text-amber-900">
+            {autoPostOn ? '자동 글쓰기가 멈춰 있어요' : '자동 글쓰기가 꺼져 있어요'}
+          </p>
+          <p className="text-xs text-amber-800 leading-relaxed">
+            {autoPostOn
+              ? '아래 두 가지가 있어야 글을 쓸 수 있어요. 채워주시면 다음 날 아침부터 다시 올라가요.'
+              : '켜두시면 매일 아침 9시에 홍보 글이 한 편씩 알아서 올라가요. 먼저 아래 두 가지를 채워주세요.'}
+          </p>
+          <div className="space-y-2">
+            {autoPostReadiness.items.map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={`flex items-start gap-2 rounded-lg border bg-white px-3 py-2.5 ${
+                  item.done ? 'border-emerald-200' : 'border-amber-300 hover:border-amber-400'
+                }`}
+              >
+                {item.done ? (
+                  <Check className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+                ) : (
+                  <span className="h-4 w-4 rounded-full border-2 border-amber-400 mt-0.5 shrink-0" />
+                )}
+                <span className="flex-1 min-w-0">
+                  <span className={`block text-sm font-medium ${item.done ? 'text-emerald-800' : 'text-amber-950'}`}>
+                    {item.label}
+                  </span>
+                  {!item.done && <span className="block text-xs text-amber-800 mt-0.5">{item.why}</span>}
+                </span>
+                {!item.done && <span className="text-xs text-amber-900 shrink-0 mt-0.5">채우기 →</span>}
+              </Link>
+            ))}
+          </div>
+        </div>
+      ) : !autoPostOn ? (
         <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 space-y-2.5">
           <p className="font-bold text-amber-900">자동 글쓰기가 꺼져 있어요</p>
           <p className="text-xs text-amber-800 leading-relaxed">
@@ -907,48 +944,16 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
             <br />
             지금은 아무 글도 안 올라가고 있어요.
           </p>
-          {autoPostReadiness && !autoPostReadiness.ready ? (
-            /* 재료가 없으면 켜는 버튼 대신 '뭘 채워야 하는지'를 보여준다.
-               ⛔버튼만 띄우고 눌렀을 때 막으면, 사장님은 뭘 해야 할지 모른 채 막히기만 한다. */
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-amber-900">
-                이것부터 채워주세요 — 그래야 글을 쓸 수 있어요
-              </p>
-              {autoPostReadiness.items.map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={`flex items-start gap-2 rounded-lg border bg-white px-3 py-2.5 ${
-                    item.done ? 'border-emerald-200' : 'border-amber-300 hover:border-amber-400'
-                  }`}
-                >
-                  {item.done ? (
-                    <Check className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
-                  ) : (
-                    <span className="h-4 w-4 rounded-full border-2 border-amber-400 mt-0.5 shrink-0" />
-                  )}
-                  <span className="flex-1 min-w-0">
-                    <span className={`block text-sm font-medium ${item.done ? 'text-emerald-800' : 'text-amber-950'}`}>
-                      {item.label}
-                    </span>
-                    {!item.done && <span className="block text-xs text-amber-800 mt-0.5">{item.why}</span>}
-                  </span>
-                  {!item.done && <span className="text-xs text-amber-900 shrink-0 mt-0.5">채우기 →</span>}
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <Button
-              type="button"
-              className="w-full h-11"
-              disabled={isSavingTarget}
-              onClick={toggleAutoPost}
-            >
-              {isSavingTarget ? '켜는 중...' : `자동 글쓰기 켜기 (월 ${autoPostLimit}편)`}
-            </Button>
-          )}
+          <Button
+            type="button"
+            className="w-full h-11"
+            disabled={isSavingTarget}
+            onClick={toggleAutoPost}
+          >
+            {isSavingTarget ? '켜는 중...' : `자동 글쓰기 켜기 (월 ${autoPostLimit}편)`}
+          </Button>
         </div>
-      )}
+      ) : null}
 
       {/* ── 상단 통계 카드 ── */}
       <div className="grid grid-cols-3 gap-3">
@@ -963,8 +968,8 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
         <div className="rounded-xl border bg-white p-4 text-center">
           {/* ⚠️플랜 한도가 아니라 '실제로 설정된 값'을 보여준다.
               예전엔 autoPostLimit을 띄워서, 꺼져 있어도 "월 목표 24"로 보였다(화면이 거짓말했다) */}
-          <p className={`text-2xl font-bold ${autoPostOn ? 'text-slate-400' : 'text-slate-300'}`}>
-            {autoPostOn ? autoPostLimit : 0}
+          <p className={`text-2xl font-bold ${autoPostOn && autoPostReadiness?.ready !== false ? 'text-slate-400' : 'text-slate-300'}`}>
+            {autoPostOn && autoPostReadiness?.ready !== false ? autoPostLimit : 0}
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">월 목표</p>
         </div>
@@ -974,8 +979,10 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
       <div className="space-y-1.5">
         <div className="flex justify-between text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
-            <Zap className={`h-3 w-3 ${autoPostOn ? 'text-primary' : 'text-slate-300'}`} />
-            {autoPostOn ? (
+            <Zap className={`h-3 w-3 ${autoPostOn && autoPostReadiness?.ready !== false ? 'text-primary' : 'text-slate-300'}`} />
+            {autoPostReadiness && !autoPostReadiness.ready ? (
+              <span className="text-slate-500">재료가 채워지면 발행이 시작돼요</span>
+            ) : autoPostOn ? (
               <>매일 오전 9시 자동 발행 중 — <span className="font-medium">{getPlanLabel(planId)}</span> 플랜</>
             ) : (
               <span className="text-slate-500">자동 글쓰기가 꺼져 있어요</span>
