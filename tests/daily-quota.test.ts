@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { QUOTAS, quotaLimit, POST_DRAFT_DAILY_LIMIT, type QuotaKey } from '@/lib/ratelimit/quotas'
+import {
+  QUOTAS, quotaLimit, isQuotaAvailable, minPlanFor,
+  POST_DRAFT_DAILY_LIMIT, type QuotaKey,
+} from '@/lib/ratelimit/quotas'
 import { PLANS, type PlanId } from '@/lib/config/plans'
 
 // 한도의 목적은 '아껴 쓰게 만드는 것'이 아니라 '한 곳이 폭주해도 마진이 안 무너지게' 하는 것이다.
@@ -31,11 +34,25 @@ function 월최대지출(plan: PlanId): number {
 }
 
 describe('요금제별 한도', () => {
-  it('모든 기능에 모든 요금제의 한도가 있다', () => {
+  it('모든 기능에 모든 요금제의 한도가 정의돼 있다', () => {
+    // 0도 유효한 값이다 — '그 요금제엔 없는 기능'이라는 뜻
     for (const key of 기능들) {
       for (const plan of Object.keys(PLANS) as PlanId[]) {
-        expect(quotaLimit(key, plan), `${key}/${plan} 한도 없음`).toBeGreaterThan(0)
+        expect(quotaLimit(key, plan), `${key}/${plan} 한도 미정의`).toBeGreaterThanOrEqual(0)
       }
+    }
+  })
+
+  it('미팅 정리는 성장 플랜부터 — 시작에는 없는 기능이다', () => {
+    // 49,000원에 넣으면 이 기능 하나로 마진이 무너진다(월 4건만 줘도 원가의 12%)
+    expect(isQuotaAvailable('meeting', 'starter')).toBe(false)
+    expect(isQuotaAvailable('meeting', 'pro')).toBe(true)
+    expect(minPlanFor('meeting')).toBe('pro')
+  })
+
+  it('나머지 기능은 시작 플랜에서도 쓸 수 있다', () => {
+    for (const key of 기능들.filter((k) => k !== 'meeting')) {
+      expect(isQuotaAvailable(key, 'starter'), `${key}가 시작에 없음`).toBe(true)
     }
   })
 
@@ -65,9 +82,12 @@ describe('마진 보호', () => {
     }
   })
 
-  it('비싼 요금제일수록 원가 비중이 낮다 — 상위 플랜이 이익을 끌고 간다', () => {
+  it('주력으로 팔 플랜(성장)의 원가 비중이 가장 낮다', () => {
+    // CAC 계산상 광고로 밀 수 있는 건 성장 플랜뿐이다(시작은 CAC 상한이 15만원이라 광고가 안 맞는다).
+    // 그러니 가장 많이 팔릴 플랜이 마진도 가장 좋아야 한다.
     const 비중 = (p: PlanId) => 월최대지출(p) / PLANS[p].price
-    expect(비중('scale')).toBeLessThan(비중('starter'))
+    expect(비중('pro')).toBeLessThan(비중('starter'))
+    expect(비중('pro')).toBeLessThan(비중('scale'))
   })
 })
 
@@ -88,7 +108,8 @@ describe('정상 사용은 한도에 안 닿는다', () => {
   it('미팅은 몰아 잡히므로 달 단위로 센다', () => {
     // 어떤 주에 5건, 다음 주에 0건이 정상이다. 하루로 끊으면 정상 사용을 막는다.
     expect(QUOTAS.meeting.period).toBe('month')
-    expect(quotaLimit('meeting', 'starter')).toBeGreaterThanOrEqual(4) // 주 1회는 된다
+    // 쓸 수 있는 플랜에서는 주 1회 이상이 되어야 한다
+    expect(quotaLimit('meeting', 'pro')).toBeGreaterThanOrEqual(4 * 4)
   })
 
   it('현장 수에 비례하는 기능은 날 단위로 센다', () => {

@@ -2,7 +2,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { toMarketYmd } from '@/lib/format/datetime'
 import { checkRateLimit } from './check'
-import { QUOTAS, quotaLimit, type QuotaKey } from './quotas'
+import { QUOTAS, quotaLimit, minPlanFor, type QuotaKey } from './quotas'
 import { PLANS, type PlanId } from '@/lib/config/plans'
 
 // 업체별 "하루 몇 번까지" 한도.
@@ -64,7 +64,7 @@ export async function getDailyUsage(
 // ── 나머지 자동 작성 기능들의 한도 ──────────────────────
 // 숫자와 근거는 ./quotas.ts 에 있다(테스트에서도 읽어야 해서 server-only 밖으로 뺐다).
 
-export { QUOTAS, quotaLimit, type QuotaKey, type QuotaPeriod } from './quotas'
+export { QUOTAS, quotaLimit, isQuotaAvailable, minPlanFor, type QuotaKey, type QuotaPeriod } from './quotas'
 
 /** 월 단위 한도의 키 — 한국 달 기준으로 바뀐다(Vercel은 UTC라 반드시 toMarketYmd를 거칠 것) */
 function monthlyKey(scope: string, businessId: string): string {
@@ -105,6 +105,15 @@ export async function spendQuota(
   const plan = planId ?? (await getBusinessPlan(db, businessId))
   const { scope, label, period } = QUOTAS[key]
   const limit = quotaLimit(key, plan)
+
+  // 0은 '다 썼다'가 아니라 '이 요금제엔 없는 기능'이다 — 문구가 달라야 한다
+  if (limit <= 0) {
+    const min = minPlanFor(key)
+    const planLabel = min ? PLANS[min].label : '상위'
+    throw new Error(
+      `[APP] ${label}는 ${planLabel} 플랜부터 쓸 수 있어요. 요금제를 올리시면 바로 쓰실 수 있습니다`,
+    )
+  }
 
   const allowed =
     period === 'month'

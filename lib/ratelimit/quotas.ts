@@ -28,20 +28,27 @@ interface QuotaSpec {
   scope: string
   label: string
   period: QuotaPeriod
-  /** 요금제별 한도. 베타는 확장과 같은 대우(플랜 설계 원칙) */
+  /**
+   * 요금제별 한도. 베타는 확장과 같은 대우(플랜 설계 원칙).
+   * ★0은 '한도 0'이 아니라 **그 요금제에는 없는 기능**이라는 뜻이다 —
+   *   안내 문구도 "다 쓰셨어요"가 아니라 "○○ 플랜부터 쓸 수 있어요"로 나간다.
+   */
   limits: Record<PlanId, number>
 }
 
 export const QUOTAS = {
   /**
    * 미팅 녹음 → 정리. 1시간 녹음이 674원(대부분 받아쓰기)이라 가장 비싸다.
+   *
+   * ★성장 플랜부터 제공한다. 시작(49,000원)에 넣으면 이 기능 하나로 마진이 무너진다 —
+   *   월 4건만 줘도 원가의 12%를 먹었다. 넉넉히 못 줄 바엔 상위 플랜의 이유로 두는 게 낫다.
    * ★월 단위로 센다 — 미팅은 몰아서 잡히는 게 정상이다.
    */
   meeting: {
     scope: 'meeting-summary',
     label: '미팅 정리',
     period: 'month',
-    limits: { beta: 60, starter: 4, pro: 25, scale: 60 },
+    limits: { beta: 60, starter: 0, pro: 25, scale: 60 },
   },
   /** 작업 보고서 전문 정리 — 현장 수에 비례한다 */
   report: {
@@ -60,7 +67,7 @@ export const QUOTAS = {
   /** 클레임 답변 초안 */
   claim: {
     scope: 'claim-reply',
-    label: '답변 초안',
+    label: '고객 응대 문구',
     period: 'day',
     limits: { beta: 25, starter: 3, pro: 12, scale: 25 },
   },
@@ -75,9 +82,22 @@ export const QUOTAS = {
 
 export type QuotaKey = keyof typeof QUOTAS
 
-/** 이 요금제에서 이 기능을 몇 번 쓸 수 있는지 */
+/** 이 요금제에서 이 기능을 몇 번 쓸 수 있는지. 0이면 그 요금제엔 없는 기능이다 */
 export function quotaLimit(key: QuotaKey, planId: PlanId): number {
   return QUOTAS[key].limits[planId]
+}
+
+/** 이 요금제에서 쓸 수 있는 기능인지 */
+export function isQuotaAvailable(key: QuotaKey, planId: PlanId): boolean {
+  return quotaLimit(key, planId) > 0
+}
+
+/** 요금이 싼 순서 — '어느 플랜부터 쓸 수 있는지' 안내에 쓴다 */
+const PLAN_ORDER: PlanId[] = ['starter', 'pro', 'scale']
+
+/** 이 기능을 쓸 수 있는 가장 낮은 유료 플랜 (없으면 null) */
+export function minPlanFor(key: QuotaKey): PlanId | null {
+  return PLAN_ORDER.find((p) => quotaLimit(key, p) > 0) ?? null
 }
 
 /**

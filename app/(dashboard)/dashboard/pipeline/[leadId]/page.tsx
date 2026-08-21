@@ -1,6 +1,8 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { LeadDetail } from './lead-detail'
+import { getBusinessPlan, isQuotaAvailable } from '@/lib/ratelimit/daily-quota'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { getLiveStatusForPhone } from '@/lib/utils/lead-live-status'
 import { getNextQuoteNumber } from '@/lib/utils/quote-number'
 
@@ -115,6 +117,10 @@ export default async function LeadDetailPage({
   // 새 견적서에 자동 부여될 다음 순번(미리보기용)
   const suggestedQuoteNumber = await getNextQuoteNumber(db, profile.business_id)
 
+  // 미팅 녹음 정리는 성장 플랜부터 — 눌러봐야 막히는 버튼을 두지 않는다
+  const plan = await getBusinessPlan(db as unknown as SupabaseClient, profile.business_id)
+  const canRecordMeeting = isQuotaAvailable('meeting', plan)
+
   return (
     <div className="max-w-2xl mx-auto">
       <LeadDetail
@@ -127,6 +133,7 @@ export default async function LeadDetailPage({
         liveStatus={liveStatus}
         businessName={bizRow?.legal_name || bizRow?.name || ''}
         suggestedQuoteNumber={suggestedQuoteNumber}
+        canRecordMeeting={canRecordMeeting}
       />
     </div>
   )

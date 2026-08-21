@@ -100,7 +100,7 @@ const STAGE_ORDER = ['new', 'contacted', 'follow_up', 'quoted', 'negotiating', '
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────
 
-export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveStatus, businessName, suggestedQuoteNumber }: { lead: Lead; activities: Activity[]; quotes: ExistingQuote[]; alreadyConverted: boolean; liveStatus: LiveStatus | null; businessName?: string; suggestedQuoteNumber?: string }) {
+export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveStatus, businessName, suggestedQuoteNumber, canRecordMeeting = true }: { lead: Lead; activities: Activity[]; quotes: ExistingQuote[]; alreadyConverted: boolean; liveStatus: LiveStatus | null; businessName?: string; suggestedQuoteNumber?: string; canRecordMeeting?: boolean }) {
   // 고객 전환 시 프리필용 대표 견적서 — 가장 최근에 만든 것 (여러 장 중)
   const primaryQuote = quotes.length > 0 ? quotes[quotes.length - 1] : null
   const router = useRouter()
@@ -467,8 +467,10 @@ export function LeadDetail({ lead, activities, quotes, alreadyConverted, liveSta
           </Button>
         </div>
 
-        {/* 미팅 녹음 정리 — 녹음/처리 중에는 전체 너비 카드로 펼쳐짐 */}
-        <MeetingRecorder leadId={lead.id} />
+        {/* 미팅 녹음 정리 — 녹음/처리 중에는 전체 너비 카드로 펼쳐짐.
+            ⛔시작 플랜에는 없는 기능이라 버튼 자체를 숨긴다.
+              눌러봐야 "성장 플랜부터"라는 말만 듣는 버튼은 두지 않는다. */}
+        {canRecordMeeting && <MeetingRecorder leadId={lead.id} />}
 
         {/* 기록 추가 폼 */}
         {showAddForm && (
