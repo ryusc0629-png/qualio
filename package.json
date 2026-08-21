@@ -17,7 +17,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "reel:music": "node scripts/reel-music.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.89.0",
