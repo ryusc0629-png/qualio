@@ -457,7 +457,7 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
                 <p className="text-xs font-semibold text-rose-700">고객이 알려온 문제 · 오늘 꼭 확인해주세요</p>
                 <ul className="space-y-2">
                   {openClaims.map((c) => (
-                    <ClaimResolveCard key={c.id} claim={c} workerId={workerId} bookingId={booking.id} />
+                    <ClaimResolveCard key={c.id} claim={c} workerId={workerId} businessId={businessId} bookingId={booking.id} />
                   ))}
                 </ul>
               </div>

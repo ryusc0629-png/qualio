@@ -1197,6 +1197,8 @@ export const fieldResolveClaimAction = action
     bookingId:  z.string().uuid(),
     claimId:    z.string().uuid(),
     resolution: z.string().min(1, '어떻게 했는지 한 줄로 적어주세요').max(2000),
+    /** 처리 후 사진 — 선택. 거래처는 '정말 됐나'를 사진으로 본다 */
+    resolutionPhotoUrls: z.array(z.string().url()).max(3).optional(),
   }))
   .action(async ({ parsedInput }) => {
     const { db, worker } = await verifyWorker(parsedInput.workerId)
@@ -1221,6 +1223,9 @@ export const fieldResolveClaimAction = action
         resolution:  parsedInput.resolution.trim(),
         status:      'resolved',
         resolved_at: now,
+        ...(parsedInput.resolutionPhotoUrls?.length
+          ? { resolution_photo_urls: parsedInput.resolutionPhotoUrls }
+          : {}),
         ...(claim && !claim.booking_id ? { booking_id: parsedInput.bookingId } : {}),
       })
       .eq('id', parsedInput.claimId)
