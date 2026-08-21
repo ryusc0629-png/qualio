@@ -57,6 +57,44 @@ export function CareAdviceInput({
   )
 }
 
+/**
+ * 정리된 보고서 안의 '앞으로 손봐야 할 것' 칸 — 위 네 항목과 같은 자리, 같은 방식으로 고친다.
+ *
+ * 현장 앱과 사장님 화면이 같은 조각을 쓴다. 예전에 이 칸의 문구가 두 화면에서
+ * 서로 다르게 갈라진 적이 있어서(8-19), 눈에 보이는 조각은 하나로 둔다.
+ */
+export function CareAdviceBox({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  return (
+    <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 space-y-1">
+      <p className="text-xs font-semibold text-orange-800">앞으로 손봐야 할 것</p>
+      {editing ? (
+        <textarea
+          className="w-full text-sm text-orange-900 bg-transparent border-none outline-none resize-none"
+          value={value}
+          rows={3}
+          autoFocus
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={() => setEditing(false)}
+        />
+      ) : (
+        <p
+          className={`text-sm cursor-pointer hover:opacity-70 ${value ? 'text-orange-900' : 'text-orange-900/50'}`}
+          onClick={() => setEditing(true)}
+        >
+          {value || '지금은 괜찮지만 나중에 문제가 될 부분이 있으면 탭해서 적어주세요'}
+        </p>
+      )}
+    </div>
+  )
+}
+
 interface Props {
   advice: string
   months: number

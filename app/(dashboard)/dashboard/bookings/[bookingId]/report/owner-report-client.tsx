@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { CareAdviceField } from '@/components/dashboard/care-advice-field'
+import { CareAdviceField, CareAdviceInput, CareAdviceBox } from '@/components/dashboard/care-advice-field'
 import { createClient } from '@/lib/supabase/client'
 import { REPORT_PHOTO_MAX } from '@/lib/config/photos'
 import { saveReportAction, ownerSendReportAction, ownerGenerateAiReportAction, skipReportSendAction } from '@/lib/actions/reports'
@@ -152,10 +152,14 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
   const { execute: generateAi, isPending: isGenerating } = useAction(ownerGenerateAiReportAction, {
     onSuccess: ({ data }) => {
       if (data?.report) {
-        const newServices = new Set(data.report.recommendedServices)
-        setAiReport(data.report)
+        // '앞으로 손봐야 할 것'은 ai_report_data에 같이 담지 않는다 —
+        // 이 글의 주인은 reports.care_advice 컬럼 하나다(고객 문서·홍보 영상 대본이 거기서 읽는다).
+        const { careAdvice: polishedAdvice, ...report } = data.report
+        const newServices = new Set(report.recommendedServices)
+        setAiReport(report)
+        if (polishedAdvice) setCareAdvice(polishedAdvice)
         setSelectedServices(newServices)
-        const formatted = formatAiNotes(data.report, newServices)
+        const formatted = formatAiNotes(report, newServices)
         setNotes(formatted)
         toast.success('전문 보고서가 작성됐어요!')
 
@@ -167,10 +171,12 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
           beforePhotoUrls: before.filter((p) => !p.uploading && p.url).map((p) => p.url),
           afterPhotoUrls:  after.filter((p) => !p.uploading && p.url).map((p) => p.url),
           sendAlimtalk:    false,
-          careAdvice,
+          careAdvice:      polishedAdvice || careAdvice,
+          // 이미 다듬은 글이라고 알려줘서 저장 쪽에서 또 다듬지 않게 한다
+          ...(polishedAdvice ? { careAdvicePolished: true } : {}),
           careMonths,
           isPublic,
-          aiReportData:    data.report,
+          aiReportData:    report,
         })
       }
     },
@@ -645,17 +651,6 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
           />
         </div>
 
-        {/* 앞으로 손봐야 할 것 — 그 시점이 되면 알림이 온다.
-            판촉 배너 대신 이걸 남긴다: 근거가 그 현장 기록이라 설득력이 다르다. */}
-        <div className="rounded-xl bg-white border p-4">
-          <CareAdviceField
-            advice={careAdvice}
-            months={careMonths}
-            onAdviceChange={setCareAdvice}
-            onMonthsChange={setCareMonths}
-          />
-        </div>
-
         <div className="rounded-xl bg-white border p-4 space-y-3">
           <div>
             <Label className="text-sm font-medium">작업 메모</Label>
@@ -670,11 +665,23 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
               />
+
+              {/* '앞으로 손봐야 할 것'도 여기서 같이 받는다 — 현장 앱과 같은 자리.
+                  카드 밖에 따로 두면 자동으로 정리되는 항목이 아니라 알아서 쓰는 메모처럼 보이고,
+                  실제로도 다듬지 않은 채 고객 문서로 나갔다. */}
+              <div className="pt-1 border-t">
+                <CareAdviceInput value={careAdvice} onChange={setCareAdvice} />
+              </div>
+
               <Button
                 variant="outline"
                 className="w-full h-11 gap-2"
                 disabled={isGenerating || notes.trim().length < 5}
-                onClick={() => generateAi({ memo: notes.trim(), serviceItems })}
+                onClick={() => generateAi({
+                  memo: notes.trim(),
+                  serviceItems,
+                  careAdvice: careAdvice.trim() || undefined,
+                })}
               >
                 <Sparkles className="h-4 w-4" />
                 {isGenerating ? '전문 보고서로 정리 중이에요...' : '전문 보고서로 정리하기'}
@@ -691,6 +698,11 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
           ) : (
             <div className="space-y-3">
               <AiReportView report={aiReport} />
+
+              {/* 다섯 번째 항목 — 위 네 개와 같은 자리, 같은 방식으로 고친다.
+                  값의 주인은 careAdvice 상태다(reports.care_advice로 저장된다). */}
+              <CareAdviceBox value={careAdvice} onChange={setCareAdvice} />
+
               <Button
                 variant="ghost"
                 size="sm"
@@ -701,7 +713,7 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
                   if (!confirmed) return
                   const rawMemo = notes.replace(/📋 작업 전 상태\n[\s\S]*$/, '').trim()
                   if (rawMemo.length >= 5) {
-                    generateAi({ memo: rawMemo, serviceItems })
+                    generateAi({ memo: rawMemo, serviceItems, careAdvice: careAdvice.trim() || undefined })
                   } else {
                     setAiReport(null)
                     setSelectedServices(new Set())
@@ -714,6 +726,18 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
               </Button>
             </div>
           )}
+        </div>
+
+        {/* 언제쯤 다시 연락할지 — 위에서 '앞으로 손봐야 할 것'을 적었을 때만 뜬다.
+            입력칸은 위 보고서 카드 안에 있으므로 여기서는 감춘다(hideAdvice). */}
+        <div className="rounded-xl bg-white border p-4">
+          <CareAdviceField
+            advice={careAdvice}
+            months={careMonths}
+            onAdviceChange={setCareAdvice}
+            onMonthsChange={setCareMonths}
+            hideAdvice
+          />
         </div>
       </div>
 

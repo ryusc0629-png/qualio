@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendWorkCompleteAlimtalk, sendReviewRequestAlimtalk } from '@/lib/kakao/alimtalk'
-import { generateAiReport } from '@/lib/ai/report-writer'
+import { generateAiReport, polishCareAdvice } from '@/lib/ai/report-writer'
 import { createPortfolioDraft } from '@/lib/actions/portfolio'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { assertReportSendable } from '@/lib/utils/report-send-guard'
@@ -30,6 +30,8 @@ const saveReportSchema = z.object({
   sendAlimtalk:    z.boolean(),
   // 앞으로 손봐야 할 것 + 몇 달 뒤에 알릴지(0이면 알림 없음)
   careAdvice:      z.string().max(2000).optional(),
+  // 보고서를 만들면서 이미 다듬은 문장이면 여기서 또 다듬지 않는다(같은 글을 두 번 쓰는 낭비)
+  careAdvicePolished: z.boolean().optional(),
   careMonths:      z.number().int().min(0).max(24).optional(),
   isPublic:        z.boolean().optional(), // 홈페이지 시공 사례 갤러리 공개 여부
   aiReportData:    aiReportDataSchema.optional(),
@@ -97,7 +99,26 @@ export const saveReportAction = action
     if (aiReportData) upsertData.ai_report_data = aiReportData
     // 향후 관리 안내 — 비우면 알림도 함께 지운다
     if (careAdvice !== undefined) {
-      const advice = careAdvice.trim()
+      let advice = careAdvice.trim()
+
+      // 이 글은 고객 문서에 그대로 인쇄된다(작업 보고서 '향후 관리 안내' · 월간 보고서 '다음 달 계획').
+      // 현장 앱과 똑같이 여기서도 말투를 맞춘다 — 사장님이 쓴 글이라고 예외를 두지 않는다.
+      // 우리 일은 쓰는 사람이 누구든 그 사람의 손을 덜어주는 것이다.
+      //
+      // ⚠️ 내용이 실제로 바뀐 저장에서만 부른다. 매번 부르면 이미 다듬은 문장을 계속
+      //    다시 써서 검토한 문장이 저장할 때마다 달라진다.
+      if (advice && !parsedInput.careAdvicePolished) {
+        const { data: prev } = await db
+          .from('reports')
+          .select('care_advice')
+          .eq('booking_id', bookingId)
+          .maybeSingle() as { data: { care_advice: string | null } | null }
+
+        if ((prev?.care_advice ?? '').trim() !== advice) {
+          advice = await polishCareAdvice(advice)
+        }
+      }
+
       upsertData.care_advice = advice || null
       upsertData.care_due_at = advice && careMonths && careMonths > 0 ? addMonths(careMonths) : null
     }
@@ -249,13 +270,19 @@ export const ownerGenerateAiReportAction = action
   .schema(z.object({
     memo:         z.string().min(5, '메모를 5자 이상 입력해주세요').max(2000),
     serviceItems: z.array(z.object({ name: z.string(), basePrice: z.number() })).optional(),
+    // '앞으로 손봐야 할 것' 원문 — 같이 다듬어 돌려준다(현장 앱과 동일)
+    careAdvice:   z.string().max(2000).optional(),
   }))
   .action(async ({ parsedInput }) => {
     const authClient = await createClient()
     const { data: { user } } = await authClient.auth.getUser()
     if (!user) throw new Error('[APP] 로그인이 필요합니다')
 
-    const result = await generateAiReport(parsedInput.memo, parsedInput.serviceItems)
+    const result = await generateAiReport(
+      parsedInput.memo,
+      parsedInput.serviceItems,
+      parsedInput.careAdvice,
+    )
     return { success: true, report: result }
   })
 

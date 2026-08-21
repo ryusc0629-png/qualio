@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { CareAdviceField, CareAdviceInput } from '@/components/dashboard/care-advice-field'
+import { CareAdviceField, CareAdviceInput, CareAdviceBox } from '@/components/dashboard/care-advice-field'
 import { SiteIssueSection } from '@/components/field/site-issue-section'
 import { createClient } from '@/lib/supabase/client'
 import { REPORT_PHOTO_MAX } from '@/lib/config/photos'
@@ -33,42 +33,6 @@ import {
 // 현장 순서대로 번호를 붙인다 — 작업 전 사진 → 하자 기록 → 작업 중 영상 → 작업 후 사진 → 마무리.
 // 현장 직원은 화면을 위에서부터 훑기 때문에, 번호가 있으면 '어디까지 했는지'를 안 헷갈린다.
 const STEP_LABELS = ['작업 전', '하자 기록', '작업 중 영상', '작업 후', '마무리'] as const
-
-/**
- * 정리된 보고서 안의 '앞으로 손봐야 할 것' 칸.
- *
- * 위 네 항목과 나란히 두는 이유: 이 글도 똑같이 자동으로 다듬어져 고객 문서에 실린다.
- * 카드 밖에 빈 칸으로 떨어져 있으면 "이건 내가 알아서 쓰는 메모"로 읽히고,
- * 실제로도 현장이 쓴 메모체("~해 보임")가 그대로 거래처 서류에 나갔다.
- *
- * 값의 주인은 reports.care_advice 컬럼이다(ai_report_data가 아니다) —
- * 고객 문서의 '향후 관리 안내'와 홍보 영상 대본이 그 컬럼을 읽는다.
- */
-function CareAdviceBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [editing, setEditing] = useState(false)
-  return (
-    <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 space-y-1">
-      <p className="text-xs font-semibold text-orange-800">앞으로 손봐야 할 것</p>
-      {editing ? (
-        <textarea
-          className="w-full text-sm text-orange-900 bg-transparent border-none outline-none resize-none"
-          value={value}
-          rows={3}
-          autoFocus
-          onChange={(e) => onChange(e.target.value)}
-          onBlur={() => setEditing(false)}
-        />
-      ) : (
-        <p
-          className={`text-sm cursor-pointer hover:opacity-70 ${value ? 'text-orange-900' : 'text-orange-900/50'}`}
-          onClick={() => setEditing(true)}
-        >
-          {value || '지금은 괜찮지만 나중에 문제가 될 부분이 있으면 탭해서 적어주세요'}
-        </p>
-      )}
-    </div>
-  )
-}
 
 function StepBadge({ n }: { n: 1 | 2 | 3 | 4 | 5 }) {
   return (
