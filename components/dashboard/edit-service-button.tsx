@@ -780,11 +780,29 @@ export function EditServiceButton({
                   </Button>
                 </div>
                 {/* ★"비워두면 자동으로 채웁니다"는 '안 채우면 알아서 팔린다'로 읽혔다.
-                    실제로는 추천·프리미엄이 비어 있으면 3단계를 아예 안 보낸다 — 그 사실을 그대로 적는다. */}
+                    실제로는 추천·프리미엄이 비어 있으면 3단계를 아예 안 보낸다 — 그 사실을 그대로 적는다.
+                    ⛔"이걸 설정한 업체는 평균 N% 올랐어요" 같은 문구를 넣지 말 것.
+                       3단계 견적 실적이 아직 0건이라 근거가 없다(2026-08-21 확인).
+                       아래 20%·50%는 남의 통계가 아니라 추천=기본×1.2, 프리미엄=×1.5라는 계산이라 항상 참이다. */}
                 <p className="text-xs text-muted-foreground mt-0.5">
                   <b className="text-foreground">추천·프리미엄에 항목을 넣어야 3단계 견적으로 나갑니다.</b>{' '}
                   기본만 채우시면 고객에게는 <b className="text-foreground">금액 하나</b>와 포함 항목만 보여요.
                 </p>
+                <div className="mt-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                  <p className="text-xs font-semibold text-primary">3단계로 보내면 뭐가 좋냐면요</p>
+                  <p className="text-xs text-foreground/80 mt-1 leading-relaxed">
+                    금액이 하나면 손님은 <b>&ldquo;할까 말까&rdquo;</b>를 고민해요. 셋이면 <b>&ldquo;어느 걸 할까&rdquo;</b>로 바뀝니다.
+                  </p>
+                  <p className="text-xs text-foreground/80 mt-1.5 leading-relaxed">
+                    손님이 추천을 고르면 기본보다 <b className="text-primary">20% 더</b> 받아요 —{' '}
+                    <b>100만 원</b> 현장이 <b className="text-primary">120만 원</b>이 됩니다.
+                    프리미엄이면 <b className="text-primary">150만 원</b>이고요.
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-1.5">
+                    가격을 직접 안 적으시면 추천은 기본의 1.2배, 프리미엄은 1.5배로 나가요.
+                    한 번 적어두면 그 서비스로 들어오는 모든 견적에 계속 쓰입니다.
+                  </p>
+                </div>
                 <p className="text-xs text-amber-600 mt-1">
                   ✏️ 짧은 명사형으로 입력해주세요 — &ldquo;필터 세척&rdquo; O, &ldquo;필터를 세척해드립니다&rdquo; X
                 </p>
