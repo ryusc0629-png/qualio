@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildMonthlySummary } from '@/lib/reports/monthly-summary'
+import { buildMonthlySummary, buildHeadline } from '@/lib/reports/monthly-summary'
 
 // 거래처 월간 보고서 상단 지표가 우리를 실제보다 나쁘게 보이게 하던 것을 고정한다.
 //
@@ -58,5 +58,15 @@ describe('현장 요청 처리 표시', () => {
     const 분자 = s.issueResolvedCount + s.requestDoneCount
     expect(분모).toBe(3)
     expect(분자).toBe(3)
+  })
+
+  it('총평 문장과 상단 지표가 같은 것을 센다', () => {
+    // 같은 문서 안에서 총평은 "요청 3건", 지표는 "요청사항 4건"으로 서로 다른 말을 하던 것.
+    // 거래처가 읽는 서류라 숫자가 어긋나면 문서 전체가 못 미덥게 보인다.
+    const s = summaryOf([
+      { booking_id: 'b1', scheduled_at: '2026-08-10T01:00:00Z', request: '주사실 커튼도 봐주세요', done_at: '2026-08-12T01:00:00Z' },
+    ])
+    const headline = buildHeadline({ summary: s, monthLabel: '2026년 8월', serviceName: '병원 정기 관리' })
+    expect(headline).toContain('접수된 요청 1건은 모두 처리 완료했습니다')
   })
 })

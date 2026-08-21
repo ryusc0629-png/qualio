@@ -185,12 +185,18 @@ export function buildHeadline(input: {
       : `${monthLabel} ${service}를 진행했습니다.`,
   ]
 
-  if (summary.issueCount > 0) {
+  // ⚠️ 총평의 '요청'은 상단 지표의 '요청사항'과 같은 것을 세야 한다(클레임 + 현장 요청).
+  // 예전엔 여기서 클레임만 세서, 같은 문서 안에서 총평은 "요청 3건"인데 지표는 "요청사항 4건"으로
+  // 서로 다른 말을 했다. 거래처가 읽는 서류라 숫자가 어긋나면 문서 전체의 신뢰가 깎인다.
+  const requestTotal = summary.issueCount + summary.requests.length
+  const requestResolved = summary.issueResolvedCount + summary.requestDoneCount
+
+  if (requestTotal > 0) {
     parts.push(
-      summary.issueResolvedCount === summary.issueCount
-        ? `접수된 요청 ${summary.issueCount}건은 모두 처리 완료했습니다.`
-        : `접수된 요청 ${summary.issueCount}건 중 ${summary.issueResolvedCount}건을 처리했고, ` +
-          `${summary.issueCount - summary.issueResolvedCount}건은 진행 중입니다.`,
+      requestResolved === requestTotal
+        ? `접수된 요청 ${requestTotal}건은 모두 처리 완료했습니다.`
+        : `접수된 요청 ${requestTotal}건 중 ${requestResolved}건을 처리했고, ` +
+          `${requestTotal - requestResolved}건은 진행 중입니다.`,
     )
   } else {
     parts.push('접수된 요청이나 문제는 없었습니다.')
