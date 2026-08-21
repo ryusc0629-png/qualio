@@ -90,9 +90,32 @@ export async function GET(request: NextRequest) {
     data: { id: string; name: string | null }[] | null
   }
 
-  const candidates = (businesses ?? []).filter((b) => (b.name?.trim().length ?? 0) >= 2)
-  if (candidates.length === 0) {
+  const named = (businesses ?? []).filter((b) => (b.name?.trim().length ?? 0) >= 2)
+  if (named.length === 0) {
     return NextResponse.json({ measured: 0, skipped: 0, eligible: 0 })
+  }
+
+  // ★발행한 글이 한 편도 없는 업체는 재지 않는다.
+  //
+  // 왜: AI 검색은 '읽을 글'이 있어야 인용한다. 글이 0편인 업체를 재면 결과가 언제나 0%다.
+  // 그건 측정이 아니라 돈만 쓰는 일이고, 화면에 0%만 계속 뜨면 사장님이 이 기능을 안 믿게 된다.
+  // (2026-08-21 기준 32곳 중 14곳이 이 상태였다 — 절반 가까이를 헛되이 재고 있었다)
+  //
+  // ⚠️원가도 크다: 측정 1회가 업체당 1,609원(30문항 × 3엔진 = 90회 호출)이고
+  //   사용량과 무관한 고정비라, 제품을 안 쓰는 업체일수록 원가에서 차지하는 비중이 커진다.
+  //
+  // ⛔조건을 '글 1편'보다 높이지 말 것 — 이제 막 시작한 업체가 첫 성과를 못 보게 된다.
+  const { data: published } = (await db
+    .from('biz_posts')
+    .select('business_id')
+    .eq('published', true)) as { data: { business_id: string }[] | null }
+
+  const hasContent = new Set((published ?? []).map((r) => r.business_id))
+  const candidates = named.filter((b) => hasContent.has(b.id))
+  const noContent = named.length - candidates.length
+
+  if (candidates.length === 0) {
+    return NextResponse.json({ measured: 0, skipped: 0, eligible: 0, noContent })
   }
 
   // 최근 MIN_INTERVAL_DAYS 내 측정 이력이 있는 업체는 제외(중복 측정 방지)
@@ -120,5 +143,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ measured, skipped, eligible: eligible.length })
+  // noContent = 글이 없어 아예 재지 않은 업체 수(원가를 얼마나 아꼈는지 추적용)
+  return NextResponse.json({ measured, skipped, eligible: eligible.length, noContent })
 }

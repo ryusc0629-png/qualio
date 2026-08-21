@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
+import Link from 'next/link'
 import { GeoMeasureButton } from './geo-measure-button'
 import { classifyGeoQuestion } from '@/lib/geo/questions'
 
@@ -118,6 +119,39 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
 
   // ── 아직 측정 전 ──
   if (!latest) {
+    // 발행한 글이 없으면 측정해봐야 0%다 — AI 검색은 '읽을 글'이 있어야 인용한다.
+    // 그래서 자동 측정에서도 제외되는데, 화면에 이유를 안 적으면 고장 난 줄 안다.
+    const { count: publishedCount } = await db
+      .from('biz_posts')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', businessId)
+      .eq('published', true)
+
+    if ((publishedCount ?? 0) === 0) {
+      return (
+        <div className="rounded-xl border bg-white p-6">
+          <p className="font-semibold text-sm">🔎 AI 검색에 우리 업체가 얼마나 나올까요?</p>
+          <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+            손님들이 <b>ChatGPT·Perplexity 같은 AI 검색</b>에 “우리 동네 청소업체 추천”이라고 물었을 때,
+            우리 업체가 얼마나 나오는지 재드려요.
+          </p>
+          <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-3">
+            <p className="text-sm font-semibold text-amber-900">먼저 글을 한 편 올려주세요</p>
+            <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+              AI는 읽을 글이 있어야 우리 업체를 추천할 수 있어요.
+              글이 하나도 없으면 아무리 재도 0%로 나와서, 글이 올라간 뒤부터 재기 시작합니다.
+            </p>
+            <Link
+              href="/dashboard/marketing/write"
+              className="inline-flex items-center gap-1 mt-2.5 text-xs font-semibold text-amber-900 underline"
+            >
+              글 만들러 가기 →
+            </Link>
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div className="rounded-xl border bg-white p-6">
         <p className="font-semibold text-sm">🔎 AI 검색에 우리 업체가 얼마나 나올까요?</p>

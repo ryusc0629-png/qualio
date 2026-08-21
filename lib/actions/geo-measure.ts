@@ -24,6 +24,21 @@ export const runGeoCheckAction = action
 
     if (!profile?.business_id) throw new Error('[APP] 업체 정보를 찾을 수 없습니다')
 
+    // 글이 한 편도 없으면 재봐야 0%다 — AI 검색은 '읽을 글'이 있어야 인용한다.
+    // 측정 1회가 90번의 외부 호출이라, 결과가 뻔한 데 쓰면 돈만 나가고
+    // 화면엔 0%만 남아 사장님이 이 기능을 안 믿게 된다.
+    const { count: publishedCount } = await db
+      .from('biz_posts')
+      .select('id', { count: 'exact', head: true })
+      .eq('business_id', profile.business_id)
+      .eq('published', true)
+
+    if ((publishedCount ?? 0) === 0) {
+      throw new Error(
+        '[APP] 먼저 글을 한 편 올려주세요. AI는 읽을 글이 있어야 우리 업체를 추천할 수 있어요',
+      )
+    }
+
     // 비용 안전장치 — 같은 질문으로 반복해 재는 것만 막는다.
     // 질문 세트가 바뀌었으면(검색어 규칙 개선·지역/서비스 추가) 바로 다시 잴 수 있어야 한다.
     //
