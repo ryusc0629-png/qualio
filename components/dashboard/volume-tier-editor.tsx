@@ -10,6 +10,7 @@
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Layers, Trash2, Plus } from 'lucide-react'
+import { HelpNote } from '@/components/ui/help-note'
 
 export interface VolumeTierRow {
   minSize: string
@@ -83,13 +84,17 @@ export function VolumeTierEditor({
 
       {enabled && (
         <div className="space-y-2">
-          <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-1">
-            <p className="text-xs font-bold text-primary">큰 현장은 자동으로 단가가 내려가요</p>
-            <p className="text-xs text-primary/80 leading-relaxed">
+          {/* 설명은 접어둔다 — 화면이 안내로 꽉 차면 정작 채울 칸을 못 찾는다 */}
+          <HelpNote summary={<b className="text-foreground">큰 현장은 자동으로 단가가 내려가요</b>}>
+            <p>
               지금은 {basePrice > 0 ? `${perLabel} ${won(basePrice)}원` : '기본 단가'}이 규모와 상관없이 그대로 곱해져요.
               아래에 구간을 넣으면 그 {sizeLabel}수부터는 낮은 단가로 계산돼요.
             </p>
-          </div>
+            <p>
+              큰 구간부터 적용돼요. 예를 들어 100{sizeLabel}·300{sizeLabel} 두 구간을 넣으면
+              250{sizeLabel} 문의는 100{sizeLabel} 구간 단가로 계산돼요.
+            </p>
+          </HelpNote>
 
           {rows.map((row, idx) => {
             const size  = Number(row.minSize)
@@ -145,10 +150,6 @@ export function VolumeTierEditor({
             구간 추가
           </Button>
 
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            큰 구간부터 적용돼요. 예를 들어 100{sizeLabel}·300{sizeLabel} 두 구간을 넣으면
-            250{sizeLabel} 문의는 100{sizeLabel} 구간 단가로 계산돼요.
-          </p>
         </div>
       )}
     </div>
