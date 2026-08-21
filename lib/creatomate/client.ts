@@ -65,6 +65,19 @@ const OUTRO_SECONDS = 2
 const FPS = 30
 
 /**
+ * 출력 해상도.
+ *
+ * 720×1280을 쓴다. 1080×1920으로 올리면 화질은 좋아지지만 크레딧이 2.25배가 된다
+ * (18크레딧 → 8크레딧, 편당 337원 → 150원).
+ *
+ * 왜 720이 충분한가: 조회수 잘 나오는 대행사 릴스를 실측했을 때도 720×1280이었다.
+ * 인스타·틱톡은 어차피 재인코딩하고, 보는 사람은 폰 화면으로 본다.
+ * ⚠️자막 크기·테두리는 전부 vmin(화면 비율)이라 해상도를 바꿔도 보이는 비율은 그대로다.
+ */
+const WIDTH = 720
+const HEIGHT = 1280
+
+/**
  * 이 영상에 들어갈 크레딧(Creatomate 공식: 가로 × 세로 × fps × 초 ÷ 1억).
  * 1크레딧 = 1억 픽셀, 최소 1크레딧.
  */
@@ -393,8 +406,8 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
 
   const source = {
     output_format: 'mp4',
-    width: 1080,
-    height: 1920,
+    width: WIDTH,
+    height: HEIGHT,
     frame_rate: FPS,
     duration: total,
     elements: [...visual, ...music, ...captions, ...audio, ...outro],
@@ -409,11 +422,9 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
     body: JSON.stringify({
       source,
       webhook_url: input.webhookUrl,
-      // ⚠️명시하지 않으면 계정 설정에 따라 축소돼 나온다 —
-      //   실제로 1080×1920을 요청했는데 270×480(정확히 1/4)으로 나와 글자가 뭉개졌다.
+      // ⚠️무료 체험 계정은 이 값과 무관하게 270×480으로 강제된다(대시보드에 'Trial limit' 표시).
+      //   글자가 뭉개졌던 원인이 이것이었고, 유료 전환으로만 풀린다.
       render_scale: 1,
-      max_width: 1080,
-      max_height: 1920,
     }),
   })
 

@@ -14,6 +14,12 @@ describe('홍보 영상 크레딧 계산', () => {
     expect(estimateCredits(1080, 1920, 28)).toBe(18)
   })
 
+  it('720×1280으로 내리면 절반 이하로 떨어진다 — 지금 쓰는 설정', () => {
+    // 대행사 릴스도 720×1280이었다. 원가가 편당 337원 → 150원이 된다.
+    expect(estimateCredits(720, 1280, 28)).toBe(8)
+    expect(estimateCredits(720, 1280, 28)).toBeLessThan(estimateCredits(1080, 1920, 28) / 2)
+  })
+
   it('해상도를 절반으로 낮추면 크레딧이 4분의 1 안팎이 된다', () => {
     const full = estimateCredits(1080, 1920, 28)
     const half = estimateCredits(540, 960, 28)
