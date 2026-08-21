@@ -14,7 +14,6 @@ import { GoogleProfileCard } from '@/components/dashboard/google-profile-card'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
 import type { PlanId } from '@/lib/config/plans'
 import { getOrCreatePostPlan } from '@/lib/geo/post-plan'
-import { getDailyUsage, POST_DRAFT_SCOPE, POST_DRAFT_DAILY_LIMIT } from '@/lib/ratelimit/daily-quota'
 
 // '지금 발행'(publishTodayAction)은 이 페이지에서 호출되는 Server Action이라
 // 이 라우트의 제한시간을 따른다. scale 플랜은 심층 글 + SNS 채널 원고까지
@@ -111,10 +110,6 @@ export default async function MarketingPage({
   const autoPostLimit = getAutoPostLimit(planId)
   const autoDailyPostLimit = getAutoDailyPostLimit(planId)
 
-  // 오늘 글을 몇 편 더 만들 수 있는지 (한국 날짜 기준, 자정에 초기화)
-  const draftUsedToday = await getDailyUsage(db, POST_DRAFT_SCOPE, profile.business_id)
-  const draftRemainingToday = Math.max(0, POST_DRAFT_DAILY_LIMIT - draftUsedToday)
-
   // 오늘 KST 기준 발행 건수 → 일 한도 초과 여부 확인
   // (서버 컴포넌트라 요청마다 서버에서 한 번만 실행 — 브라우저 재렌더와 무관)
   // eslint-disable-next-line react-hooks/purity
@@ -186,7 +181,6 @@ export default async function MarketingPage({
         isTodayComplete={isTodayComplete}
         pendingPortfolios={pendingPortfolios}
         doneReels={doneReels}
-        draftRemainingToday={draftRemainingToday}
         initialSuggestions={initialSuggestions}
         naverBlogId={business?.naver_blog_id ?? null}
         danggeunBusinessUrl={business?.danggeun_business_url ?? null}
