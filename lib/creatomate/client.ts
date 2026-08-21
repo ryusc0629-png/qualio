@@ -346,7 +346,10 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
             font_size: '8 vmin',
             font_weight: '900',
             fill_color: EMPHASIS_COLOR,
-            letter_spacing: '0.2 vmin',
+            // ⚠️letter_spacing은 vmin이 아니라 퍼센트만 받는다(글자 크기 대비).
+            //   'vmin'을 넣었더니 렌더가 통째로 실패했다:
+            //   "business-phone.letter_spacing: Expected a number ending with %"
+            letter_spacing: '3%',
             animations: fadeIn,
           },
         ]
