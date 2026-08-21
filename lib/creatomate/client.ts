@@ -55,6 +55,22 @@ const STROKE = '#000000'
 const EMPHASIS_COLOR = '#FFD60A'
 /** 업체명 아웃트로 길이 */
 const OUTRO_SECONDS = 2
+
+/**
+ * 초당 프레임 수.
+ *
+ * ⚠️크레딧이 fps에 비례한다 — 30 → 25로 낮추면 원가가 17% 준다.
+ * 지금은 움직임이 부드러운 쪽을 택했다. 원가를 더 줄여야 하면 여기부터 건드릴 것.
+ */
+const FPS = 30
+
+/**
+ * 이 영상에 들어갈 크레딧(Creatomate 공식: 가로 × 세로 × fps × 초 ÷ 1억).
+ * 1크레딧 = 1억 픽셀, 최소 1크레딧.
+ */
+export function estimateCredits(width: number, height: number, seconds: number): number {
+  return Math.max(1, Math.ceil((width * height * FPS * seconds) / 100_000_000))
+}
 /**
  * 배경음악 크기. Creatomate volume은 0~100 퍼센트 문자열이다.
  *
@@ -379,6 +395,7 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
     output_format: 'mp4',
     width: 1080,
     height: 1920,
+    frame_rate: FPS,
     duration: total,
     elements: [...visual, ...music, ...captions, ...audio, ...outro],
   }
@@ -410,12 +427,11 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
   const render = Array.isArray(data) ? data[0] : data
   if (!render?.id) throw new Error('[APP] 영상 편집 요청에 실패했어요')
 
-  // ⚠️응답을 통째로 남긴다. 요청은 1080×1920인데 결과물이 270×480(정확히 1/4)으로 나오는 원인을
-  //   못 찾고 있다 — render_scale·max_width를 명시해도 그대로였다. 답은 이 응답 안에 있다.
-  //   원인이 밝혀지면 이 로그는 크기 한 줄로 줄일 것.
+  // 영상 한 편에 크레딧이 얼마나 드는지 남긴다 — 이게 홍보 영상 원가의 대부분이다.
+  // 안 남기면 업체가 늘었을 때 청구서를 보고 나서야 알게 된다.
   console.log(
-    `[Creatomate] 렌더 요청 ${render.id} · 요청 ${source.width}×${source.height} · ${total}초`,
-    '· 응답:', JSON.stringify(render).slice(0, 800),
+    `[Creatomate] 렌더 요청 ${render.id} · ${source.width}×${source.height} ${FPS}fps ` +
+    `· ${total}초 · 약 ${estimateCredits(source.width, source.height, total)}크레딧`,
   )
 
   return render.id
