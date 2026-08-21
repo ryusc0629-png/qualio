@@ -143,27 +143,50 @@ const SORT_OPTIONS = [
 
 // ── URL 파라미터 헬퍼 ────────────────────────────────────
 
-function buildHref(params: { type?: string; sort?: string; show_archived?: string; q?: string }) {
+type ListParams = {
+  type?: string
+  sort?: string
+  show_archived?: string
+  show_dormant?: string
+  all?: string
+  q?: string
+}
+
+function buildHref(params: ListParams) {
   const p = new URLSearchParams()
   if (params.type && params.type !== 'all') p.set('type', params.type)
   if (params.sort && params.sort !== 'ltv_desc') p.set('sort', params.sort)
   if (params.show_archived === '1') p.set('show_archived', '1')
+  if (params.show_dormant === '1') p.set('show_dormant', '1')
+  if (params.all === '1') p.set('all', '1')
   if (params.q) p.set('q', params.q)
   const qs = p.toString()
   return `/dashboard/clients${qs ? '?' + qs : ''}`
 }
+
+// 한 번에 그리는 최대 개수 — 넘으면 '더 보기'로 펼친다.
+// 고객이 300명이면 카드 300장을 그대로 그리던 것이 목록이 안 보이는 진짜 원인이었다.
+const LIST_LIMIT = 20
+
+// 마지막 거래가 이만큼 지나면 '지난 고객'으로 접어둔다.
+// 청소는 재구매 주기가 길어 90일로는 살아 있는 고객까지 접힌다(재방문 대기열이 90일 기준).
+const DORMANT_AFTER_DAYS = 180
 
 // ── 페이지 ────────────────────────────────────────────────
 
 export default async function ClientsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ type?: string; sort?: string; show_archived?: string; q?: string }>
+  searchParams: Promise<ListParams>
 }) {
-  const { type, sort = 'ltv_desc', show_archived, q } = await searchParams
+  const { type, sort = 'ltv_desc', show_archived, show_dormant, all, q } = await searchParams
   const searchQuery = q?.trim().toLowerCase() ?? ''
   const activeTab = ['individual', 'company'].includes(type ?? '') ? type! : 'all'
   const showArchived = show_archived === '1'
+  const showDormant = show_dormant === '1'
+  const showAll = all === '1'
+  // 검색 중에는 지난 고객도 결과에 나와야 한다 — 찾으려고 친 이름이 접혀 있으면 검색이 고장 난 것처럼 보인다
+  const isSearching = searchQuery.length > 0
 
   const authClient = await createClient()
   const { data: { user } } = await authClient.auth.getUser()
@@ -343,6 +366,42 @@ export default async function ClientsPage({
   // 전환된 거래처 중 지금 영업(정기계약 업셀 등) 진행 중인 곳 — 자동 배지와 별개로 손으로 지정한 것
   const companyInSales = companyCustomers.filter(c => isActiveSalesStage(c.sales_stage))
 
+  // ── 거래 중 / 지난 고객 ──
+  //
+  // 고객은 지우지 않으니 영구히 쌓인다. 청소 한 번 받고 끝난 손님이 몇 년치 모이면
+  // 정작 이번 달에 손댈 곳이 그 사이에 묻힌다. 마지막 거래를 기준으로 갈라
+  // 기본 목록에는 '거래 중'만 두고, 지난 고객은 접어둔다(지우는 게 아니다).
+  //
+  // ⛔ 사장님이 손으로 '완료' 표시를 하게 만들지 말 것 — 안 누르면 아무 효과가 없고,
+  //    누르는 일 자체가 새 업무가 된다. 이미 쌓인 방문 기록에서 자동으로 갈린다.
+  // (서버 컴포넌트라 요청마다 서버에서 한 번만 실행 — 브라우저 재렌더와 무관)
+  // eslint-disable-next-line react-hooks/purity
+  const dormantCutoff = new Date(Date.now() - DORMANT_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString()
+
+  function lastDealAt(c: CustomerRow): string {
+    const lastVisit = c.phone ? (bookingMap[normalizePhone(c.phone)]?.lastDate ?? '') : ''
+    // 방문 이력이 없으면 등록일을 마지막 접점으로 본다(문의만 받고 안 온 손님도 언젠간 접힌다)
+    return lastVisit || c.created_at
+  }
+
+  function isDormant(c: CustomerRow): boolean {
+    // 정기계약이 살아 있으면 방문이 뜸해도 거래 중이다
+    if ((contractMap[c.id] ?? []).some(k => k.status === 'active')) return false
+    // 지금 영업 중으로 손수 지정해둔 곳도 접지 않는다
+    if (isActiveSalesStage(c.sales_stage)) return false
+    return lastDealAt(c) < dormantCutoff
+  }
+
+  // 검색 중에는 가르지 않는다 — 찾으려는 사람이 접혀 있으면 검색이 고장 난 것처럼 보인다
+  const splitDormant = (list: CustomerRow[]) =>
+    isSearching
+      ? { live: list, dormant: [] as CustomerRow[] }
+      : { live: list.filter(c => !isDormant(c)), dormant: list.filter(isDormant) }
+
+  const { live: individualLive, dormant: individualDormant } = splitDormant(individualCustomers)
+  const { live: companyLive, dormant: companyDormant } = splitDormant(companyCustomers)
+  const dormantCount = individualDormant.length + companyDormant.length
+
   const activeLeads = sortLeads(
     (leads ?? []).filter(l => l.customer_type === 'company' && !CLOSED_LEAD_STATUSES.has(l.status) && !registeredLeadIds.has(l.id) && matchesSearch(l.company_name, l.phone, l.address))
   )
@@ -379,6 +438,18 @@ export default async function ClientsPage({
     )
   )
 
+  // 지금 화면 상태를 기본으로 깔고, 바꿀 것만 덮어쓰는 링크 헬퍼.
+  // 안 그러면 정렬을 누르는 순간 펼쳐둔 '지난 고객'이 도로 접힌다.
+  const currentParams: ListParams = {
+    type: activeTab,
+    sort,
+    show_archived: showArchived ? '1' : undefined,
+    show_dormant: showDormant ? '1' : undefined,
+    all: showAll ? '1' : undefined,
+    q: searchQuery || undefined,
+  }
+  const href = (overrides: ListParams = {}) => buildHref({ ...currentParams, ...overrides })
+
   const totalLtv = (completedBookings ?? []).reduce((s, b) => s + (b.final_price ?? 0), 0)
   const monthlyRecurring = ((contracts ?? []) as unknown as ContractRow[]).filter(c => c.status === 'active').reduce((s, c) => s + c.contract_price, 0)
 
@@ -398,7 +469,7 @@ export default async function ClientsPage({
         <div className="bg-white rounded-xl border p-4">
           <p className="text-xs text-muted-foreground">개인 고객</p>
           <p className="text-2xl font-bold mt-1 tabular-nums text-blue-600">
-            {individualCustomers.length}<span className="text-sm font-normal text-muted-foreground ml-0.5">명</span>
+            {individualLive.length}<span className="text-sm font-normal text-muted-foreground ml-0.5">명</span>
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
             {(pendingQuotes ?? []).length > 0 ? <span className="text-amber-600 font-medium">견적 대기 {(pendingQuotes ?? []).length}건 ·</span> : null}
@@ -410,7 +481,7 @@ export default async function ClientsPage({
           <p className="text-2xl font-bold mt-1 tabular-nums text-violet-600">
             {activeLeads.length}<span className="text-sm font-normal text-muted-foreground ml-0.5">곳</span>
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">등록된 거래처 {companyCustomers.length}곳</p>
+          <p className="text-xs text-muted-foreground mt-0.5">등록된 거래처 {companyLive.length}곳</p>
         </div>
         <div className="bg-white rounded-xl border p-4">
           <p className="text-xs text-muted-foreground">월 정기 매출</p>
@@ -432,7 +503,7 @@ export default async function ClientsPage({
           {TABS.map((tab) => (
             <Link
               key={tab.key}
-              href={buildHref({ type: tab.key, sort, show_archived: showArchived ? '1' : undefined, q: searchQuery || undefined })}
+              href={href({ type: tab.key })}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                 activeTab === tab.key
                   ? 'bg-primary text-primary-foreground'
@@ -447,7 +518,7 @@ export default async function ClientsPage({
           {SORT_OPTIONS.map((opt) => (
             <Link
               key={opt.key}
-              href={buildHref({ type: activeTab, sort: opt.key, show_archived: showArchived ? '1' : undefined, q: searchQuery || undefined })}
+              href={href({ sort: opt.key })}
               className={`px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
                 sort === opt.key
                   ? 'bg-foreground text-background'
@@ -470,7 +541,7 @@ export default async function ClientsPage({
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-blue-600" />
               <h2 className="text-sm font-semibold text-blue-600">개인 고객</h2>
-              <span className="text-xs text-muted-foreground">({individualCustomers.length}명)</span>
+              <span className="text-xs text-muted-foreground">({individualLive.length}명)</span>
             </div>
           )}
 
@@ -572,13 +643,13 @@ export default async function ClientsPage({
             </div>
           )}
 
-          {individualCustomers.length === 0 && (pendingQuotes ?? []).length === 0 && individualLeads.length === 0 ? (
+          {individualLive.length === 0 && (pendingQuotes ?? []).length === 0 && individualLeads.length === 0 ? (
             <div className="bg-white rounded-xl border border-dashed p-8 text-center space-y-2">
               <p className="text-sm text-muted-foreground">아직 개인 고객이 없어요</p>
               <p className="text-xs text-muted-foreground">고객 링크를 공유하면 견적 요청이 자동으로 들어와요</p>
             </div>
           ) : (
-            individualCustomers.map((customer) => {
+            individualLive.slice(0, showAll ? undefined : LIST_LIMIT).map((customer) => {
               const booking = customer.phone ? bookingMap[normalizePhone(customer.phone)] : undefined
               const customerContracts = contractMap[customer.id] ?? []
               const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
@@ -611,16 +682,17 @@ export default async function ClientsPage({
                         )}
                         {customer.phone && <CallLink phone={customer.phone} className="w-7 h-7 rounded-full bg-sky-100 flex items-center justify-center hover:bg-sky-200 transition-colors shrink-0" iconClassName="h-3.5 w-3.5 text-sky-600" />}
                       </div>
-                      {/* 마지막 방문은 재방문 판단에 바로 쓰이는 값이라 접지 않는다 */}
-                      {lastVisitDate && (
-                        <p className="mt-1 text-xs text-muted-foreground flex items-center gap-1">
-                          <Calendar className="h-3 w-3 shrink-0" />
-                          마지막 방문 {new Date(lastVisitDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
-                          {bookingCount > 1 && ` · 총 ${bookingCount}회`}
-                        </p>
-                      )}
-                      {(customer.phone || customer.address || activeContract) && (
-                        <ClientRowDetails>
+                      {/* 마지막 방문은 재방문 판단에 바로 쓰이는 값이라 접지 않는다 — '자세히'와 같은 줄에 둔다 */}
+                      <ClientRowDetails
+                        hasDetails={Boolean(customer.phone || customer.address || activeContract)}
+                        summary={lastVisitDate ? (
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Calendar className="h-3 w-3 shrink-0" />
+                            마지막 방문 {new Date(lastVisitDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', timeZone: 'Asia/Seoul' })}
+                            {bookingCount > 1 && ` · 총 ${bookingCount}회`}
+                          </span>
+                        ) : null}
+                      >
                           {customer.phone && (
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               <Phone className="h-3 w-3 shrink-0" />{customer.phone}
@@ -646,7 +718,6 @@ export default async function ClientsPage({
                             </div>
                           )}
                         </ClientRowDetails>
-                      )}
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-2">
                       <div className="text-right">
@@ -682,6 +753,14 @@ export default async function ClientsPage({
               )
             })
           )}
+          {!showAll && individualLive.length > LIST_LIMIT && (
+            <Link
+              href={href({ all: '1' })}
+              className="block w-full text-center text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-xl py-3"
+            >
+              나머지 {individualLive.length - LIST_LIMIT}명 더 보기
+            </Link>
+          )}
         </section>
       )}
 
@@ -696,7 +775,7 @@ export default async function ClientsPage({
             </div>
           )}
 
-          {activeLeads.length === 0 && companyCustomers.length === 0 ? (
+          {activeLeads.length === 0 && companyLive.length === 0 ? (
             <div className="bg-white rounded-xl border border-dashed p-8 text-center space-y-2">
               <p className="text-sm text-muted-foreground">영업 중인 법인 거래처가 없어요</p>
               <p className="text-xs text-muted-foreground">위 &lsquo;고객 추가&rsquo; 버튼으로 거래처를 등록하세요</p>
@@ -727,16 +806,17 @@ export default async function ClientsPage({
                         {/* 번호 텍스트는 접어두고 수화기만 남긴다 — 목록에서 바로 걸 수 있어야 접는 의미가 있다 */}
                         {lead.phone && <CallLink phone={lead.phone} className="w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center hover:bg-violet-200 transition-colors shrink-0" />}
                       </div>
-                      {/* 다음 연락 날짜는 '지금 할 일'이라 접지 않는다 */}
-                      {lead.next_follow_up_date && (
-                        <p className={`mt-1 text-xs flex items-center gap-1 ${isOverdue ? 'text-red-600 font-medium' : 'text-amber-600'}`}>
-                          <Calendar className="h-3 w-3 shrink-0" />
-                          다음 연락: {new Date(lead.next_follow_up_date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
-                          {isOverdue && ' (지났어요)'}
-                        </p>
-                      )}
-                      {(lead.phone || lead.address) && (
-                        <ClientRowDetails>
+                      {/* 다음 연락 날짜는 '지금 할 일'이라 접지 않는다 — '자세히'와 같은 줄에 둔다 */}
+                      <ClientRowDetails
+                        hasDetails={Boolean(lead.phone || lead.address)}
+                        summary={lead.next_follow_up_date ? (
+                          <span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-600 font-medium' : 'text-amber-600'}`}>
+                            <Calendar className="h-3 w-3 shrink-0" />
+                            다음 연락: {new Date(lead.next_follow_up_date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
+                            {isOverdue && ' (지났어요)'}
+                          </span>
+                        ) : null}
+                      >
                           {lead.phone && (
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               <Phone className="h-3 w-3 shrink-0" />{lead.phone}
@@ -747,8 +827,7 @@ export default async function ClientsPage({
                               <MapPin className="h-3 w-3 shrink-0" />{lead.address}
                             </p>
                           )}
-                        </ClientRowDetails>
-                      )}
+                      </ClientRowDetails>
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-2">
                       {/* 아직 영업 중이라 견적 금액은 '확정 매출'이 아님 → 영업 단계를 크게 보여주고,
@@ -770,10 +849,10 @@ export default async function ClientsPage({
           )}
 
           {/* 등록된 거래처(법인 고객, type='recurring') — 계약 유무는 각 카드의 배지로 표시 */}
-          {companyCustomers.length > 0 && (
+          {companyLive.length > 0 && (
             <div className="mt-3 space-y-2">
               <p className="text-xs text-muted-foreground px-1">등록된 거래처</p>
-              {companyCustomers.map((customer) => {
+              {companyLive.slice(0, showAll ? undefined : LIST_LIMIT).map((customer) => {
                 const customerContracts = contractMap[customer.id] ?? []
                 const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
                 const hasAnyContract = customerContracts.length > 0
@@ -810,13 +889,14 @@ export default async function ClientsPage({
                           {customer.phone && <CallLink phone={customer.phone} className="w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center hover:bg-violet-200 transition-colors shrink-0" />}
                         </div>
                         {/* 계약 내용 한 줄만 남기고 나머지는 접는다. 금액은 오른쪽에 이미 있어 여기선 뺀다 */}
-                        {activeContract && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
-                          </p>
-                        )}
-                        {(customer.phone || customer.address || activeContract) && (
-                          <ClientRowDetails>
+                        <ClientRowDetails
+                          hasDetails={Boolean(customer.phone || customer.address || activeContract)}
+                          summary={activeContract ? (
+                            <span className="text-xs text-muted-foreground">
+                              {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
+                            </span>
+                          ) : null}
+                        >
                             {customer.phone && (
                               <p className="text-xs text-muted-foreground flex items-center gap-1">
                                 <Phone className="h-3 w-3 shrink-0" />{customer.phone}
@@ -838,7 +918,6 @@ export default async function ClientsPage({
                               </div>
                             )}
                           </ClientRowDetails>
-                        )}
                       </div>
                       <div className="shrink-0 flex flex-col items-end gap-2">
                         <div className="text-right">
@@ -873,6 +952,14 @@ export default async function ClientsPage({
                   </div>
                 )
               })}
+              {!showAll && companyLive.length > LIST_LIMIT && (
+                <Link
+                  href={href({ all: '1' })}
+                  className="block w-full text-center text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-xl py-3"
+                >
+                  나머지 {companyLive.length - LIST_LIMIT}곳 더 보기
+                </Link>
+              )}
             </div>
           )}
 
@@ -881,7 +968,7 @@ export default async function ClientsPage({
             <div className="mt-4">
               {!showArchived ? (
                 <Link
-                  href={buildHref({ type: activeTab, sort, show_archived: '1', q: searchQuery || undefined })}
+                  href={href({ show_archived: '1' })}
                   className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                 >
                   <Archive className="h-3.5 w-3.5" />
@@ -894,7 +981,7 @@ export default async function ClientsPage({
                       <Archive className="h-3.5 w-3.5 text-muted-foreground" />
                       <span className="text-xs text-muted-foreground font-medium">끝난 거래처 ({closedLeads.length}곳)</span>
                     </div>
-                    <Link href={buildHref({ type: activeTab, sort, q: searchQuery || undefined })} className="text-xs text-muted-foreground hover:text-foreground underline">
+                    <Link href={href({ show_archived: undefined })} className="text-xs text-muted-foreground hover:text-foreground underline">
                       숨기기
                     </Link>
                   </div>
@@ -935,6 +1022,69 @@ export default async function ClientsPage({
             </div>
           )}
         </section>
+      )}
+
+      {/* ── 지난 고객 ──
+          거래가 끝난 지 오래된 고객. 지우지 않고 접어둔다 — 목록에서 내려야 이번 달에
+          손댈 곳이 보이고, 다시 부를 땐 검색으로 바로 찾을 수 있다. */}
+      {dormantCount > 0 && (
+        <div className="pt-2">
+          {!showDormant ? (
+            <Link
+              href={href({ show_dormant: '1' })}
+              className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-xl py-3"
+            >
+              <Archive className="h-3.5 w-3.5" />
+              지난 고객 {dormantCount}명 보기 — 6개월 넘게 거래가 없어요
+            </Link>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Archive className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground font-medium">지난 고객 ({dormantCount}명)</span>
+                </div>
+                <Link href={href({ show_dormant: undefined })} className="text-xs text-muted-foreground hover:text-foreground underline">
+                  숨기기
+                </Link>
+              </div>
+              <p className="text-xs text-muted-foreground px-1">
+                다시 부르고 싶은 곳이 있으면 이름을 눌러 이력을 보고 연락하세요.
+              </p>
+              {[...individualDormant, ...companyDormant]
+                .slice(0, showAll ? undefined : LIST_LIMIT)
+                .map((customer) => {
+                  const last = lastDealAt(customer)
+                  return (
+                    <div key={`dormant-${customer.id}`} className="bg-muted/30 rounded-xl border border-dashed border-border px-4 py-2.5 flex items-center gap-2">
+                      <Link href={`/dashboard/clients/${customer.id}`} className="font-medium text-sm text-muted-foreground hover:text-foreground truncate">
+                        {customer.name}
+                      </Link>
+                      {last && (
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          마지막 거래 {new Date(last).toLocaleDateString('ko-KR', { year: '2-digit', month: 'short', day: 'numeric', timeZone: 'Asia/Seoul' })}
+                        </span>
+                      )}
+                      <div className="ml-auto flex items-center gap-1 shrink-0">
+                        {customer.phone && <CallLink phone={customer.phone} className="w-7 h-7 rounded-full bg-muted flex items-center justify-center hover:bg-muted-foreground/20 transition-colors" iconClassName="h-3.5 w-3.5 text-muted-foreground" />}
+                        <Link href={`/dashboard/clients/${customer.id}`} className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded border border-border">
+                          이력<ChevronRight className="h-3 w-3" />
+                        </Link>
+                      </div>
+                    </div>
+                  )
+                })}
+              {!showAll && dormantCount > LIST_LIMIT && (
+                <Link
+                  href={href({ all: '1' })}
+                  className="block w-full text-center text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-xl py-3"
+                >
+                  나머지 {dormantCount - LIST_LIMIT}명 더 보기
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
