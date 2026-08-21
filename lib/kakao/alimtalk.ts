@@ -659,6 +659,36 @@ export interface CareCheckParams {
   reportUrl:     string  // 지난 작업 보고서 전체 주소
 }
 
+/**
+ * 이 템플릿이 지금 발송 가능한 상태인지(승인 완료) 확인한다.
+ *
+ * 왜 필요한가: 검수중·반려 상태의 템플릿으로 발송하면 솔라피가 요청은 받아주고
+ * 나중에 실패로 기록한다(예: 1042). 그러면 우리 코드는 '보냈다'고 표시하는데
+ * 고객에겐 아무것도 안 간다 — 몇 달을 모를 수 있는 조용한 실패다.
+ * 그래서 크론 한 번당 한 번만 상태를 확인하고, 승인 전이면 아예 시도하지 않는다.
+ */
+export async function isCareCheckTemplateReady(): Promise<boolean> {
+  const apiKey     = process.env.SOLAPI_API_KEY
+  const apiSecret  = process.env.SOLAPI_API_SECRET
+  const templateId = process.env.SOLAPI_TEMPLATE_ID_CARE_CHECK
+
+  if (!apiKey || !apiSecret || !templateId) return false
+
+  try {
+    const service = new SolapiMessageService(apiKey, apiSecret)
+    const template = await service.getKakaoAlimtalkTemplate(templateId)
+    if (template.status !== 'APPROVED') {
+      console.warn(`[Alimtalk] CARE_CHECK 템플릿이 아직 ${template.status} — 알림톡 발송 건너뜀`)
+      return false
+    }
+    return true
+  } catch (e) {
+    // 상태를 모르면 보내지 않는다. 조용히 사라지는 것보다 문자로 나가거나 사장님이 전화하는 게 낫다
+    console.error('[Alimtalk] CARE_CHECK 템플릿 상태 확인 실패:', e)
+    return false
+  }
+}
+
 /** 점검 시기 안내 — 보냈으면 true, 템플릿 미설정이면 false(문자로 폴백) */
 export async function sendCareCheckAlimtalk(params: CareCheckParams): Promise<boolean> {
   const apiKey     = process.env.SOLAPI_API_KEY
@@ -670,7 +700,7 @@ export async function sendCareCheckAlimtalk(params: CareCheckParams): Promise<bo
   if (!apiKey || !apiSecret || !sender || !templateId || !pfId) return false
 
   const service = new SolapiMessageService(apiKey, apiSecret)
-  await service.sendOne({
+  const res = await service.sendOne({
     to:   params.customerPhone,
     from: sender,
     type: 'ATA',
@@ -695,6 +725,13 @@ export async function sendCareCheckAlimtalk(params: CareCheckParams): Promise<bo
       ],
     },
   })
+
+  // 접수 코드가 2000번대가 아니면 실패다. 예외를 던지지 않고 실패 코드만 돌려주는 경우가 있어
+  // 이걸 안 보면 '보냈다'고 기록해놓고 고객에겐 아무것도 안 간다.
+  if (res.statusCode && !res.statusCode.startsWith('2')) {
+    console.error(`[Alimtalk] CARE_CHECK 접수 실패: ${res.statusCode} ${res.statusMessage}`)
+    return false
+  }
   return true
 }
 

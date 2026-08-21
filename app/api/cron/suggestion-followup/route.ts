@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { SolapiMessageService } from 'solapi'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendPushToBusiness } from '@/lib/push/web-push'
-import { sendCareCheckAlimtalk } from '@/lib/kakao/alimtalk'
+import { sendCareCheckAlimtalk, isCareCheckTemplateReady } from '@/lib/kakao/alimtalk'
 import { canSendMarketingSms } from '@/lib/reengagement/consent'
 
 // Vercel Cron(daily-maintenance에서 호출):
@@ -50,7 +50,6 @@ async function trySendCareCheck(
   phone: string,
   now: Date,
 ): Promise<'sent' | 'optout' | 'unavailable'> {
-  if (!process.env.SOLAPI_TEMPLATE_ID_CARE_CHECK) return 'unavailable'
 
   const { data: optout } = (await db
     .from('marketing_optouts')
@@ -155,6 +154,11 @@ export async function GET(request: NextRequest) {
   const canSend = !!(apiKey && apiSecret && sender)
   const service = canSend ? new SolapiMessageService(apiKey!, apiSecret!) : null
 
+  // 템플릿 승인 상태는 크론 한 번당 한 번만 확인한다.
+  // 검수중·반려 상태로 보내면 솔라피가 접수만 하고 나중에 실패로 기록해, 우리는
+  // '보냈다'고 표시하는데 고객에겐 아무것도 안 간다.
+  const alimtalkReady = await isCareCheckTemplateReady()
+
   let sent = 0
   let held = 0
   const heldByBusiness = new Map<string, number>()
@@ -181,7 +185,7 @@ export async function GET(request: NextRequest) {
       // 알림톡이 승인돼 있으면 그걸로 보낸다 — 문자보다 건당 요금이 훨씬 싸다.
       // 정보성 안내라 수신 동의가 필요 없다(작업 보고서에서 이미 이 시점을 고지했다).
       // 다만 수신거부한 번호는 어떤 경우에도 제외한다 — 그건 우리 약속이다.
-      if (row.report_id) {
+      if (alimtalkReady && row.report_id) {
         const alimtalkSent = await trySendCareCheck(looseDb, row, phone, now)
         if (alimtalkSent === 'sent') { sent++; continue }
         if (alimtalkSent === 'optout') continue
