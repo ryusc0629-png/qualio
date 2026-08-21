@@ -121,13 +121,27 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
   if (!latest) {
     // 발행한 글이 없으면 측정해봐야 0%다 — AI 검색은 '읽을 글'이 있어야 인용한다.
     // 그래서 자동 측정에서도 제외되는데, 화면에 이유를 안 적으면 고장 난 줄 안다.
-    const { count: publishedCount } = await db
-      .from('biz_posts')
-      .select('id', { count: 'exact', head: true })
-      .eq('business_id', businessId)
-      .eq('published', true)
+    //
+    // ⚠️글은 사장님이 직접 쓰는 게 아니라 **매일 자동으로 발행된다**.
+    //   그래서 글이 0편이라는 건 "안 썼다"가 아니라 **자동 발행이 꺼져 있다**는 뜻이다
+    //   (2026-08-21 기준 0편인 14곳 중 13곳이 자동 발행 꺼짐).
+    //   ⛔"글을 한 편 써주세요"라고 안내하지 말 것 — 우리 제품이 하는 일을 사장님에게 미루는 말이다.
+    const [{ count: publishedCount }, { data: biz }] = await Promise.all([
+      db
+        .from('biz_posts')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', businessId)
+        .eq('published', true),
+      db
+        .from('businesses')
+        .select('monthly_post_target')
+        .eq('id', businessId)
+        .maybeSingle() as unknown as Promise<{ data: { monthly_post_target: number | null } | null }>,
+    ])
 
     if ((publishedCount ?? 0) === 0) {
+      const autoPostOff = (biz?.monthly_post_target ?? 0) === 0
+
       return (
         <div className="rounded-xl border bg-white p-6">
           <p className="font-semibold text-sm">🔎 AI 검색에 우리 업체가 얼마나 나올까요?</p>
@@ -136,17 +150,35 @@ export async function GeoShareCard({ businessId }: { businessId: string }) {
             우리 업체가 얼마나 나오는지 재드려요.
           </p>
           <div className="mt-4 rounded-lg bg-amber-50 border border-amber-200 p-3">
-            <p className="text-sm font-semibold text-amber-900">먼저 글을 한 편 올려주세요</p>
-            <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-              AI는 읽을 글이 있어야 우리 업체를 추천할 수 있어요.
-              글이 하나도 없으면 아무리 재도 0%로 나와서, 글이 올라간 뒤부터 재기 시작합니다.
-            </p>
-            <Link
-              href="/dashboard/marketing/write"
-              className="inline-flex items-center gap-1 mt-2.5 text-xs font-semibold text-amber-900 underline"
-            >
-              글 만들러 가기 →
-            </Link>
+            {autoPostOff ? (
+              <>
+                <p className="text-sm font-semibold text-amber-900">자동 글쓰기가 꺼져 있어요</p>
+                <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                  켜두시면 매일 알아서 홍보 글이 올라가고, 그 글이 쌓이는 만큼 AI 검색에 잡히기 시작해요.
+                  글이 하나도 없으면 아무리 재도 0%라서 지금은 재지 않고 있어요.
+                </p>
+                <Link
+                  href="/dashboard/marketing"
+                  className="inline-flex items-center gap-1 mt-2.5 text-xs font-semibold text-amber-900 underline"
+                >
+                  자동 글쓰기 켜러 가기 →
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-amber-900">첫 글이 올라가면 재기 시작해요</p>
+                <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                  자동 글쓰기는 켜져 있어요. 매일 아침에 한 편씩 올라가니 조금만 기다려주세요.
+                  글이 하나도 없는 동안은 아무리 재도 0%라서 재지 않고 있어요.
+                </p>
+                <Link
+                  href="/dashboard/marketing"
+                  className="inline-flex items-center gap-1 mt-2.5 text-xs font-semibold text-amber-900 underline"
+                >
+                  발행 현황 보기 →
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )

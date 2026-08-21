@@ -27,15 +27,28 @@ export const runGeoCheckAction = action
     // 글이 한 편도 없으면 재봐야 0%다 — AI 검색은 '읽을 글'이 있어야 인용한다.
     // 측정 1회가 90번의 외부 호출이라, 결과가 뻔한 데 쓰면 돈만 나가고
     // 화면엔 0%만 남아 사장님이 이 기능을 안 믿게 된다.
-    const { count: publishedCount } = await db
-      .from('biz_posts')
-      .select('id', { count: 'exact', head: true })
-      .eq('business_id', profile.business_id)
-      .eq('published', true)
+    //
+    // ⚠️글은 사장님이 쓰는 게 아니라 매일 자동으로 발행된다.
+    //   그래서 0편이라는 건 '안 썼다'가 아니라 **자동 글쓰기가 꺼져 있다**는 뜻이다.
+    //   ⛔"글을 써주세요"라고 안내하지 말 것 — 우리 제품이 하는 일을 사장님에게 미루는 말이다.
+    const [{ count: publishedCount }, { data: biz }] = await Promise.all([
+      db
+        .from('biz_posts')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', profile.business_id)
+        .eq('published', true),
+      db
+        .from('businesses')
+        .select('monthly_post_target' as never)
+        .eq('id', profile.business_id)
+        .maybeSingle() as unknown as Promise<{ data: { monthly_post_target: number | null } | null }>,
+    ])
 
     if ((publishedCount ?? 0) === 0) {
       throw new Error(
-        '[APP] 먼저 글을 한 편 올려주세요. AI는 읽을 글이 있어야 우리 업체를 추천할 수 있어요',
+        (biz?.monthly_post_target ?? 0) === 0
+          ? '[APP] 자동 글쓰기를 먼저 켜주세요. 글이 쌓여야 AI 검색에 잡혀요'
+          : '[APP] 첫 글이 올라가면 바로 잴 수 있어요. 자동 글쓰기가 켜져 있으니 조금만 기다려주세요',
       )
     }
 
