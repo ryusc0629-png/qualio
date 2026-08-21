@@ -48,7 +48,7 @@ export function ClientSearchInput() {
         type="text"
         value={query}
         onChange={(e) => handleChange(e.target.value)}
-        placeholder="고객 이름으로 검색"
+        placeholder="이름·전화번호·주소로 검색 (예: 0107414, 언양)"
         className="w-full h-10 rounded-lg border border-border bg-background pl-9 pr-9 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
       />
       {query && (

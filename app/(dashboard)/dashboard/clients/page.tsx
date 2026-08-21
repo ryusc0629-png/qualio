@@ -15,6 +15,8 @@ import { formatFrequency } from '@/lib/utils/frequency'
 import { contractAccruedRevenue, type ContractPriceSegment } from '@/lib/utils/ltv'
 import { isActiveSalesStage, salesStageMeta } from '@/lib/business/sales-stage'
 import { ClientSearchInput } from '@/components/dashboard/client-search-input'
+import { ClientRowDetails } from '@/components/dashboard/client-row-details'
+import { CallLink } from '@/components/dashboard/call-link'
 import { formatCompactKRW } from '@/lib/format/krw'
 import { normalizePhone } from '@/lib/format/phone'
 import { Phone, MapPin, Calendar, TrendingUp, ChevronRight, Building2, User, Archive, Star, FileText } from 'lucide-react'
@@ -121,6 +123,11 @@ const PIPELINE_STAGE: Record<string, { text: string; color: string }> = {
   rejected:    { text: '포기',      color: 'bg-red-100 text-red-600' },
 }
 
+// 진행 중 목록에서 내리는 상태 — 끝난 건(포기)과 손으로 보관한 건.
+// '포기'가 계속 '영업 중'에 섞여 있으면 고객이 쌓일수록 진짜 진행 중인 곳이 끝난 곳 사이에 묻힌다.
+// 지우는 게 아니라 아래 '끝난 거래처'로 접어두는 것이라, 다시 영업하려면 펼쳐서 되살리면 된다.
+const CLOSED_LEAD_STATUSES = new Set(['archived', 'rejected'])
+
 const TABS = [
   { key: 'all',        label: '전체' },
   { key: 'individual', label: '개인 고객' },
@@ -128,8 +135,8 @@ const TABS = [
 ]
 
 const SORT_OPTIONS = [
-  { key: 'ltv_desc', label: 'LTV 높은순' },
-  { key: 'ltv_asc',  label: 'LTV 낮은순' },
+  { key: 'ltv_desc', label: '누적 매출 많은순' },
+  { key: 'ltv_asc',  label: '누적 매출 적은순' },
   { key: 'newest',   label: '최신순' },
   { key: 'oldest',   label: '오래된순' },
 ]
@@ -316,28 +323,39 @@ export default async function ClientsPage({
 
   // ── 데이터 분류 ──
 
-  // 이름 검색 필터
-  const matchesSearch = (name: string) => !searchQuery || name.toLowerCase().includes(searchQuery)
+  // 이름·전화·주소 검색 필터
+  //
+  // 이름만 찾으면 목록이 길어졌을 때 못 찾는다 — 사장님은 "010-7414 그 치과", "언양 그 집"처럼
+  // 번호나 동네로 기억한다. 전화는 010-1234-5678 / 01012345678 두 형식이 섞여 저장돼 있어
+  // 양쪽 다 숫자만 남겨 비교한다.
+  const searchDigits = searchQuery.replace(/[^0-9]/g, '')
+  const matchesSearch = (name: string | null, phone?: string | null, address?: string | null) => {
+    if (!searchQuery) return true
+    if ((name ?? '').toLowerCase().includes(searchQuery)) return true
+    if ((address ?? '').toLowerCase().includes(searchQuery)) return true
+    if (searchDigits && normalizePhone(phone).includes(searchDigits)) return true
+    return false
+  }
 
   // type 필드 기준으로 개인/법인 분리 + 검색 필터
-  const individualCustomers = sortCustomers((customers ?? []).filter(c => c.type !== 'recurring' && matchesSearch(c.name)))
-  const companyCustomers = sortCustomers((customers ?? []).filter(c => c.type === 'recurring' && matchesSearch(c.name)))
+  const individualCustomers = sortCustomers((customers ?? []).filter(c => c.type !== 'recurring' && matchesSearch(c.name, c.phone, c.address)))
+  const companyCustomers = sortCustomers((customers ?? []).filter(c => c.type === 'recurring' && matchesSearch(c.name, c.phone, c.address)))
   // 전환된 거래처 중 지금 영업(정기계약 업셀 등) 진행 중인 곳 — 자동 배지와 별개로 손으로 지정한 것
   const companyInSales = companyCustomers.filter(c => isActiveSalesStage(c.sales_stage))
 
   const activeLeads = sortLeads(
-    (leads ?? []).filter(l => l.customer_type === 'company' && l.status !== 'archived' && !registeredLeadIds.has(l.id) && matchesSearch(l.company_name))
+    (leads ?? []).filter(l => l.customer_type === 'company' && !CLOSED_LEAD_STATUSES.has(l.status) && !registeredLeadIds.has(l.id) && matchesSearch(l.company_name, l.phone, l.address))
   )
-  const archivedLeads = (leads ?? []).filter(l => l.customer_type === 'company' && l.status === 'archived' && matchesSearch(l.company_name))
+  const closedLeads = (leads ?? []).filter(l => l.customer_type === 'company' && CLOSED_LEAD_STATUSES.has(l.status) && matchesSearch(l.company_name, l.phone, l.address))
 
-  // 보관 목록을 펼쳤을 때만 — 삭제 확인창에 "상담 기록 N개도 함께 지워져요"를 정확히 띄우기 위한 개수
+  // 끝난 목록을 펼쳤을 때만 — 삭제 확인창에 "상담 기록 N개도 함께 지워져요"를 정확히 띄우기 위한 개수
   const archivedActivityCount: Record<string, number> = {}
-  if (showArchived && archivedLeads.length > 0) {
+  if (showArchived && closedLeads.length > 0) {
     const { data: archivedActivities } = await db
       .from('lead_activities')
       .select('lead_id')
       .eq('business_id', businessId)
-      .in('lead_id', archivedLeads.map(l => l.id))
+      .in('lead_id', closedLeads.map(l => l.id))
     for (const a of archivedActivities ?? []) {
       if (a.lead_id) archivedActivityCount[a.lead_id] = (archivedActivityCount[a.lead_id] ?? 0) + 1
     }
@@ -355,9 +373,9 @@ export default async function ClientsPage({
   const individualLeads = sortLeads(
     (leads ?? []).filter(l =>
       l.customer_type !== 'company' &&
-      l.status !== 'archived' &&
+      !CLOSED_LEAD_STATUSES.has(l.status) &&
       (l.status === 'new' || (!registeredLeadIds.has(l.id) && !customerByPhone.has(normalizePhone(l.phone)))) &&
-      matchesSearch(l.company_name)
+      matchesSearch(l.company_name, l.phone, l.address)
     )
   )
 
@@ -591,39 +609,43 @@ export default async function ClientsPage({
                             리뷰 작성
                           </span>
                         )}
+                        {customer.phone && <CallLink phone={customer.phone} className="w-7 h-7 rounded-full bg-sky-100 flex items-center justify-center hover:bg-sky-200 transition-colors shrink-0" iconClassName="h-3.5 w-3.5 text-sky-600" />}
                       </div>
-                      <div className="mt-1.5 space-y-0.5">
-                        {customer.phone && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Phone className="h-3 w-3 shrink-0" />{customer.phone}
-                          </p>
-                        )}
-                        {customer.address && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                            <MapPin className="h-3 w-3 shrink-0" />{customer.address}
-                          </p>
-                        )}
-                        {lastVisitDate && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Calendar className="h-3 w-3 shrink-0" />
-                            마지막 방문 {new Date(lastVisitDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
-                            {bookingCount > 1 && ` · 총 ${bookingCount}회`}
-                          </p>
-                        )}
-                      </div>
-                      {activeContract && (
-                        <div className="mt-2 pt-2 border-t flex items-center gap-2 flex-wrap">
-                          <p className="text-xs text-muted-foreground">
-                            {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
-                          </p>
-                          <ContractStatusSelect contractId={activeContract.id} currentStatus={activeContract.status} />
-                          <ContractLockupCell
-                            contractId={activeContract.id}
-                            requiresLockup={activeContract.requires_lockup ?? false}
-                            expectedDurationMinutes={activeContract.expected_duration_minutes ?? null}
-                            checklistItems={activeContract.checklist_items ?? []}
-                          />
-                        </div>
+                      {/* 마지막 방문은 재방문 판단에 바로 쓰이는 값이라 접지 않는다 */}
+                      {lastVisitDate && (
+                        <p className="mt-1 text-xs text-muted-foreground flex items-center gap-1">
+                          <Calendar className="h-3 w-3 shrink-0" />
+                          마지막 방문 {new Date(lastVisitDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
+                          {bookingCount > 1 && ` · 총 ${bookingCount}회`}
+                        </p>
+                      )}
+                      {(customer.phone || customer.address || activeContract) && (
+                        <ClientRowDetails>
+                          {customer.phone && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Phone className="h-3 w-3 shrink-0" />{customer.phone}
+                            </p>
+                          )}
+                          {customer.address && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                              <MapPin className="h-3 w-3 shrink-0" />{customer.address}
+                            </p>
+                          )}
+                          {activeContract && (
+                            <div className="mt-2 pt-2 border-t flex items-center gap-2 flex-wrap">
+                              <p className="text-xs text-muted-foreground">
+                                {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
+                              </p>
+                              <ContractStatusSelect contractId={activeContract.id} currentStatus={activeContract.status} />
+                              <ContractLockupCell
+                                contractId={activeContract.id}
+                                requiresLockup={activeContract.requires_lockup ?? false}
+                                expectedDurationMinutes={activeContract.expected_duration_minutes ?? null}
+                                checklistItems={activeContract.checklist_items ?? []}
+                              />
+                            </div>
+                          )}
+                        </ClientRowDetails>
                       )}
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-2">
@@ -702,26 +724,31 @@ export default async function ClientsPage({
                         {isOverdue && (
                           <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-600">연락 지연</span>
                         )}
+                        {/* 번호 텍스트는 접어두고 수화기만 남긴다 — 목록에서 바로 걸 수 있어야 접는 의미가 있다 */}
+                        {lead.phone && <CallLink phone={lead.phone} className="w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center hover:bg-violet-200 transition-colors shrink-0" />}
                       </div>
-                      <div className="mt-1.5 space-y-0.5">
-                        {lead.phone && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Phone className="h-3 w-3 shrink-0" />{lead.phone}
-                          </p>
-                        )}
-                        {lead.address && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                            <MapPin className="h-3 w-3 shrink-0" />{lead.address}
-                          </p>
-                        )}
-                        {lead.next_follow_up_date && (
-                          <p className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-600 font-medium' : 'text-amber-600'}`}>
-                            <Calendar className="h-3 w-3 shrink-0" />
-                            다음 연락: {new Date(lead.next_follow_up_date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
-                            {isOverdue && ' (지났어요)'}
-                          </p>
-                        )}
-                      </div>
+                      {/* 다음 연락 날짜는 '지금 할 일'이라 접지 않는다 */}
+                      {lead.next_follow_up_date && (
+                        <p className={`mt-1 text-xs flex items-center gap-1 ${isOverdue ? 'text-red-600 font-medium' : 'text-amber-600'}`}>
+                          <Calendar className="h-3 w-3 shrink-0" />
+                          다음 연락: {new Date(lead.next_follow_up_date + 'T00:00:00').toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
+                          {isOverdue && ' (지났어요)'}
+                        </p>
+                      )}
+                      {(lead.phone || lead.address) && (
+                        <ClientRowDetails>
+                          {lead.phone && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Phone className="h-3 w-3 shrink-0" />{lead.phone}
+                            </p>
+                          )}
+                          {lead.address && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                              <MapPin className="h-3 w-3 shrink-0" />{lead.address}
+                            </p>
+                          )}
+                        </ClientRowDetails>
+                      )}
                     </div>
                     <div className="shrink-0 flex flex-col items-end gap-2">
                       {/* 아직 영업 중이라 견적 금액은 '확정 매출'이 아님 → 영업 단계를 크게 보여주고,
@@ -780,24 +807,27 @@ export default async function ClientsPage({
                           {customer.category && (
                             <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">{customer.category}</span>
                           )}
+                          {customer.phone && <CallLink phone={customer.phone} className="w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center hover:bg-violet-200 transition-colors shrink-0" />}
                         </div>
-                        <div className="mt-1.5 space-y-0.5">
-                          {customer.phone && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Phone className="h-3 w-3 shrink-0" />{customer.phone}
-                            </p>
-                          )}
-                          {customer.address && (
-                            <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                              <MapPin className="h-3 w-3 shrink-0" />{customer.address}
-                            </p>
-                          )}
-                          {activeContract && (
-                            <>
-                              <p className="text-xs text-muted-foreground mt-1">
-                                {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
-                                <span className="text-emerald-600 font-medium ml-2">{activeContract.contract_price.toLocaleString('ko-KR')}원/월</span>
+                        {/* 계약 내용 한 줄만 남기고 나머지는 접는다. 금액은 오른쪽에 이미 있어 여기선 뺀다 */}
+                        {activeContract && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
+                          </p>
+                        )}
+                        {(customer.phone || customer.address || activeContract) && (
+                          <ClientRowDetails>
+                            {customer.phone && (
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Phone className="h-3 w-3 shrink-0" />{customer.phone}
                               </p>
+                            )}
+                            {customer.address && (
+                              <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                                <MapPin className="h-3 w-3 shrink-0" />{customer.address}
+                              </p>
+                            )}
+                            {activeContract && (
                               <div className="mt-1.5">
                                 <ContractLockupCell
                                   contractId={activeContract.id}
@@ -806,9 +836,9 @@ export default async function ClientsPage({
                                   checklistItems={activeContract.checklist_items ?? []}
                                 />
                               </div>
-                            </>
-                          )}
-                        </div>
+                            )}
+                          </ClientRowDetails>
+                        )}
                       </div>
                       <div className="shrink-0 flex flex-col items-end gap-2">
                         <div className="text-right">
@@ -847,7 +877,7 @@ export default async function ClientsPage({
           )}
 
           {/* 보관된 거래처 토글 */}
-          {archivedLeads.length > 0 && (
+          {closedLeads.length > 0 && (
             <div className="mt-4">
               {!showArchived ? (
                 <Link
@@ -855,25 +885,25 @@ export default async function ClientsPage({
                   className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                 >
                   <Archive className="h-3.5 w-3.5" />
-                  보관된 거래처 {archivedLeads.length}곳 보기
+                  끝난 거래처 {closedLeads.length}곳 보기 (포기·보관)
                 </Link>
               ) : (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <Archive className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground font-medium">보관된 거래처 ({archivedLeads.length}곳)</span>
+                      <span className="text-xs text-muted-foreground font-medium">끝난 거래처 ({closedLeads.length}곳)</span>
                     </div>
                     <Link href={buildHref({ type: activeTab, sort, q: searchQuery || undefined })} className="text-xs text-muted-foreground hover:text-foreground underline">
                       숨기기
                     </Link>
                   </div>
-                  {archivedLeads.map((lead) => (
+                  {closedLeads.map((lead) => (
                     <div key={`archived-${lead.id}`} className="bg-muted/30 rounded-xl border border-dashed border-border p-4 opacity-70">
                       <div className="flex items-start gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-500">보관됨</span>
+                            <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-gray-100 text-gray-500">{lead.status === 'rejected' ? '포기' : '보관됨'}</span>
                             <p className="font-medium text-muted-foreground">{lead.company_name}</p>
                           </div>
                           <div className="mt-1 space-y-0.5">
