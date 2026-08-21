@@ -25,9 +25,17 @@ const TAIL_TRIM_SECONDS = 0.12
 /** 아무리 당겨도 이보다 짧아지지는 않게 (아주 짧은 문장 보호) */
 const MIN_LINE_SECONDS = 0.8
 
-// 배경음악은 REEL_MUSIC_URL 환경변수에 트랙 주소를 넣으면 켜진다.
-// ⛔값이 없으면 안 깐다 — 아무 노래나 넣으면 인스타·유튜브가 음원을 식별해
-//   수익을 가져가거나 영상을 내린다. 저작권이 정리된 트랙만 넣을 것.
+/**
+ * 배경음악 트랙.
+ *
+ * 우리가 만든 트랙이라 저작권이 우리에게 있다(fal.ai Stable Audio Open, 2026-08-21 생성).
+ * ⛔남의 노래를 넣지 말 것 — 인스타·유튜브가 음원을 식별해 수익을 가져가거나 영상을 내린다.
+ * ⚠️끝 무음을 잘라낸 판이다(안 자르면 반복될 때마다 소리가 1초씩 끊긴다).
+ *   교체하려면 `npm run reel:music`으로 새로 만들고 --upload 로 올린 주소를 넣을 것.
+ * 환경변수 REEL_MUSIC_URL로 덮어쓸 수 있다(빈 문자열로 두면 음악 없이 나간다).
+ */
+const DEFAULT_MUSIC_URL =
+  'https://wjxcrgwfeqkgvvyakack.supabase.co/storage/v1/object/public/report-photos/_shared/reel-music/2-1787310049827.mp3'
 
 interface ReelSource {
   id: string
@@ -178,7 +186,7 @@ export async function renderReelForReport(
       businessName: business.name as string,
       lines,
       narrationUrls,
-      musicUrl: process.env.REEL_MUSIC_URL || null,
+      musicUrl: process.env.REEL_MUSIC_URL ?? DEFAULT_MUSIC_URL,
       webhookUrl: `${appUrl}/api/creatomate/webhook`,
     })
 

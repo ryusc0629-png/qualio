@@ -16,7 +16,7 @@
 // 고른 뒤:
 //   1) --upload 로 올리면 공개 주소가 나온다
 //   2) 그 주소를 Vercel 환경변수 REEL_MUSIC_URL 에 넣는다
-//   3) 다음 영상부터 배경음악이 깔린다 (볼륨 8%는 코드에 고정)
+//   3) 다음 영상부터 배경음악이 깔린다 (볼륨 15%는 코드에 고정)
 
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -24,6 +24,8 @@ import { join, basename } from 'node:path'
 import nextEnv from '@next/env'
 import { fal } from '@fal-ai/client'
 import { createClient } from '@supabase/supabase-js'
+import { execFileSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
 
 const { loadEnvConfig } = nextEnv
 loadEnvConfig(process.cwd())
@@ -84,6 +86,60 @@ function parseArgs(argv) {
   return out
 }
 
+
+/**
+ * 트랙 끝의 무음을 잘라낸다.
+ *
+ * ⚠️왜 필요한가: 생성된 트랙은 끝에 1초 안팎의 무음이 붙어 나온다("seamless loop"라고
+ *   써넣어도 그렇다). 그대로 반복시키면 한 바퀴마다 소리가 뚝 끊겨 고장 난 것처럼 들린다.
+ *   실제로 첫 업로드에서 12초 트랙 끝에 1.09초 무음이 있었다.
+ *
+ * ffmpeg이 없으면 원본을 그대로 쓰고 경고만 남긴다 — 못 올리는 것보단 낫다.
+ */
+function trimTrailingSilence(filePath) {
+  try {
+    execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' })
+  } catch {
+    console.warn('⚠️  ffmpeg이 없어 끝 무음을 못 잘랐습니다. 반복 재생 시 소리가 끊길 수 있어요.')
+    return filePath
+  }
+
+  // ⚠️ffmpeg은 분석 결과를 stdout이 아니라 stderr로 내보내고, 성공해도 종료코드가 0이다.
+  //   예전엔 try/catch로 잡으려다 정상 종료하면 파싱을 아예 안 타서 무음이 그대로 남았다.
+  let log = ''
+  try {
+    // stderr를 stdout으로 합쳐 받는다 — 종료코드와 무관하게 항상 로그를 손에 쥔다
+    log = execFileSync(
+      'sh',
+      ['-c', `ffmpeg -hide_banner -i "$1" -af silencedetect=n=-45dB:d=0.05 -f null - 2>&1`, 'sh', filePath],
+      { encoding: 'utf8' },
+    )
+  } catch (e) {
+    log = String(e.stdout ?? '') + String(e.stderr ?? '')
+  }
+
+  const dm = log.match(/Duration: (\d+):(\d+):([\d.]+)/)
+  const dur = dm ? Number(dm[1]) * 3600 + Number(dm[2]) * 60 + Number(dm[3]) : 0
+  if (!dur) return filePath
+
+  const starts = [...log.matchAll(/silence_start: ([\d.]+)/g)].map((m) => parseFloat(m[1]))
+  const lastStart = starts.at(-1)
+  if (lastStart === undefined) return filePath
+
+  // 마지막 무음이 파일 끝까지 이어질 때만 자른다(중간 무음은 리듬의 일부일 수 있다)
+  const ends = [...log.matchAll(/silence_end: ([\d.]+)/g)].map((m) => parseFloat(m[1]))
+  const lastEnd = ends.at(-1)
+  if (lastEnd !== undefined && lastEnd > lastStart && lastEnd < dur - 0.05) return filePath
+
+  const keep = Math.max(1, lastStart - 0.02)
+  if (keep >= dur - 0.05) return filePath
+
+  const trimmed = join(tmpdir(), `reel-music-trimmed-${Date.now()}.mp3`)
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', filePath, '-t', String(keep), '-c:a', 'libmp3lame', '-b:a', '192k', trimmed])
+  console.log(`   끝 무음 ${(dur - keep).toFixed(2)}초를 잘랐습니다 (${dur.toFixed(1)}초 → ${keep.toFixed(1)}초)`)
+  return trimmed
+}
+
 /** 고른 트랙을 스토리지에 올리고 공개 주소를 돌려준다 */
 async function upload(filePath) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -101,10 +157,19 @@ async function upload(filePath) {
     process.exit(1)
   }
 
+  // 반복 재생될 트랙이라 끝 무음을 먼저 잘라낸다
+  const source = trimTrailingSilence(filePath)
+
   const db = createClient(url, key)
-  const bytes = readFileSync(filePath)
+  const bytes = readFileSync(source)
+  // ⚠️스토리지 키에는 한글·공백을 못 쓴다(Invalid key). 파일명은 한글로 두되 키만 영문으로 바꾼다.
+  const safe = basename(filePath)
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^\w-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'track'
   // 업체별 폴더가 아니라 공용 자리에 둔다 — 모든 고객사가 같은 트랙을 쓴다
-  const path = `_shared/reel-music/${basename(filePath)}`
+  const path = `_shared/reel-music/${safe}-${Date.now()}.mp3`
 
   const { error } = await db.storage
     .from('report-photos')

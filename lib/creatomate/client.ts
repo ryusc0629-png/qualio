@@ -142,6 +142,10 @@ function captionElement(cap: ReelCaption): Element {
     x_anchor: '50%',
     y_anchor: '50%',
     y: '50%',
+    // ⚠️x_anchor는 '상자'를 가운데로 옮길 뿐이고, 상자 안 글자는 기본이 왼쪽 정렬이다.
+    //   글자를 가운데로 두려면 x_alignment가 따로 있어야 한다 —
+    //   두 줄로 넘어가는 자막에서 왼쪽으로 쏠려 보이던 원인.
+    x_alignment: '50%',
     text: cap.text,
     font_family: FONT,
     font_weight: '800',
@@ -275,6 +279,7 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
       x_anchor: '50%',
       y_anchor: '50%',
       y: '46%',
+      x_alignment: '50%',
       text: input.businessName,
       font_family: FONT,
       font_size: '10 vmin',
@@ -292,6 +297,7 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
       x_anchor: '50%',
       y_anchor: '0%',
       y: '56%',
+      x_alignment: '50%',
       text: '믿고 맡기는 깨끗함',
       font_family: FONT,
       font_size: '4.5 vmin',
