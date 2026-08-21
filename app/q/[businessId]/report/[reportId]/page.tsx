@@ -1,6 +1,8 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { ReportPhotoSection } from './report-photos'
+import { CareReminderOptIn } from './care-reminder-optin'
+import { canSendMarketingSms } from '@/lib/reengagement/consent'
 import { formatDate } from '@/lib/format/datetime'
 import {
   DocPage, DocHeader, DocMeta, DocLede, DocSection, DocText, DocSignature,
@@ -146,6 +148,11 @@ export default async function ReportPage({
     ? formatDate(careRow.care_due_at, { year: 'numeric', month: 'long' })
     : null
 
+  // 다음 청소 시기 알림에 이미 동의한 고객인지 (동의했으면 버튼 대신 '알려드릴게요'로 보인다)
+  const alreadyOptedIn = bookingInfo?.customer_phone
+    ? await canSendMarketingSms(db, businessId, bookingInfo.customer_phone)
+    : false
+
   // 문서 머리말 항목 — 값이 없는 줄은 DocMeta가 알아서 뺀다
   const meta = [
     { k: '고객', v: bookingInfo?.customer_name ?? '' },
@@ -239,6 +246,19 @@ export default async function ReportPage({
             </p>
           )}
         </DocSection>
+      )}
+
+      {/* 다음 청소 시기 알림 — 동의는 '작업이 끝난 뒤'인 여기서 받는다.
+          위 '향후 관리 안내'에 언제 다시 손봐야 하는지가 이미 적혀 있어,
+          그 약속을 지키겠다는 뜻이라 판촉으로 읽히지 않는다.
+          ⛔견적 폼으로 되돌리지 말 것 — 청소를 안 받은 손님에겐 보낼 시점 자체가 없다. */}
+      {bookingInfo?.customer_phone && (
+        <CareReminderOptIn
+          reportId={reportId}
+          businessId={businessId}
+          dueLabel={careDueLabel}
+          initialOptedIn={alreadyOptedIn}
+        />
       )}
 
       {/* 후기 — 문서 끝에 한 줄로 청한다 */}

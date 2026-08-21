@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { recordMarketingConsent } from '@/lib/reengagement/consent'
 
 async function getBusinessId() {
   const authClient = await createClient()
@@ -164,4 +165,37 @@ export const registerSuggestedServiceAction = action
     revalidatePath('/dashboard/services')
     revalidatePath('/dashboard/reengagement')
     return { success: true, alreadyExists: false }
+  })
+
+// ── 고객이 작업 보고서에서 직접 고르는 '다음 청소 시기 알림' 동의 ──
+//
+// ⛔이 동의를 견적 폼으로 되돌리지 말 것. '다음 청소 시기 안내'는 청소를 한 번 받은
+//   뒤라야 성립하는 약속이고(마지막 작업일·공간이 있어야 시점을 잡는다), 견적만 넣은
+//   손님에겐 보낼 근거가 없다. 게다가 신청 직전에 광고 이야기를 꺼내면 전환만 깎인다.
+//
+// 위변조 방지: 고객이 전화번호를 보내지 않는다. 보고서 id로 서버가 다시 찾는다 —
+// 남의 번호를 동의 처리하려면 그 보고서 링크(UUID)를 알아야 한다.
+export const optInCareReminderAction = action
+  .schema(z.object({
+    reportId: z.string().uuid(),
+    businessId: z.string().uuid(),
+  }))
+  .action(async ({ parsedInput: { reportId, businessId } }) => {
+    const db = createServiceClient()
+
+    const { data: report } = (await db
+      .from('reports')
+      .select('id, bookings!booking_id(customer_phone)')
+      .eq('id', reportId)
+      .eq('business_id', businessId)
+      .maybeSingle()) as unknown as {
+        data: { id: string; bookings: { customer_phone: string | null } | { customer_phone: string | null }[] | null } | null
+      }
+
+    const booking = Array.isArray(report?.bookings) ? report?.bookings[0] : report?.bookings
+    const phone = booking?.customer_phone
+    if (!report || !phone) throw new Error('[APP] 연락처를 찾지 못했어요. 업체로 연락 주세요')
+
+    await recordMarketingConsent(db as unknown as SupabaseClient, businessId, phone, 'report_page')
+    return { success: true }
   })

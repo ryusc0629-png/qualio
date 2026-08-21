@@ -55,8 +55,6 @@ export function HeroLeadForm({ businessId, businessName, services, channel }: Pr
   const [company, setCompany] = useState('')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
-  // 광고 문자 수신 동의 — 고른 손님에게만 나중에 안내 문자가 나간다(기본은 안 고른 상태)
-  const [marketingConsent, setMarketingConsent] = useState(false)
   const [result, setResult] = useState<'quote' | 'consult' | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
   const startedRef = useRef(false)
@@ -104,7 +102,6 @@ export function HeroLeadForm({ businessId, businessName, services, channel }: Pr
     setCompany('')
     setName('')
     setPhone('')
-    setMarketingConsent(false)
     startedRef.current = false
   }
 
@@ -143,7 +140,6 @@ export function HeroLeadForm({ businessId, businessName, services, channel }: Pr
         customer_phone: phoneDigits,
         company_name: businessMode ? trimmedCompany : undefined,
         channel: channel ?? undefined,
-        marketing_consent: marketingConsent,
       })
     } else {
       quoteAction.execute({
@@ -154,7 +150,6 @@ export function HeroLeadForm({ businessId, businessName, services, channel }: Pr
         customer_phone: phoneDigits,
         company_name: businessMode ? trimmedCompany : undefined,
         channel: channel ?? undefined,
-        marketing_consent: marketingConsent,
       })
     }
   }
@@ -286,25 +281,14 @@ export function HeroLeadForm({ businessId, businessName, services, channel }: Pr
           )}
         </Button>
 
-        {/* 광고 수신 동의 — 반드시 '고르지 않은 상태'로 둔다.
-            미리 체크해두면 동의를 받은 게 아니라 몰래 넣은 게 된다(위법).
-            안 고르면 나중에 안내 문자를 보내지 않고, 사장님이 직접 전화하게 된다. */}
-        <label className="flex items-start gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={marketingConsent}
-            onChange={(e) => setMarketingConsent(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-600"
-          />
-          <span className="text-[11px] text-slate-500 leading-relaxed">
-            청소 시기 안내·혜택 소식을 문자로 받아볼게요 (선택)
-          </span>
-        </label>
-
+        {/* ⛔여기에 광고 수신 동의 체크박스를 다시 넣지 말 것.
+            '다음 청소 시기 안내'는 청소를 한 번 받은 뒤라야 성립하는 약속이고,
+            견적만 넣은 손님에겐 보낼 근거(마지막 작업일·공간)가 없다.
+            동의는 작업이 끝난 뒤 고객이 받는 작업 보고서에서 받는다. */}
         <p className="text-center text-[11px] text-slate-400">
           입력하신 연락처로 {businessName}에서 바로 연락드려요.
           <br />
-          위에 동의하지 않으시면 광고 문자는 보내지 않아요
+          광고 문자는 보내지 않아요
         </p>
       </form>
 
