@@ -119,7 +119,7 @@ export default async function FieldBookingPage({ params }: Props) {
 
   // 이 고객의 미해결 클레임 — 사장님이 대시보드에서 접수한 고객 불만이다.
   // 지금까지는 담당자를 지정할 때 푸시 한 번이 전부라, 알림을 지나치면 현장에서 볼 방법이 없었다.
-  let openClaims: { title: string; content: string | null; isUrgent: boolean }[] = []
+  let openClaims: { id: string; title: string; content: string | null; isUrgent: boolean }[] = []
   if (booking.customer_phone) {
     // ⚠️ 같은 번호가 '010-1234-5678'과 '01012345678' 두 형태로 저장돼 있다.
     //    그대로 비교하면 다른 사람으로 보여 클레임이 통째로 안 뜬다.
@@ -128,16 +128,17 @@ export default async function FieldBookingPage({ params }: Props) {
 
     const { data: claimRows } = (await db
       .from('claims' as never)
-      .select('title, content, is_urgent' as never)
+      .select('id, title, content, is_urgent' as never)
       .eq('business_id' as never, worker.business_id)
       .in('customer_phone' as never, phoneVariants as never)
       .eq('status' as never, 'open')
       .order('created_at' as never, { ascending: false })
       .limit(3)) as unknown as {
-        data: { title: string; content: string | null; is_urgent: boolean }[] | null
+        data: { id: string; title: string; content: string | null; is_urgent: boolean }[] | null
       }
 
     openClaims = (claimRows ?? []).map((c) => ({
+      id: c.id,
       title: c.title,
       content: c.content,
       isUrgent: c.is_urgent,

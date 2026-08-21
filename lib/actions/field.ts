@@ -1184,6 +1184,54 @@ export const fieldAddSiteIssueAction = action
     return { success: true, claimId: created?.id ?? null }
   })
 
+/**
+ * 사장님이 접수한 클레임을 현장에서 처리 완료로 남긴다.
+ *
+ * 왜 '새 특이사항'이 아니라 이 액션인가: 같은 문제를 현장에서 다시 등록하면 한 건이 두 건이 된다.
+ * 사장님 화면에는 미해결 하나 + 처리됨 하나가 남아, 결국 사장님이 손으로 정리해야 한다.
+ * 그래서 원래 건에 처리 내용을 채운다.
+ */
+export const fieldResolveClaimAction = action
+  .schema(z.object({
+    workerId:   z.string().uuid(),
+    bookingId:  z.string().uuid(),
+    claimId:    z.string().uuid(),
+    resolution: z.string().min(1, '어떻게 했는지 한 줄로 적어주세요').max(2000),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, worker } = await verifyWorker(parsedInput.workerId)
+    const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
+
+    const looseDb = db as unknown as SupabaseClient
+    const now = new Date().toISOString()
+
+    const { error } = await looseDb
+      .from('claims')
+      .update({
+        resolution:  parsedInput.resolution.trim(),
+        status:      'resolved',
+        resolved_at: now,
+      })
+      .eq('id', parsedInput.claimId)
+      // 남의 업체 건을 못 건드리게 — workerId만 믿지 않는다
+      .eq('business_id', worker.business_id)
+
+    if (error) {
+      console.error('[Field] 클레임 처리 실패:', error)
+      throw new Error('[APP] 저장하지 못했어요. 다시 눌러주세요')
+    }
+
+    // 고객 불만이 해결됐다는 건 사장님이 바로 알아야 한다 — 고객에게 답을 줘야 하기 때문이다
+    await sendPushToBusiness(worker.business_id, {
+      title: `클레임 처리 완료 · ${booking.customer_name}`,
+      body: `${worker.name} 기사님 — ${parsedInput.resolution.trim().slice(0, 60)}`,
+      url: '/dashboard/claims',
+      tag: `claim-resolved-${parsedInput.claimId}`,
+    }).catch((e) => console.error('[Field] 클레임 처리 푸시 실패:', e))
+
+    return { success: true }
+  })
+
 /** 이 방문에서 현장이 올린 특이사항 — 화면에 목록으로 되돌려 보여준다 */
 export const fieldListSiteIssuesAction = action
   .schema(z.object({

@@ -16,6 +16,7 @@ import {
   fieldSaveChecklistPhotosAction,
 } from '@/lib/actions/field'
 import { FieldBookingItemsEditor } from '@/components/field/field-booking-items-editor'
+import { ClaimResolveCard, type OpenClaim } from '@/components/field/claim-resolve-card'
 import { ContactActions } from '@/components/dashboard/contact-actions'
 import { buildUploadPath } from '@/lib/storage/upload-path'
 import {
@@ -79,7 +80,7 @@ interface Props {
   /** 이 현장에서 알아야 할 것 — 지난 방문 직원들이 쌓아온 고객 메모 */
   customerNotes?: string | null
   /** 고객이 알려온 미해결 문제 — 사장님이 대시보드에서 접수한 것 */
-  openClaims?: { title: string; content: string | null; isUrgent: boolean }[]
+  openClaims?: OpenClaim[]
   existingChecklistPhotos: Record<string, string[]>
 }
 
@@ -449,23 +450,14 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
               <p className="text-sm font-bold text-blue-900">읽고 시작해주세요</p>
             </div>
 
-            {/* 고객 불만이 가장 먼저다 — 오늘 그걸 못 챙기면 나머지를 다 해도 소용없다 */}
+            {/* 고객 불만이 가장 먼저다 — 오늘 그걸 못 챙기면 나머지를 다 해도 소용없다.
+                읽기만 하고 끝나면 사장님은 처리됐는지 영영 모른다. 읽은 자리에서 바로 적게 한다. */}
             {openClaims.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-rose-700">고객이 알려온 문제</p>
-                <ul className="space-y-1.5">
-                  {openClaims.map((c, i) => (
-                    <li key={i} className="rounded-lg border border-rose-200 bg-white px-3 py-2">
-                      <p className="text-sm font-semibold text-rose-900">
-                        {c.isUrgent && <span className="mr-1">🚨</span>}
-                        {c.title}
-                      </p>
-                      {c.content?.trim() && (
-                        <p className="text-xs text-rose-800/90 mt-0.5 whitespace-pre-wrap leading-relaxed">
-                          {c.content.trim()}
-                        </p>
-                      )}
-                    </li>
+                <p className="text-xs font-semibold text-rose-700">고객이 알려온 문제 · 오늘 꼭 확인해주세요</p>
+                <ul className="space-y-2">
+                  {openClaims.map((c) => (
+                    <ClaimResolveCard key={c.id} claim={c} workerId={workerId} bookingId={booking.id} />
                   ))}
                 </ul>
               </div>
