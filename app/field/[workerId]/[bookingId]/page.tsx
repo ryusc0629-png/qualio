@@ -98,17 +98,22 @@ export default async function FieldBookingPage({ params }: Props) {
     hasNotes:    !!report?.notes?.trim(),
   }
 
-  // 출발 알림 수신 설정
+  // 출발 알림 수신 설정 + 이 현장에서 알아야 할 것(고객 메모)
+  //
+  // customers.notes에는 직원들이 '다음에 올 직원이 알아야 할 것'을 날짜와 함께 쌓아왔는데,
+  // 정작 그 다음 직원에게 보여주는 화면이 없었다. 쓰기만 하고 읽지는 못했다.
   let notifyOnMyWay = true
+  let customerNotes: string | null = null
   if (booking.customer_phone) {
     const { data: customer } = await db
       .from('customers')
-      .select('notify_on_my_way' as never)
+      .select('notify_on_my_way, notes' as never)
       .eq('business_id', worker.business_id)
       .eq('phone', booking.customer_phone)
-      .maybeSingle() as { data: { notify_on_my_way: boolean | null } | null }
+      .maybeSingle() as { data: { notify_on_my_way: boolean | null; notes: string | null } | null }
 
     if (customer && customer.notify_on_my_way === false) notifyOnMyWay = false
+    customerNotes = customer?.notes ?? null
   }
 
   return (
@@ -125,6 +130,16 @@ export default async function FieldBookingPage({ params }: Props) {
         status: booking.status,
         memo: booking.memo,
       }}
+      // 사장님이 남긴 이번 방문 메모인지 구분한다.
+      //   · 마지막에 쓴 사람이 직원이면 자기가 적은 특이사항이라 '전달사항'이 아니다
+      //   · 정기 방문은 자동 생성될 때 memo에 '정기계약 · 공용부 청소'가 박힌다.
+      //     그건 사장님이 남긴 말이 아니라 시스템이 붙인 꼬리표라, 띄우면 매 방문 같은 줄만 뜬다
+      ownerMemo={
+        booking.memo_updated_by || (booking.memo ?? '').startsWith('정기계약 ·')
+          ? null
+          : booking.memo
+      }
+      customerNotes={customerNotes}
       reportSentAt={report?.kakao_sent_at ?? null}
       reportProgress={reportProgress}
       notifyOnMyWay={notifyOnMyWay}

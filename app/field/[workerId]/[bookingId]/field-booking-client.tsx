@@ -27,6 +27,7 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Play,
+  Info,
   X,
   ChevronDown,
   Film,
@@ -73,10 +74,14 @@ interface Props {
   checkinAt: string | null
   checkoutAt: string | null
   checklistItems: { id: string; label: string }[]
+  /** 사장님이 이 방문에 남긴 메모 (직원이 마지막으로 쓴 경우엔 null) */
+  ownerMemo?: string | null
+  /** 이 현장에서 알아야 할 것 — 지난 방문 직원들이 쌓아온 고객 메모 */
+  customerNotes?: string | null
   existingChecklistPhotos: Record<string, string[]>
 }
 
-export function FieldBookingClient({ workerId, businessId, booking, reportSentAt, reportProgress, notifyOnMyWay, onMyWaySentAt, requiresLockup, isRecurring, existingOpenPhotoUrls, existingLockupPhotoUrls, checkinAt, checkoutAt, checklistItems, existingChecklistPhotos }: Props) {
+export function FieldBookingClient({ workerId, businessId, booking, reportSentAt, reportProgress, notifyOnMyWay, onMyWaySentAt, requiresLockup, isRecurring, existingOpenPhotoUrls, existingLockupPhotoUrls, checkinAt, checkoutAt, checklistItems, existingChecklistPhotos, ownerMemo, customerNotes }: Props) {
   const [currentStatus, setCurrentStatus] = useState(booking.status)
   const [onMyWaySent, setOnMyWaySent] = useState(!!onMyWaySentAt)
   // 도착 사진 → 작업 자동 시작이 한 번만 실행되도록 (사진 여러 장 올려도 중복 시작 방지)
@@ -253,6 +258,15 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
   }
 
   // 체크리스트 완료 여부 — 모든 항목에 사진 1장 이상이면 작업 완료 가능
+  // 고객 메모는 '[8/19] 내용' 이 날짜순으로 쌓인 덩어리다. 최근 3줄만 보여준다 —
+  // 다 펼치면 길어져서 정작 읽어야 할 줄까지 안 읽는다.
+  const noteLines = (customerNotes ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(-3)
+    .reverse()
+
   const checklistDoneCount = checklistItems.filter((it) => (checklistPhotos[it.id] ?? []).some((p) => p.url)).length
   const checklistDone = checklistItems.length === 0 || checklistDoneCount === checklistItems.length
 
@@ -416,6 +430,37 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
             </div>
           </div>
         </div>
+
+        {/* 사장님 전달사항 · 현장 참고 — 읽기 전용.
+            이 두 값은 예전부터 저장되고 있었는데 현장 앱 어디에도 안 보여줬다.
+            사장님이 예약에 적은 부탁도, 지난 직원이 남긴 현장 요령도 직원은 못 봤다.
+            맨 위에 두는 이유: 작업을 시작하기 '전에' 알아야 쓸모가 있다. */}
+        {(ownerMemo?.trim() || noteLines.length > 0) && (
+          <div className="rounded-xl border-2 border-blue-200 bg-blue-50 p-4 space-y-3">
+            <div className="flex items-center gap-1.5">
+              <Info className="h-4 w-4 text-blue-700 shrink-0" />
+              <p className="text-sm font-bold text-blue-900">읽고 시작해주세요</p>
+            </div>
+
+            {ownerMemo?.trim() && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-blue-900">사장님 전달사항</p>
+                <p className="text-sm text-blue-900 whitespace-pre-wrap leading-relaxed">{ownerMemo.trim()}</p>
+              </div>
+            )}
+
+            {noteLines.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-blue-900">이 현장에서 알아둘 것</p>
+                <ul className="space-y-1">
+                  {noteLines.map((line, i) => (
+                    <li key={i} className="text-sm text-blue-900/90 leading-relaxed">· {line}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 예정 상태 안내 — 지금 할 한 가지(작업 시작)만 남기고, 나머지는 시작 후 등장 */}
         {currentStatus === 'confirmed' && (
