@@ -410,9 +410,12 @@ export async function requestReelRender(input: ReelInput): Promise<string> {
   const render = Array.isArray(data) ? data[0] : data
   if (!render?.id) throw new Error('[APP] 영상 편집 요청에 실패했어요')
 
-  // 실제로 어떤 크기로 렌더되는지 남긴다 — 요청과 다르게 나오면 여기서만 드러난다
+  // ⚠️응답을 통째로 남긴다. 요청은 1080×1920인데 결과물이 270×480(정확히 1/4)으로 나오는 원인을
+  //   못 찾고 있다 — render_scale·max_width를 명시해도 그대로였다. 답은 이 응답 안에 있다.
+  //   원인이 밝혀지면 이 로그는 크기 한 줄로 줄일 것.
   console.log(
-    `[Creatomate] 렌더 요청 ${render.id} · ${render.width ?? '?'}×${render.height ?? '?'} · ${total}초`,
+    `[Creatomate] 렌더 요청 ${render.id} · 요청 ${source.width}×${source.height} · ${total}초`,
+    '· 응답:', JSON.stringify(render).slice(0, 800),
   )
 
   return render.id

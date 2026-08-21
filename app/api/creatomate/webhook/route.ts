@@ -23,6 +23,10 @@ export async function POST(req: NextRequest) {
   const db = createServiceClient()
 
   if (payload.status === 'succeeded' && payload.url) {
+    // ⚠️완성 통보에는 실제로 렌더된 크기가 담겨 온다 — 요청(1080×1920)과 다르게 나오는 원인을
+    //   쫓는 중이라 통째로 남긴다. 원인이 밝혀지면 지울 것.
+    console.log('[Creatomate] 완성:', JSON.stringify(payload).slice(0, 800))
+
     // 어느 업체 것인지 알아야 대표에게 알릴 수 있다
     const { data: report } = await db
       .from('reports')
