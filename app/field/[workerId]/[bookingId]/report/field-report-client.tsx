@@ -127,6 +127,9 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   const [savedReportId, setSavedReportId] = useState<string | null>(existingReport?.id ?? null)
   const [alreadySent, setAlreadySent] = useState(!!existingReport?.sentAt)
   const [aiReport, setAiReport] = useState<AiReportData | null>(existingReport?.aiReportData ?? null)
+  // 현장이 처음 적은 메모 — 정리하면 notes가 정리된 글로 덮어써지기 때문에 따로 들고 있는다.
+  // '보고서 다시 작성하기'가 이 값을 재료로 쓴다(새로고침하면 비므로 그때는 정리본을 재료로 쓴다).
+  const [rawMemo, setRawMemo] = useState('')
   const [clips, setClips] = useState<VideoSlot[]>(
     existingReport?.workClipUrls.map((url) => ({ url, uploading: false })) ?? []
   )
@@ -480,6 +483,9 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   // ① 전문 보고서로 정리하기 — 메모가 짧으면 먼저 메모 칸으로 데려간다
   const handleAutoWrite = () => {
     const memo = notes.replace(/📋 작업 전 상태\n[\s\S]*$/, '').trim()
+    // 정리 뒤에 '다시 작성하기'를 누르면 이 원본이 필요하다.
+    // notes는 정리된 글로 덮어써지므로 여기서 따로 붙들어 둔다.
+    setRawMemo(memo)
     if (memo.length < 5) {
       memoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       memoRef.current?.focus()
@@ -1022,15 +1028,16 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
                   const confirmed = window.confirm('보고서를 다시 작성할까요?\n\n현재 보고서 내용이 새로 작성됩니다.')
                   if (!confirmed) return
                   // 원본 메모 추출 (AI 포맷팅 전 텍스트)
-                  const rawMemo = notes.replace(/📋 작업 전 상태\n[\s\S]*$/, '').trim()
-                  if (rawMemo.length >= 5) {
-                    generateAi({ workerId, memo: rawMemo, serviceItems, careAdvice: careAdvice.trim() || undefined })
-                  } else {
-                    // 메모가 너무 짧으면 AI 보고서 초기화해서 메모 입력 모드로 전환
-                    setAiReport(null)
-                    setSelectedServices(new Set())
-                    setNotes('')
-                  }
+                  // ⚠️ 예전엔 여기서 notes에서 원본 메모를 뽑아내려 했는데 **항상 빈 문자열**이 나왔다.
+                  // 정리하고 나면 notes 자체가 '📋 작업 전 상태…'로 통째로 바뀌므로,
+                  // 그 앞을 잘라내면 남는 게 없다. 그래서 매번 아래 else로 빠져
+                  // '다시 작성하기'가 사실상 '보고서 지우기'로 동작했다.
+                  // 발송까지 끝난 보고서에서는 ① 정리하기 버튼도 안 보여서 되돌릴 수도 없었다.
+                  //
+                  // 지금은 지우지 않는다. 현장이 처음 적은 메모가 남아 있으면 그걸로,
+                  // 없으면(새로고침 뒤 등) 이미 정리된 '작업 내용'을 재료로 다시 쓴다.
+                  const source = rawMemo.trim().length >= 5 ? rawMemo.trim() : aiReport.workDetails
+                  generateAi({ workerId, memo: source, serviceItems, careAdvice: careAdvice.trim() || undefined })
                 }}
               >
                 <Sparkles className="h-3.5 w-3.5" />
@@ -1145,10 +1152,25 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           </Button>
         ) : alreadySent ? (
           <>
-            <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 h-14">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
-              <span className="text-sm font-semibold text-emerald-800">보고서 발송 완료</span>
-            </div>
+            {/* 발송이 끝났어도 정리된 보고서가 없는 상태가 있을 수 있다(옛 보고서 등).
+                그때 ① 버튼이 안 보이면 '적고 나서 아래 버튼을 눌러주세요'라는 안내만 있고
+                누를 버튼이 없는 막다른 길이 된다. 그 상태에서만 버튼을 함께 띄운다. */}
+            {!aiReport ? (
+              <Button
+                size="lg"
+                className="w-full h-14 text-base gap-2"
+                disabled={isGenerating || isUploading}
+                onClick={handleAutoWrite}
+              >
+                <Sparkles className="h-5 w-5" />
+                {isGenerating ? '전문 보고서로 정리 중이에요...' : '① 전문 보고서로 정리하기'}
+              </Button>
+            ) : (
+              <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 h-14">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                <span className="text-sm font-semibold text-emerald-800">보고서 발송 완료</span>
+              </div>
+            )}
             <div className="flex gap-2">
               <Button
                 variant="outline"

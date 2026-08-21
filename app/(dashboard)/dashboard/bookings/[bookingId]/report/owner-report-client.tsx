@@ -100,6 +100,9 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
   // 아직 시작 안 한 일정에는 보고서를 못 보낸다(서버에서도 막지만, 눌러보고 실패하기 전에 알려준다)
   const canSend = canSendReport(booking.status)
   const [aiReport, setAiReport] = useState<AiReportData | null>(existingReport?.aiReportData ?? null)
+  // 처음 적은 메모 — 정리하면 notes가 정리된 글로 덮어써지므로 따로 들고 있는다.
+  // '보고서 다시 작성하기'가 이 값을 재료로 쓴다(새로고침하면 비므로 그때는 정리본을 쓴다).
+  const [rawMemo, setRawMemo] = useState('')
   const [selectedServices, setSelectedServices] = useState<Set<string>>(
     new Set(existingReport?.aiReportData?.recommendedServices ?? [])
   )
@@ -677,11 +680,15 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
                 variant="outline"
                 className="w-full h-11 gap-2"
                 disabled={isGenerating || notes.trim().length < 5}
-                onClick={() => generateAi({
-                  memo: notes.trim(),
-                  serviceItems,
-                  careAdvice: careAdvice.trim() || undefined,
-                })}
+                onClick={() => {
+                  // '다시 작성하기'가 쓸 원본을 붙들어 둔다 — notes는 정리된 글로 덮어써진다
+                  setRawMemo(notes.trim())
+                  generateAi({
+                    memo: notes.trim(),
+                    serviceItems,
+                    careAdvice: careAdvice.trim() || undefined,
+                  })
+                }}
               >
                 <Sparkles className="h-4 w-4" />
                 {isGenerating ? '전문 보고서로 정리 중이에요...' : '전문 보고서로 정리하기'}
@@ -711,14 +718,12 @@ export function OwnerReportClient({ businessId, booking, existingReport, service
                 onClick={() => {
                   const confirmed = window.confirm('보고서를 다시 작성할까요?\n\n현재 보고서 내용이 새로 작성됩니다.')
                   if (!confirmed) return
-                  const rawMemo = notes.replace(/📋 작업 전 상태\n[\s\S]*$/, '').trim()
-                  if (rawMemo.length >= 5) {
-                    generateAi({ memo: rawMemo, serviceItems, careAdvice: careAdvice.trim() || undefined })
-                  } else {
-                    setAiReport(null)
-                    setSelectedServices(new Set())
-                    setNotes('')
-                  }
+                  // ⚠️ 예전엔 notes에서 원본 메모를 뽑아내려 했는데 **항상 빈 문자열**이 나왔다.
+                  // 정리하고 나면 notes 자체가 '📋 작업 전 상태…'로 통째로 바뀌어서 앞을 잘라내면
+                  // 남는 게 없다. 그래서 매번 아래 else로 빠져 '다시 작성하기'가 사실상
+                  // '보고서 지우기'로 동작했다. 지우지 말고 있는 재료로 다시 쓴다.
+                  const source = rawMemo.trim().length >= 5 ? rawMemo.trim() : aiReport.workDetails
+                  generateAi({ memo: source, serviceItems, careAdvice: careAdvice.trim() || undefined })
                 }}
               >
                 <Sparkles className="h-3.5 w-3.5" />
