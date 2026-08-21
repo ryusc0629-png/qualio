@@ -13,7 +13,7 @@ import { CareAdviceField } from '@/components/dashboard/care-advice-field'
 import { SiteIssueSection } from '@/components/field/site-issue-section'
 import { createClient } from '@/lib/supabase/client'
 import { REPORT_PHOTO_MAX } from '@/lib/config/photos'
-import { fieldSaveReportAction, fieldSendReportAction, fieldGenerateAiReportAction, fieldSaveWorkClipsAction, fieldRequestReelAction, fieldGetReelStatusAction, fieldSaveMemoAction } from '@/lib/actions/field'
+import { fieldSaveReportAction, fieldSendReportAction, fieldGenerateAiReportAction, fieldSaveWorkClipsAction, fieldSaveMemoAction } from '@/lib/actions/field'
 import {
   ArrowLeft,
   Camera,
@@ -130,12 +130,6 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   const [clips, setClips] = useState<VideoSlot[]>(
     existingReport?.workClipUrls.map((url) => ({ url, uploading: false })) ?? []
   )
-  // 영상 1개만 있어도 만들 수 있다 — 3개를 못 채워서 아예 못 만드는 것보단 낫다
-  const [clipsSaved, setClipsSaved] = useState(
-    (existingReport?.workClipUrls.length ?? 0) >= 1
-  )
-  const [reelStatus, setReelStatus] = useState(existingReport?.reelStatus ?? 'idle')
-  const [reelUrl, setReelUrl] = useState<string | null>(existingReport?.reelUrl ?? null)
   const [selectedServices, setSelectedServices] = useState<Set<string>>(
     new Set(existingReport?.aiReportData?.recommendedServices ?? [])
   )
@@ -225,42 +219,8 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
 
   // 작업 중 영상 클립 저장 (업로드 완료 시 자동 호출)
   const { execute: saveClips } = useAction(fieldSaveWorkClipsAction, {
-    onSuccess: () => setClipsSaved(true),
     onError: () => toast.error('영상 저장 못 했어요. 인터넷 확인 후 다시 눌러주세요'),
   })
-
-  // 릴스 편집 요청
-  const { execute: requestReel, isPending: isRequestingReel } = useAction(fieldRequestReelAction, {
-    onSuccess: () => {
-      setReelStatus('processing')
-      toast.success('영상을 만들기 시작했어요! 완성되면 사장님께 알려드려요')
-    },
-    onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
-  })
-
-  // 릴스 상태 조회 (처리 중일 때 폴링) — 완성되면 자동으로 '완료'로 전환
-  const { execute: checkReelStatus } = useAction(fieldGetReelStatusAction, {
-    onSuccess: ({ data }) => {
-      if (!data) return
-      if (data.reelStatus === 'done' && data.reelUrl) {
-        setReelStatus('done')
-        setReelUrl(data.reelUrl)
-      } else if (data.reelStatus === 'failed') {
-        setReelStatus('failed')
-      }
-    },
-  })
-
-  // '처리 중' 상태면 5초마다 완성 여부 확인 (웹훅이 DB를 갱신하면 감지)
-  useEffect(() => {
-    if (reelStatus !== 'processing' || !savedReportId) return
-    checkReelStatus({ workerId, reportId: savedReportId })  // 진입 즉시 1회
-    const interval = setInterval(() => {
-      checkReelStatus({ workerId, reportId: savedReportId })
-    }, 5000)
-    return () => clearInterval(interval)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reelStatus, savedReportId])
 
   // 파일을 칸 밖에 떨어뜨리면 브라우저가 그 파일을 열어버려서, 작성 중이던 보고서가 통째로 날아간다.
   // 칸 안에 떨어뜨린 건 아래 dropZone이 먼저 처리하므로 영향 없다.
@@ -383,7 +343,6 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
 
         return next
       })
-      setClipsSaved(false)
     } catch (err) {
       console.error('[FieldReport] 영상 업로드 예외:', err)
       toast.error('영상 업로드에 실패했어요. 다시 시도해주세요')
@@ -398,7 +357,6 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       next[index] = { url: '', uploading: false }
       return next
     })
-    setClipsSaved(false)
   }
 
   // 사진 업로드
@@ -979,61 +937,17 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             })}
           </div>
 
-          {/* 릴스 요청 버튼 */}
-          {!savedReportId ? (
-            <p className="text-xs text-muted-foreground text-center">
-              아래에서 보고서를 먼저 저장하면 홍보 영상을 만들 수 있어요
-            </p>
-          ) : reelStatus === 'idle' || reelStatus === 'failed' ? (
-            <div className="space-y-2">
-              {clipsSaved ? (
-                <>
-                  <Button
-                    className="w-full h-12 gap-2 bg-rose-500 hover:bg-rose-600 text-white"
-                    disabled={isRequestingReel}
-                    onClick={() =>
-                      requestReel({ workerId, bookingId: booking.id, reportId: savedReportId })
-                    }
-                  >
-                    <Film className="h-4 w-4" />
-                    {isRequestingReel ? '만드는 중... 1분쯤 걸려요' : '홍보 영상 만들기'}
-                  </Button>
-                  {savedClipCount < 3 && (
-                    <p className="text-xs text-muted-foreground text-center">
-                      지금 {savedClipCount}개예요. 3개를 채우면 더 보기 좋아요
-                    </p>
-                  )}
-                </>
-              ) : (
-                <p className="text-xs text-muted-foreground text-center">
-                  영상을 1개 이상 올리면 홍보 영상을 만들 수 있어요
-                </p>
-              )}
-              {reelStatus === 'failed' && (
-                <p className="text-xs text-rose-600 text-center">영상을 못 만들었어요. 다시 눌러주세요</p>
-              )}
-            </div>
-          ) : reelStatus === 'processing' ? (
-            <div className="flex items-center justify-center gap-2 rounded-lg bg-amber-50 border border-amber-100 p-3">
-              <Loader2 className="h-4 w-4 text-amber-600 animate-spin" />
-              <p className="text-sm text-amber-800 font-medium">편집 중이에요 — 완성되면 사장님께 알려드려요</p>
-            </div>
-          ) : reelStatus === 'done' && reelUrl ? (
-            <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 space-y-2">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                <p className="text-sm font-semibold text-emerald-800">홍보 영상이 완성됐어요!</p>
-              </div>
-              <a
-                href={reelUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full text-center text-sm text-emerald-700 underline"
-              >
-                영상 보기 / 다운로드
-              </a>
-            </div>
-          ) : null}
+          {/* ⛔현장에 '홍보 영상 만들기' 버튼을 두지 않는다.
+              홍보는 대표의 일이지 현장 직원의 일이 아니다. 버튼을 누르고 1분을 기다리는 것도
+              현장에선 그냥 일이 하나 더 느는 것이고, 직원 입장에선 누를 이유도 없다.
+              올려두기만 하면 보고서를 보낼 때(정기 현장은 작업을 끝낼 때) 자동으로 넘어간다. */}
+          <p className="text-xs text-muted-foreground text-center">
+            {savedClipCount === 0
+              ? '올려두시면 사장님이 홍보 영상으로 만들어요'
+              : savedClipCount < 3
+                ? `${savedClipCount}개 올렸어요. 3개를 채우면 더 보기 좋아요`
+                : '다 올리셨어요! 사장님께 자동으로 넘어가요'}
+          </p>
         </div>
 
         {/* ④ 작업 후 사진 */}

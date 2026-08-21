@@ -19,9 +19,7 @@ import { geocodeAddress } from '@/lib/roadmap/geo'
 import { postBookingRevenue } from '@/lib/finance/post-booking-revenue'
 import { assertReportSendable } from '@/lib/utils/report-send-guard'
 import { sendPushToBusiness } from '@/lib/push/web-push'
-
-/** 클립 길이 기록이 없는 예전 보고서에 쓰는 기본값(초) — 다 비슷한 길이로 보고 고르게 나눈다 */
-const DEFAULT_CLIP_SECONDS = 8
+import { queueReelForBooking } from '@/lib/reel/queue'
 
 // workers 테이블 타입 (Supabase 타입 아직 미생성)
 interface WorkerRow {
@@ -425,6 +423,10 @@ export const fieldCompletePaymentAction = action
       }
     }
 
+    // 홍보 영상 대기열 — 정기 거래처는 보고서를 안 보내므로 여기가 유일한 지점이다.
+    // 이미 대기 중이면 아무 일도 안 한다(발송 때 들어갔을 수 있다).
+    await queueReelForBooking(db as unknown as SupabaseClient, worker.business_id, parsedInput.bookingId)
+
     return { success: true, reviewSkipped: !!parsedInput.skipReview }
   })
 
@@ -648,6 +650,10 @@ export const fieldSendReportAction = action
       .update({ kakao_sent_at: new Date().toISOString() })
       .eq('id', parsedInput.reportId)
 
+    // 홍보 영상 대기열에 넣는다 — 현장 직원은 아무것도 안 눌러도 된다.
+    // 실제 제작은 크론이 하고, 완성되면 대표에게 알림이 간다.
+    await queueReelForBooking(db as unknown as SupabaseClient, worker.business_id, parsedInput.bookingId)
+
     return { success: true }
   })
 
@@ -697,176 +703,9 @@ export const fieldSaveWorkClipsAction = action
     return { success: true }
   })
 
-// 릴스 편집 요청 (Creatomate API 호출)
-export const fieldRequestReelAction = action
-  .schema(z.object({
-    workerId:  z.string().uuid(),
-    bookingId: z.string().uuid(),
-    reportId:  z.string().uuid(),
-  }))
-  .action(async ({ parsedInput }) => {
-    const { db, worker } = await verifyWorker(parsedInput.workerId)
-    const booking = await verifyBookingOwnership(db, parsedInput.bookingId, worker.id, worker.business_id)
-
-    // 보고서 + 사진 + 클립 + AI 보고서 데이터(자막 생성용) 조회
-    const { data: report } = await db
-      .from('reports')
-      .select('id, work_clip_urls, work_clip_durations, notes, preventive_note, care_advice, ai_report_data, report_photos(url, type, sort_order)' as never)
-      .eq('id', parsedInput.reportId)
-      .eq('business_id', worker.business_id)
-      .maybeSingle() as {
-        data: {
-          id: string
-          work_clip_urls: string[]
-          work_clip_durations: number[] | null
-          notes: string | null
-          preventive_note: string | null
-          care_advice: string | null
-          ai_report_data: {
-            beforeStatus?: string
-            workDetails?: string
-            afterResult?: string
-          } | null
-          report_photos: { url: string; type: string; sort_order: number }[]
-        } | null
-      }
-
-    if (!report) throw new Error('[APP] 보고서를 찾을 수 없어요')
-
-    // 영상은 1개만 있어도 만든다 — 3개를 못 채워서 아예 못 만드는 것보단 낫다.
-    // (3개일 때가 가장 보기 좋아서 현장 화면에서는 3컷을 권한다)
-    const clipUrls = (report.work_clip_urls ?? []).filter(Boolean)
-    if (clipUrls.length === 0) throw new Error('[APP] 작업 중 영상을 1개 이상 올려주세요')
-
-    // 클립 길이는 영상을 고를 때 브라우저에서 읽어 저장해둔 값이다.
-    // 예전에 올린 보고서엔 없을 수 있는데, 그때는 다 비슷한 길이로 보고 고르게 나눈다.
-    const durations = report.work_clip_durations ?? []
-    const reelClips = clipUrls.map((url, i) => ({
-      url,
-      duration: durations[i] && durations[i] > 0 ? durations[i] : DEFAULT_CLIP_SECONDS,
-    }))
-
-    const beforePhotos = report.report_photos
-      .filter((p) => p.type === 'before')
-      .sort((a, b) => a.sort_order - b.sort_order)
-    const afterPhotos = report.report_photos
-      .filter((p) => p.type === 'after')
-      .sort((a, b) => a.sort_order - b.sort_order)
-
-    if (!beforePhotos[0]) throw new Error('[APP] 작업 전 사진이 필요해요')
-    if (!afterPhotos[0]) throw new Error('[APP] 작업 후 사진이 필요해요')
-
-    const { data: business } = await db
-      .from('businesses')
-      .select('name')
-      .eq('id', worker.business_id)
-      .maybeSingle()
-
-    if (!business) throw new Error('[APP] 업체 정보를 찾을 수 없어요')
-
-    // 서비스명 (자막 맥락용)
-    let cleaningType = '청소 서비스'
-    if (booking.quote_id) {
-      const { data: quote } = await db
-        .from('quotes')
-        .select('cleaning_type')
-        .eq('id', booking.quote_id)
-        .maybeSingle()
-      if (quote?.cleaning_type) cleaningType = quote.cleaning_type
-    }
-
-    // 오늘 보고서에 실제로 적힌 것만으로 나레이션 대본을 만든다.
-    // 업체가 따로 등록해둔 '노하우' 같은 건 없다 — 있는 데이터만 쓴다.
-    const { generateReelScript } = await import('@/lib/ai/reel-script')
-    const draft = await generateReelScript({
-      cleaningType,
-      beforeStatus: report.ai_report_data?.beforeStatus ?? booking.memo ?? '',
-      workDetails:  report.ai_report_data?.workDetails ?? report.notes ?? '',
-      afterResult:  report.ai_report_data?.afterResult ?? '',
-      siteNote:     report.preventive_note ?? booking.memo ?? '',
-      careAdvice:   report.care_advice ?? '',
-    })
-
-    // 문장을 하나씩 음성으로 만들고, 그 mp3의 '실제' 길이를 자막·화면 길이로 삼는다.
-    // 글자 수로 추정하면 뒤로 갈수록 자막이 목소리보다 밀린다(실측 7~10자/초로 편차가 크다).
-    // 합성이 안 되면 추정값 그대로 무음 영상을 만든다 — 릴스를 통째로 못 만드는 것보단 낫다.
-    const { synthesizeLines } = await import('@/lib/ai/narration')
-    const stamp = Date.now()
-    const clipsAudio = await synthesizeLines(draft.map((l) => l.text))
-
-    let lines = draft
-    let narrationUrls: string[] = []
-
-    if (clipsAudio) {
-      const uploaded: string[] = []
-      for (const [i, clip] of clipsAudio.entries()) {
-        const path = `${worker.business_id}/${parsedInput.bookingId}/narration/${stamp}-${i}.mp3`
-        const { error: upErr } = await db.storage
-          .from('report-photos')
-          .upload(path, clip.mp3, { contentType: 'audio/mpeg', upsert: true })
-        if (upErr) {
-          console.error('[Field] 나레이션 업로드 실패:', upErr)
-          break
-        }
-        uploaded.push(db.storage.from('report-photos').getPublicUrl(path).data.publicUrl)
-      }
-
-      // 전부 올라갔을 때만 음성을 쓴다 — 일부만 올라가면 중간에 목소리가 끊긴다
-      if (uploaded.length === clipsAudio.length) {
-        narrationUrls = uploaded
-        // 문장 끝에 숨 돌릴 틈을 조금 준다. 붙여 놓으면 다음 문장이 겹쳐 들린다.
-        lines = draft.map((l, i) => ({
-          ...l,
-          seconds: Math.round((clipsAudio[i].seconds + 0.35) * 100) / 100,
-        }))
-      }
-    }
-
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
-    const { requestReelRender } = await import('@/lib/creatomate/client')
-
-    const renderId = await requestReelRender({
-      beforePhotoUrl: beforePhotos[0].url,
-      clips: reelClips,
-      afterPhotoUrl: afterPhotos[0].url,
-      businessName: business.name,
-      lines,
-      narrationUrls,
-      webhookUrl: `${appUrl}/api/creatomate/webhook`,
-    })
-
-    const { error } = await db
-      .from('reports')
-      .update({ reel_status: 'processing', reel_render_id: renderId } as never)
-      .eq('id', parsedInput.reportId)
-
-    if (error) throw new Error('[APP] 릴스 요청 저장에 실패했어요')
-    return { success: true }
-  })
-
-// 릴스 편집 상태 조회 — 현장 앱에서 '처리 중'일 때 폴링용
-export const fieldGetReelStatusAction = action
-  .schema(z.object({
-    workerId: z.string().uuid(),
-    reportId: z.string().uuid(),
-  }))
-  .action(async ({ parsedInput }) => {
-    const { db, worker } = await verifyWorker(parsedInput.workerId)
-
-    const { data: report } = await db
-      .from('reports')
-      .select('reel_status, reel_url' as never)
-      .eq('id', parsedInput.reportId)
-      .eq('business_id', worker.business_id)
-      .maybeSingle() as { data: { reel_status: string | null; reel_url: string | null } | null }
-
-    if (!report) throw new Error('[APP] 보고서를 찾을 수 없어요')
-
-    return {
-      reelStatus: report.reel_status ?? 'idle',
-      reelUrl: report.reel_url ?? null,
-    }
-  })
+// 홍보 영상 제작은 여기 없다 — lib/reel/render.ts로 옮겼다.
+// 현장 직원이 버튼을 눌러 1분을 기다리던 구조를 없앴고(홍보는 대표의 일이다),
+// 지금은 보고서 발송·작업 완료 때 대기열에 들어가고 크론이 만든다.
 
 // AI 보고서 자동 작성 (직원 메모 → 전문가 보고서 + 서비스 추천)
 export const fieldGenerateAiReportAction = action

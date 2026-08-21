@@ -8,6 +8,7 @@ import { ChannelLinksCard } from './channel-links-card'
 import { ChannelPerformanceCard } from './channel-performance-card'
 import { MarketingPeriodSelector } from './period-selector'
 import { GeoShareCard } from '@/components/dashboard/geo-share-card'
+import { ReelInboxCard } from '@/components/dashboard/reel-inbox-card'
 import { AiCrawlerCard } from '@/components/dashboard/ai-crawler-card'
 import { GoogleProfileCard } from '@/components/dashboard/google-profile-card'
 import { getAutoPostLimit, getAutoDailyPostLimit } from '@/lib/config/plans'
@@ -193,6 +194,16 @@ export default async function MarketingPage({
       />
 
       <div className="border-t pt-6 space-y-5">
+        {/* 현장이 올린 영상으로 만들어진 홍보 영상 — 대표가 확인하고 올린다.
+            성과 지표보다 위에 둔다: 여기 있는 건 '지금 할 일'이고 아래는 '지난 결과'다. */}
+        <Suspense fallback={
+          <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
+            홍보 영상을 불러오는 중...
+          </div>
+        }>
+          <ReelInboxCard businessId={profile.business_id} />
+        </Suspense>
+
         {business?.slug && (
           <ChannelLinksCard
             baseUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'}/biz/${business.slug}`}
