@@ -6,18 +6,22 @@ export interface MarketingChannel {
   label: string   // 대시보드 표시명
   emoji: string   // 목록 아이콘
   hint: string    // 어디에 붙이는 링크인지 한 줄 설명
+  // 링크를 붙여 넣으러 갈 곳 — 사장님이 '어디 가서 넣지?'로 막히지 않게 바로 열어준다
+  manageUrl?: string
+  // 인쇄물용 — 링크가 아니라 QR 그림이 필요한 채널(복사해봐야 종이에 못 붙인다)
+  needsQr?: boolean
 }
 
 // 한국 청소업체가 실제로 쓰는 홍보 채널 (필요 시 여기만 추가하면 링크·통계에 자동 반영)
 export const MARKETING_CHANNELS: MarketingChannel[] = [
-  { key: 'naver_place', label: '네이버 플레이스', emoji: '🟢', hint: '플레이스 소개/설명란에 넣는 링크' },
-  { key: 'naver_blog',  label: '네이버 블로그',   emoji: '📗', hint: '블로그 글 하단에 넣는 링크' },
-  { key: 'instagram',   label: '인스타그램',      emoji: '📷', hint: '프로필/게시물의 링크' },
-  { key: 'youtube',     label: '유튜브',          emoji: '▶️', hint: '영상 설명란·채널 정보에 넣는 링크' },
-  { key: 'danggeun',    label: '당근',            emoji: '🥕', hint: '당근 게시글·프로필 링크' },
-  { key: 'kakao',       label: '카카오톡',        emoji: '💬', hint: '채널/오픈채팅으로 보내는 링크' },
-  { key: 'flyer',       label: '전단지·명함 QR',  emoji: '📄', hint: '인쇄물 QR코드로 만들 링크' },
-  { key: 'proposal',    label: '제안서 QR',       emoji: '📑', hint: '영업 제안서에 넣는 QR코드 링크(병원·업체 방문영업)' },
+  { key: 'naver_place', label: '네이버 플레이스', emoji: '🟢', hint: '플레이스 소개/설명란에 넣는 링크', manageUrl: 'https://new.smartplace.naver.com/' },
+  { key: 'naver_blog',  label: '네이버 블로그',   emoji: '📗', hint: '블로그 글 하단에 넣는 링크', manageUrl: 'https://blog.naver.com/' },
+  { key: 'instagram',   label: '인스타그램',      emoji: '📷', hint: '프로필/게시물의 링크', manageUrl: 'https://www.instagram.com/' },
+  { key: 'youtube',     label: '유튜브',          emoji: '▶️', hint: '영상 설명란·채널 정보에 넣는 링크', manageUrl: 'https://studio.youtube.com/' },
+  { key: 'danggeun',    label: '당근',            emoji: '🥕', hint: '당근 게시글·프로필 링크', manageUrl: 'https://www.daangn.com/kr/business/' },
+  { key: 'kakao',       label: '카카오톡',        emoji: '💬', hint: '채널/오픈채팅으로 보내는 링크', manageUrl: 'https://center-pf.kakao.com/' },
+  { key: 'flyer',       label: '전단지·명함 QR',  emoji: '📄', hint: '인쇄물에 넣는 QR — 손님이 찍으면 견적 폼이 열려요', needsQr: true },
+  { key: 'proposal',    label: '제안서 QR',       emoji: '📑', hint: '병원·업체 방문영업 제안서에 넣는 QR', needsQr: true },
 ]
 
 // 유료 검색광고 채널 — 광고관리자(네이버/구글)에서 랜딩 URL에 ?ch= 로 심어 유입을 구분.

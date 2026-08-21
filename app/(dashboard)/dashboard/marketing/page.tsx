@@ -5,6 +5,8 @@ import { Suspense } from 'react'
 import { PostList } from './post-list'
 import { MarketingStats } from './marketing-stats'
 import { ChannelLinksCard } from './channel-links-card'
+import { MARKETING_CHANNELS } from '@/lib/utils/marketing-channels'
+import { generateProposalQr } from '@/lib/proposal/qr'
 import { ChannelPerformanceCard } from './channel-performance-card'
 import { MarketingPeriodSelector } from './period-selector'
 import { GeoShareCard } from '@/components/dashboard/geo-share-card'
@@ -108,6 +110,18 @@ export default async function MarketingPage({
     channel_posted_at: string | null
   }[]
   const pendingPortfolios = pendingPortfolioResult.data ?? []
+  // 인쇄물 채널(전단지·명함/제안서)의 QR 그림 — 링크만 주면 사장님이 QR 만들 곳을 또 찾아야 한다.
+  // 서버에서 만들어 바로 내려받게 한다(채널 태그 ?ch= 가 들어간 주소 그대로).
+  const channelBaseUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'}/biz/${business?.slug ?? ''}`
+  const qrChannelKeys = MARKETING_CHANNELS.filter((c) => c.needsQr).map((c) => c.key)
+  const qrByChannel: Record<string, string> = {}
+  if (business?.slug) {
+    for (const key of qrChannelKeys) {
+      const dataUrl = await generateProposalQr(`${channelBaseUrl}?ch=${key}`)
+      if (dataUrl) qrByChannel[key] = dataUrl
+    }
+  }
+
   const planId = ((subResult.data?.plan as PlanId) ?? 'beta')
   const autoPostLimit = getAutoPostLimit(planId)
   const autoDailyPostLimit = getAutoDailyPostLimit(planId)
@@ -206,7 +220,8 @@ export default async function MarketingPage({
 
         {business?.slug && (
           <ChannelLinksCard
-            baseUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'}/biz/${business.slug}`}
+            baseUrl={channelBaseUrl}
+            qrByChannel={qrByChannel}
           />
         )}
 
