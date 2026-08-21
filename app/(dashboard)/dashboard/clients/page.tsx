@@ -343,14 +343,20 @@ export default async function ClientsPage({
     }
   }
 
-  // 개인 상담 리드 (leads의 individual, 아직 고객 미전환) — AI 상담·현장견적 문의로 들어온 개인
-  const individualCustomerPhones = new Set((customers ?? []).map(c => normalizePhone(c.phone)).filter(Boolean))
+  // 개인 상담 리드 (leads의 individual) — 상담창·현장견적 문의로 들어온 개인
+  //
+  // ★새 문의(status 'new')는 이미 고객이어도 반드시 보여준다.
+  //   예전엔 전화번호가 고객 명단에 있으면 통째로 숨겼는데, 그러면 단골이 다시 문의했을 때
+  //   대표 폰으로 알림만 오고 화면 어디에도 안 남았다("명단에 남는다"고 해놓고 사라짐).
+  //   재문의는 놓치면 안 되는 재구매 신호라, 중복 걱정은 숨기기가 아니라 '기존 고객' 배지로 푼다.
+  const customerByPhone = new Map(
+    (customers ?? []).filter(c => c.phone).map(c => [normalizePhone(c.phone), c] as const)
+  )
   const individualLeads = sortLeads(
     (leads ?? []).filter(l =>
       l.customer_type !== 'company' &&
       l.status !== 'archived' &&
-      !registeredLeadIds.has(l.id) &&
-      !individualCustomerPhones.has(normalizePhone(l.phone)) &&
+      (l.status === 'new' || (!registeredLeadIds.has(l.id) && !customerByPhone.has(normalizePhone(l.phone)))) &&
       matchesSearch(l.company_name)
     )
   )
@@ -508,6 +514,9 @@ export default async function ClientsPage({
               <p className="text-xs font-semibold text-muted-foreground px-0.5">상담·문의 중 ({individualLeads.length})</p>
               {individualLeads.map((lead) => {
                 const stage = PIPELINE_STAGE[lead.status] ?? PIPELINE_STAGE.new
+                // 같은 번호로 이미 등록된 고객이면 알려준다 — 새로 온 손님인지 단골의 재문의인지가
+                // 전화를 걸기 전에 보여야 무슨 말부터 할지 정할 수 있다
+                const knownCustomer = customerByPhone.get(normalizePhone(lead.phone))
                 return (
                   <Link
                     key={`ilead-${lead.id}`}
@@ -520,6 +529,11 @@ export default async function ClientsPage({
                           <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-sky-100 text-sky-700">개인</span>
                           <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${stage.color}`}>{stage.text}</span>
                           <p className="font-semibold">{lead.company_name}</p>
+                          {knownCustomer && (
+                            <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-amber-100 text-amber-700">
+                              기존 고객 · {knownCustomer.name}
+                            </span>
+                          )}
                         </div>
                         <div className="mt-1 space-y-0.5">
                           {lead.phone && (

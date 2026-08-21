@@ -65,9 +65,12 @@ async function registerConsultationLead(
     if (name) patch.company_name = name
     // 보관·거절됐던 리드가 다시 상담하면 '신규 문의'로 되살림(마음 바뀐 재문의를 놓치지 않게)
     if (existing.status === 'archived' || existing.status === 'rejected') patch.status = 'new'
-    await db.from('leads').update(patch).eq('id', existing.id)
+    const { error } = await db.from('leads').update(patch).eq('id', existing.id)
+    // 저장이 실패해도 알림은 보낸다(연락처가 알림에 들어 있어 전화는 걸 수 있다).
+    // 다만 조용히 넘어가면 "알림은 왔는데 명단엔 없다"의 원인을 영영 못 찾는다.
+    if (error) console.error('[Consult] 상담 리드 갱신 실패:', error)
   } else {
-    await db.from('leads').insert({
+    const { error } = await db.from('leads').insert({
       business_id: businessId,
       company_name: name || '상담 요청 고객',
       contact_name: null, // 개인 상담 리드는 담당자가 따로 없음(고객 본인) → '담당' 표시 안 함
@@ -76,6 +79,7 @@ async function registerConsultationLead(
       status: 'new',
       notes,
     })
+    if (error) console.error('[Consult] 상담 리드 등록 실패:', error)
   }
 
   // 대표 폰 알림 — 실패해도 상담 흐름은 끊기지 않게 격리
