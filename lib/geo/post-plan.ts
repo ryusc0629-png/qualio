@@ -2,6 +2,8 @@ import 'server-only'
 import type { createServiceClient } from '@/lib/supabase/server'
 import { generateTopicSuggestions, generateGeoTitles, isKeywordishTitle, keywordToCopyTitle, type TopicSuggestion } from '@/lib/ai/geo-content'
 import { deriveKeyword } from '@/lib/geo/weak-topics'
+import { fetchNeighborTitles } from '@/lib/geo/neighbor-titles'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 // 자동 발행 '계획표'를 월 1회 확정해 DB(businesses.post_plan)에 고정 저장한다.
 // → 달력 미리보기·크론 자동발행·수동 '지금 발행'이 모두 이 고정 계획을 그대로 따른다.
@@ -96,11 +98,17 @@ async function buildMonthlyPlan(db: Db, businessId: string, ctx: PlanContext): P
       //   달력의 '월 N회 / 경쟁 낮음' 배지가 읽는 값이 바로 여기서 채워지는 monthlySearches다.
       //   계획은 월 1회만 만들어 저장하므로 네이버 API 호출도 업체당 월 1회뿐이고,
       //   실패하거나 키가 없으면 배지 없이 주제만 남는다(6초 타임아웃·예외 무시).
+      // 같은 지역 다른 고객사가 최근 쓴 제목도 회피 목록에 넣는다.
+      // 업체가 늘수록 업종·지역·주제 풀이 같아 제목이 겹치는데, 겹치면 같은 검색어에서
+      // 우리 고객끼리 순위를 나눠 갖게 된다. 주제가 겹치는 건 어쩔 수 없어도 제목은 갈라야 한다.
+      const neighborTitles = await fetchNeighborTitles(db as unknown as SupabaseClient, businessId, { address: ctx.address })
+
       const suggestions: TopicSuggestion[] = await generateTopicSuggestions({
         businessName: ctx.businessName,
         services: (services ?? []) as { name: string; base_price: number; unit: string }[],
         currentMonth: ctx.currentMonthNum,
         address: ctx.address,
+        recentTitles: neighborTitles,
       })
       for (const s of suggestions) {
         queue.push({

@@ -10,6 +10,7 @@ import { getAutoPostLimit, getAutoDailyPostLimit, getPostModel, isChannelContent
 import type { PlanId } from '@/lib/config/plans'
 import { checkAutoPostReadiness } from '@/lib/marketing/auto-post-readiness'
 import { acquireAutoPostLock, releaseAutoPostLock } from '@/lib/marketing/auto-post-lock'
+import { fetchNeighborTitles, isTitleTaken } from '@/lib/geo/neighbor-titles'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // Vercel Cron: 매일 00:00 UTC (한국 오전 9시) 실행
@@ -53,6 +54,8 @@ async function publishOnePost(
   realCases: string[],
   // 고정 계획표의 오늘 슬롯 — 있으면 무조건 이 주제·제목으로 발행(달력과 일치)
   planned: { topic: string; keyword: string | null; title: string } | null,
+  // 같은 지역 다른 고객사가 이미 쓴 제목 — 글자 그대로 겹치지 않게 피한다
+  neighborTitles: string[],
 ): Promise<string> {
   // 주제 선택 — 무조건 고정 계획표의 오늘 슬롯을 그대로 따른다.
   let selectedTopic: string | undefined = planned?.topic || undefined
@@ -91,6 +94,13 @@ async function publishOnePost(
     }
   }
 
+  // 계획표 제목이 이웃 업체 제목과 글자 그대로 같으면 고집하지 않는다.
+  // 달력과 제목이 어긋나는 건 우리 안의 사소한 불일치지만, 같은 지역에 같은 제목이
+  // 두 개 뜨는 건 두 고객사의 검색 순위를 함께 깎는 실제 손해다.
+  const plannedTitle = planned?.title && !isTitleTaken(planned.title, neighborTitles)
+    ? planned.title
+    : undefined
+
   const postContent = await generatePostContent({
     businessName: business.name,
     address: business.address,
@@ -101,7 +111,8 @@ async function publishOnePost(
     serviceAreas: business.serviceAreas,
     model,
     realCases,
-    titleOverride: planned?.title, // 계획표에 확정된 제목 그대로 발행(달력과 일치)
+    titleOverride: plannedTitle, // 계획표에 확정된 제목 그대로 발행(달력과 일치)
+    avoidTitles: neighborTitles,
   })
 
   // slug 중복 방지
@@ -304,6 +315,8 @@ export async function GET(request: NextRequest) {
       const channelsEnabled = isChannelContentEnabled(planId)
       // 실제 작업 사례(익명) — 글 고유성 근거 (업체당 1회 조회)
       const realCases = await fetchRecentJobCases(db, business.id)
+      // 같은 지역 다른 고객사가 최근 쓴 제목 (업체당 1회 조회)
+      const neighborTitles = await fetchNeighborTitles(db as unknown as SupabaseClient, business.id, { address: business.address })
 
       // ★자리 맡기 — 위 '하루 상한' 가드만으로는 못 막는다.
       //   글 한 편에 40초~5분이 걸려서, 그 사이에 시작한 다른 실행은 아직 0건으로 읽는다.
@@ -320,7 +333,7 @@ export async function GET(request: NextRequest) {
         for (let i = 0; i < toPublish; i++) {
           // 주제가 안 정해진 빈 슬롯은 계획으로 쓰지 않는다 — 안내 문구가 글 제목이 되어 버린다
           const planned = hasPlannedTopic(todaySlot) ? { topic: todaySlot!.topic, keyword: todaySlot!.keyword, title: todaySlot!.label } : null
-          const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas }, services ?? [], publishedTitles, month, model, channelsEnabled, realCases, planned)
+          const title = await publishOnePost(db, { ...business, serviceAreas: business.service_areas }, services ?? [], publishedTitles, month, model, channelsEnabled, realCases, planned, neighborTitles)
           publishedTitlesThisRun.push(title)
           console.log(`[Cron] 자동 발행 완료 (${i + 1}/${toPublish}): ${business.name} — "${title}"`)
         }

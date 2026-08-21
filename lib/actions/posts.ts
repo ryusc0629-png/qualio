@@ -14,6 +14,7 @@ import { getOrCreatePostPlan, pickTodayPlanSlot, hasPlannedTopic } from '@/lib/g
 import { getRelatedKeywords } from '@/lib/keyword/naver-searchad'
 import { checkAutoPostReadiness } from '@/lib/marketing/auto-post-readiness'
 import { acquireAutoPostLock, releaseAutoPostLock } from '@/lib/marketing/auto-post-lock'
+import { fetchNeighborTitles, isTitleTaken } from '@/lib/geo/neighbor-titles'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // 공통: 현재 유저의 business_id 조회
@@ -339,6 +340,9 @@ export const publishTodayAction = action
     })
     const todaySlot = pickTodayPlanSlot(plan, todayDayKST, publishedDays)
 
+    // 같은 지역 다른 고객사가 최근 쓴 제목 (1회 조회) — 제목이 글자 그대로 겹치는 것만 막는다
+    const neighborTitles = await fetchNeighborTitles(db as unknown as SupabaseClient, businessId, { address: business.address })
+
     const titles: string[] = []
     const publishedSlugs: string[] = []
 
@@ -385,8 +389,12 @@ export const publishTodayAction = action
         keyword,
         relatedKeywords,
         // 계획표에 확정된 제목 그대로 발행(달력과 일치). 빈 슬롯이면 넘기지 않는다 —
-        // 안내 문구('최적 주제를 자동으로 선택해요')가 글 제목으로 나간 적이 있다
-        titleOverride: hasPlannedTopic(todaySlot) ? todaySlot!.label : undefined,
+        // 안내 문구('최적 주제를 자동으로 선택해요')가 글 제목으로 나간 적이 있다.
+        // 같은 지역 다른 고객사가 이미 쓴 제목이면 고집하지 않는다(순위를 서로 깎는다)
+        titleOverride: hasPlannedTopic(todaySlot) && !isTitleTaken(todaySlot!.label, neighborTitles)
+          ? todaySlot!.label
+          : undefined,
+        avoidTitles: neighborTitles,
       })
 
       // slug 중복 방지

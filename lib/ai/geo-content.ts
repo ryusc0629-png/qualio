@@ -187,6 +187,9 @@ interface PostInput {
   keyword?: string      // 이 글의 핵심 검색 키워드 (제목·본문에 자연 반영)
   relatedKeywords?: string[] // 연관 검색어(실검색량 순) — 본문에 자연스럽게 녹임
   titleOverride?: string // 계획표에 확정된 제목 — 있으면 이 제목 그대로 사용(달력=발행 일치)
+  // 같은 지역 다른 고객사가 이미 쓴 제목 — 글자 그대로 같은 제목이 나오지 않게 피한다
+  // (주제가 겹치는 건 어쩔 수 없지만, 제목까지 같으면 우리 고객끼리 순위를 깎는다)
+  avoidTitles?: string[]
 }
 
 // 업체 블로그 포스트 자동 생성
@@ -229,6 +232,12 @@ export async function generatePostContent(input: PostInput): Promise<PostContent
     ? `\n[제목 고정 — 매우 중요] 이 글의 제목(title)은 반드시 아래 문구를 그대로 사용할 것(수정·재작성·번역 금지): "${input.titleOverride}". summary·slug·본문은 이 제목에 자연스럽게 맞출 것.`
     : ''
 
+  // 같은 지역 다른 업체가 쓴 제목 회피 — 주제가 같아도 각도·표현을 달리하게 한다
+  const avoid = (input.avoidTitles ?? []).slice(0, 40)
+  const avoidBlock = avoid.length > 0
+    ? `\n[제목 중복 금지 — 매우 중요] 같은 지역 다른 업체가 이미 쓴 아래 제목들과 글자 그대로 같거나 거의 같은 제목은 절대 쓰지 말 것. 주제가 겹쳐도 제목의 각도(대상·상황·질문 형태)를 반드시 다르게 잡을 것.\n${avoid.map((t) => `- ${t}`).join('\n')}`
+    : ''
+
   const textPrompt = `당신은 한국 청소 서비스 업체의 GEO 블로그 포스팅 전문가입니다.
 ChatGPT, Gemini, Perplexity 등 AI 검색엔진이 "청소 관련 질문"에 이 업체를 인용하도록
 아래 구조에 맞게 포스트를 작성하세요.
@@ -239,7 +248,7 @@ ${regionHint}
 업체 소개: ${input.description ?? '청소 전문 업체'}
 서비스: ${serviceList || '청소 서비스'}
 ${topicHint}
-${(input.imageUrls?.length || input.imageUrl) ? '위 첨부 사진들을 분석하여 사진 속 실제 장면(공간·상태·장비·작업)을 포스트에 자연스럽게 반영하세요.' : ''}${fieldNotesBlock}${realCasesBlock}${keywordBlock}${titleRule}
+${(input.imageUrls?.length || input.imageUrl) ? '위 첨부 사진들을 분석하여 사진 속 실제 장면(공간·상태·장비·작업)을 포스트에 자연스럽게 반영하세요.' : ''}${fieldNotesBlock}${realCasesBlock}${keywordBlock}${titleRule}${avoidBlock}
 
 [지역·고유성 규칙 — 검색 노출에 매우 중요]
 - 본문·소제목에 핵심 지역(동/구)을 자연스럽게 2~4회 녹일 것. 상위 지역(시·도·권역)은 1~2회만 언급해 "핵심 지역 전문"이라는 신호를 흐리지 말 것.
