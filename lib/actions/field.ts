@@ -1205,12 +1205,23 @@ export const fieldResolveClaimAction = action
     const looseDb = db as unknown as SupabaseClient
     const now = new Date().toISOString()
 
+    // ★ 월간 보고서는 '이 거래처의 이번 달 방문에 붙은 클레임'만 가져온다(claims.booking_id 기준).
+    //   사장님이 클레임 화면에서 등록하면 booking_id가 비어 있을 수 있는데, 그대로 두면
+    //   현장에서 처리해도 거래처 보고서에 한 줄도 안 남는다 — 처리한 방문에 붙여준다.
+    const { data: claim } = (await looseDb
+      .from('claims')
+      .select('booking_id')
+      .eq('id', parsedInput.claimId)
+      .eq('business_id', worker.business_id)
+      .maybeSingle()) as unknown as { data: { booking_id: string | null } | null }
+
     const { error } = await looseDb
       .from('claims')
       .update({
         resolution:  parsedInput.resolution.trim(),
         status:      'resolved',
         resolved_at: now,
+        ...(claim && !claim.booking_id ? { booking_id: parsedInput.bookingId } : {}),
       })
       .eq('id', parsedInput.claimId)
       // 남의 업체 건을 못 건드리게 — workerId만 믿지 않는다
