@@ -23,6 +23,40 @@ const PERIODS = [
   { months: 12, label: '1년' },
 ] as const
 
+/**
+ * '앞으로 손봐야 할 것' 입력칸만 떼어낸 것.
+ *
+ * 왜 떼어냈나: 일회성 현장에서는 이 칸이 '오늘 한 작업' 카드 **안**에 들어간다.
+ * 카드 밖에 따로 있으면 자동으로 정리되는 항목이 아니라 직원이 알아서 쓰는 메모처럼
+ * 보이고, 실제로도 다듬지 않은 채 고객 문서로 나갔다.
+ * 정기 현장은 그 카드 자체가 없어서 여기(CareAdviceField) 안에 그대로 남는다.
+ */
+export function CareAdviceInput({
+  value,
+  onChange,
+}: {
+  value: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <div>
+        <Label className="text-sm font-medium">앞으로 손봐야 할 것</Label>
+        <p className="text-xs text-muted-foreground">
+          지금은 괜찮지만 나중에 문제가 될 부분을 적어주세요. 적은 대로 같이 정리해 드려요
+        </p>
+      </div>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={3}
+        placeholder="예: 후드 기름때는 제거했지만 필터가 오래돼 교체가 필요해 보임"
+        className="w-full rounded-xl border p-3 text-sm outline-none focus:border-primary resize-none"
+      />
+    </div>
+  )
+}
+
 interface Props {
   advice: string
   months: number
@@ -33,6 +67,8 @@ interface Props {
   /** 다음에 제안할 서비스 이름들 (등록된 것 + 현장에서 직접 적은 것) */
   suggestions?: string[]
   onSuggestionsChange?: (v: string[]) => void
+  /** 입력칸을 '오늘 한 작업' 카드 안에서 따로 보여주는 화면이면 여기서는 감춘다 */
+  hideAdvice?: boolean
 }
 
 export function CareAdviceField({
@@ -43,6 +79,7 @@ export function CareAdviceField({
   serviceItems = [],
   suggestions,
   onSuggestionsChange,
+  hideAdvice = false,
 }: Props) {
   const [customOpen, setCustomOpen] = useState(false)
   const [customName, setCustomName] = useState('')
@@ -74,20 +111,7 @@ export function CareAdviceField({
 
   return (
     <div className="space-y-2">
-      <div>
-        <Label className="text-sm font-medium">앞으로 손봐야 할 것</Label>
-        <p className="text-xs text-muted-foreground">
-          지금은 괜찮지만 나중에 문제가 될 부분을 적어주세요. 고객 보고서에 그대로 실려요
-        </p>
-      </div>
-
-      <textarea
-        value={advice}
-        onChange={(e) => onAdviceChange(e.target.value)}
-        rows={3}
-        placeholder="예: 후드 기름때는 제거했지만 필터가 오래돼 교체가 필요해 보입니다."
-        className="w-full rounded-xl border p-3 text-sm outline-none focus:border-primary resize-none"
-      />
+      {!hideAdvice && <CareAdviceInput value={advice} onChange={onAdviceChange} />}
 
       {canSuggest && (
         <div className="space-y-2 pt-1">

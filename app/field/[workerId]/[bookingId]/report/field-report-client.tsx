@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { CareAdviceField } from '@/components/dashboard/care-advice-field'
+import { CareAdviceField, CareAdviceInput } from '@/components/dashboard/care-advice-field'
 import { SiteIssueSection } from '@/components/field/site-issue-section'
 import { createClient } from '@/lib/supabase/client'
 import { REPORT_PHOTO_MAX } from '@/lib/config/photos'
@@ -33,6 +33,42 @@ import {
 // 현장 순서대로 번호를 붙인다 — 작업 전 사진 → 하자 기록 → 작업 중 영상 → 작업 후 사진 → 마무리.
 // 현장 직원은 화면을 위에서부터 훑기 때문에, 번호가 있으면 '어디까지 했는지'를 안 헷갈린다.
 const STEP_LABELS = ['작업 전', '하자 기록', '작업 중 영상', '작업 후', '마무리'] as const
+
+/**
+ * 정리된 보고서 안의 '앞으로 손봐야 할 것' 칸.
+ *
+ * 위 네 항목과 나란히 두는 이유: 이 글도 똑같이 자동으로 다듬어져 고객 문서에 실린다.
+ * 카드 밖에 빈 칸으로 떨어져 있으면 "이건 내가 알아서 쓰는 메모"로 읽히고,
+ * 실제로도 현장이 쓴 메모체("~해 보임")가 그대로 거래처 서류에 나갔다.
+ *
+ * 값의 주인은 reports.care_advice 컬럼이다(ai_report_data가 아니다) —
+ * 고객 문서의 '향후 관리 안내'와 홍보 영상 대본이 그 컬럼을 읽는다.
+ */
+function CareAdviceBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  return (
+    <div className="rounded-lg bg-orange-50 border border-orange-200 p-3 space-y-1">
+      <p className="text-xs font-semibold text-orange-800">앞으로 손봐야 할 것</p>
+      {editing ? (
+        <textarea
+          className="w-full text-sm text-orange-900 bg-transparent border-none outline-none resize-none"
+          value={value}
+          rows={3}
+          autoFocus
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={() => setEditing(false)}
+        />
+      ) : (
+        <p
+          className={`text-sm cursor-pointer hover:opacity-70 ${value ? 'text-orange-900' : 'text-orange-900/50'}`}
+          onClick={() => setEditing(true)}
+        >
+          {value || '지금은 괜찮지만 나중에 문제가 될 부분이 있으면 탭해서 적어주세요'}
+        </p>
+      )}
+    </div>
+  )
+}
 
 function StepBadge({ n }: { n: 1 | 2 | 3 | 4 | 5 }) {
   return (
@@ -191,15 +227,20 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
   const { execute: generateAi, isPending: isGenerating } = useAction(fieldGenerateAiReportAction, {
     onSuccess: ({ data }) => {
       if (data?.report) {
-        const newServices = new Set(data.report.recommendedServices)
-        setAiReport(data.report)
+        // '앞으로 손봐야 할 것'은 ai_report_data에 같이 담지 않는다 —
+        // 이 글의 주인은 reports.care_advice 컬럼 하나다(고객 문서·홍보 영상 대본이 거기서 읽는다).
+        // 두 군데에 두면 한쪽만 고쳐져 서로 다른 문장이 남는다.
+        const { careAdvice: polishedAdvice, ...report } = data.report
+        const newServices = new Set(report.recommendedServices)
+        setAiReport(report)
+        if (polishedAdvice) setCareAdvice(polishedAdvice)
         setSelectedServices(newServices)
         // 자동 정리가 집어낸 서비스는 '다음에 제안할 서비스'의 밑그림으로 올려둔다.
         // 현장이 보고 빼거나 더하면 된다 — 고르는 사람은 현장이다.
         if (newServices.size > 0) {
           setSuggestedServices((prev) => [...new Set([...prev, ...newServices])])
         }
-        const formatted = formatAiNotes(data.report)
+        const formatted = formatAiNotes(report)
         setNotes(formatted)
         toast.success('전문 보고서가 작성됐어요!')
 
@@ -210,7 +251,10 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
           notes: formatted,
           beforePhotoUrls: before.filter((p) => !p.uploading && p.url).map((p) => p.url),
           afterPhotoUrls: after.filter((p) => !p.uploading && p.url).map((p) => p.url),
-          aiReportData: data.report,
+          aiReportData: report,
+          // 다듬은 문장을 바로 저장한다 — 여기서 안 넣으면 화면엔 다듬은 글이,
+          // DB엔 현장이 쓴 메모체가 남아 고객 문서로 옛 문장이 나간다
+          ...(polishedAdvice ? { careAdvice: polishedAdvice } : {}),
         })
       }
     },
@@ -477,7 +521,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
       toast.error('오늘 한 작업을 한 줄이라도 적어주세요. 그래야 보고서를 만들 수 있어요')
       return
     }
-    generateAi({ workerId, memo, serviceItems })
+    generateAi({ workerId, memo, serviceItems, careAdvice: careAdvice.trim() || undefined })
   }
 
   const handleSend = async () => {
@@ -982,6 +1026,13 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
                 rows={3}
               />
 
+              {/* '앞으로 손봐야 할 것'도 여기서 같이 받는다.
+                  카드 밖에 따로 두면 자동으로 정리되는 항목이 아니라 직원이 알아서 쓰는
+                  메모처럼 보이고, 실제로도 다듬지 않은 채 고객 문서로 나갔다. */}
+              <div className="pt-1 border-t">
+                <CareAdviceInput value={careAdvice} onChange={setCareAdvice} />
+              </div>
+
               {/* 정리 버튼은 아래 고정 바에 ①번으로 있다 — 같은 일을 하는 버튼을 두 곳에 두지 않는다 */}
               <p className="text-xs text-muted-foreground text-center">
                 {notes.trim().length > 0 && notes.trim().length < 5
@@ -993,6 +1044,10 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             /* AI 보고서가 있을 때: 결과 표시 + 재작성 버튼 */
             <div className="space-y-3">
               <AiReportView report={aiReport} />
+
+              {/* 다섯 번째 항목 — 위 네 개와 같은 자리, 같은 방식으로 고친다.
+                  값의 주인은 careAdvice 상태다(ai_report_data가 아니라 reports.care_advice로 저장된다). */}
+              <CareAdviceBox value={careAdvice} onChange={setCareAdvice} />
               <Button
                 variant="ghost"
                 size="sm"
@@ -1004,7 +1059,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
                   // 원본 메모 추출 (AI 포맷팅 전 텍스트)
                   const rawMemo = notes.replace(/📋 작업 전 상태\n[\s\S]*$/, '').trim()
                   if (rawMemo.length >= 5) {
-                    generateAi({ workerId, memo: rawMemo, serviceItems })
+                    generateAi({ workerId, memo: rawMemo, serviceItems, careAdvice: careAdvice.trim() || undefined })
                   } else {
                     // 메모가 너무 짧으면 AI 보고서 초기화해서 메모 입력 모드로 전환
                     setAiReport(null)
@@ -1025,7 +1080,11 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
 
         {/* 앞으로 손봐야 할 것 — 그 시점이 되면 사장님께 알림이 간다.
             판촉 배너 대신 이걸 남긴다: 근거가 그 현장 기록이라 설득력이 다르다.
-            정기·일회성 둘 다 쓴다 — 정기 거래처에도 "다음 달엔 이걸 봐야 한다"가 필요하다. */}
+            정기·일회성 둘 다 쓴다 — 정기 거래처에도 "다음 달엔 이걸 봐야 한다"가 필요하다.
+
+            ⚠️ 입력칸은 일회성 현장에서만 여기서 감춘다(hideAdvice).
+            일회성은 위 '오늘 한 작업' 카드 안에서 받아 같이 다듬기 때문이고,
+            정기 현장은 그 카드 자체가 없어서 여기서 받아야 한다. */}
         <div className="rounded-xl bg-white border p-4">
           <CareAdviceField
             advice={careAdvice}
@@ -1035,6 +1094,7 @@ export function FieldReportClient({ workerId, businessId, booking, existingRepor
             serviceItems={serviceItems}
             suggestions={suggestedServices}
             onSuggestionsChange={setSuggestedServices}
+            hideAdvice={!isRecurringSite}
           />
         </div>
 

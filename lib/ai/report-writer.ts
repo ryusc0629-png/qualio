@@ -1,10 +1,15 @@
-import { getClaude } from '@/lib/ai/client'
+import { getClaude, textFrom } from '@/lib/ai/client'
 
 export interface AiReport {
   beforeStatus: string    // 작업 전 상태
   workDetails: string     // 작업 내용
   afterResult: string     // 작업 결과
   additionalNotes: string // 참고사항
+  /**
+   * 앞으로 손봐야 할 것 — 현장이 적은 메모를 고객이 읽을 문장으로 다듬은 것.
+   * 적은 게 없으면 빈 문자열(지어내지 않는다).
+   */
+  careAdvice: string
   recommendedServices: string[] // 추천 다음 서비스 (서비스명 목록)
 }
 
@@ -13,12 +18,22 @@ const FALLBACK: AiReport = {
   workDetails: '각 구역별로 꼼꼼하게 청소 작업을 진행했습니다.',
   afterResult: '모든 구역의 청소가 완료되어 깨끗한 상태로 마무리됐습니다.',
   additionalNotes: '정기적인 관리를 하시면 깨끗한 상태를 오래 유지하실 수 있어요.',
+  careAdvice: '',
   recommendedServices: [],
 }
 
 export async function generateAiReport(
   workerMemo: string,
   serviceItems?: { name: string; basePrice: number }[],
+  /**
+   * '앞으로 손봐야 할 것'에 현장이 적은 원문.
+   *
+   * 왜 여기서 같이 다듬나: 이 글은 고객 문서의 '향후 관리 안내'로 **그대로** 나간다.
+   * 다듬지 않으면 위 네 항목은 "~했어요" 존댓말인데 이 칸만 "~해 보임." 메모체라
+   * 서류 한 장 안에서 말투가 무너진다. 현장이 적을 내용을 늘리지 않으면서
+   * 문장만 우리가 손보는 자리다.
+   */
+  careAdviceMemo?: string,
 ): Promise<AiReport> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return FALLBACK
@@ -26,6 +41,21 @@ export async function generateAiReport(
   const client = getClaude('report-writer')
 
   // 서비스 목록이 있으면 프롬프트에 포함
+  // 현장이 '앞으로 손봐야 할 것'에 적은 원문 — 있을 때만 다듬는다.
+  // ⛔ 없으면 지어내지 않는다. 이 문장은 고객 문서에 그대로 실리므로
+  //    없는 하자를 만들어내면 그대로 거짓말이 되고, 나중에 분쟁의 근거가 된다.
+  const careAdviceSection = careAdviceMemo?.trim()
+    ? `
+## 앞으로 손봐야 할 것 (현장이 적은 원문)
+${careAdviceMemo.trim()}
+
+이 내용을 careAdvice에 **고객이 읽을 문장으로** 다듬어 넣으세요.
+- 위 말투 규칙 그대로 ~요 체. "~해 보임", "~있음" 같은 메모체를 남기지 마세요
+- 원문에 없는 사실·원인·기간·비용을 보태지 마세요. 문장만 다듬는 것입니다
+- 겁주지 말고 담담하게. 지금 당장의 하자가 아니라 '앞으로 지켜볼 것'이라는 톤
+`
+    : ''
+
   const serviceListSection = serviceItems && serviceItems.length > 0
     ? `\n## 이 업체가 제공하는 서비스 목록\n${serviceItems.map((s) => `- ${s.name} (${s.basePrice.toLocaleString()}원~)`).join('\n')}\n\n위 서비스 중 현장 상태를 고려했을 때 고객에게 추가로 필요할 수 있는 서비스가 있다면 추천해주세요. 현재 진행한 작업과 동일한 서비스는 제외하세요. 관련 없는 서비스는 추천하지 마세요.`
     : ''
@@ -57,7 +87,7 @@ export async function generateAiReport(
 
 ## 직원 메모
 ${workerMemo}
-${serviceListSection}
+${careAdviceSection}${serviceListSection}
 
 ## 출력 형식 (JSON)
 {
@@ -65,6 +95,7 @@ ${serviceListSection}
   "workDetails": "어떤 방법과 도구로 어떤 작업을 완료했는지 설명 (완료된 것만)",
   "afterResult": "작업 후 개선된 결과를 구체적으로 설명",
   "additionalNotes": "유지 관리 팁, 그리고 오늘 끝내지 못했거나 앞으로 손봐야 할 부분",
+  "careAdvice": "${careAdviceMemo?.trim() ? '위 「앞으로 손봐야 할 것」 메모를 고객이 읽을 문장으로 다듬은 것 (1~3문장)' : '빈 문자열'}",
   "recommendedServices": ["추천할 서비스명1", "추천할 서비스명2"]
 }
 
@@ -75,13 +106,17 @@ JSON만 출력하세요. 다른 텍스트는 포함하지 마세요.`,
   })
 
   try {
-    const text = response.content[0]?.type === 'text' ? response.content[0].text : ''
+    // content[0]을 답으로 읽으면 안 된다 — 모델이 생각 블록을 먼저 내보내면 그 자리가 밀려
+    // 빈 문자열이 나오고, 호출부는 '실패'가 아니라 조용히 기본 문구로 넘어간다
+    const text = textFrom(response)
     const jsonMatch = text.match(/\{[\s\S]*\}/)
     if (!jsonMatch) return FALLBACK
 
     const parsed = JSON.parse(jsonMatch[0]) as AiReport
     if (!parsed.beforeStatus || !parsed.workDetails || !parsed.afterResult) return FALLBACK
     if (!Array.isArray(parsed.recommendedServices)) parsed.recommendedServices = []
+    // 현장이 안 적었으면 빈 값으로 — 모델이 채워 넣었더라도 버린다(지어낸 하자 방지)
+    parsed.careAdvice = careAdviceMemo?.trim() ? (parsed.careAdvice ?? '').trim() : ''
     return parsed
   } catch {
     return FALLBACK

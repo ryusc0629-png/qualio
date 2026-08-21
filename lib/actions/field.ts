@@ -716,11 +716,18 @@ export const fieldGenerateAiReportAction = action
       name: z.string(),
       basePrice: z.number(),
     })).optional(),
+    // '앞으로 손봐야 할 것'에 현장이 적은 원문 — 같이 다듬어 돌려준다.
+    // 이 글은 고객 문서에 그대로 나가므로 메모체로 두면 서류 말투가 무너진다.
+    careAdvice: z.string().max(2000).optional(),
   }))
   .action(async ({ parsedInput }) => {
     await verifyWorker(parsedInput.workerId)
 
-    const result = await generateAiReport(parsedInput.memo, parsedInput.serviceItems)
+    const result = await generateAiReport(
+      parsedInput.memo,
+      parsedInput.serviceItems,
+      parsedInput.careAdvice,
+    )
     return { success: true, report: result }
   })
 
