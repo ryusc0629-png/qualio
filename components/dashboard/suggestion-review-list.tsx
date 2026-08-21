@@ -28,9 +28,24 @@ export interface SuggestionItem {
   failReason?: string | null
   /** 이 손님이 문자 수신에 동의했는지. 아니면 그날 알림만 가고 사장님이 직접 연락한다 */
   smsAllowed: boolean
+  /** pending(아직 결정 전) | scheduled(승인해둠) */
+  status: string
+  /** sms(그날 문자 자동) | manual(그날 알림만) */
+  channel: string
+  /** 연락하기로 한 날이 지났는지 */
+  isDue: boolean
 }
 
-function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: string) => void }) {
+function SuggestionRow({
+  item,
+  onDone,
+  variant = 'action',
+}: {
+  item: SuggestionItem
+  onDone: (id: string) => void
+  /** 'reserved'는 이미 정해둔 것 — 읽고 취소만 한다 */
+  variant?: 'action' | 'reserved'
+}) {
   const [msg, setMsg] = useState(item.message)
   // 방금 누른 버튼이 문자였는지 — 성공 안내 문구를 맞게 띄우기 위해서만 쓴다
   const pickedSms = useRef(false)
@@ -65,6 +80,37 @@ function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: st
   })
 
   const busy = isApproving || isSkipping
+
+  // 이미 정해둔 건 — 무엇을 언제 어떻게 하기로 했는지만 한 줄로 보여주고, 취소만 열어둔다.
+  // 여기서 또 승인 버튼을 보여주면 "아직 안 된 건가?" 하고 다시 누르게 된다.
+  if (variant === 'reserved') {
+    return (
+      <div className="bg-white rounded-xl border border-border p-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold truncate">
+            {item.customerName}님 · {item.serviceName}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1">
+            <CalendarClock className="h-3 w-3 shrink-0" />
+            {item.dueLabel}에 {item.channel === 'sms' ? '문자 자동 발송' : '알림 받고 전화'}
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            if (confirm(`${item.customerName}님 ${item.serviceName} 예약을 취소할까요?`)) {
+              skip({ dispatchId: item.id })
+            }
+          }}
+          className="shrink-0 inline-flex items-center gap-1 h-9 px-3 rounded-lg border border-border bg-white text-xs font-medium text-muted-foreground hover:border-red-300 hover:text-red-500 disabled:opacity-60"
+        >
+          <X className="h-3.5 w-3.5" />
+          취소
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="bg-white rounded-xl border border-border p-4 space-y-3">
@@ -220,15 +266,27 @@ function SuggestionRow({ item, onDone }: { item: SuggestionItem; onDone: (id: st
   )
 }
 
-export function SuggestionReviewList({ items: initialItems }: { items: SuggestionItem[] }) {
+export function SuggestionReviewList({
+  items: initialItems,
+  variant = 'action',
+  emptyText,
+}: {
+  items: SuggestionItem[]
+  variant?: 'action' | 'reserved'
+  emptyText?: string
+}) {
   const [items, setItems] = useState(initialItems)
   const remove = (id: string) => setItems((prev) => prev.filter((i) => i.id !== id))
 
+  // 예약 목록은 비면 구역 자체를 안 그리므로(페이지에서 처리) 빈 화면이 필요 없다
   if (items.length === 0) {
+    if (variant === 'reserved') return null
     return (
       <div className="text-center py-10 space-y-2 rounded-xl border border-dashed">
         <Sparkles className="h-8 w-8 text-muted-foreground/40 mx-auto" />
-        <p className="text-sm text-muted-foreground">현장에서 올린 제안이 아직 없어요</p>
+        <p className="text-sm text-muted-foreground">
+          {emptyText ?? '현장에서 올린 제안이 아직 없어요'}
+        </p>
         <p className="text-xs text-muted-foreground">
           직원이 작업 보고서에서 &lsquo;다음에 제안할 서비스&rsquo;를 고르면 여기로 올라와요
         </p>
@@ -239,7 +297,7 @@ export function SuggestionReviewList({ items: initialItems }: { items: Suggestio
   return (
     <div className="space-y-3">
       {items.map((item) => (
-        <SuggestionRow key={item.id} item={item} onDone={remove} />
+        <SuggestionRow key={item.id} item={item} onDone={remove} variant={variant} />
       ))}
     </div>
   )

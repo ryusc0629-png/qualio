@@ -45,13 +45,15 @@ export default async function ReengagementPage() {
       | null
   }
 
-  // 현장에서 올린 '다음에 제안할 서비스' — 승인해야 정해진 날짜에 문자가 나간다
+  // 현장에서 올린 '다음에 제안할 서비스'.
+  // 아직 결정 안 한 것(pending)과 승인해둔 것(scheduled)을 함께 가져와 화면에서 갈라 보여준다.
+  // 승인한 건이 아무 데도 안 보이면 "내가 승인한 게 어디 갔지?"가 된다.
   const { data: sugRows } = (await looseDb
     .from('reengagement_dispatches')
-    .select('id, customer_name, customer_phone, service_name, reason, due_at, message, fail_reason, workers!worker_id(name)')
+    .select('id, customer_name, customer_phone, service_name, reason, due_at, message, fail_reason, status, channel, workers!worker_id(name)')
     .eq('business_id', businessId)
     .eq('source', 'field')
-    .eq('status', 'pending')
+    .in('status', ['pending', 'scheduled'])
     .order('due_at', { ascending: true })) as unknown as {
     data:
       | Array<{
@@ -63,6 +65,8 @@ export default async function ReengagementPage() {
           due_at: string | null
           message: string
           fail_reason: string | null
+          status: string
+          channel: string
           workers: { name: string } | { name: string }[] | null
         }>
       | null
@@ -107,8 +111,19 @@ export default async function ReengagementPage() {
         unregistered: !registeredNames.has(r.service_name!),
         failReason: r.fail_reason,
         smsAllowed: smsAllowed(r.customer_phone),
+        status: r.status,
+        channel: r.channel,
+        isDue: !!r.due_at && new Date(r.due_at) <= new Date(),
       }
     })
+
+  // 상태가 아니라 '지금 뭘 해야 하는가'로 가른다.
+  //   오늘 연락 — 기한이 됐고 승인이 끝난 것(크론이 pending으로 되돌리며 사유를 남긴다)
+  //   승인 대기 — 아직 사장님이 날짜·방법을 안 정한 것
+  //   예약됨   — 정해두고 그날을 기다리는 것
+  const dueNow   = suggestions.filter((s) => s.status === 'pending' && s.isDue)
+  const waiting  = suggestions.filter((s) => s.status === 'pending' && !s.isDue)
+  const reserved = suggestions.filter((s) => s.status === 'scheduled')
 
   const items: ReengagementItem[] = (rows ?? []).map((r) => ({
     id: r.id,
@@ -135,26 +150,49 @@ export default async function ReengagementPage() {
         </h1>
       </div>
 
-      {/* 현장이 올린 제안이 먼저 — 근거가 그 현장 기록이라 성사율이 다르다 */}
+      {/* 지금 해야 하는 것부터 — 오늘 연락 → 결정 대기 → 예약됨 순서로 내려간다.
+          상태로 나누면 사장님은 "그래서 지금 뭘 하라는 거지?"를 다시 계산해야 한다. */}
       <section className="space-y-3">
         <div>
-          <h2 className="font-semibold">현장에서 올린 제안</h2>
+          <h2 className="font-semibold">오늘 연락할 곳</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            직원이 현장에서 보고 고른 것들이에요. <b>승인해야</b> 정해진 날짜에 문자가 나가고, 그 전엔 고객에게 아무것도 안 갑니다.
+            연락드리기로 한 날이 됐어요. 준비된 문구를 보고 <b>전화 한 통</b>이면 됩니다.
           </p>
         </div>
-        <SuggestionReviewList items={suggestions} />
+        {/* 둘 다 비면 빈 안내가 두 번 뜬다 — 하나만 보여준다 */}
+        {dueNow.length === 0 && items.length === 0 ? (
+          <SuggestionReviewList items={[]} emptyText="오늘 연락드릴 곳은 없어요" />
+        ) : (
+          <>
+            {dueNow.length > 0 && <SuggestionReviewList items={dueNow} />}
+            {items.length > 0 && <ReengagementReviewList items={items} />}
+          </>
+        )}
       </section>
 
       <section className="space-y-3">
         <div>
-          <h2 className="font-semibold">한동안 안 오신 단골</h2>
+          <h2 className="font-semibold">승인 기다리는 제안</h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            보낼 <b>문구</b>를 준비했어요. 다듬어서 복사해 카톡으로 보낸 뒤 <b>보냈어요</b>를 눌러요.
+            직원이 현장에서 보고 고른 것들이에요. <b>언제 연락할지 정해주시면</b> 그날 알려드립니다.
+            그 전엔 고객에게 아무것도 안 갑니다.
           </p>
         </div>
-        <ReengagementReviewList items={items} />
+        <SuggestionReviewList items={waiting} />
       </section>
+
+      {reserved.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="font-semibold">예약해둔 연락 {reserved.length}건</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              정해두신 것들이에요. 그날이 되면 위 <b>오늘 연락할 곳</b>으로 올라옵니다.
+            </p>
+          </div>
+          <SuggestionReviewList items={reserved} variant="reserved" />
+        </section>
+      )}
+
     </div>
   )
 }
