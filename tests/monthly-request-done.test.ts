@@ -18,7 +18,6 @@ function summaryOf(requests: { booking_id: string; scheduled_at: string; request
   return buildMonthlySummary({
     visits: [방문],
     reports: [],
-    workerNames: new Map(),
     now: new Date('2026-08-31T00:00:00Z'),
     issues: [],
     requests,

@@ -1,8 +1,6 @@
 // 거래처 월간 보고서 요약 계산 — 날짜 나열이 아니라 '이번 달 어땠는지'를 한눈에 만든다.
 // 페이지(서버 컴포넌트)는 화면 그리기에만 집중하고, 숫자 만드는 규칙은 전부 여기에 모은다.
 
-import { customerFacingWorkerNames } from '@/lib/workers/customer-facing-name'
-
 export interface VisitLike {
   id: string
   scheduled_at: string
@@ -61,7 +59,6 @@ export interface MonthlySummary {
   onTimeRate: number | null
   /** 현장에서 챙긴 것 — 날짜 + 내용 */
   siteNotes: { date: string; note: string }[]
-  workerNames: string[]
 
   // ── 담당자가 실제로 궁금해하는 것 ────────────────────────
   // 방문 횟수·체류 시간보다 '문제가 있었나, 처리됐나'가 먼저다(사장님 지적 2026-08-18).
@@ -108,7 +105,6 @@ export interface MonthlySummary {
 export function buildMonthlySummary(input: {
   visits: VisitLike[]
   reports: ReportLike[]
-  workerNames: Map<string, string>
   /** 기준 시각(보통 지금) — '이미 지난 방문'을 가르는 선 */
   now: Date
   /** 이번 달 접수된 문제·클레임 */
@@ -116,7 +112,7 @@ export function buildMonthlySummary(input: {
   /** 현장에서 받은 추가 요청 */
   requests?: RequestLike[]
 }): MonthlySummary {
-  const { visits, reports, workerNames, now } = input
+  const { visits, reports, now } = input
   const issueRows = input.issues ?? []
   const requestRows = input.requests ?? []
 
@@ -139,13 +135,6 @@ export function buildMonthlySummary(input: {
     .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
     .map((v) => ({ date: v.scheduled_at, note: noteByBooking.get(v.id)! }))
 
-  // 담당 표기 — 이 문서는 거래처가 읽는다. 사람 이름으로 보이는 것만 남긴다.
-  // 도급팀을 상호로 등록해 둔 업체가 있어(2026-08-22 사고) 그대로 실으면 하청 사실이 드러난다.
-  // 전부 걸러지면 빈 배열이 되고, 문서는 '담당' 줄 자체를 그리지 않는다.
-  const names = customerFacingWorkerNames(
-    [...new Set(completed.map((v) => v.worker_id).filter(Boolean) as string[])]
-      .map((id) => workerNames.get(id)),
-  )
 
   // 문제·요청 — '처리됨'의 기준은 status가 resolved이거나 resolved_at이 찍힌 것
   const isResolved = (i: IssueLike) => i.status === 'resolved' || !!i.resolved_at
@@ -187,7 +176,6 @@ export function buildMonthlySummary(input: {
     upcomingCount: upcoming.length,
     onTimeRate,
     siteNotes,
-    workerNames: names,
     issueCount: issues.length,
     issueResolvedCount: resolvedCount,
     issueResolveRate: issues.length > 0 ? Math.round((resolvedCount / issues.length) * 100) : null,

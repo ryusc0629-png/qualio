@@ -205,8 +205,10 @@ export interface ReviewRequestParams {
   cleaningType:  string
   reviewToken:   string           // 후기 인증 토큰. 링크는 템플릿이 https://qualio.co.kr/review/#{리뷰토큰} 형태로 갖고 있다
   // 현장 담당자 이름 — 회사가 아니라 사람이 부탁해야 응답률이 오른다.
-  // 단, 사람 이름으로 보일 때만 나간다(도급사 상호 유출 방지) — customerFacingWorkerName 참고
+  // 상호는 떼고 사람 이름만 나간다(도급사 상호 유출 방지) — customerFacingWorkerName 참고
   workerName?:   string | null
+  // 'contractor'면 도급사 — 직함이 안 적혀 있어도 '팀장님'으로 나간다(사장님 결정 2026-08-22)
+  workerType?:   string | null
   rewardText?:   string | null    // 감사 선물 안내 한 줄. 없으면 그 줄이 비어서 나간다
 }
 
@@ -248,7 +250,9 @@ export async function sendReviewRequestAlimtalk(params: ReviewRequestParams): Pr
         // 담당자 표기는 여기서 한 번 더 거른다 — 발송 지점이 세 곳(수동·현장 마감·크론)이라
         // 호출부에서 거르면 언젠가 한 곳이 빠진다. 마지막 관문에서 막는다.
         // (2026-08-22: 도급팀 상호 '리멤버클린 …'이 이 자리로 나갔다)
-        '#{담당자}':   customerFacingWorkerName(params.workerName, params.businessName),
+        '#{담당자}':   customerFacingWorkerName(params.workerName, params.businessName, {
+          isContractor: params.workerType === 'contractor',
+        }),
         // 선물이 없으면 공백 한 칸 — 빈 문자열은 변수 미치환으로 반려될 수 있다
         '#{혜택}':     params.rewardText?.trim() || ' ',
       },

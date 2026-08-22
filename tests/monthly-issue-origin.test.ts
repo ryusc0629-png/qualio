@@ -44,7 +44,6 @@ function summaryOf(issues: Parameters<typeof buildMonthlySummary>[0]['issues']) 
   return buildMonthlySummary({
     visits: [방문],
     reports: [],
-    workerNames: new Map(),
     now: new Date('2026-08-31T00:00:00Z'),
     issues,
     requests: [],

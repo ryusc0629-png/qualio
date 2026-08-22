@@ -6,6 +6,7 @@ import { action } from '@/lib/safe-action'
 import { createServiceClient } from '@/lib/supabase/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import {
+  sendPaymentRequestAlimtalk,
   sendReceiptAlimtalk,
   sendReviewRequestAlimtalk,
   sendWorkCompleteAlimtalk,
@@ -27,6 +28,8 @@ interface WorkerRow {
   id: string
   business_id: string
   name: string
+  /** 'employee' | 'contractor' — 고객 문구에서 도급사를 가릴 때 쓴다 */
+  type: string | null
   is_active: boolean
 }
 
@@ -50,7 +53,7 @@ async function verifyWorker(workerId: string) {
   const db = createServiceClient()
   const { data: worker } = await db
     .from('workers' as never)
-    .select('id, business_id, name, is_active' as never)
+    .select('id, business_id, name, type, is_active' as never)
     .eq('id' as never, workerId)
     .maybeSingle() as { data: WorkerRow | null }
 
@@ -214,7 +217,7 @@ export const fieldSaveMemoAction = action
     return { success: true }
   })
 
-// 결제 요청 (고객에게 영수증 알림톡 발송)
+// 결제 요청 (작업은 끝났고 아직 수금 전 — 고객에게 금액을 알린다)
 export const fieldRequestPaymentAction = action
   .schema(z.object({
     workerId:  z.string().uuid(),
@@ -246,19 +249,20 @@ export const fieldRequestPaymentAction = action
       if (quote?.cleaning_type) cleaningType = quote.cleaning_type
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
-    const receiptUrl = `${appUrl}/q/${worker.business_id}/receipt/${booking.id}`
-
-    await sendReceiptAlimtalk({
+    // 영수증이 아니라 '결제 요청'을 보낸다. 이 시점엔 아직 돈을 받지 않았고,
+    // 영수증 페이지도 completed가 아니라 열리지 않는다.
+    const sent = await sendPaymentRequestAlimtalk({
       customerPhone: booking.customer_phone,
       customerName:  booking.customer_name,
       businessName:  business.name,
       businessPhone: business.phone ?? null,
       cleaningType,
-      completedAt:   booking.scheduled_at,
-      paidAmount:    booking.final_price,
-      receiptUrl,
+      workedAt:      booking.scheduled_at,
+      amount:        Math.round(booking.final_price ?? 0),
     })
+
+    // 안 나갔는데 "보냈어요!"가 뜨면 기사가 고객에게 말도 안 하고 넘어간다
+    if (!sent) throw new Error('[APP] 결제 요청 카톡은 아직 준비 중이에요. 금액을 직접 알려주세요')
 
     return { success: true }
   })
@@ -312,12 +316,13 @@ export const fieldCompletePaymentAction = action
 
     if (error) throw new Error('[APP] 상태 변경에 실패했어요')
 
+    // 계산서 청구 건은 현장에서 받은 돈이 0원 — 전액이 '못 받은 돈'으로 남아 재무 화면에 뜬다
+    const paid = parsedInput.invoiceRequested
+      ? 0
+      : parsedInput.paidAmount ?? Math.round(booking.final_price ?? 0)
+
     // 수금액 기록 + 매출 장부 자동 반영 — 일회성 예약만(정기는 월말 정산이라 제외)
     if (!bChk?.contract_id) {
-      // 계산서 청구 건은 현장에서 받은 돈이 0원 — 전액이 '못 받은 돈'으로 남아 재무 화면에 뜬다
-      const paid = parsedInput.invoiceRequested
-        ? 0
-        : parsedInput.paidAmount ?? Math.round(booking.final_price ?? 0)
       await db
         .from('bookings')
         .update({ paid_amount: paid } as never)
@@ -367,6 +372,40 @@ export const fieldCompletePaymentAction = action
       }
     }
 
+    // 영수증 발송 — 수금이 기록되는 이 지점이 유일한 자동 발송 자리다.
+    //
+    // 사장님이 누를 버튼을 따로 두지 않는다. 돈을 받았다고 기록하는 행동 자체가
+    // 영수증을 보낼 이유이고, 이 시점엔 예약이 completed라 영수증 링크도 살아 있다.
+    // (예전엔 '결제 요청' 시점에 영수증을 보내서 링크가 404였다.)
+    //
+    // 안 보내는 경우 세 가지:
+    //   · 정기계약 방문 — 정기 거래처 카톡은 전날 안내·초도·월간 보고서 세 가지뿐
+    //   · 계산서 청구 건 — 현장에서 받은 돈이 없으니 "결제 완료"는 거짓말이 된다
+    //   · 수금액 0원 — 위와 같은 이유
+    // 발송이 실패해도 수금 완료는 되돌리지 않는다(알림은 부가 기능).
+    if (!bChk?.contract_id && !parsedInput.invoiceRequested && paid > 0 && booking.customer_phone) {
+      try {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
+        await sendReceiptAlimtalk({
+          customerPhone: booking.customer_phone,
+          customerName:  booking.customer_name,
+          businessName:  business.name,
+          businessPhone: business.phone ?? null,
+          cleaningType,
+          completedAt:   booking.scheduled_at,
+          paidAmount:    paid,
+          receiptUrl:    `${appUrl}/q/${worker.business_id}/receipt/${parsedInput.bookingId}`,
+        })
+        await db
+          .from('bookings')
+          .update({ receipt_sent_at: new Date().toISOString() } as never)
+          .eq('id', parsedInput.bookingId)
+          .eq('business_id', worker.business_id)
+      } catch (err) {
+        console.error('[Field] 영수증 발송 실패:', err)
+      }
+    }
+
     // 리뷰 요청 발송 (skipReview=true면 생략, 실패해도 수금 완료는 유지)
     //
     // 크론(D+1·D+3)과 똑같이 인증 페이지(/review/토큰)로 보낸다.
@@ -411,6 +450,7 @@ export const fieldCompletePaymentAction = action
             cleaningType,
             reviewToken:   token,
             workerName:    worker.name ?? null,
+            workerType:    worker.type ?? null,
           })
 
           // 크론이 다음 날 같은 요청을 또 보내지 않게 발송 기록을 남긴다

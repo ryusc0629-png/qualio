@@ -103,16 +103,10 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
 
   const bookings = bookingsRaw ?? []
 
-  // 담당자 이름 매핑
-  const workerIds = [...new Set(bookings.map((b) => b.worker_id).filter(Boolean))] as string[]
-  const workerMap = new Map<string, string>()
-  if (workerIds.length > 0) {
-    const { data: workers } = (await db
-      .from('workers' as never)
-      .select('id, name')
-      .in('id' as never, workerIds)) as unknown as { data: { id: string; name: string }[] | null }
-    for (const w of workers ?? []) workerMap.set(w.id, w.name)
-  }
+  // ⛔ '담당 ○○○' 줄은 뺐다(사장님 결정 2026-08-22).
+  //    거래처가 궁금한 건 '문제가 있었나, 처리됐나'지 누가 왔는지가 아니고,
+  //    도급팀을 상호로 등록해 둔 업체가 있어 그대로 실으면 하청 사실이 드러난다.
+  //    (실제로 닥터홍 8월분에 '담당 베이스케어'가 실릴 뻔했다. 되살리지 말 것.)
 
   // 방문별 작업 리포트 — 현장 특이사항을 모으는 용도.
   //
@@ -202,7 +196,6 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
   const summary = buildMonthlySummary({
     visits: bookings,
     reports: reportRows,
-    workerNames: workerMap,
     now: new Date(),
     issues: (issueRows ?? []).map((r) => ({ ...r, createdByWorker: !!r.created_by_worker_id })),
     requests: bookings
@@ -267,11 +260,6 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
              문서라서 색을 채우지 않고 왼쪽 선으로만 무게를 준다 ── */}
         <section className="mt-8 bg-emerald-50/70 border-l-4 border-emerald-500 px-5 py-4 break-inside-avoid">
           <p className="text-[13px] leading-7 text-slate-800">{headline}</p>
-          {summary.workerNames.length > 0 && (
-            <p className="mt-2 text-[12px] text-slate-500">
-              담당 {summary.workerNames.join(' · ')}
-            </p>
-          )}
         </section>
 
         {/* ── 핵심 숫자 — 전부 '문제와 처리'에 대한 것만 둔다 ──

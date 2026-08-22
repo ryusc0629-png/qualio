@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
   const [d1Result, d3Result] = await Promise.all([
     db
       .from('bookings')
-      .select('id, business_id, contract_id, worker_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), workers!worker_id(name), businesses!business_id(name, phone, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)')
+      .select('id, business_id, contract_id, worker_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), workers!worker_id(name, type), businesses!business_id(name, phone, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)')
       .eq('status', 'completed')
       // 정기계약 방문은 제외 — 매 방문마다 후기를 조르면 거래처가 피로해진다.
       // (주 5회 현장이면 후기 요청이 매 평일 나간다) 후기는 일회성 작업에만 요청한다.
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
 
     db
       .from('bookings')
-      .select('id, business_id, contract_id, worker_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), workers!worker_id(name), businesses!business_id(name, phone, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)')
+      .select('id, business_id, contract_id, worker_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), workers!worker_id(name, type), businesses!business_id(name, phone, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)')
       .eq('status', 'completed')
       .is('contract_id', null)   // 위와 같은 이유 — 정기계약 방문은 후기 요청 대상이 아니다
       .gte('scheduled_at', d3Start.toISOString())
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
     customer_phone: string | null
     scheduled_at: string
     quotes: { cleaning_type: string | null } | { cleaning_type: string | null }[] | null
-    workers: { name: string | null } | { name: string | null }[] | null
+    workers: { name: string | null; type: string | null } | { name: string | null; type: string | null }[] | null
     businesses: BizInfo | BizInfo[] | null
   }
 
@@ -130,6 +130,7 @@ export async function GET(request: NextRequest) {
         cleaningType:  quote?.cleaning_type ?? '청소 서비스',
         reviewToken:   token,
         workerName:    workerRow?.name ?? null,
+        workerType:    workerRow?.type ?? null,
         rewardText:    rewardSentence(biz),
       })
 

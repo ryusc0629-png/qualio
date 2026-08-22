@@ -21,7 +21,7 @@ import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle
 import { getHolidayName } from '@/lib/holidays/kr'
 import Link from 'next/link'
 import { formatPhone } from '@/lib/format/phone'
-import { looksLikePersonName } from '@/lib/workers/customer-facing-name'
+import { extractPersonName, customerFacingWorkerName } from '@/lib/workers/customer-facing-name'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
 import { assignBookingAction, assignBookingAndPropagateAction, addWorkerAction, deleteWorkerAction, updateBookingWorkersAction, clearHolidayVisitsAction } from '@/lib/actions/workers'
@@ -295,12 +295,18 @@ function AddWorkerDialog() {
               className="h-10"
             />
             {/* 상호를 적어도 막지 않는다 — 도급사는 정산 때문에 상호로 적는 게 맞다.
-                대신 '그 이름은 고객에게 안 나간다'를 이 자리에서 알려준다.
+                대신 '고객에게는 이렇게 나간다'를 저장 전에 이 자리에서 보여준다.
                 (예전 예시 문구가 '홍길동 또는 청소파트너'였고, 실제로 도급사 상호가 등록돼
                  후기 요청 알림톡에 그대로 실려 나갔다 — 2026-08-22) */}
-            {name.trim() && !looksLikePersonName(name) && (
-              <p className="text-[11px] text-amber-700 leading-relaxed">
-                이 이름은 우리끼리만 봐요. 고객에게 가는 안내에는 사장님 업체명으로 나갑니다
+            {name.trim() && (
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                고객에게는{' '}
+                <span className="font-semibold text-foreground">
+                  {extractPersonName(name)
+                    ? customerFacingWorkerName(name, '', { isContractor: type === 'contractor' })
+                    : '업체명'}
+                </span>
+                {extractPersonName(name) ? '으로 나가요' : '으로 나가요 (사람 이름을 못 찾았어요)'}
               </p>
             )}
           </div>
