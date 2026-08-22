@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
-  BASE_PRICE, MODULES, CLIENT_INCLUDED, CLIENT_OVERAGE,
+  BASE_PRICE, MODULES, CLIENT_RATE, CLIENT_MIN, CLIENT_MIN_THRESHOLD,
   CARD_BASE, CARD_RATE, ANNUAL_DISCOUNT,
-  quoteModules, cardFeeFor, marginOf, type ModuleId,
+  quoteModules, cardFeeFor, clientFeeFor, marginOf, type ModuleId,
 } from '@/lib/config/modules'
 
 // 요금은 감으로 정하면 나중에 아무도 근거를 못 댄다.
@@ -24,9 +24,13 @@ describe('모듈 가격의 근거', () => {
     expect(MODULES.field.price).toBeLessThan(6_300 * 2)
   })
 
-  it('거래처 초과 요금은 거래처 1곳 매출(월 70만원)의 1% 미만이다', () => {
-    // "거래처 하나 늘면 70만원 버시고 저희는 5,900원 받습니다"가 성립해야 한다
-    expect(CLIENT_OVERAGE / 700_000).toBeLessThan(0.01)
+  it('거래처 요금은 사람을 쓰는 것보다 싸다', () => {
+    // 거래처 1곳당 월 1시간(월간 보고서·시방서·방문 관리) × 사무직 실질 시급 14,776원
+    // (최저임금 실질 2,571,001원 ÷ 실근로 174시간)
+    const 사람 = 14_776
+    for (const 거래처매출 of [500_000, 1_000_000, 1_900_000]) {
+      expect(거래처매출 * CLIENT_RATE, `${거래처매출}원 거래처`).toBeLessThan(사람)
+    }
   })
 
   it('마케팅 Pro는 지역당 같은 값이다 — 첫 지역을 깎지 않는다', () => {
@@ -42,9 +46,9 @@ describe('영구 할인은 만들지 않는다', () => {
   it('모듈을 여러 개 골라도 단순 합산이다', () => {
     // 묶음 할인(2개 10%·3개 15%)을 검토했다가 폐지했다 —
     // 할인이 가장 큰 대상이 모듈을 전부 사는 최고 고객이라 ARR을 영구히 깎는다.
-    const q = quoteModules({ workers: 5, regions: 1, clients: 10 })
+    const q = quoteModules({ workers: 5, regions: 1, recurringRevenue: 10_000_000 })
     const expected =
-      BASE_PRICE + MODULES.field.price * 5 + MODULES.marketing.price + MODULES.client.price
+      BASE_PRICE + MODULES.field.price * 5 + MODULES.marketing.price + CLIENT_MIN
     expect(q.monthly).toBe(expected)
   })
 
@@ -60,14 +64,23 @@ describe('요금 계산', () => {
     expect(quoteModules({}).monthly).toBe(BASE_PRICE)
   })
 
-  it('거래처 15곳까지는 추가 요금이 없다', () => {
-    expect(quoteModules({ clients: 1 }).monthly).toBe(quoteModules({ clients: CLIENT_INCLUDED }).monthly)
+  it('정기 매출이 최소 기준 아래면 전부 같은 값이다', () => {
+    expect(clientFeeFor(1_000_000)).toBe(CLIENT_MIN)
+    expect(clientFeeFor(CLIENT_MIN_THRESHOLD)).toBe(CLIENT_MIN)
   })
 
-  it('16곳부터 곳당 붙는다', () => {
-    const a = quoteModules({ clients: CLIENT_INCLUDED }).monthly
-    const b = quoteModules({ clients: CLIENT_INCLUDED + 3 }).monthly
-    expect(b - a).toBe(CLIENT_OVERAGE * 3)
+  it('최소 기준을 넘으면 매출에 비례한다', () => {
+    expect(clientFeeFor(87_500_000)).toBe(437_500)
+    expect(clientFeeFor(175_000_000)).toBe(875_000)
+  })
+
+  it('★같은 정기 매출이면 계약을 몇 개로 쪼개든 요금이 같다', () => {
+    // 곳수식을 폐기한 이유. 같은 2,310만원인데 큰 계약 12곳이면 129,000원,
+    // 잘게 쪼갠 154곳이면 949,100원이 나왔다 — 7.4배 차이인데 우리 원가는 같다.
+    const 정기 = 23_100_000
+    expect(clientFeeFor(정기)).toBe(clientFeeFor(정기)) // 곳수가 계산에 아예 안 들어간다
+    expect(quoteModules({ recurringRevenue: 정기 }).monthly)
+      .toBe(BASE_PRICE + CLIENT_MIN)
   })
 
   it('직원 수에 비례해 오른다 — 천장이 없다', () => {
@@ -83,9 +96,9 @@ describe('요금 계산', () => {
   })
 
   it('내역에 계산 근거가 남는다 — 사장님이 왜 이 금액인지 볼 수 있어야 한다', () => {
-    const q = quoteModules({ workers: 3, clients: 20 })
+    const q = quoteModules({ workers: 3, recurringRevenue: 87_500_000 })
     expect(q.lines.find((l) => l.label === '현장 Pro')?.detail).toContain('3명')
-    expect(q.lines.find((l) => l.label === '거래처 Pro')?.detail).toContain('5곳')
+    expect(q.lines.find((l) => l.label === '거래처 Pro')?.detail).toContain('0.5%')
   })
 })
 

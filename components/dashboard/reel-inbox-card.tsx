@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { Film, Clock, Download } from 'lucide-react'
 import { ReelDoneItem } from './reel-done-item'
+import { buildReelCaptions } from '@/lib/reel/channel-captions'
 import { ReelFromClipsButton } from './reel-from-clips-button'
 import { ReelMakeNowButton } from './reel-make-now-button'
 import { ReelAutoRefresh } from './reel-auto-refresh'
@@ -21,16 +22,29 @@ interface PortfolioReelRow {
   reel_url: string | null
   reel_queued_at: string | null
   reel_error: string | null
+  naver_title: string | null
+  naver_tags: string[] | null
   instagram_content: string | null
   instagram_hashtags: string[] | null
   source_report_id: string | null
 }
 
-/** 인스타에 그대로 붙여넣을 한 덩이로 합친다 — 본문 + 해시태그 */
-function toCaption(body: string | null, tags: string[] | null): string | undefined {
-  if (!body) return undefined
-  const tagLine = (tags ?? []).map((t) => (t.startsWith('#') ? t : `#${t}`)).join(' ')
-  return tagLine ? `${body}\n\n${tagLine}` : body
+interface CaptionSource {
+  naver_title: string | null
+  naver_tags: string[] | null
+  instagram_content: string | null
+  instagram_hashtags: string[] | null
+}
+
+/** 영상 하나를 네 채널(인스타·틱톡·쇼츠·네이버 클립)에 올릴 문구 세트로 만든다 */
+function captionsOf(src: CaptionSource | undefined) {
+  if (!src) return []
+  return buildReelCaptions({
+    searchTitle: src.naver_title,
+    searchTags: src.naver_tags,
+    body: src.instagram_content,
+    bodyTags: src.instagram_hashtags,
+  })
 }
 
 interface ReelRow {
@@ -59,7 +73,7 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
   // 시공 사례로 만든 릴스도 같은 목록에 보여준다 — 만든 방법이 달라도 사장님에겐 같은 '홍보 영상'이다
   const { data: postRows } = (await db
     .from('biz_posts' as never)
-    .select('id, title, reel_status, reel_url, reel_queued_at, reel_error, instagram_content, instagram_hashtags, source_report_id' as never)
+    .select('id, title, reel_status, reel_url, reel_queued_at, reel_error, naver_title, naver_tags, instagram_content, instagram_hashtags, source_report_id' as never)
     .eq('business_id' as never, businessId)
     .in('reel_status' as never, ['queued', 'processing', 'done', 'failed'])
     .order('reel_queued_at' as never, { ascending: false, nullsFirst: false })
@@ -85,18 +99,15 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
   // 작업보고서로 만든 릴스의 캡션 — 그 보고서에서 승인된 시공 사례가 있으면 그 글을 쓴다.
   // ⛔릴스용 캡션을 따로 또 만들지 말 것(같은 내용을 두 번 만들면 돈만 두 번 나간다).
   const reportIds = rows.map((r) => r.id)
-  const captionByReport = new Map<string, string>()
+  const captionByReport = new Map<string, CaptionSource>()
   if (reportIds.length > 0) {
     const { data: linked } = (await db
       .from('biz_posts' as never)
-      .select('source_report_id, instagram_content, instagram_hashtags' as never)
+      .select('source_report_id, naver_title, naver_tags, instagram_content, instagram_hashtags' as never)
       .in('source_report_id' as never, reportIds)) as {
-      data: { source_report_id: string; instagram_content: string | null; instagram_hashtags: string[] | null }[] | null
+      data: ({ source_report_id: string } & CaptionSource)[] | null
     }
-    for (const row of linked ?? []) {
-      const cap = toCaption(row.instagram_content, row.instagram_hashtags)
-      if (cap) captionByReport.set(row.source_report_id, cap)
-    }
+    for (const row of linked ?? []) captionByReport.set(row.source_report_id, row)
   }
 
   // 고객 이름을 붙여야 어느 현장인지 안다
@@ -191,7 +202,7 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
               reportId={r.id}
               url={r.reel_url!}
               label={names.get(r.booking_id) ?? '현장'}
-              caption={captionByReport.get(r.id)}
+              captions={captionsOf(captionByReport.get(r.id))}
             />
           ))}
 
@@ -203,7 +214,7 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
               url={p.reel_url!}
               label={p.title}
               source="portfolio"
-              caption={toCaption(p.instagram_content, p.instagram_hashtags)}
+              captions={captionsOf(p)}
             />
           ))}
 

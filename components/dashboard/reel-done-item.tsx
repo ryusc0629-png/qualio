@@ -1,18 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
-import { Play, SkipForward, Copy, Check } from 'lucide-react'
-import { ReelShareButtons } from './reel-share-buttons'
+import { Play, SkipForward, Download, Share2, Loader2, ExternalLink } from 'lucide-react'
 import { dismissReelAction } from '@/lib/actions/reports'
+import type { ReelChannelCaption } from '@/lib/reel/channel-captions'
 
-// 완성된 홍보 영상 한 편. 보고 · 올리고 · 치우는 것까지 이 자리에서 끝난다.
+// 완성된 홍보 영상 한 편. 보고 · 저장하고 · 채널마다 올리고 · 치우는 것까지 이 자리에서 끝난다.
 //
-// ⚠️예전엔 같은 릴스가 마케팅 화면에 두 번 나왔다. 위쪽 '홍보 영상' 카드엔 올리기·내려받기가,
-//   아래쪽 '올려야 할 작업물' 허브엔 미리보기·건너뛰기가 따로 있었다. 영상을 확인하려면
-//   아래로 내려가 '미리보기'를 누르고, 올리려면 다시 위로 올라와야 했다.
+// ⚠️예전엔 같은 릴스가 마케팅 화면에 두 번 나왔다(위 카드/아래 허브).
 //   ⛔릴스를 두 곳에 그리지 말 것 — 같은 것이 두 번 보이면 어느 쪽이 진짜인지 헷갈린다.
+//
+// ★동선은 두 단계로 고정한다: ①영상을 기기에 저장 → ②채널을 골라 문구 복사 + 그 채널 열기.
+//   순서가 뒤집히면(채널 먼저 열기) 올릴 파일이 없어서 되돌아와야 한다.
 
 interface Props {
   reportId: string
@@ -20,32 +21,87 @@ interface Props {
   label: string
   /** 어디서 만든 영상인가 — 시공 사례로 만든 것은 '치우기'가 아직 없다 */
   source?: 'report' | 'portfolio'
-  /** 인스타에 그대로 붙여넣을 캡션(해시태그 포함). 없으면 버튼을 안 그린다 */
-  caption?: string
+  /** 채널별 문구. 없으면 채널 줄을 안 그린다 */
+  captions?: ReelChannelCaption[]
 }
 
-export function ReelDoneItem({ reportId, url, label, source = 'report', caption }: Props) {
+export function ReelDoneItem({ reportId, url, label, source = 'report', captions = [] }: Props) {
   // 썸네일을 누르면 그 자리에서 큰 화면으로 재생된다 — '미리보기' 버튼을 따로 찾을 필요가 없다
   const [playing, setPlaying] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const [copiedKey, setCopiedKey] = useState<string | null>(null)
 
-  // 영상만 있으면 사장님이 올릴 때 글을 직접 써야 한다. 캡션까지 손에 쥐여준다.
-  const copyCaption = async () => {
-    if (!caption) return
-    try {
-      await navigator.clipboard.writeText(caption)
-      setCopied(true)
-      toast.success('캡션을 복사했어요. 인스타에 붙여넣으세요')
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      toast.error('복사하지 못했어요. 아래 글을 길게 눌러 복사해주세요')
-    }
-  }
+  // ⚠️맥·PC에는 인스타 앱이 없다. 그래서 '인스타에 올리기'를 누르면 에어드롭·메일만 있는
+  //   공유창이 떠서 "왜 공유가 뜨지?"가 된다(2026-08-22 대표 확인). 폰에서만 공유를 권하고
+  //   PC에서는 '영상 저장하기'를 주 버튼으로 둔다.
+  const [isPhone, setIsPhone] = useState(false)
+  useEffect(() => {
+    setIsPhone(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) && typeof navigator.share === 'function')
+  }, [])
 
   const { execute: dismiss, isPending: isDismissing } = useAction(dismissReelAction, {
     onSuccess: () => toast.success('목록에서 치웠어요'),
     onError: () => toast.error('치우지 못했어요. 다시 눌러주세요'),
   })
+
+  const fileName = `${label.replace(/[^\p{L}\p{N}]+/gu, '-')}.mp4`
+
+  const save = async () => {
+    if (saving) return
+    setSaving(true)
+    try {
+      const res = await fetch(url)
+      const blob = await res.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = objectUrl
+      a.download = fileName
+      a.click()
+      URL.revokeObjectURL(objectUrl)
+      toast.success('영상을 저장했어요')
+    } catch (err) {
+      console.error('[Reel] 저장 실패:', err)
+      window.open(url, '_blank', 'noopener')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // 폰에서만 — 공유창에 인스타·틱톡 앱이 뜬다
+  const shareToApps = async () => {
+    if (sharing) return
+    setSharing(true)
+    try {
+      const res = await fetch(url)
+      const blob = await res.blob()
+      const file = new File([blob], fileName, { type: blob.type || 'video/mp4' })
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: label })
+        return
+      }
+      await save()
+    } catch (err) {
+      if (err instanceof DOMException && (err.name === 'AbortError' || err.name === 'InvalidStateError')) return
+      console.error('[Reel] 공유 실패:', err)
+      toast.error('보내지 못했어요. 아래 저장하기를 눌러주세요')
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  // 채널 하나를 누르면 문구를 복사하고 그 채널을 연다 — 한 번 누르면 할 일이 끝난다
+  const goChannel = async (c: ReelChannelCaption) => {
+    try {
+      await navigator.clipboard.writeText(c.text)
+      setCopiedKey(c.key)
+      setTimeout(() => setCopiedKey(null), 2500)
+      toast.success(`${c.label} 문구를 복사했어요. 붙여넣기만 하세요`)
+    } catch {
+      toast.warning('문구 복사가 안 됐어요. 채널을 연 뒤 다시 눌러주세요')
+    }
+    window.open(c.openUrl, '_blank', 'noopener')
+  }
 
   return (
     <div className="rounded-lg border p-3 space-y-3">
@@ -58,20 +114,9 @@ export function ReelDoneItem({ reportId, url, label, source = 'report', caption 
           className="w-full rounded-lg aspect-[9/16] bg-black object-contain max-h-[360px]"
         />
       ) : (
-        <button
-          type="button"
-          onClick={() => setPlaying(true)}
-          className="flex items-center gap-3 w-full text-left"
-        >
-          {/* 첫 장면 + 재생 표시 — 눌러서 볼 수 있다는 걸 그림으로 알린다 */}
+        <button type="button" onClick={() => setPlaying(true)} className="flex items-center gap-3 w-full text-left">
           <div className="relative w-16 h-24 shrink-0">
-            <video
-              src={url}
-              className="w-16 h-24 rounded-lg object-cover bg-muted"
-              preload="metadata"
-              muted
-              playsInline
-            />
+            <video src={url} className="w-16 h-24 rounded-lg object-cover bg-muted" preload="metadata" muted playsInline />
             <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/25">
               <Play className="h-5 w-5 text-white fill-white" />
             </span>
@@ -84,32 +129,70 @@ export function ReelDoneItem({ reportId, url, label, source = 'report', caption 
         </button>
       )}
 
-      <ReelShareButtons url={url} label={label} />
-
-      {caption && (
+      {/* ① 영상을 기기에 저장 — 이게 있어야 어느 채널에든 올릴 수 있다 */}
+      <div className="flex gap-2">
         <button
           type="button"
-          onClick={copyCaption}
-          className="w-full flex items-center justify-center gap-1.5 h-11 rounded-lg text-sm font-medium border bg-white hover:bg-muted transition-colors"
+          onClick={save}
+          disabled={saving}
+          className="flex-1 h-11 inline-flex items-center justify-center gap-1.5 rounded-lg text-sm font-semibold text-white bg-primary hover:opacity-90 disabled:opacity-60 transition-opacity"
         >
-          {copied ? <><Check className="h-4 w-4 text-emerald-600" />복사했어요</> : <><Copy className="h-4 w-4" />올릴 글 복사하기</>}
+          {saving ? <><Loader2 className="h-4 w-4 animate-spin" />저장 중...</> : <><Download className="h-4 w-4" />영상 저장하기</>}
         </button>
+        {isPhone && (
+          <button
+            type="button"
+            onClick={shareToApps}
+            disabled={sharing}
+            className="h-11 px-3 inline-flex items-center justify-center gap-1.5 rounded-lg text-sm font-medium border bg-white hover:bg-muted disabled:opacity-60 transition-colors"
+          >
+            {sharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+            앱으로 보내기
+          </button>
+        )}
+      </div>
+
+      {/* ② 채널 고르기 — 누르면 그 채널 문구가 복사되고 채널이 열린다 */}
+      {captions.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground">
+            저장한 뒤 올릴 곳을 누르세요. 문구는 자동으로 복사돼요
+          </p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {captions.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => goChannel(c)}
+                className={`h-11 px-2 rounded-lg border text-xs font-medium transition-colors ${
+                  copiedKey === c.key ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'bg-white hover:bg-muted'
+                }`}
+                title={c.hint}
+              >
+                <span className="inline-flex items-center gap-1">
+                  {copiedKey === c.key ? '복사됐어요' : c.label}
+                  <ExternalLink className="h-3 w-3 opacity-60" />
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {source === 'report' && (
-      <button
-        type="button"
-        disabled={isDismissing}
-        onClick={() => {
-          if (confirm('이 영상을 목록에서 치울까요?\n\n영상은 그대로 있고 목록에서만 사라져요.')) {
-            dismiss({ reportId })
-          }
-        }}
-        className="w-full flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-60"
-      >
-        <SkipForward className="h-3 w-3" />
-        다 올렸어요 · 목록에서 치우기
-      </button>
+        <button
+          type="button"
+          disabled={isDismissing}
+          onClick={() => {
+            if (confirm('이 영상을 목록에서 치울까요?\n\n영상은 그대로 있고 목록에서만 사라져요.')) {
+              dismiss({ reportId })
+            }
+          }}
+          className="w-full flex items-center justify-center gap-1 py-1.5 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-60"
+        >
+          <SkipForward className="h-3 w-3" />
+          다 올렸어요 · 목록에서 치우기
+        </button>
       )}
     </div>
   )

@@ -10,7 +10,7 @@
 //  도급으로 굴리는 업체는 아무리 커져도 우리 매출이 그대로였다.
 //    사람   — 현장 Pro 9,900/명
 //    지역   — 마케팅 Pro 89,000/지역
-//    거래처 — 거래처 Pro 15곳 포함, 초과 곳당 5,900
+//    거래처 — 거래처 Pro 정기 매출의 0.5% (최소 129,000)
 //    거래액 — 카드 받기 19,900 + 결제액 0.5%
 //    시간   — 연 5% 이내 갱신 조정
 //
@@ -34,7 +34,7 @@ interface ModuleSpec {
   /** 기준 가격 (공급가액) */
   price: number
   /** 무엇에 비례해 오르는지 — null이면 정액 */
-  unit: 'worker' | 'region' | null
+  unit: 'worker' | 'region' | 'recurring' | null
   /** 1회 실측 원가(원) — 마진 확인용. 가격 근거가 아니라 검산용이다 */
   cost: number
 }
@@ -62,25 +62,43 @@ export const MODULES: Record<ModuleId, ModuleSpec> = {
     unit: 'region',
     cost: 10_337, // 글24 + SNS12 + GEO 주1회 + 영상 5편 (1지역)
   },
-  /** 빌딩·사무실과 계약하는 업체. 거래처 1곳이 월 70만원이라 이 값은 그 18% */
+  /** 빌딩·사무실과 계약하는 업체. 값은 거래처 '수'가 아니라 정기 계약 매출에 비례한다 */
   client: {
     id: 'client',
     label: '거래처 Pro',
     who: '빌딩·사무실과 계약하는 업체',
-    price: 129_000,
-    unit: null,
+    price: 129_000, // 최소 요금 (아래 CLIENT_MIN과 같은 값)
+    unit: 'recurring',
     cost: 4_955,
   },
 }
 
-/** 거래처 Pro에 포함되는 거래처 수 */
-export const CLIENT_INCLUDED = 15
 /**
- * 포함분을 넘는 거래처 1곳당 요금.
- * 거래처 1곳이 월 70만원을 벌어주므로 이 값은 그 0.84%다 —
- * "거래처 하나 늘면 70만원 버시고 저희는 5,900원 받습니다"로 설명된다.
+ * 거래처 Pro = 정기 계약 매출의 CLIENT_RATE, 최소 CLIENT_MIN.
+ *
+ * ⛔거래처 '곳수'로 매기지 말 것 — 2026-08-22에 곳수식(15곳 포함, 초과 5,900원)을 폐기했다.
+ *   실제 계약을 보면 주5일은 월 190만원, 월2회는 10만원이라 단가가 19배 벌어진다.
+ *   같은 2,310만원을 버는 업체인데 큰 계약 12곳이면 129,000원, 잘게 쪼갠 154곳이면
+ *   949,100원이 나왔다. **7.4배 차이인데 우리 원가는 같다**(월간 보고서 한 장이 113원).
+ *   매출로 매기면 같은 매출은 같은 요금이 된다.
+ *
+ * ★사장님께 설명하는 말:
+ *   "거래처에서 100만원 받으시면 저희가 5,000원 받습니다.
+ *    사람을 쓰시면 그 거래처 하나에 14,776원이 듭니다(사무직 실질 시급)."
+ *
+ * ⚠️요율을 바꾸면 매출이 크게 움직인다. 0.5% → 1.0%면 구독 ARPA가 530,435 → 757,602원,
+ *   500억 매각에 필요한 고객사가 648곳 → 491곳이 된다. 공정성은 요율과 무관하게 유지되므로
+ *   요율은 순수하게 '얼마를 받을 것인가'의 문제다.
  */
-export const CLIENT_OVERAGE = 5_900
+export const CLIENT_RATE = 0.005
+export const CLIENT_MIN = 129_000
+/** 최소 요금이 걸리는 선 — 정기 매출이 이 아래면 전부 CLIENT_MIN */
+export const CLIENT_MIN_THRESHOLD = CLIENT_MIN / CLIENT_RATE
+
+/** 정기 계약 매출로 거래처 Pro 요금을 계산한다 */
+export function clientFeeFor(recurringRevenue: number): number {
+  return Math.max(CLIENT_MIN, Math.round(Math.max(0, recurringRevenue) * CLIENT_RATE))
+}
 
 /** 카드 받기 — 옵션. 켠 업체만 낸다 */
 export const CARD_BASE = 19_900
@@ -104,8 +122,8 @@ export interface ModuleSelection {
   workers?: number
   /** 마케팅을 쓰는 지역 수. 0이면 미사용 */
   regions?: number
-  /** 정기 거래처 수. 0이면 거래처 Pro 미사용 */
-  clients?: number
+  /** 월 정기 계약 매출(원). 0이면 거래처 Pro 미사용 */
+  recurringRevenue?: number
 }
 
 export interface ModuleQuoteLine {
@@ -132,7 +150,7 @@ export interface ModuleQuote {
 export function quoteModules(sel: ModuleSelection): ModuleQuote {
   const workers = Math.max(0, Math.floor(sel.workers ?? 0))
   const regions = Math.max(0, Math.floor(sel.regions ?? 0))
-  const clients = Math.max(0, Math.floor(sel.clients ?? 0))
+  const recurring = Math.max(0, Math.round(sel.recurringRevenue ?? 0))
 
   const lines: ModuleQuoteLine[] = [{ label: '기본', amount: BASE_PRICE }]
 
@@ -150,14 +168,14 @@ export function quoteModules(sel: ModuleSelection): ModuleQuote {
       detail: regions > 1 ? `${MODULES.marketing.price.toLocaleString()}원 × ${regions}개 지역` : undefined,
     })
   }
-  if (clients > 0) {
-    const over = Math.max(0, clients - CLIENT_INCLUDED)
+  if (recurring > 0) {
+    const fee = clientFeeFor(recurring)
     lines.push({
       label: MODULES.client.label,
-      amount: MODULES.client.price + over * CLIENT_OVERAGE,
-      detail: over > 0
-        ? `${CLIENT_INCLUDED}곳 포함 + ${over}곳 × ${CLIENT_OVERAGE.toLocaleString()}원`
-        : `${CLIENT_INCLUDED}곳까지 포함`,
+      amount: fee,
+      detail: fee === CLIENT_MIN
+        ? `정기 매출 ${CLIENT_MIN_THRESHOLD.toLocaleString()}원까지 같은 값`
+        : `정기 매출 ${recurring.toLocaleString()}원의 ${(CLIENT_RATE * 100).toFixed(1)}%`,
     })
   }
 
