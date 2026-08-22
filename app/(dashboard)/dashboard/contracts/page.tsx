@@ -1,11 +1,14 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { RefreshCw } from 'lucide-react'
+import Link from 'next/link'
+import { RefreshCw, FileText } from 'lucide-react'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { AddContractForm } from '@/components/dashboard/add-contract-form'
 import { ContractStatusSelect } from '@/components/dashboard/contract-status-select'
 import { ContractLockupCell } from '@/components/dashboard/contract-lockup-cell'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { formatFrequency } from '@/lib/utils/frequency'
+import { countPendingOnboardingReports } from '@/lib/onboarding/pending-reports'
 
 // 수정 창(고객·계약 수정)이 고객 정보까지 함께 고치므로 계약 조인에 고객 칸을 다 실어 온다
 type CustomerForEdit = {
@@ -98,6 +101,17 @@ export default async function ContractsPage() {
     }
   }
 
+  // 첫 작업은 끝났는데 초도 리포트를 아직 안 보낸 계약
+  //
+  // 홈 알림이 "3곳 있어요"라고만 알려주고 나머지 거래처는 갈 곳이 없었다.
+  // 홈·푸시와 같은 기준을 써야 하므로 판정은 countPendingOnboardingReports 하나만 쓴다.
+  const pendingOnboardingIds = new Set(
+    (await countPendingOnboardingReports(
+      db as unknown as SupabaseClient,
+      profile.business_id,
+    )).map((p) => p.contractId)
+  )
+
   // 확정 정기 매출 (활성 계약 합산)
   const monthlyRevenue = (contracts ?? [])
     .filter((c) => c.status === 'active')
@@ -180,6 +194,15 @@ export default async function ContractsPage() {
                       {customer?.name ?? '—'}
                       {customer?.phone && (
                         <p className="text-xs text-muted-foreground font-normal">{customer.phone}</p>
+                      )}
+                      {pendingOnboardingIds.has(contract.id) && (
+                        <Link
+                          href={`/dashboard/contracts/${contract.id}/onboarding-report`}
+                          className="mt-1 inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-700 hover:bg-blue-100 transition-colors whitespace-nowrap"
+                        >
+                          <FileText className="h-3 w-3" />
+                          첫 작업 리포트 보내기
+                        </Link>
                       )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{contract.service_type}</td>

@@ -494,8 +494,17 @@ export default async function DashboardPage() {
               </div>
             </Link>
           )}
+          {/* 한 곳이면 그 리포트로 바로, 여러 곳이면 계약 목록으로
+              — "3곳 있어요"를 눌렀는데 한 곳만 열리면 나머지를 찾을 길이 없다.
+              목록에서는 대기 중인 계약에 '첫 작업 리포트 보내기' 배지가 붙는다 */}
           {pendingOnboardingReports.length > 0 && (
-            <Link href={`/dashboard/contracts/${pendingOnboardingReports[0].contractId}/onboarding-report`}>
+            <Link
+              href={
+                pendingOnboardingReports.length === 1
+                  ? `/dashboard/contracts/${pendingOnboardingReports[0].contractId}/onboarding-report`
+                  : '/dashboard/contracts'
+              }
+            >
               <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 hover:bg-blue-100 transition-colors">
                 <FileText className="h-4 w-4 text-blue-600 shrink-0" />
                 <div className="flex-1">
