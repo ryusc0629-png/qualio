@@ -24,12 +24,19 @@ describe('모듈 가격의 근거', () => {
     expect(MODULES.field.price).toBeLessThan(6_300 * 2)
   })
 
-  it('거래처 요금은 사람을 쓰는 것보다 싸다', () => {
-    // 거래처 1곳당 월 1시간(월간 보고서·시방서·방문 관리) × 사무직 실질 시급 14,776원
-    // (최저임금 실질 2,571,001원 ÷ 실근로 174시간)
-    const 사람 = 14_776
-    for (const 거래처매출 of [500_000, 1_000_000, 1_900_000]) {
-      expect(거래처매출 * CLIENT_RATE, `${거래처매출}원 거래처`).toBeLessThan(사람)
+  it('거래처 요금은 실측 전 구간에서 사람을 쓰는 것보다 싸다', () => {
+    // 사무직 실질 시급 14,776원(최저임금 실질 2,571,001원 ÷ 실근로 174시간).
+    // ★큰 거래처일수록 방문이 많아 보고서 만드는 시간도 길다 — 1시간 고정은 틀린 가정이다.
+    // [월 단가, 월 방문, 보고서 정리 시간] — 운영 DB 실측 계약 기준
+    const 실측: [number, number, number][] = [
+      [1_900_000, 22, 3.0],
+      [350_000, 4, 1.5],
+      [170_000, 2, 0.6],
+      [100_000, 2, 0.5],
+    ]
+    for (const [단가, , 시간] of 실측) {
+      const 사람 = 시간 * 14_776
+      expect(단가 * CLIENT_RATE, `${단가}원 거래처`).toBeLessThan(사람)
     }
   })
 
@@ -70,8 +77,8 @@ describe('요금 계산', () => {
   })
 
   it('최소 기준을 넘으면 매출에 비례한다', () => {
-    expect(clientFeeFor(87_500_000)).toBe(437_500)
-    expect(clientFeeFor(175_000_000)).toBe(875_000)
+    expect(clientFeeFor(43_750_000)).toBe(437_500)
+    expect(clientFeeFor(87_500_000)).toBe(875_000)
   })
 
   it('★같은 정기 매출이면 계약을 몇 개로 쪼개든 요금이 같다', () => {
@@ -80,7 +87,7 @@ describe('요금 계산', () => {
     const 정기 = 23_100_000
     expect(clientFeeFor(정기)).toBe(clientFeeFor(정기)) // 곳수가 계산에 아예 안 들어간다
     expect(quoteModules({ recurringRevenue: 정기 }).monthly)
-      .toBe(BASE_PRICE + CLIENT_MIN)
+      .toBe(BASE_PRICE + 231_000)  // 2,310만 × 1% = 231,000 (최소를 넘김)
   })
 
   it('직원 수에 비례해 오른다 — 천장이 없다', () => {
@@ -98,7 +105,7 @@ describe('요금 계산', () => {
   it('내역에 계산 근거가 남는다 — 사장님이 왜 이 금액인지 볼 수 있어야 한다', () => {
     const q = quoteModules({ workers: 3, recurringRevenue: 87_500_000 })
     expect(q.lines.find((l) => l.label === '현장 Pro')?.detail).toContain('3명')
-    expect(q.lines.find((l) => l.label === '거래처 Pro')?.detail).toContain('0.5%')
+    expect(q.lines.find((l) => l.label === '거래처 Pro')?.detail).toContain('1.0%')
   })
 })
 
