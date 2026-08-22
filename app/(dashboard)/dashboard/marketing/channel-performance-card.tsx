@@ -1,7 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { ALL_CHANNELS, channelLabel } from '@/lib/utils/marketing-channels'
 import { contractRevenueSince, type ContractLike } from '@/lib/utils/ltv'
-import { isAiSource } from '@/lib/utils/detect-view-source'
+import { visitBucket, isSearchSource, SEARCH_KEY, DIRECT_KEY } from '@/lib/marketing/visit-bucket'
 
 interface ChannelPerformanceCardProps {
   businessId: string
@@ -16,9 +16,6 @@ interface ChannelPerformanceCardProps {
 //   └ 정기 방문 예약은 0원으로 저장되므로 계약 자체를 채널에 귀속해야 매출이 잡힌다.
 // 채널이 안 붙는 유입(전화·소개·직접 등록)은 '직접·기타'로 묶는다.
 
-const DIRECT_KEY = '' // 채널 미상 — 소개·사장님 직접 등록 등
-// 검색·AI로 들어온 방문은 ?ch= 링크가 아니라 유입 소스(source)로 잡히므로 가짜 채널 키 하나로 묶는다
-const SEARCH_KEY = '__search'
 const REVENUE_STATUSES = ['confirmed', 'in_progress', 'completed']
 
 // 이모지 조회 (없으면 기본 태그 아이콘)
@@ -148,11 +145,8 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
   //   ⚠️이 순서를 뒤집으면 유료 광고가 '검색으로 온 손님'에 섞인다.
   //     (구글 검색광고 22건이 source='google'이라 무료 검색으로 세어지고 있었다)
   const knownChannelKeys = new Set(ALL_CHANNELS.map((c) => c.key))
-  const isSearchSource = (s: string) => isAiSource(s) || ['google', 'naver', 'daum'].includes(s)
   for (const p of pageViewsResult.data ?? []) {
-    if (p.channel && knownChannelKeys.has(p.channel)) bump(p.channel, { visits: 1 })
-    else if (isSearchSource(p.source)) bump(SEARCH_KEY, { visits: 1 })
-    else bump(DIRECT_KEY, { visits: 1 })
+    bump(visitBucket(p.channel, p.source, knownChannelKeys), { visits: 1 })
   }
   for (const v of (postViewsResult.data ?? []) as { source: string; viewed_at: string }[]) {
     bump(isSearchSource(v.source) ? SEARCH_KEY : DIRECT_KEY, { visits: 1 })

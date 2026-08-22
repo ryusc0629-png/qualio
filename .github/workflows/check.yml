@@ -1,0 +1,45 @@
+# 코드를 올릴 때마다 자동으로 검사한다.
+#
+# ⚠️이 검사는 깃허브 서버에서 '코드 사본'을 받아 돌린다.
+#   운영 사이트도, 데이터베이스도 건드리지 않는다. 최악의 경우 빨간불이 뜰 뿐
+#   서비스는 그대로 돌아간다.
+#
+# 지금은 '알람'이지 '차단기'가 아니다 — 깃허브 설정에서 브랜치 보호를 켜야
+# 빨간불일 때 병합이 막힌다. 며칠 돌려보고 오탐이 없는지 확인한 뒤 켜는 게 안전하다.
+name: 검사
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # postinstall/prebuild가 DB 키를 요구하지 않도록 설치만 한다
+      - name: 의존성 설치
+        run: npm ci --ignore-scripts
+
+      - name: 타입 검사
+        run: npx tsc --noEmit
+
+      - name: 린트 (오류만 — 경고는 통과)
+        run: npx eslint --max-warnings=-1
+
+      - name: 테스트
+        run: npm test
+
+      # RLS(테이블 잠금) 검사 — 마이그레이션 파일만 읽는다.
+      # ⚠️키가 없으면 스크립트가 알아서 '실제 노출 검사'를 건너뛰고 정적 검사만 한다.
+      #   운영 DB에 붙는 검사는 배포 전 prebuild가 계속 담당한다.
+      - name: 새 테이블 RLS 확인
+        run: node scripts/check-rls.mjs
