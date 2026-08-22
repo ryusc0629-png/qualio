@@ -179,16 +179,51 @@ export default async function MarketingPage({
         </p>
       </div>
 
-      <Link
-        href="/dashboard/marketing/proposal"
-        className="flex items-center justify-between rounded-xl border bg-card px-4 py-3.5 hover:bg-muted transition-colors"
-      >
-        <div>
-          <p className="text-sm font-semibold">📄 회사 소개서 만들기</p>
-          <p className="text-xs text-muted-foreground mt-0.5">업체 정보로 자동 완성 · PDF로 저장해 손님에게 보내기</p>
-        </div>
-        <span className="text-muted-foreground text-lg">›</span>
-      </Link>
+      {/* ── 지금 할 일 ──
+          ★글 목록보다 위에 둔다. 글 목록이 페이지의 대부분을 차지해서, 아래에 두면 여기까지
+            한참 스크롤해야 하고 마케팅 메뉴를 눌렀을 때 첫 화면에 안 보인다.
+            비테크 사장님은 눈에 안 보이면 안 한다 → 할 일이 먼저, 글은 그 다음.
+          ⛔글 목록 아래로 되돌리지 말 것. */}
+      <div className="space-y-5">
+        {/* 현장이 올린 영상으로 만들어진 홍보 영상 — 대표가 확인하고 올린다 */}
+        <Suspense fallback={
+          <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
+            홍보 영상을 불러오는 중...
+          </div>
+        }>
+          <ReelInboxCard businessId={profile.business_id} />
+        </Suspense>
+
+        {business?.slug && (
+          <ChannelLinksCard
+            baseUrl={channelBaseUrl}
+            qrByChannel={qrByChannel}
+          />
+        )}
+
+        {/* 구글 지도 조건 맞추기 — 짧은 '추천' 질문은 블로그가 아니라 구글 지도가 답한다.
+            ★이건 통계가 아니라 '할 일 체크리스트'다. 성과 카드들 사이에 끼워 두면 숫자를 읽던
+              흐름이 끊긴다(기간 선택기도 이 카드엔 적용되지 않는다).
+            ⛔성과 섹션 안으로 되돌리지 말 것. */}
+        <Suspense fallback={
+          <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
+            구글 지도 조건을 확인하는 중...
+          </div>
+        }>
+          <GoogleProfileCard businessId={profile.business_id} />
+        </Suspense>
+
+        <Link
+          href="/dashboard/marketing/proposal"
+          className="flex items-center justify-between rounded-xl border bg-card px-4 py-3.5 hover:bg-muted transition-colors"
+        >
+          <div>
+            <p className="text-sm font-semibold">📄 회사 소개서 만들기</p>
+            <p className="text-xs text-muted-foreground mt-0.5">업체 정보로 자동 완성 · PDF로 저장해 손님에게 보내기</p>
+          </div>
+          <span className="text-muted-foreground text-lg">›</span>
+        </Link>
+      </div>
 
       <PostList
         posts={posts}
@@ -207,38 +242,9 @@ export default async function MarketingPage({
         postPlan={postPlan}
       />
 
+      {/* ── 여기부터 '지난 결과'(통계) — 위는 '지금 할 일', 여기는 읽기만 하는 숫자 ── */}
       <div className="border-t pt-6 space-y-5">
-        {/* 현장이 올린 영상으로 만들어진 홍보 영상 — 대표가 확인하고 올린다.
-            성과 지표보다 위에 둔다: 여기 있는 건 '지금 할 일'이고 아래는 '지난 결과'다. */}
-        <Suspense fallback={
-          <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
-            홍보 영상을 불러오는 중...
-          </div>
-        }>
-          <ReelInboxCard businessId={profile.business_id} />
-        </Suspense>
-
-        {business?.slug && (
-          <ChannelLinksCard
-            baseUrl={channelBaseUrl}
-            qrByChannel={qrByChannel}
-          />
-        )}
-
-        {/* 구글 지도 조건 맞추기 — 짧은 '추천' 질문은 블로그가 아니라 구글 지도가 답한다.
-            ★이건 통계가 아니라 '할 일 체크리스트'다. 성과 카드들 사이에 끼워 두면 숫자를 읽던
-              흐름이 끊긴다(기간 선택기도 이 카드엔 적용되지 않는다). 위 '지금 할 일' 구역에 둔다.
-            ⛔성과 섹션 안으로 되돌리지 말 것. */}
-        <Suspense fallback={
-          <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
-            구글 지도 조건을 확인하는 중...
-          </div>
-        }>
-          <GoogleProfileCard businessId={profile.business_id} />
-        </Suspense>
-
-        {/* ── 여기부터 '지난 결과'(통계) ──
-            성과 섹션 헤더 + 집계 기간 선택 (아래 두 카드 모두에 적용) */}
+        {/* 성과 섹션 헤더 + 집계 기간 선택 (아래 두 카드 모두에 적용) */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <h2 className="text-base font-bold">마케팅 성과</h2>
           <MarketingPeriodSelector current={months} />
