@@ -3,13 +3,17 @@
 import { useState } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
-import { KeyRound, Loader2, Eye, EyeOff } from 'lucide-react'
+import { KeyRound, Loader2, Eye, EyeOff, Check } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { setNewPasswordAction } from '@/lib/actions/auth'
 
+// 길이 기준은 회원가입과 같은 8자 (lib/actions/auth.ts의 스키마와 짝)
+const MIN_LENGTH = 8
+
 export function NewPasswordForm() {
   const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
   // 비테크 사장님은 점(●)만 보이면 오타를 못 잡는다 — 눈 버튼으로 직접 확인하게 한다
   const [visible, setVisible] = useState(false)
 
@@ -22,7 +26,10 @@ export function NewPasswordForm() {
     onError: ({ error }) => toast.error(error.serverError ?? '저장하지 못했어요. 다시 시도해주세요'),
   })
 
-  const tooShort = password.length > 0 && password.length < 6
+  const tooShort = password.length > 0 && password.length < MIN_LENGTH
+  const mismatch = confirm.length > 0 && confirm !== password
+  const matched = password.length >= MIN_LENGTH && confirm === password
+  const canSubmit = matched && !isPending
 
   return (
     <div className="space-y-3">
@@ -33,8 +40,9 @@ export function NewPasswordForm() {
             type={visible ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="6자 이상"
+            placeholder="8자 이상"
             autoComplete="new-password"
+            inputMode="text"
             className="h-12 pr-11"
           />
           <button
@@ -46,12 +54,31 @@ export function NewPasswordForm() {
             {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
-        {tooShort && <p className="text-xs text-red-600">6자 이상으로 정해주세요</p>}
+        {tooShort && <p className="text-xs text-red-600">8자 이상으로 정해주세요</p>}
+      </div>
+
+      {/* 한 번 더 — 오타로 정해버리면 다음 로그인이 막힌다(그때는 다시 전화해야 한다) */}
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium">한 번 더 입력 (필수)</label>
+        <Input
+          type={visible ? 'text' : 'password'}
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          placeholder="위와 똑같이 입력해주세요"
+          autoComplete="new-password"
+          className="h-12"
+        />
+        {mismatch && <p className="text-xs text-red-600">위에 적으신 것과 달라요. 다시 확인해주세요</p>}
+        {matched && (
+          <p className="text-xs text-emerald-600 flex items-center gap-1">
+            <Check className="h-3.5 w-3.5" />두 번 다 같아요
+          </p>
+        )}
       </div>
 
       <Button
         type="button"
-        disabled={password.length < 6 || isPending}
+        disabled={!canSubmit}
         onClick={() => execute({ newPassword: password })}
         className="h-12 w-full gap-2"
       >

@@ -128,9 +128,11 @@ export async function logoutAction() {
 // 왜 '지금 쓰는 비밀번호'를 다시 받나: Supabase는 세션만 있으면 바꿔준다. 그러면 사장님이
 // 로그인된 폰·PC를 잠깐 두고 자리를 비운 사이 남이 비밀번호를 바꿔 계정을 통째로 가져갈 수 있다.
 // 한 번 더 확인하는 게 맞다.
+// ★길이 기준은 회원가입(8자)과 같게 맞춘다 — 한 서비스 안에서 기준이 두 개면
+//   "가입은 8자인데 왜 여기선 6자?"가 되고, 짧은 쪽으로 새는 문이 된다.
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, '지금 쓰는 비밀번호를 입력해주세요'),
-  newPassword: z.string().min(6, '새 비밀번호는 6자 이상으로 정해주세요'),
+  newPassword: z.string().min(8, '새 비밀번호는 8자 이상으로 정해주세요'),
 })
 
 export const changePasswordAction = action
@@ -160,7 +162,7 @@ export const changePasswordAction = action
 // 여기선 '지금 쓰는 비밀번호'를 다시 묻지 않는다 — 방금 그 비밀번호로 로그인해 세션이 있고,
 // 한 번 더 물으면 종이에 적어둔 임시 비번을 또 옮겨 적게 만들어 실패만 늘어난다.
 export const setNewPasswordAction = action
-  .schema(z.object({ newPassword: z.string().min(6, '비밀번호는 6자 이상으로 정해주세요') }))
+  .schema(z.object({ newPassword: z.string().min(8, '비밀번호는 8자 이상으로 정해주세요') }))
   .action(async ({ parsedInput: { newPassword } }) => {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
