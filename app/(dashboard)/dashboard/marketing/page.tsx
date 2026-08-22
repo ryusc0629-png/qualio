@@ -225,7 +225,20 @@ export default async function MarketingPage({
           />
         )}
 
-        {/* 성과 섹션 헤더 + 집계 기간 선택 (아래 두 카드 모두에 적용) */}
+        {/* 구글 지도 조건 맞추기 — 짧은 '추천' 질문은 블로그가 아니라 구글 지도가 답한다.
+            ★이건 통계가 아니라 '할 일 체크리스트'다. 성과 카드들 사이에 끼워 두면 숫자를 읽던
+              흐름이 끊긴다(기간 선택기도 이 카드엔 적용되지 않는다). 위 '지금 할 일' 구역에 둔다.
+            ⛔성과 섹션 안으로 되돌리지 말 것. */}
+        <Suspense fallback={
+          <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
+            구글 지도 조건을 확인하는 중...
+          </div>
+        }>
+          <GoogleProfileCard businessId={profile.business_id} />
+        </Suspense>
+
+        {/* ── 여기부터 '지난 결과'(통계) ──
+            성과 섹션 헤더 + 집계 기간 선택 (아래 두 카드 모두에 적용) */}
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <h2 className="text-base font-bold">마케팅 성과</h2>
           <MarketingPeriodSelector current={months} />
@@ -245,15 +258,6 @@ export default async function MarketingPage({
           </div>
         }>
           <ChannelPerformanceCard businessId={profile.business_id} months={months} />
-        </Suspense>
-
-        {/* 짧은 '추천' 질문은 블로그가 아니라 구글 지도가 답한다 — 콘텐츠로 안 닿는 영역이라 맨 위에 둔다 */}
-        <Suspense fallback={
-          <div className="rounded-xl border bg-white p-8 text-center text-sm text-muted-foreground animate-pulse">
-            구글 지도 조건을 확인하는 중...
-          </div>
-        }>
-          <GoogleProfileCard businessId={profile.business_id} />
         </Suspense>
 
         {/* 크롤러 방문이 노출률보다 먼저 움직이므로 위에 둔다 — 노출률이 0인 동안에도 볼 게 있어야 한다 */}
