@@ -31,6 +31,10 @@ export interface SettlementCardData {
     revenue: number
     ownerShare: number
     contractorPay: number
+    /** 급여 관리에서 따로 얹은 금액(현장 일당·추가 업무) */
+    extraPay: number
+    /** 실제로 나갈 돈 = 도급비 + 추가 지급 */
+    totalPay: number
     jobCount: number
     blocked: string | null
   }
@@ -50,7 +54,8 @@ export function SubcontractSettlementCard({ month, items, manualRevenue = 0 }: P
   if (active.length === 0) return null
 
   const totalRevenue = active.reduce((s, i) => s + i.result.revenue, 0)
-  const totalPay = active.reduce((s, i) => s + (i.result.blocked ? 0 : i.result.contractorPay), 0)
+  // 배분이 막힌 도급사도 따로 준 돈은 실제로 나간 돈이라 합계에 넣는다
+  const totalPay = active.reduce((s, i) => s + i.result.totalPay, 0)
   const totalMine = active.reduce((s, i) => s + (i.result.blocked ? 0 : i.result.ownerShare), 0)
 
   return (
@@ -166,6 +171,7 @@ function SettlementRow({ month, item }: { month: string; item: SettlementCardDat
               <p className="text-xs text-amber-700">{r.blocked}</p>
               <p className="text-xs text-muted-foreground">
                 이 달 현장 매출 {formatWon(r.revenue)}
+                {r.extraPay !== 0 && ` · 따로 준 돈 ${formatWon(r.extraPay)}`}
               </p>
               {!item.hasContract && (
                 <Button asChild variant="outline" size="sm" className="h-9 text-xs">
@@ -180,6 +186,13 @@ function SettlementRow({ month, item }: { month: string; item: SettlementCardDat
                 <span className="text-rose-600 font-medium">{formatWon(r.contractorPay)}</span> · 내 몫{' '}
                 <span className="text-emerald-700 font-semibold">{formatWon(r.ownerShare)}</span>
               </p>
+              {/* 급여 관리에서 따로 준 돈 — 장부에는 도급비와 합쳐 들어간다 */}
+              {r.extraPay !== 0 && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  따로 준 돈 {formatWon(r.extraPay)} → 실제 지급{' '}
+                  <span className="text-rose-600 font-medium">{formatWon(r.totalPay)}</span>
+                </p>
+              )}
 
               {lines.length > 0 && (
                 <button

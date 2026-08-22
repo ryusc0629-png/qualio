@@ -40,10 +40,13 @@ export default async function PayslipPage({
   if (!p) notFound()
 
   const { label } = monthRangeUtc(month)
-  const hasRate = !!(p.worker.pay_type && p.worker.pay_rate)
-  const rateText = hasRate
-    ? `${formatWon(p.worker.pay_rate!)} ${PAY_TYPE_UNIT[p.worker.pay_type!].replace('원', '')} (${PAY_TYPE_LABEL[p.worker.pay_type!]})`
-    : '단가 미설정'
+  // 계산이 막혀 있고 따로 준 돈도 없으면 금액을 지어내지 않는다
+  const showAmount = !p.baseBlocked || p.extraTotal !== 0
+  const rateText = p.isContractor
+    ? '도급 계약서 정산 조건'
+    : p.worker.pay_type && p.worker.pay_rate
+      ? `${formatWon(p.worker.pay_rate)} ${PAY_TYPE_UNIT[p.worker.pay_type].replace('원', '')} (${PAY_TYPE_LABEL[p.worker.pay_type]})`
+      : '단가 미설정'
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -54,7 +57,10 @@ export default async function PayslipPage({
         </Link>
         <div className="flex gap-2">
           <PrintPayslipButton />
-          <PostLedgerButton workerId={p.worker.id} month={month} disabled={!hasRate || p.amount <= 0} />
+          {/* 도급비는 재무의 도급 정산에서 매출과 함께 확정한다(같은 돈을 두 번 잡지 않기 위해) */}
+          {!p.isContractor && (
+            <PostLedgerButton workerId={p.worker.id} month={month} disabled={!showAmount || p.amount <= 0} />
+          )}
         </div>
       </div>
 
@@ -116,10 +122,29 @@ export default async function PayslipPage({
           )}
         </div>
 
-        {/* 지급액 */}
-        <div className="flex items-baseline justify-between border-t pt-4">
-          <span className="font-semibold">지급액 합계</span>
-          <span className="text-2xl font-bold tabular-nums">{hasRate ? formatWon(p.amount) : '단가 미설정'}</span>
+        {/* 지급 내역 — 기본급 + 따로 준 돈 */}
+        <div className="border-t pt-4 space-y-2">
+          <div className="flex items-baseline justify-between text-sm">
+            <span className="text-muted-foreground">
+              기본급 <span className="text-foreground">{p.baseLabel}</span>
+            </span>
+            <span className="tabular-nums">{formatWon(p.baseAmount)}</span>
+          </div>
+          {p.extras.map((e) => (
+            <div key={e.id} className="flex items-baseline justify-between text-sm">
+              <span className="text-muted-foreground min-w-0 truncate">
+                <span className="text-foreground">{e.label}</span>
+                {e.bookingLabel && <span className="ml-1 text-xs">({e.bookingLabel})</span>}
+              </span>
+              <span className="tabular-nums">{formatWon(e.amount)}</span>
+            </div>
+          ))}
+          <div className="flex items-baseline justify-between border-t pt-3">
+            <span className="font-semibold">지급액 합계</span>
+            <span className="text-2xl font-bold tabular-nums">
+              {showAmount ? formatWon(p.amount) : '단가 미설정'}
+            </span>
+          </div>
         </div>
 
         <p className="text-[11px] text-muted-foreground leading-relaxed">

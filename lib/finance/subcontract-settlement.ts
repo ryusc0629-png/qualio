@@ -51,6 +51,13 @@ export interface SettlementResult {
   /** 건당 정산용 현장 수 (정기 방문 + 일회성 건수) */
   jobCount: number
   /**
+   * 배분과 별개로 이 도급사에 더 준(또는 뺀) 금액 합. 급여 관리의 '추가 지급' 줄에서 온다.
+   * 어떤 현장은 배분이 아니라 일당으로 주는 경우가 있어 배분 계산과 섞지 않고 따로 센다.
+   */
+  extraPay: number
+  /** 실제로 지급할 총액 = 도급비 + 추가 지급. 장부에는 이 금액이 들어간다 */
+  totalPay: number
+  /**
    * 자동 계산을 할 수 없는 이유. 값이 있으면 금액(ownerShare·contractorPay)은 0이고
    * 화면은 매출만 보여주며 사장님께 무엇을 채워야 하는지 안내한다.
    */
@@ -90,6 +97,8 @@ export interface SettlementInput {
   contract: SubcontractorContractData | null
   recurring: RecurringLine[]
   oneOff: OneOffLine[]
+  /** 급여 관리에서 이 도급사에 따로 얹은 금액(현장 일당·추가 업무 등). 음수면 공제 */
+  extras?: { amount: number }[]
 }
 
 /**
@@ -105,14 +114,17 @@ export function computeSettlement(input: SettlementInput): SettlementResult {
   const oneOffRevenue = input.oneOff.reduce((s, r) => s + r.amount, 0)
   const revenue = recurringRevenue + oneOffRevenue
   const jobCount = input.recurring.reduce((s, r) => s + r.visits, 0) + input.oneOff.length
+  const extraPay = (input.extras ?? []).reduce((s, e) => s + e.amount, 0)
 
   const base = {
     recurringRevenue,
     oneOffRevenue,
     revenue,
     jobCount,
+    extraPay,
     ownerShare: 0,
     contractorPay: 0,
+    totalPay: extraPay,
   }
 
   const c = input.contract
@@ -131,12 +143,14 @@ export function computeSettlement(input: SettlementInput): SettlementResult {
       }
     }
     const ownerShare = Math.round((revenue * pct) / 100)
+    const contractorPay = revenue - ownerShare
     return {
       ...base,
       mode: c.settlementMode,
       sharePercent: pct,
       ownerShare,
-      contractorPay: revenue - ownerShare,
+      contractorPay,
+      totalPay: contractorPay + extraPay,
       blocked: null,
     }
   }
@@ -156,6 +170,7 @@ export function computeSettlement(input: SettlementInput): SettlementResult {
       mode: c.settlementMode,
       sharePercent: null,
       contractorPay,
+      totalPay: contractorPay + extraPay,
       ownerShare: revenue - contractorPay,
       blocked: null,
     }

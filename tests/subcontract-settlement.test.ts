@@ -176,6 +176,45 @@ describe('computeSettlement — 건당 단가', () => {
   })
 })
 
+describe('computeSettlement — 급여 관리에서 얹은 추가 지급', () => {
+  const base = {
+    contract: contract({ settlementMode: 'revenue_share', sharePercent: 20 }),
+    recurring: [rec(1_000_000, 4)],
+    oneOff: [],
+  }
+
+  it('배분(도급비)과 추가 지급을 섞지 않는다', () => {
+    const r = computeSettlement({ ...base, extras: [{ amount: 150_000 }] })
+    expect(r.contractorPay).toBe(800_000) // 배분분은 그대로
+    expect(r.extraPay).toBe(150_000)
+    expect(r.totalPay).toBe(950_000) // 실제로 나가는 돈
+  })
+
+  it('갑의 몫은 추가 지급에 영향받지 않는다(배분은 매출 기준)', () => {
+    const r = computeSettlement({ ...base, extras: [{ amount: 500_000 }] })
+    expect(r.ownerShare).toBe(200_000)
+    expect(r.ownerShare + r.contractorPay).toBe(r.revenue)
+  })
+
+  it('추가 지급이 없으면 총 지급액은 도급비와 같다', () => {
+    const r = computeSettlement(base)
+    expect(r.extraPay).toBe(0)
+    expect(r.totalPay).toBe(r.contractorPay)
+  })
+
+  it('공제(음수)도 총 지급액에서 빠진다', () => {
+    const r = computeSettlement({ ...base, extras: [{ amount: 200_000 }, { amount: -50_000 }] })
+    expect(r.totalPay).toBe(950_000)
+  })
+
+  it('계약서가 없어 배분이 막혀도 따로 준 돈은 남는다', () => {
+    const r = computeSettlement({ contract: null, recurring: [rec(500_000)], oneOff: [], extras: [{ amount: 300_000 }] })
+    expect(r.blocked).not.toBeNull()
+    expect(r.contractorPay).toBe(0)
+    expect(r.totalPay).toBe(300_000)
+  })
+})
+
 describe('settlementSourceKey', () => {
   it('도급사·달·종류가 다르면 키가 다르다(같으면 덮어쓰기 대상)', () => {
     const a = settlementSourceKey('w1', '2026-08', 'pay')

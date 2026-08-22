@@ -27,7 +27,10 @@ async function getBusinessId() {
 export const updateWorkerPayAction = action
   .schema(z.object({
     workerId: z.string().uuid(),
-    payType: z.string().refine((v) => ['hourly', 'daily', 'per_visit'].includes(v), '급여 방식을 선택해주세요'),
+    payType: z.string().refine(
+      (v) => ['monthly', 'hourly', 'daily', 'per_visit'].includes(v),
+      '급여 방식을 선택해주세요',
+    ),
     payRate: z.coerce.number().int().min(0).max(100_000_000),
   }))
   .action(async ({ parsedInput }) => {
@@ -39,6 +42,65 @@ export const updateWorkerPayAction = action
       .eq('business_id', businessId)
     if (error) throw new Error('[APP] 단가 저장에 실패했어요. 다시 시도해주세요')
     revalidatePath('/dashboard/payroll')
+    return { success: true }
+  })
+
+// 현장 일당·추가 업무 수당 등 기본급 위에 얹는 줄 추가
+export const addPayrollEntryAction = action
+  .schema(z.object({
+    workerId: z.string().uuid(),
+    month: z.string().regex(/^\d{4}-\d{2}$/, '월 형식이 올바르지 않습니다'),
+    bookingId: z.string().uuid().nullable().optional(),
+    label: z.string().trim().min(1, '어떤 돈인지 적어주세요').max(60),
+    amount: z.coerce.number().int().min(-100_000_000).max(100_000_000)
+      .refine((v) => v !== 0, '금액을 넣어주세요'),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    // 다른 업체의 직원에 줄을 붙이지 못하게 막는다
+    const { data: worker } = await db
+      .from('workers')
+      .select('id')
+      .eq('id', parsedInput.workerId)
+      .eq('business_id', businessId)
+      .maybeSingle()
+    if (!worker) throw new Error('[APP] 직원을 찾을 수 없어요')
+
+    const { error } = await db.from('payroll_entries').insert({
+      business_id: businessId,
+      worker_id: parsedInput.workerId,
+      month: parsedInput.month,
+      booking_id: parsedInput.bookingId ?? null,
+      label: parsedInput.label,
+      amount: parsedInput.amount,
+    } as never)
+    if (error) {
+      console.error('[Payroll] 추가 지급 저장 실패:', error)
+      throw new Error('[APP] 저장 못 했어요. 다시 눌러주세요')
+    }
+
+    revalidatePath('/dashboard/payroll')
+    revalidatePath('/dashboard/finance')
+    return { success: true }
+  })
+
+// 추가 지급·공제 줄 삭제
+export const deletePayrollEntryAction = action
+  .schema(z.object({ entryId: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+    const { error } = await db
+      .from('payroll_entries')
+      .delete()
+      .eq('id', parsedInput.entryId)
+      .eq('business_id', businessId)
+    if (error) {
+      console.error('[Payroll] 추가 지급 삭제 실패:', error)
+      throw new Error('[APP] 지우지 못했어요. 다시 눌러주세요')
+    }
+    revalidatePath('/dashboard/payroll')
+    revalidatePath('/dashboard/finance')
     return { success: true }
   })
 
@@ -55,9 +117,12 @@ export const postPayrollExpenseAction = action
     const payroll = await getMonthlyPayroll(db, businessId, parsedInput.month)
     const wp = payroll.find((p) => p.worker.id === parsedInput.workerId)
     if (!wp) throw new Error('[APP] 직원을 찾을 수 없어요')
-    if (!wp.worker.pay_type || !wp.worker.pay_rate) {
-      throw new Error('[APP] 먼저 이 직원의 단가를 설정해주세요')
+    // 도급사 도급비는 재무의 도급 정산에서 '외주·도급비'로 한 번에 들어간다.
+    // 여기서 또 인건비로 넣으면 같은 돈이 장부에 두 번 잡힌다.
+    if (wp.isContractor) {
+      throw new Error('[APP] 도급비는 재무 > 도급 정산에서 장부에 넣어주세요')
     }
+    if (wp.baseBlocked && wp.extraTotal === 0) throw new Error(`[APP] ${wp.baseBlocked}`)
     if (wp.amount <= 0) throw new Error('[APP] 이 달 급여가 0원이라 반영할 게 없어요')
 
     const { lastDay, label } = monthRangeUtc(parsedInput.month)
@@ -71,7 +136,7 @@ export const postPayrollExpenseAction = action
       .eq('category', '인건비')
       .like('memo', `%${tag}%`)
 
-    const payLabel = PAY_TYPE_LABEL[wp.worker.pay_type]
+    const payLabel = wp.worker.pay_type ? PAY_TYPE_LABEL[wp.worker.pay_type] : '급여'
     const { error } = await db.from('finance_entries').insert({
       business_id: businessId,
       entry_date: lastDay,

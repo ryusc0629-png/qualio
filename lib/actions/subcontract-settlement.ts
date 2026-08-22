@@ -91,13 +91,16 @@ export const postSubcontractSettlementAction = action
         memo: `${s.workerName} ${monthLabel} 일회성 현장 매출`,
       })
     }
-    if (s.result.contractorPay > 0) {
+    // 실제로 나가는 돈은 배분분 + 급여 관리에서 얹은 추가 지급이다.
+    // 추가 지급을 빼고 넣으면 그만큼이 장부에서 조용히 샌다.
+    if (s.result.totalPay > 0) {
+      const extraNote = s.result.extraPay !== 0 ? ` + 추가 지급 ${s.result.extraPay.toLocaleString('ko-KR')}원` : ''
       rows.push({
         source_key: settlementSourceKey(workerId, month, 'pay'),
         type: 'expense',
         category: SUBCONTRACT_EXPENSE_CATEGORY,
-        amount: s.result.contractorPay,
-        memo: `${s.workerName} ${monthLabel} 도급비 · ${modeLabel}${shareLabel}`,
+        amount: s.result.totalPay,
+        memo: `${s.workerName} ${monthLabel} 도급비 · ${modeLabel}${shareLabel}${extraNote}`,
       })
     }
 

@@ -26,6 +26,8 @@ export interface ContractorSettlement {
   signed: boolean
   recurring: RecurringLine[]
   oneOff: OneOffLine[]
+  /** 급여 관리에서 이 도급사에 따로 얹은 줄(현장 일당·추가 업무 등) */
+  extras: { label: string; amount: number }[]
   result: SettlementResult
   /** 장부에 이미 확정 기입된 달인지 */
   posted: boolean
@@ -81,7 +83,7 @@ export async function loadContractorSettlements(
   const { first, last } = monthBounds(month)
   const { from, to } = marketDayRange(first, last)
 
-  const [workersRes, bookingsRes, contractsRes, postedRes] = await Promise.all([
+  const [workersRes, bookingsRes, contractsRes, postedRes, extrasRes] = await Promise.all([
     db
       .from('workers' as never)
       .select('id, name, company_name, color, contract_data, contract_signed_at')
@@ -110,6 +112,16 @@ export async function loadContractorSettlements(
       .like('source_key' as never, `subcontract:%:${month}:%`) as unknown as Promise<{
         data: { source_key: string }[] | null
       }>,
+
+    // 급여 관리에서 얹은 추가 지급·공제 — 배분과 별개로 실제 지급액에 더해진다
+    db
+      .from('payroll_entries' as never)
+      .select('worker_id, label, amount')
+      .eq('business_id' as never, businessId)
+      .eq('month' as never, month)
+      .order('created_at' as never) as unknown as Promise<{
+        data: { worker_id: string; label: string; amount: number }[] | null
+      }>,
   ])
 
   const workers = workersRes.data ?? []
@@ -118,6 +130,13 @@ export async function loadContractorSettlements(
   const bookings = bookingsRes.data ?? []
   const contracts = contractsRes.data ?? []
   const postedKeys = new Set((postedRes.data ?? []).map((r) => r.source_key))
+
+  const extrasByWorker = new Map<string, { label: string; amount: number }[]>()
+  for (const e of extrasRes.data ?? []) {
+    const list = extrasByWorker.get(e.worker_id) ?? []
+    list.push({ label: e.label, amount: e.amount })
+    extrasByWorker.set(e.worker_id, list)
+  }
 
   // 그 달 예약에 배정된 인력 — 도급사만 골라 쓴다
   const bookingIds = bookings.map((b) => b.id)
@@ -232,6 +251,7 @@ export async function loadContractorSettlements(
   return workers.map((w) => {
     const recurring = recurringByWorker.get(w.id) ?? []
     const oneOff = oneOffByWorker.get(w.id) ?? []
+    const extras = extrasByWorker.get(w.id) ?? []
     return {
       workerId: w.id,
       // 장부·정산은 내부 기록이라 상호로 적는 게 알아보기 쉽다
@@ -241,7 +261,8 @@ export async function loadContractorSettlements(
       signed: !!w.contract_signed_at,
       recurring,
       oneOff,
-      result: computeSettlement({ contract: w.contract_data, recurring, oneOff }),
+      extras,
+      result: computeSettlement({ contract: w.contract_data, recurring, oneOff, extras }),
       posted: postedKeys.has(`subcontract:${w.id}:${month}:pay`),
     }
   })
