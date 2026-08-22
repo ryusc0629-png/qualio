@@ -71,7 +71,13 @@ export async function GET(request: NextRequest) {
   }
 
   const rows = queued ?? []
-  if (rows.length === 0) return NextResponse.json({ ok: true, made: 0, queued: 0 })
+
+  // ⚠️만들 게 없어도 '보관'은 반드시 돌려야 한다. 평소엔 대기열이 비어 있는 게 정상이라,
+  //   여기서 그냥 돌아가면 30일 뒤 사라질 영상을 옮기는 일이 사실상 한 번도 안 돈다.
+  if (rows.length === 0) {
+    const archivedOnly = await archivePendingReels(db)
+    return NextResponse.json({ ok: true, made: 0, queued: 0, archived: archivedOnly })
+  }
 
   // 업체별 상한 적용 — 한 업체가 대기열을 독차지하지 않게 한다
   const perBusiness = new Map<string, number>()
