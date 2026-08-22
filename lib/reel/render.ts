@@ -32,9 +32,19 @@ const GAP_SECONDS = 0.06
  * ⚠️끝 무음을 잘라낸 판이다(안 자르면 반복될 때마다 소리가 1초씩 끊긴다).
  *   교체하려면 `npm run reel:music`으로 새로 만들고 --upload 로 올린 주소를 넣을 것.
  * 환경변수 REEL_MUSIC_URL로 덮어쓸 수 있다(빈 문자열로 두면 음악 없이 나간다).
+ *
+ * ★2026-08-22 교체 — 사장님: "똑딱똑딱 브금이 좀 아쉬워요, 더 리드미컬하게".
+ *   원인은 곡이 나빠서가 아니라 **짧은 루프를 되풀이해서**였다. 옛 트랙은 10.9초라
+ *   37초 영상에서 3.4번 반복되고 LRA 0.2 LU(=세기 변화 없음)라 메트로놈처럼 들렸다.
+ *   새 트랙은 '1-단단한비트'(125 BPM·초당 5.4타점)를 재료로:
+ *     ① 뒤에 붙은 무음 2.1초를 잘라내고
+ *     ② 마디에 맞춰 5마디(9.60초)로 끊고 — 아무 데서나 자르면 이음새에서 박이 튄다
+ *     ③ 4번 이어붙이며 -4dB → 0dB로 자라게 해 38.4초짜리 한 곡으로 만들었다.
+ *   결과: 릴스 최대 길이(37초)보다 길어 **반복이 아예 없고**, LRA 0.2 → 5.8 LU.
+ *   ⛔짧은 루프를 그대로 넣지 말 것 — 볼륨이나 곡을 바꿔도 되풀이되면 또 똑딱거린다.
  */
 const DEFAULT_MUSIC_URL =
-  'https://wjxcrgwfeqkgvvyakack.supabase.co/storage/v1/object/public/report-photos/_shared/reel-music/2-1787310049827.mp3'
+  'https://wjxcrgwfeqkgvvyakack.supabase.co/storage/v1/object/public/report-photos/_shared/reel-music/beat125-38s-1.mp3'
 
 interface ReelSource {
   id: string
