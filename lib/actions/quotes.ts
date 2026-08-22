@@ -285,6 +285,9 @@ export const calculateAndCreateQuoteAction = publicAction
         goodServices: goodNames,
         betterServices: betterNames,
         bestServices: bestNames,
+        // 3단계로 안 나가는 견적이면 기본 플랜 설명만 요청한다 —
+        // 빈 추천·프리미엄을 그대로 시키면 모델이 되물어서 기본 설명까지 날아갔다
+        tiersOffered: plansConfigured,
       })
     } catch {
       console.error('[AI] tier descriptions 생성 실패')
