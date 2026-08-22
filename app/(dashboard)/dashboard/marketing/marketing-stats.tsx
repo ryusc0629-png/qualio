@@ -274,135 +274,129 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
         </div>
       </div>
 
-      {/* ── 3층 진단: 어디서 들어오나·어디서 멈추나 (접이식) ── */}
-      <details className="group">
-        <summary className="cursor-pointer list-none select-none rounded-xl border bg-slate-50 px-5 py-3.5 flex items-center justify-between gap-2 text-sm font-medium text-muted-foreground hover:bg-slate-100 transition-colors">
-          <span>📊 자세히 보기 <span className="text-muted-foreground/60 font-normal">· 어디서 들어오나·어디서 멈추나</span></span>
+      {/* ── 3층 진단: 어디서 들어오나 (접이식) ──
+          접는 머리와 내용이 한 상자다. 예전엔 상자가 두 겹이라(머리 따로, 내용 따로) 남남처럼 보였고,
+          '자세히 보기'와 안쪽 '어디서 들어오나' 제목이 같은 말을 두 번 하고 있었다. 제목은 머리 한 줄뿐. */}
+      <details className="group rounded-xl border bg-white overflow-hidden">
+        <summary className="cursor-pointer list-none select-none bg-slate-50 px-5 py-3.5 flex items-center justify-between gap-2 text-sm font-medium text-muted-foreground hover:bg-slate-100 transition-colors group-open:border-b">
+          <span className="text-foreground font-semibold">📊 어디서 들어오나 <span className="text-muted-foreground/70 font-normal">· 손님이 어떤 길로 왔는지</span></span>
           <span className="text-xs shrink-0">
             <span className="group-open:hidden">펼치기 ▾</span>
             <span className="hidden group-open:inline">접기 ▴</span>
           </span>
         </summary>
-        <div className="space-y-4 pt-4">
 
-          {/* 검색·AI 유입 + 월별 추이 */}
-          <div className="rounded-xl border bg-white overflow-hidden">
-            <div className="px-5 py-3 border-b bg-slate-50">
-              <p className="font-semibold text-sm">어디서 들어오나 — 검색·AI 유입</p>
-            </div>
-            <div className="px-5 py-2.5 bg-emerald-50 border-b border-emerald-100 flex items-start gap-1.5">
-              <span className="text-sm leading-none mt-0.5" aria-hidden>💚</span>
-              <p className="text-xs text-emerald-800 font-medium leading-relaxed">
-                광고비 <b>0원</b> — 자동 포스팅만으로 검색·AI가 스스로 데려온 손님이에요
-              </p>
-            </div>
-            {/* 검색을 한 칸으로 합친다 — AI(ChatGPT)와 일반 검색을 가르는 건 우리 관심사지 사장님 관심사가 아니다.
-                따로 두면 아직 작은 AI 숫자만 눈에 띄어, 정작 큰 '검색으로 온 손님' 전체가 작아 보인다. */}
-            <div className="grid grid-cols-2 divide-x">
-              <div className="px-2 py-4 text-center">
-                <p className="text-xl font-bold text-emerald-600">{(aiViews + seoViews).toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground mt-1">검색으로 온 손님</p>
-                <p className="text-[10px] text-muted-foreground/70 mt-0.5">네이버·구글·ChatGPT 등</p>
-              </div>
-              <div className="px-2 py-4 text-center">
-                <p className="text-xl font-bold text-slate-500">{directOtherViews.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground mt-1">홍보·직접</p>
-                <p className="text-[10px] text-muted-foreground/70 mt-0.5">소개서·SNS·즐겨찾기</p>
-              </div>
-            </div>
-
-            {/* '홍보·직접'을 채널별로 펼치기 — 눌러야 열림(기본 화면은 그대로). 매출 연결은 아래 '채널별 성과' 카드 */}
-            {directOtherViews > 0 && (
-              <details className="group/dt border-t">
-                <summary className="flex items-center justify-between gap-2 px-5 py-3 cursor-pointer list-none select-none hover:bg-slate-50">
-                  <span className="text-xs font-medium text-slate-600">
-                    {promoTotalViews > 0
-                      ? `'홍보·직접' 손님 자세히 보기 — 홍보로 ${promoTotalViews.toLocaleString()}명`
-                      : "'홍보·직접' 손님 자세히 보기"}
-                  </span>
-                  <span className="text-xs text-muted-foreground transition-transform group-open/dt:rotate-180" aria-hidden>▾</span>
-                </summary>
-                <div className="px-5 pb-4 pt-1 space-y-2">
-                  {promoRows.length > 0 ? (
-                    <>
-                      <div className="space-y-1.5">
-                        {promoRows.map(([key, n]) => (
-                          <div key={key} className="flex items-center justify-between gap-2 text-sm">
-                            <span className="flex items-center gap-1.5 min-w-0">
-                              <span aria-hidden>{channelEmoji(key)}</span>
-                              <span className="truncate">{channelLabel(key)}</span>
-                            </span>
-                            <span className="tabular-nums font-medium">{n.toLocaleString()}명</span>
-                          </div>
-                        ))}
-                        {pureDirectViews > 0 && (
-                          <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1.5 min-w-0">
-                              <span aria-hidden>🔖</span>
-                              <span className="truncate">그냥 직접 (주소 입력·즐겨찾기 등)</span>
-                            </span>
-                            <span className="tabular-nums">{pureDirectViews.toLocaleString()}명</span>
-                          </div>
-                        )}
-                      </div>
-                      <p className="border-t pt-2 text-[11px] leading-relaxed text-muted-foreground">
-                        이 손님들이 실제로 <b>계약·매출</b>까지 이어졌는지는 아래 <b>&lsquo;채널별 성과&rsquo;</b>에서 볼 수 있어요.
-                      </p>
-                    </>
-                  ) : (
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                      아직 홍보 링크로 들어온 손님이 없어요. 위 <b>&lsquo;채널별 홍보 링크&rsquo;</b>를 소개서 QR·인스타·블로그에 붙이면, 여기서 어느 홍보로 왔는지 구분돼 쌓여요.
-                    </p>
-                  )}
-                </div>
-              </details>
-            )}
-
-            {/* 월별 추이 — AI=초록·일반검색=파랑, 아래 숫자는 그 달 발행 글 수 */}
-            {trendBuckets.length >= 2 && (
-              <div className="border-t p-4 space-y-3">
-                <p className="text-xs text-muted-foreground">
-                  {trendTotal === 0
-                    ? '아직 검색·AI로 들어온 방문이 없어요. 글이 색인되면 여기에 쌓여요'
-                    : '글이 쌓일수록 검색·AI로 찾아오는 고객이 늘어요'}
-                </p>
-                <div className="flex items-end justify-between gap-2 pt-1">
-                  {trendBuckets.map((m) => {
-                    const total = m.ai + m.seo
-                    const heightPct = trendMax > 0 ? Math.max((total / trendMax) * 100, total > 0 ? 8 : 0) : 0
-                    return (
-                      <div key={m.label} className="group/bar relative flex-1 flex flex-col items-center gap-1.5 min-w-0">
-                        {total > 0 && (
-                          <div className="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 z-10 hidden group-hover/bar:block whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-medium text-white shadow-lg">
-                            검색으로 {total.toLocaleString()}명
-                          </div>
-                        )}
-                        <span className="text-[11px] font-bold tabular-nums text-foreground">
-                          {total > 0 ? total.toLocaleString() : ''}
-                        </span>
-                        <div className="w-full h-24 flex items-end">
-                          {/* 한 색으로 — AI/일반을 나눠 칠하면 색 두 개를 설명할 범례가 또 필요해진다 */}
-                          <div className="w-full rounded-t bg-emerald-500" style={{ height: `${heightPct}%` }} />
-                        </div>
-                        <span className="text-[11px] text-muted-foreground">{m.label}</span>
-                        <span className="text-[10px] text-muted-foreground/70 tabular-nums">
-                          {m.published > 0 ? `글 ${m.published}` : '·'}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-                <p className="text-[11px] text-muted-foreground/70 pt-2 border-t">
-                  아래 숫자는 그 달 발행한 글 수예요
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* '문의 폼 완주율'은 뺐다 — 다단계 견적 계산기 시절 '어느 단계에서 멈췄나'를 찾던 지표인데,
-              지금은 한 화면짜리 문의 폼이라 멈춘 지점을 알려주지 못한다. 비율만 보여선 할 수 있는 일이 없다.
-              ⛔되살리지 말 것. 이탈 지점을 다시 보고 싶다면 폼이 다시 여러 단계가 된 뒤에. */}
+        <div className="px-5 py-2.5 bg-emerald-50 border-b border-emerald-100 flex items-start gap-1.5">
+          <span className="text-sm leading-none mt-0.5" aria-hidden>💚</span>
+          <p className="text-xs text-emerald-800 font-medium leading-relaxed">
+            광고비 <b>0원</b> — 자동 포스팅만으로 검색·AI가 스스로 데려온 손님이에요
+          </p>
         </div>
+        {/* 검색을 한 칸으로 합친다 — AI(ChatGPT)와 일반 검색을 가르는 건 우리 관심사지 사장님 관심사가 아니다.
+            따로 두면 아직 작은 AI 숫자만 눈에 띄어, 정작 큰 '검색으로 온 손님' 전체가 작아 보인다. */}
+        <div className="grid grid-cols-2 divide-x">
+          <div className="px-2 py-4 text-center">
+            <p className="text-xl font-bold text-emerald-600">{(aiViews + seoViews).toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-1">검색으로 온 손님</p>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">네이버·구글·ChatGPT 등</p>
+          </div>
+          <div className="px-2 py-4 text-center">
+            <p className="text-xl font-bold text-slate-500">{directOtherViews.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-1">홍보·직접</p>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">소개서·SNS·즐겨찾기</p>
+          </div>
+        </div>
+
+        {/* '홍보·직접'을 채널별로 펼치기 — 눌러야 열림(기본 화면은 그대로). 매출 연결은 아래 '채널별 성과' 카드 */}
+        {directOtherViews > 0 && (
+          <details className="group/dt border-t">
+            <summary className="flex items-center justify-between gap-2 px-5 py-3 cursor-pointer list-none select-none hover:bg-slate-50">
+              <span className="text-xs font-medium text-slate-600">
+                {promoTotalViews > 0
+                  ? `'홍보·직접' 손님 자세히 보기 — 홍보로 ${promoTotalViews.toLocaleString()}명`
+                  : "'홍보·직접' 손님 자세히 보기"}
+              </span>
+              <span className="text-xs text-muted-foreground transition-transform group-open/dt:rotate-180" aria-hidden>▾</span>
+            </summary>
+            <div className="px-5 pb-4 pt-1 space-y-2">
+              {promoRows.length > 0 ? (
+                <>
+                  <div className="space-y-1.5">
+                    {promoRows.map(([key, n]) => (
+                      <div key={key} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span aria-hidden>{channelEmoji(key)}</span>
+                          <span className="truncate">{channelLabel(key)}</span>
+                        </span>
+                        <span className="tabular-nums font-medium">{n.toLocaleString()}명</span>
+                      </div>
+                    ))}
+                    {pureDirectViews > 0 && (
+                      <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span aria-hidden>🔖</span>
+                          <span className="truncate">그냥 직접 (주소 입력·즐겨찾기 등)</span>
+                        </span>
+                        <span className="tabular-nums">{pureDirectViews.toLocaleString()}명</span>
+                      </div>
+                    )}
+                  </div>
+                  <p className="border-t pt-2 text-[11px] leading-relaxed text-muted-foreground">
+                    이 손님들이 실제로 <b>계약·매출</b>까지 이어졌는지는 아래 <b>&lsquo;채널별 성과&rsquo;</b>에서 볼 수 있어요.
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  아직 홍보 링크로 들어온 손님이 없어요. 위 <b>&lsquo;채널별 홍보 링크&rsquo;</b>를 소개서 QR·인스타·블로그에 붙이면, 여기서 어느 홍보로 왔는지 구분돼 쌓여요.
+                </p>
+              )}
+            </div>
+          </details>
+        )}
+
+        {/* 월별 추이 — 검색으로 온 손님(막대 한 색), 아래 숫자는 그 달 발행 글 수 */}
+        {trendBuckets.length >= 2 && (
+          <div className="border-t p-4 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              {trendTotal === 0
+                ? '아직 검색·AI로 들어온 방문이 없어요. 글이 색인되면 여기에 쌓여요'
+                : '글이 쌓일수록 검색·AI로 찾아오는 고객이 늘어요'}
+            </p>
+            <div className="flex items-end justify-between gap-2 pt-1">
+              {trendBuckets.map((m) => {
+                const total = m.ai + m.seo
+                const heightPct = trendMax > 0 ? Math.max((total / trendMax) * 100, total > 0 ? 8 : 0) : 0
+                return (
+                  <div key={m.label} className="group/bar relative flex-1 flex flex-col items-center gap-1.5 min-w-0">
+                    {total > 0 && (
+                      <div className="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 z-10 hidden group-hover/bar:block whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-medium text-white shadow-lg">
+                        검색으로 {total.toLocaleString()}명
+                      </div>
+                    )}
+                    <span className="text-[11px] font-bold tabular-nums text-foreground">
+                      {total > 0 ? total.toLocaleString() : ''}
+                    </span>
+                    <div className="w-full h-24 flex items-end">
+                      {/* 한 색으로 — AI/일반을 나눠 칠하면 색 두 개를 설명할 범례가 또 필요해진다 */}
+                      <div className="w-full rounded-t bg-emerald-500" style={{ height: `${heightPct}%` }} />
+                    </div>
+                    <span className="text-[11px] text-muted-foreground">{m.label}</span>
+                    <span className="text-[10px] text-muted-foreground/70 tabular-nums">
+                      {m.published > 0 ? `글 ${m.published}` : '·'}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="text-[11px] text-muted-foreground/70 pt-2 border-t">
+              아래 숫자는 그 달 발행한 글 수예요
+            </p>
+          </div>
+        )}
+
+        {/* '문의 폼 완주율'은 뺐다 — 다단계 견적 계산기 시절 '어느 단계에서 멈췄나'를 찾던 지표인데,
+            지금은 한 화면짜리 문의 폼이라 멈춘 지점을 알려주지 못한다. 비율만 보여선 할 수 있는 일이 없다.
+            ⛔되살리지 말 것. 이탈 지점을 다시 보고 싶다면 폼이 다시 여러 단계가 된 뒤에. */}
       </details>
     </div>
   )
