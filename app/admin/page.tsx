@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { getAdminMetrics } from '@/lib/admin/metrics'
 import { getRegionCrowding } from '@/lib/admin/region-crowding'
-import { computeNrr, getMrrTrend } from '@/lib/admin/snapshot'
+import { computeNrr, getMrrTrend, NRR_MIN_COHORT } from '@/lib/admin/snapshot'
 import { getPaymentFunnel } from '@/lib/admin/payment-funnel'
 import { formatMoney } from '@/lib/format/money'
 import { formatDateTime } from '@/lib/format/datetime'
@@ -88,11 +88,18 @@ export default async function AdminMetricsPage() {
             sub="2개월치 스냅샷 필요"
           />
         ) : (
+          // 코호트가 작을 때는 초록 강조를 빼고 '참고용'임을 밝힌다.
+          // 유료 2곳에서 한 곳만 플랜을 올려도 150%가 찍히는데, 그 숫자를 실적으로 읽으면
+          // 요금제·투자 판단이 통째로 어긋난다.
           <Stat
-            label="NRR (순매출유지율)"
+            label={nrr.reliable ? 'NRR (순매출유지율)' : 'NRR (참고용)'}
             value={pct(nrr.nrr)}
-            sub={`${nrr.retainedBusinesses}/${nrr.cohortBusinesses}곳 유지 · ${nrr.previous}→${nrr.current}`}
-            accent
+            sub={
+              nrr.reliable
+                ? `${nrr.retainedBusinesses}/${nrr.cohortBusinesses}곳 유지 · ${nrr.previous}→${nrr.current}`
+                : `유료 ${nrr.cohortBusinesses}곳 기준이라 아직 지표로 쓸 수 없어요 (${NRR_MIN_COHORT}곳부터) · ${nrr.previous}→${nrr.current}`
+            }
+            accent={nrr.reliable}
           />
         )}
       </Section>

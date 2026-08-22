@@ -80,6 +80,17 @@ export async function captureMonthlySnapshot(): Promise<{ period: string; busine
 
 // ── 읽기(대시보드 표시용) ────────────────────────────────────────────────────
 
+/**
+ * NRR을 '믿어도 되는 값'으로 볼 최소 코호트 크기.
+ *
+ * ⚠️유료 업체가 2곳일 때 한 곳이 상위 플랜으로 올라가면 NRR이 150%로 찍힌다.
+ *   그 숫자는 실력이 아니라 표본이 작아서 생긴 착시인데, 화면에 크게 초록으로 뜨면
+ *   "우리 리텐션이 ServiceTitan급"으로 읽힌다. NRR은 밸류에이션 배수를 좌우하는
+ *   지표라 이 착시가 특히 위험하다.
+ * ⛔이 가드를 빼거나 숫자를 낮추지 말 것 — 표본이 차면 저절로 풀린다.
+ */
+export const NRR_MIN_COHORT = 5
+
 export interface NrrResult {
   current: string | null
   previous: string | null
@@ -87,6 +98,8 @@ export interface NrrResult {
   nrr: number | null
   cohortBusinesses: number // 이전 달 유료였던 업체 수
   retainedBusinesses: number // 그중 이번 달도 매출이 남은 업체 수
+  /** 코호트가 NRR_MIN_COHORT 이상이라 지표로 써도 되는지. false면 참고용으로만 보여준다 */
+  reliable: boolean
 }
 
 /** 최근 2개월 스냅샷으로 NRR을 계산한다. */
@@ -105,6 +118,7 @@ export async function computeNrr(): Promise<NrrResult> {
       nrr: null,
       cohortBusinesses: 0,
       retainedBusinesses: 0,
+      reliable: false,
     }
   }
 
@@ -131,6 +145,7 @@ export async function computeNrr(): Promise<NrrResult> {
     nrr: priorMrr > 0 ? retainedMrr / priorMrr : null,
     cohortBusinesses: cohort.length,
     retainedBusinesses,
+    reliable: cohort.length >= NRR_MIN_COHORT,
   }
 }
 
