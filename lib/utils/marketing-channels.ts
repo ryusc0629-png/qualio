@@ -17,7 +17,12 @@ export const MARKETING_CHANNELS: MarketingChannel[] = [
   { key: 'naver_place', label: '네이버 플레이스', emoji: '🟢', hint: '플레이스 소개/설명란에 넣는 링크', manageUrl: 'https://new.smartplace.naver.com/' },
   { key: 'naver_blog',  label: '네이버 블로그',   emoji: '📗', hint: '블로그 글 하단에 넣는 링크', manageUrl: 'https://blog.naver.com/' },
   { key: 'instagram',   label: '인스타그램',      emoji: '📷', hint: '프로필/게시물의 링크', manageUrl: 'https://www.instagram.com/' },
+  // 숏폼 3형제 — 릴스 한 편을 인스타·틱톡·쇼츠·네이버 클립에 돌려 올리므로 채널을 갈라 잡는다.
+  // ⚠️틱톡·인스타는 캡션에 쓴 링크가 눌리지 않는다 → 프로필(link in bio)에 넣어야 유입이 잡힌다.
+  { key: 'tiktok',      label: '틱톡',            emoji: '🎵', hint: '프로필 링크(캡션 링크는 안 눌려요)', manageUrl: 'https://www.tiktok.com/' },
   { key: 'youtube',     label: '유튜브',          emoji: '▶️', hint: '영상 설명란·채널 정보에 넣는 링크', manageUrl: 'https://studio.youtube.com/' },
+  // 네이버 클립은 발행할 때 '링크'를 태그로 걸 수 있다 — 숏폼 중 유일하게 영상에서 바로 눌린다
+  { key: 'naver_clip',  label: '네이버 클립',      emoji: '🎬', hint: '클립 발행할 때 링크로 태그하는 주소', manageUrl: 'https://m.blog.naver.com/' },
   { key: 'danggeun',    label: '당근',            emoji: '🥕', hint: '당근 게시글·프로필 링크', manageUrl: 'https://www.daangn.com/kr/business/' },
   { key: 'kakao',       label: '카카오톡',        emoji: '💬', hint: '채널/오픈채팅으로 보내는 링크', manageUrl: 'https://center-pf.kakao.com/' },
   { key: 'flyer',       label: '전단지·명함 QR',  emoji: '📄', hint: '인쇄물에 넣는 QR — 손님이 찍으면 견적 폼이 열려요', needsQr: true },

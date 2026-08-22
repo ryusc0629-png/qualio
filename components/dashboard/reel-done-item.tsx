@@ -96,7 +96,9 @@ export function ReelDoneItem({ reportId, url, label, source = 'report', captions
       await navigator.clipboard.writeText(c.text)
       setCopiedKey(c.key)
       setTimeout(() => setCopiedKey(null), 2500)
-      toast.success(`${c.label} 문구를 복사했어요. 붙여넣기만 하세요`)
+      // 어디에 어떻게 올리는지는 누르는 순간에 알려준다 — 화면에 상시로 깔면 글자 벽이 된다.
+      // (네이버 클립처럼 경로가 안 뻔한 채널은 이 한 줄이 없으면 사장님이 헤맨다)
+      toast.success(`${c.label} 문구를 복사했어요`, { description: c.hint, duration: 6000 })
     } catch {
       toast.warning('문구 복사가 안 됐어요. 채널을 연 뒤 다시 눌러주세요')
     }

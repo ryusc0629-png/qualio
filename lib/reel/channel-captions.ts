@@ -59,16 +59,15 @@ export function buildReelCaptions(src: Source): ReelChannelCaption[] {
       label: '인스타',
       text,
       openUrl: 'https://www.instagram.com/',
-      hint: '릴스로 올리고 문구 붙여넣기',
+      hint: '릴스로 올리고 문구 붙여넣기 (링크는 프로필에)',
     })
 
-    // 틱톡은 캡션이 짧을수록 좋아 해시태그를 조금 더 얹는다
     out.push({
       key: 'tiktok',
       label: '틱톡',
       text: tags ? `${body}\n\n${tags}` : body,
       openUrl: 'https://www.tiktok.com/upload',
-      hint: '영상 올리고 문구 붙여넣기',
+      hint: '영상 올리고 문구 붙여넣기 (링크는 프로필에)',
     })
   }
 
@@ -87,13 +86,17 @@ export function buildReelCaptions(src: Source): ReelChannelCaption[] {
       hint: '만들기 → 동영상 업로드',
     })
 
+    // ★네이버 클립은 발행할 때 '링크'를 태그로 걸 수 있다 — 숏폼 중 유일하게 영상에서 바로 눌린다.
+    //   그래서 우리 채널 목록에도 naver_clip 추적 링크를 따로 뒀다(?ch=naver_clip).
+    // ⚠️올리는 곳은 **네이버 블로그 앱(모바일)**이다: 글쓰기(+) → [클립] → 영상 → 제목·해시태그 → 발행.
+    //   PC로 올리려면 네이버TV 크리에이터 스튜디오를 따로 개설해야 해서 초기 세팅이 번거롭다.
+    //   ⛔PC 업로드 경로를 기본으로 안내하지 말 것.
     out.push({
       key: 'naver_clip',
       label: '네이버 클립',
       text: searchTags ? `${title}\n\n${searchTags}` : title,
-      // ⚠️네이버 클립은 네이버 블로그 앱(모바일)에서 올린다. PC 업로드 경로는 확인하지 못했다.
       openUrl: 'https://m.blog.naver.com/',
-      hint: '블로그 앱에서 클립으로 올리기',
+      hint: '블로그 앱 → 글쓰기(+) → 클립 → 발행할 때 링크 태그 걸기',
     })
   }
 
