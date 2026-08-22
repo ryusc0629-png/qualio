@@ -88,6 +88,14 @@ export async function GoogleProfileCard({ businessId }: { businessId: string }) 
       why: '예전에 등록해둔 게 폐업·휴업으로 남아 있으면 아무리 잘해도 후보에서 빠져요.',
     },
     {
+      // 한 번 바꾸면 끝나는 일이라 후기 모으기보다 앞 (2026-08-22 대표 지시)
+      key: 'category',
+      done: !!checks.category,
+      title: '업종을 ‘청소전문업체’로 바꾸기',
+      why: '지금 위에 뜨는 업체들은 전부 이 업종으로 돼 있어요. 다르게 돼 있으면 같은 검색에서 뒤로 밀립니다.',
+    },
+    {
+      // 맨 뒤 — 몇 주에 걸쳐 손님이 하나씩 남기는 것이라 하루 만에 끝낼 수 없다
       key: 'reviews',
       done: googleReviews >= GOOGLE_REVIEW_TARGET,
       auto: true,
@@ -96,25 +104,18 @@ export async function GoogleProfileCard({ businessId }: { businessId: string }) 
       // ⚠️ 이건 '구글에 올라간 후기 수'가 아니라 '후기 부탁을 받고 구글로 넘어간 손님 수'다.
       //    구글에 실제로 글을 썼는지는 우리가 알 수 없다(구글 계정 연동이 없다).
       //    "지금 0개"라고만 쓰면 구글 후기를 세고 있는 것처럼 읽혀서 문구를 정확히 바꿨다.
-      //    → Places API로 실제 후기 수(user_ratings_total)를 읽어오면 그때 진짜 개수로 바꿀 것.
+      //    ⛔Places API로 실제 후기 수를 읽어오지 말 것 — 대표 판단(gbp.ts 주석 참고).
       now:
         googleReviews >= GOOGLE_REVIEW_TARGET
           ? `구글로 보낸 손님 ${googleReviews}명 — 다 채웠어요`
           : `구글로 보낸 손님 ${googleReviews}명 · ${GOOGLE_REVIEW_TARGET - googleReviews}명 남았어요`,
     },
-    {
-      // 손이 제일 많이 가는 것(구글 비즈니스 프로필에 들어가 분류를 바꿔야 함) — 그래서 맨 뒤
-      key: 'category',
-      done: !!checks.category,
-      title: '업종을 ‘청소전문업체’로 바꾸기',
-      why: '지금 위에 뜨는 업체들은 전부 이 업종으로 돼 있어요. 다르게 돼 있으면 같은 검색에서 뒤로 밀립니다.',
-    },
   ]
 
   const doneCount = steps.filter((s) => s.done).length
   // '지금 할 일'은 사장님이 실제로 손댈 수 있는 것부터 고른다.
-  // 후기 모으기(auto)는 우리가 알아서 하는 거라 여기 걸리면 "하실 일 없습니다"만 뜨고,
-  // 정작 사장님이 해야 할 것이 아래 목록으로 밀려 안 보인다.
+  // 후기 모으기(auto)가 여기 걸리면 "하실 일 없습니다"만 떠서 카드가 할 말이 없어진다.
+  // 지금은 후기가 맨 뒤라 순서상으로도 그럴 일이 없지만, 순서를 또 바꿔도 안전하도록 남겨둔다.
   const current = steps.find((s) => !s.done && !s.auto) ?? steps.find((s) => !s.done) ?? null
   const rest = steps.filter((s) => s !== current)
 
