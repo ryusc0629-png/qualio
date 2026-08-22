@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { getPlanPrice, vatOf, type PlanId } from '@/lib/config/plans'
 import { applyLifetimeDiscount, BETA_SEATS } from '@/lib/config/beta'
+import { isModuleSubscriber, quoteFor } from '@/lib/config/module-subscription'
 
 export interface ChargeAmount {
   /** 정가 공급가액 (요금제 표에 적힌 금액 — 부가세 별도) */
@@ -15,6 +16,11 @@ export interface ChargeAmount {
   discountRate: number
   /** 베타 순번 (없으면 null) */
   betaNumber: number | null
+  /**
+   * 모듈 요금으로 계산했다면 그 근거 숫자(직원 수·지역 수·정기 매출).
+   * 옛 플랜으로 계산했으면 null. 주문명·영수증에 "왜 이 금액인지"를 적을 때 쓴다.
+   */
+  moduleBasis: { workers: number; regions: number; recurringRevenue: number } | null
 }
 
 /**
@@ -28,7 +34,12 @@ export interface ChargeAmount {
  *   (부가세를 먼저 더하고 할인하면 세액이 어긋나 세금계산서와 맞지 않는다)
  */
 export async function getChargeAmount(businessId: string, planId: PlanId): Promise<ChargeAmount> {
-  const listPrice = getPlanPrice(planId)
+  // 모듈을 하나라도 켠 업체는 모듈 요금으로 청구한다 — 옛 플랜 금액은 안 본다.
+  // ★화면(요금 계산기)과 여기가 반드시 같은 quoteFor()를 써야 금액이 안 어긋난다.
+  const moduleQuote = (await isModuleSubscriber(businessId))
+    ? await quoteFor(businessId)
+    : null
+  const listPrice = moduleQuote ? moduleQuote.monthly : getPlanPrice(planId)
 
   const db = createServiceClient()
   const { data } = (await db
@@ -51,6 +62,7 @@ export async function getChargeAmount(businessId: string, planId: PlanId): Promi
     amount: supplyAmount + vat,
     discountRate,
     betaNumber: data?.beta_number ?? null,
+    moduleBasis: moduleQuote?.basis ?? null,
   }
 }
 

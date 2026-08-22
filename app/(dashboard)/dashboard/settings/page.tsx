@@ -1,6 +1,8 @@
+import { ChevronRight } from 'lucide-react'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { SettingsForm } from './settings-form'
+import Link from 'next/link'
 import { CurrentPlanCard } from '@/components/dashboard/current-plan-card'
 import { CancelSubscriptionButton } from '@/components/dashboard/cancel-subscription-button'
 import { GeoPanel } from '@/components/dashboard/geo-panel'
@@ -162,6 +164,20 @@ export default async function SettingsPage() {
         lifetimeDiscountRate={business.lifetime_discount_rate ?? 0}
         betaNumber={business.beta_number ?? null}
       />
+
+      {/* 쓰는 기능 고르기 — 모듈을 켜고 끄면 요금이 그만큼 바뀐다 */}
+      <Link
+        href="/dashboard/settings/modules"
+        className="flex items-center justify-between rounded-xl border bg-card p-5 transition-colors hover:bg-muted/40"
+      >
+        <div>
+          <p className="font-semibold">쓰는 기능 고르기</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            안 쓰시는 건 끄시면 그만큼 요금이 내려가요
+          </p>
+        </div>
+        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+      </Link>
 
       {/* 구독 취소 — 유료 플랜 + 활성 상태일 때만 노출 */}
       {subscription.plan !== 'beta' && subscription.status === 'active' && (

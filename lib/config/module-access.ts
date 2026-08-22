@@ -2,6 +2,7 @@ import 'server-only'
 import { createServiceClient } from '@/lib/supabase/server'
 import { PLANS, type PlanId } from '@/lib/config/plans'
 import type { ModuleId } from '@/lib/config/modules'
+import { getEnabledModules } from '@/lib/config/module-subscription'
 
 // ────────────────────────────────────────────────────────────────────────────
 // 모듈이 켜져 있는가 — 판정 단일 소스.
@@ -47,8 +48,15 @@ export async function getPlanIdOf(businessId: string): Promise<PlanId> {
   return plan && plan in PLANS ? plan : 'beta'
 }
 
-/** 이 업체가 이 모듈을 쓸 수 있나 */
+/**
+ * 이 업체가 이 모듈을 쓸 수 있나.
+ *
+ * ★모듈을 하나라도 켠 업체는 **모듈 구독이 진실**이다 — 옛 플랜은 안 본다.
+ *   아직 안 옮긴 업체만 플랜으로 판정한다(전환기 동안 두 체계가 공존한다).
+ */
 export async function hasModule(businessId: string, moduleId: ModuleId): Promise<boolean> {
+  const enabled = await getEnabledModules(businessId)
+  if (enabled.length > 0) return enabled.some((e) => e.moduleId === moduleId)
   return planHasModule(await getPlanIdOf(businessId), moduleId)
 }
 
