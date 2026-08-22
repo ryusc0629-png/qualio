@@ -55,7 +55,7 @@ describe('영구 할인은 만들지 않는다', () => {
     // 할인이 가장 큰 대상이 모듈을 전부 사는 최고 고객이라 ARR을 영구히 깎는다.
     const q = quoteModules({ workers: 5, regions: 1, recurringRevenue: 10_000_000 })
     const expected =
-      BASE_PRICE + MODULES.field.price * 5 + MODULES.marketing.price + CLIENT_MIN
+      BASE_PRICE + MODULES.field.price * 5 + MODULES.marketing.price + 100_000  // 1,000만 × 1%
     expect(q.monthly).toBe(expected)
   })
 
@@ -74,6 +74,14 @@ describe('요금 계산', () => {
   it('정기 매출이 최소 기준 아래면 전부 같은 값이다', () => {
     expect(clientFeeFor(1_000_000)).toBe(CLIENT_MIN)
     expect(clientFeeFor(CLIENT_MIN_THRESHOLD)).toBe(CLIENT_MIN)
+  })
+
+  it('최소 요금이 낮아 실제 고객도 1%에 곧 걸린다', () => {
+    // 129,000원일 때는 정기 1,290만원을 넘어야 1%가 걸려서 사실상 정액이었다.
+    // 지금 고객 중 가장 큰 다트클린이 정기 225만원이다.
+    expect(CLIENT_MIN_THRESHOLD).toBeLessThan(5_000_000)
+    // 타겟 구간(정기 2,300만원)은 확실히 1% 적용
+    expect(clientFeeFor(23_300_000)).toBe(233_000)
   })
 
   it('최소 기준을 넘으면 매출에 비례한다', () => {

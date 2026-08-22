@@ -21,6 +21,8 @@ import { applyLifetimeDiscount, BETA_LIFETIME_DISCOUNT_RATE } from '@/lib/config
 
 const RECURRING_STEPS = [
   { label: '없어요', value: 0 },
+  { label: '월 200만원쯤', value: 2_000_000 },
+  { label: '월 500만원쯤', value: 5_000_000 },
   { label: '월 1,000만원쯤', value: 10_000_000 },
   { label: '월 3,000만원쯤', value: 30_000_000 },
   { label: '월 5,000만원쯤', value: 50_000_000 },
