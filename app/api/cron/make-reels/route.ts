@@ -124,10 +124,13 @@ async function archivePendingReels(db: SupabaseClient): Promise<number> {
   // 한 편이 8MB 안팎이라 한 번에 너무 많이 옮기면 함수 시간(300초)을 넘긴다
   const ARCHIVE_PER_RUN = 20
 
+  // ⚠️'dismissed'(사장님이 다 올리고 목록에서 치운 것)도 반드시 포함한다.
+  //   치웠다고 영상까지 버린 게 아니다 — 빼면 치운 순간 30일 시계가 돌기 시작해서,
+  //   돈 받고 만든 영상이 조용히 사라진다.
   const { data: done } = (await db
     .from('reports')
     .select('id, business_id, booking_id, reel_render_id, reel_url')
-    .eq('reel_status', REEL_DONE)
+    .in('reel_status', [REEL_DONE, 'dismissed'])
     .not('reel_url', 'is', null)
     .order('updated_at', { ascending: true })
     .limit(200)) as { data: DoneRow[] | null }

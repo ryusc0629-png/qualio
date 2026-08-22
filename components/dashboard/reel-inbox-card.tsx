@@ -1,6 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { Film, Clock, Download } from 'lucide-react'
-import { ReelShareButtons } from './reel-share-buttons'
+import { ReelDoneItem } from './reel-done-item'
 import { ReelMakeNowButton } from './reel-make-now-button'
 import { ReelAutoRefresh } from './reel-auto-refresh'
 import { getReelUsage } from '@/lib/reel/charges'
@@ -111,23 +111,12 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
       ) : (
         <div className="space-y-3">
           {done.map((r) => (
-            <div key={r.id} className="rounded-lg border p-3 space-y-3">
-              <div className="flex items-center gap-3">
-                {/* 미리보기 — 소리 없이 첫 장면만 보여준다 */}
-                <video
-                  src={r.reel_url!}
-                  className="w-16 h-24 rounded-lg object-cover bg-muted shrink-0"
-                  preload="metadata"
-                  muted
-                  playsInline
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{names.get(r.booking_id) ?? '현장'}</p>
-                  <p className="text-xs text-emerald-600 mt-0.5">올릴 준비가 됐어요</p>
-                </div>
-              </div>
-              <ReelShareButtons url={r.reel_url!} label={names.get(r.booking_id) ?? '현장'} />
-            </div>
+            <ReelDoneItem
+              key={r.id}
+              reportId={r.id}
+              url={r.reel_url!}
+              label={names.get(r.booking_id) ?? '현장'}
+            />
           ))}
 
           {waiting.map((r) => (

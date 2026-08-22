@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { deletePostAction, getTopicSuggestionsAction, setMonthlyTargetAction, publishTodayAction, markChannelsPostedAction } from '@/lib/actions/posts'
 import { approvePortfolioAction, rejectPortfolioAction } from '@/lib/actions/portfolio'
-import { dismissReelAction } from '@/lib/actions/reports'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
@@ -90,14 +89,6 @@ interface PendingPortfolio {
   after_image_urls: string[]
 }
 
-interface DoneReel {
-  reportId: string
-  reelUrl: string
-  bookingId: string
-  customerName: string
-  scheduledAt: string
-}
-
 interface PostListProps {
   posts: Post[]
   businessSlug: string | null
@@ -112,7 +103,6 @@ interface PostListProps {
   planId: string
   isTodayComplete: boolean
   pendingPortfolios?: PendingPortfolio[]
-  doneReels?: DoneReel[]
   // 오늘 글을 몇 편 더 만들 수 있는지 (하루 한도 — 원가 보호 + 몰아쓰기로 인한 검색 순위 하락 방지)
   // 서버가 이번 달 저장된 주제를 넘겨줌 — 있으면 재조회·스피너 없이 바로 표시
   initialSuggestions?: TopicSuggestion[] | null
@@ -320,102 +310,7 @@ function ImageGalleryModal({
 }
 
 // ── 릴스 미리보기 + 저장 카드 ──
-function ReelCard({
-  reel,
-  dateLabel,
-  isDismissing,
-  onDismiss,
-}: {
-  reel: DoneReel
-  dateLabel: string
-  isDismissing: boolean
-  onDismiss: () => void
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-
-  const handleSave = async () => {
-    setIsSaving(true)
-    try {
-      const res = await fetch(reel.reelUrl)
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `릴스_${reel.customerName}_${dateLabel || '영상'}.mp4`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch {
-      toast.error('저장에 실패했어요. 다시 시도해주세요')
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  return (
-    <div className="rounded-xl border border-rose-100 bg-rose-50/60 overflow-hidden">
-      {/* 헤더 — 고객명 + 날짜 + 미리보기 토글 */}
-      <div className="flex items-center gap-3 px-3 py-2.5">
-        <div className="w-9 h-9 rounded-lg bg-rose-100 flex items-center justify-center shrink-0">
-          <Film className="h-4 w-4 text-rose-500" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{reel.customerName}</p>
-          {dateLabel && <p className="text-xs text-muted-foreground">{dateLabel} 작업</p>}
-        </div>
-        <div className="flex flex-col gap-1 shrink-0">
-          <button
-            type="button"
-            onClick={() => setExpanded(!expanded)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-              expanded
-                ? 'text-rose-600 bg-white border border-rose-200 hover:bg-rose-50'
-                : 'text-white bg-rose-500 hover:bg-rose-600'
-            }`}
-          >
-            {expanded ? <><ChevronUp className="h-3.5 w-3.5" />접기</> : <><Play className="h-3.5 w-3.5" />미리보기</>}
-          </button>
-          <button
-            type="button"
-            disabled={isDismissing}
-            onClick={() => { if (confirm('이 릴스를 건너뛸까요?\n\n목록에서 사라져요.')) onDismiss() }}
-            className="flex items-center justify-center gap-1 px-2 py-1 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            <SkipForward className="h-3 w-3" />건너뛰기
-          </button>
-        </div>
-      </div>
-
-      {/* 미리보기 + 저장 버튼 */}
-      {expanded && (
-        <div className="px-3 pb-3 space-y-2.5">
-          <video
-            src={reel.reelUrl}
-            controls
-            playsInline
-            className="w-full rounded-lg aspect-[9/16] bg-black object-contain max-h-[360px]"
-          />
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={handleSave}
-            className="w-full flex items-center justify-center gap-2 h-11 rounded-lg text-sm font-semibold text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 disabled:opacity-60 transition-colors"
-          >
-            {isSaving ? (
-              <><Loader2 className="h-4 w-4 animate-spin" />저장 중...</>
-            ) : (
-              <><Save className="h-4 w-4" />내 기기에 저장하기</>
-            )}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, autoPostReadiness, planId, isTodayComplete, pendingPortfolios = [], doneReels = [], initialSuggestions = null, naverBlogId = null, danggeunBusinessUrl = null, postPlan = null }: PostListProps) {
+export function PostList({ posts: initialPosts, businessSlug, businessId, monthlyTarget: initialTarget, autoPostLimit, autoPostReadiness, planId, isTodayComplete, pendingPortfolios = [], initialSuggestions = null, naverBlogId = null, danggeunBusinessUrl = null, postPlan = null }: PostListProps) {
   const [posts] = useState(initialPosts)
   // 오름차순 정렬 (오래된 글 위 → 최신 글 아래) + 오늘 위치로 자동 스크롤
   const sortedPosts = [...posts].sort((a, b) => new Date(a.published_at).getTime() - new Date(b.published_at).getTime())
@@ -557,7 +452,8 @@ export function PostList({ posts: initialPosts, businessSlug, businessId, monthl
   // 사장님이 처리해야 할 작업물 총합
   // (이미지 미등록은 알리지 않음 — 글에 실리는 사진은 공개 승인된 작업보고 사진뿐이고,
   //  그 밖의 사진은 글별 '수정'에서 사장님이 직접 올린다)
-  const totalTodos = doneReels.length + pendingPortfolios.length + channelTodos.length
+  // ⚠️릴스는 위 '홍보 영상' 카드 한 곳에서만 센다 — 여기서 또 세면 같은 일이 두 번 있는 것처럼 보인다
+  const totalTodos = pendingPortfolios.length + channelTodos.length
 
   const { execute: fetchSuggestions, isPending: isLoadingSuggestions } = useAction(
     getTopicSuggestionsAction,
@@ -622,11 +518,6 @@ const { execute: deletePost, isPending: isDeleting } = useAction(deletePostActio
   const { execute: rejectPortfolio, isPending: isRejecting } = useAction(rejectPortfolioAction, {
     onSuccess: () => { toast.success('삭제됐어요'); setTimeout(() => window.location.replace(window.location.pathname), 1200) },
     onError: ({ error }) => { toast.error(error.serverError ?? '삭제에 실패했어요') },
-  })
-
-  const { execute: dismissReel, isPending: isDismissing } = useAction(dismissReelAction, {
-    onSuccess: () => { toast.success('건너뛰었어요'); setTimeout(() => window.location.replace(window.location.pathname), 800) },
-    onError: ({ error }) => { toast.error(error.serverError ?? '처리에 실패했어요') },
   })
 
   const { execute: publishToday, isPending: isPublishing } = useAction(publishTodayAction, {
@@ -753,33 +644,6 @@ const postUrl = (slug: string) => businessSlug ? `${appUrl}/biz/${businessSlug}/
           </div>
         ) : (
           <div className="divide-y max-h-[520px] overflow-y-auto overscroll-contain">
-
-            {/* 🎬 완성된 릴스 */}
-            {doneReels.length > 0 && (
-              <div className="px-4 sm:px-5 py-3.5">
-                <div className="flex items-center gap-1.5 mb-2.5">
-                  <Film className="h-4 w-4 text-rose-500" />
-                  <p className="text-sm font-semibold text-rose-900">완성된 릴스 {doneReels.length}개</p>
-                  <span className="text-xs text-muted-foreground hidden sm:inline">— 저장해서 SNS에 올려보세요</span>
-                </div>
-                <div className="space-y-3">
-                  {doneReels.map((reel) => {
-                    const date = reel.scheduledAt
-                      ? new Date(reel.scheduledAt).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', timeZone: 'Asia/Seoul' })
-                      : ''
-                    return (
-                      <ReelCard
-                        key={reel.reportId}
-                        reel={reel}
-                        dateLabel={date}
-                        isDismissing={isDismissing}
-                        onDismiss={() => dismissReel({ reportId: reel.reportId })}
-                      />
-                    )
-                  })}
-                </div>
-              </div>
-            )}
 
             {/* 📸 시공 사례 승인 대기 */}
             {pendingPortfolios.length > 0 && (
