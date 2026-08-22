@@ -9,6 +9,8 @@ import { ContractLockupCell } from '@/components/dashboard/contract-lockup-cell'
 import { EditCustomerButton } from '@/components/dashboard/edit-customer-button'
 import { formatFrequency } from '@/lib/utils/frequency'
 import { countPendingOnboardingReports } from '@/lib/onboarding/pending-reports'
+import { hasModule } from '@/lib/config/module-access'
+import { ModuleLocked } from '@/components/dashboard/module-locked'
 
 // 수정 창(고객·계약 수정)이 고객 정보까지 함께 고치므로 계약 조인에 고객 칸을 다 실어 온다
 type CustomerForEdit = {
@@ -40,6 +42,11 @@ export default async function ContractsPage() {
     .maybeSingle()
 
   if (!profile?.business_id) redirect('/onboarding')
+
+  // 정기계약은 거래처 Pro에 들어 있다 — 안 켠 업체에는 무엇이 들었는지 보여주고 멈춘다
+  if (!(await hasModule(profile.business_id, 'client'))) {
+    return <ModuleLocked moduleId="client" what="정기계약 관리" />
+  }
 
   // 계약 목록 (고객 정보 조인)
   const { data: contracts } = await db

@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { PAID_PLANS, formatPrice, formatPriceWithVat } from '@/lib/config/plans'
+import { BASE_PRICE } from '@/lib/config/modules'
 import { BILLING_COPY } from '@/lib/config/billing'
 import { BETA_SEATS, BETA_LIFETIME_DISCOUNT_RATE, applyLifetimeDiscount, LAUNCH_DATE_LABEL, isBeforeLaunch } from '@/lib/config/beta'
 import { getRemainingBetaSeats } from '@/lib/payments/pricing'
@@ -304,7 +305,7 @@ export default async function RootPage() {
                 베타 {BETA_SEATS}팀은 유료 전환 후에도 평생 {BETA_LIFETIME_DISCOUNT_RATE}% 할인 — {remainingSeats}자리 남았어요
               </p>
               <p className="mt-1.5 text-sm text-muted-foreground break-keep text-pretty">
-                가입 순서대로 자동 적용돼요. 성장 플랜이면 매달 {formatPrice(applyLifetimeDiscount(290_000, BETA_LIFETIME_DISCOUNT_RATE))}(부가세 별도, 실제 결제 {formatPriceWithVat(applyLifetimeDiscount(290_000, BETA_LIFETIME_DISCOUNT_RATE))}) · 플랜을 올려도 할인은 그대로 유지됩니다.
+                가입 순서대로 자동 적용돼요. 기본 요금이면 매달 {formatPrice(applyLifetimeDiscount(BASE_PRICE, BETA_LIFETIME_DISCOUNT_RATE))}(부가세 별도, 실제 결제 {formatPriceWithVat(applyLifetimeDiscount(BASE_PRICE, BETA_LIFETIME_DISCOUNT_RATE))}) · 모듈을 더해도 할인은 그대로 유지됩니다.
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
                 해지 후 다시 가입하거나 업체를 넘기면 할인은 이어지지 않아요

@@ -1,12 +1,15 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Check, Star } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { PAID_PLANS, formatPrice, formatPriceWithVat } from '@/lib/config/plans'
+import { formatPrice, formatPriceWithVat } from '@/lib/config/plans'
+import { BASE_PRICE } from '@/lib/config/modules'
 import { SiteFooter } from '@/components/site-footer'
 import { BETA_SEATS, BETA_LIFETIME_DISCOUNT_RATE, applyLifetimeDiscount, LAUNCH_DATE_LABEL, isBeforeLaunch } from '@/lib/config/beta'
 import { getRemainingBetaSeats } from '@/lib/payments/pricing'
 import { BILLING_COPY } from '@/lib/config/billing'
+import { ModuleCalculator } from '@/components/pricing/module-calculator'
+import { MODULE_CARDS } from '@/lib/config/module-cards'
 
 export const metadata: Metadata = {
   title: '요금제 | 퀄리오',
@@ -78,76 +81,48 @@ export default async function PricingPage() {
           </p>
         </div>
 
-        {/* 플랜 카드 */}
-        <div className="grid md:grid-cols-3 gap-6 mb-16">
-          {PAID_PLANS.map((plan) => (
+        {/* 모듈 — 기본 + 필요한 것만 */}
+        <div className="max-w-3xl mx-auto mb-6 text-center">
+          <h2 className="text-2xl font-bold mb-2">기본 하나에 필요한 것만 더하세요</h2>
+          <p className="text-sm text-muted-foreground">
+            안 쓰시는 건 한 푼도 안 내십니다. 직원이 늘거나 거래처가 커지면 그만큼만 올라가요.
+          </p>
+        </div>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+          {MODULE_CARDS.map((m) => (
             <div
-              key={plan.id}
-              className={`relative rounded-xl border p-6 flex flex-col ${
-                plan.highlight
-                  ? 'border-primary shadow-lg shadow-primary/10 bg-primary/5'
-                  : 'border-border bg-card'
+              key={m.name}
+              className={`rounded-xl border p-5 flex flex-col ${
+                m.core ? 'border-primary border-2 bg-primary/5' : 'border-border bg-card'
               }`}
             >
-              {/* 추천 배지 */}
-              {plan.highlight && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="bg-primary text-primary-foreground text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
-                    <Star className="h-3 w-3 fill-current" />
-                    주력 플랜
-                  </span>
-                </div>
-              )}
-
-              {/* 플랜 정보 */}
-              <div className="mb-6">
-                {plan.tagline && <p className="text-xs text-muted-foreground mb-1">{plan.tagline}</p>}
-                <h2 className="text-2xl font-bold mb-1">{plan.label}</h2>
-                {/* 주 가격은 항상 정가 — 결제창에 실제로 청구되는 금액(정가 또는 베타 할인가)과
-                    이 화면의 큰 숫자가 어긋나면 결제망 심사에서 '가격 고지 불일치'로 걸린다.
-                    베타 할인은 아래 한 줄 안내로만 알린다(결제 화면에서 정가 취소선 + 할인가로 다시 보여줌). */}
-                <div className="text-3xl font-bold mb-1">
-                  {formatPrice(plan.price)}
-                  <span className="text-sm font-normal text-muted-foreground ml-1.5">부가세 별도</span>
-                </div>
-                {/* 표시가는 공급가액이므로, 카드에 실제로 나가는 총액을 반드시 함께 밝힌다 */}
-                <p className="text-xs text-muted-foreground mb-2">
-                  실제 결제 {formatPriceWithVat(plan.price)}
-                </p>
-                {remainingSeats > 0 && (
-                  <p className="text-xs text-primary font-medium mb-1">
-                    베타 {BETA_SEATS}팀은 결제 시 {BETA_LIFETIME_DISCOUNT_RATE}% 할인 —{' '}
-                    {formatPrice(applyLifetimeDiscount(plan.price, BETA_LIFETIME_DISCOUNT_RATE))} (부가세 별도,
-                    실제 결제 {formatPriceWithVat(applyLifetimeDiscount(plan.price, BETA_LIFETIME_DISCOUNT_RATE))})
-                  </p>
-                )}
-                {/* 결제 방식 — 실제 동작(lib/config/billing.ts)과 항상 같은 문구 */}
-                <p className="text-xs text-muted-foreground mb-1">{BILLING_COPY.short}</p>
-                <p className="text-sm text-muted-foreground">{plan.target}</p>
-                <p className="text-sm font-medium mt-2 text-foreground">{plan.description}</p>
+              <div className="flex items-baseline justify-between gap-2 mb-1">
+                <h3 className="font-bold">{m.name}</h3>
+                <span className="font-extrabold whitespace-nowrap">
+                  {m.price}
+                  {m.per && <span className="text-xs font-semibold text-muted-foreground"> {m.per}</span>}
+                </span>
               </div>
-
-              {/* 기능 목록 */}
-              <ul className="space-y-2 flex-1 mb-6">
-                {plan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-sm">
-                    <Check className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                    <span>{feature}</span>
+              <p className="text-xs text-muted-foreground mb-3">{m.who}</p>
+              <ul className="space-y-2 text-sm flex-1">
+                {m.features.map((f) => (
+                  <li key={f.t} className="flex items-start gap-2">
+                    <Check className="h-3.5 w-3.5 text-primary shrink-0 mt-1" />
+                    <span>
+                      <span className="block leading-snug">{f.t}</span>
+                      {f.d && <span className="block text-xs text-muted-foreground leading-snug mt-0.5">{f.d}</span>}
+                    </span>
                   </li>
                 ))}
               </ul>
-
-              {/* CTA */}
-              <Link href="/signup">
-                <Button
-                  className="w-full"
-                  variant={plan.highlight ? 'default' : 'outline'}
-                >
-                  시작하기
-                </Button>
-              </Link>
             </div>
           ))}
+        </div>
+
+        {/* 계산기 */}
+        <div className="max-w-2xl mx-auto mb-16">
+          <ModuleCalculator betaOpen={remainingSeats > 0} />
         </div>
 
         {/* FAQ */}
@@ -177,7 +152,7 @@ export default async function PricingPage() {
               },
               {
                 q: '표시된 금액에 부가세가 포함되어 있나요?',
-                a: `요금표의 금액은 부가세가 빠진 공급가액입니다. 실제로는 여기에 부가세 10%가 더해져 결제됩니다. 예를 들어 시작 플랜은 ${formatPrice(PAID_PLANS[0].price)}에 부가세를 더해 ${formatPriceWithVat(PAID_PLANS[0].price)}이 청구됩니다. 사업자라면 매입세액 공제를 받으실 수 있습니다.`,
+                a: `요금표의 금액은 부가세가 빠진 공급가액입니다. 실제로는 여기에 부가세 10%가 더해져 결제됩니다. 예를 들어 기본은 ${formatPrice(BASE_PRICE)}에 부가세를 더해 ${formatPriceWithVat(BASE_PRICE)}이 청구됩니다. 사업자라면 매입세액 공제를 받으실 수 있습니다.`,
               },
               {
                 q: '결제 수단은 무엇을 지원하나요?',

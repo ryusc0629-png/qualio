@@ -14,7 +14,7 @@
 
 import { createServiceClient } from '@/lib/supabase/server'
 import { PLANS } from '@/lib/config/plans'
-import { parseFrequency } from '@/lib/utils/frequency'
+import { monthlyContractValue } from '@/lib/utils/recurring-revenue'
 
 // ── 타입 정의 ────────────────────────────────────────────────────────────────
 
@@ -79,7 +79,6 @@ export interface AdminMetrics {
 export const PAID_SUBSCRIPTION_STATUSES = new Set(['active', 'past_due'])
 const COMPLETED_BOOKING = 'completed'
 const OPEN_LEAD_STATUSES = new Set(['new', 'contacted', 'quoted', 'follow_up']) // 진행 중
-const WEEKS_PER_MONTH = 4.345
 
 export function planPrice(plan: string): number {
   return (PLANS as Record<string, { price: number }>)[plan]?.price ?? 0
@@ -97,16 +96,6 @@ function planLabel(plan: string): string {
 function startOfThisMonth(): Date {
   const now = new Date()
   return new Date(now.getFullYear(), now.getMonth(), 1)
-}
-
-// 정기계약 가격을 월 환산값으로 정규화한다.
-// frequency는 JSON({type, count})이며, 주 단위는 월 4.345회로 환산한다.
-// 레거시/불명 값은 contract_price를 월값으로 간주(보수적).
-function monthlyContractValue(contractPrice: number, frequencyRaw: string | null): number {
-  const f = frequencyRaw ? parseFrequency(frequencyRaw) : null
-  if (!f) return contractPrice
-  if (f.type === 'weekly') return Math.round(contractPrice * f.count * WEEKS_PER_MONTH)
-  return contractPrice * f.count
 }
 
 function rate(numerator: number, denominator: number): number {

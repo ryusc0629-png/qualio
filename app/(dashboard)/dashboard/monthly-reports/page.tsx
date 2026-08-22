@@ -8,6 +8,8 @@ import { buildMonthlyCharge, type ChargeContract, type OneOffJob } from '@/lib/r
 import { loadOneOffJobs } from '@/lib/reports/one-off-jobs'
 import { toMarketYmd } from '@/lib/format/datetime'
 import { formatAmount } from '@/lib/format/money'
+import { hasModule } from '@/lib/config/module-access'
+import { ModuleLocked } from '@/components/dashboard/module-locked'
 
 /** 방문 시각을 서울 기준 'YYYY-MM'으로 — Vercel 서버는 UTC라 변환 없이 자르면 월이 밀린다 */
 function kstMonth(iso: string): string {
@@ -28,6 +30,11 @@ export default async function MonthlyReportsPage() {
 
   if (!profile?.business_id) redirect('/onboarding')
   const businessId = profile.business_id
+
+  // 거래처 월간 리포트는 거래처 Pro에 들어 있다
+  if (!(await hasModule(businessId, 'client'))) {
+    return <ModuleLocked moduleId="client" what="거래처 월간 리포트" />
+  }
 
   // 검토 대기(pending) 리포트 + 거래처명
   // monthly_report_dispatches는 아직 database.ts 타입에 없어 느슨한 클라이언트로 접근
