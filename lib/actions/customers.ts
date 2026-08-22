@@ -45,10 +45,28 @@ export const createCustomerAction = action
   .action(async ({ parsedInput }) => {
     const { db, businessId } = await getAuthenticatedBusinessId()
 
+    // 같은 번호가 이미 명단에 있으면 만들지 않는다.
+    // ⚠️운영 DB에서 같은 사람이 12초 간격으로 두 번 등록된 게 발견됐다('지인 김효진' 2행,
+    //   한 행은 예약·계약 0으로 텅 빈 채 남음). 버튼은 isPending으로 잠겨 있으니 더블클릭이
+    //   아니라, 등록한 뒤 목록에서 못 찾아 다시 등록한 경우다.
+    //   ⛔'중복 확인' 버튼을 따로 만들지 말 것 — 시스템이 알아서 막는다.
+    // ⚠️저장된 번호가 '010-1234-5678'과 '01012345678' 두 형식으로 섞여 있다(운영 DB 확인).
+    //   그대로 비교하면 같은 사람인데 다른 사람으로 보여 중복을 놓친다 → 숫자만 남겨 비교한다.
+    const phone = normalizePhone(parsedInput.phone)
+    const { data: existing } = await db
+      .from('customers')
+      .select('id, name, phone')
+      .eq('business_id', businessId)
+
+    const dup = (existing ?? []).find((c) => normalizePhone(c.phone) === phone)
+    if (dup) {
+      throw new Error(`[APP] 이미 등록된 번호예요 — '${dup.name}'으로 명단에 있어요`)
+    }
+
     const { error } = await db.from('customers').insert({
       business_id: businessId,
       name: parsedInput.name,
-      phone: normalizePhone(parsedInput.phone),
+      phone,
       address: parsedInput.address || null,
       category: parsedInput.category || null,
       type: parsedInput.type,
