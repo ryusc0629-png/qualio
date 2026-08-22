@@ -76,6 +76,41 @@ export const addWorkerAction = action
     return { success: true }
   })
 
+// 직원/도급사 수정 — 이름·연락처·유형·색상
+//
+// 등록할 때 적은 이름이 그대로 굳어 고칠 데가 없었다. 특히 도급사를 상호로 적어둔 곳은
+// 고객에게 나가는 표기가 업체명으로 대체되는데(customerFacingWorkerName), 사람 이름으로
+// 고쳐 적으면 '김성현 팀장님'으로 나가므로 이 창에서 바로잡을 수 있어야 한다.
+export const updateWorkerAction = action
+  .schema(z.object({
+    workerId: z.string().uuid(),
+    name:  z.string().min(1, '이름을 입력해주세요').max(20),
+    phone: z.string().optional(),
+    type:  z.string().refine((v) => ['employee', 'contractor'].includes(v), '유형을 선택해주세요'),
+    color: z.string().min(4).max(7),
+  }))
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+
+    // business_id를 함께 걸어 남의 업체 직원이 수정되지 않게 한다
+    const { error } = await db
+      .from('workers' as never)
+      .update({
+        name:  parsedInput.name,
+        phone: parsedInput.phone || null,
+        type:  parsedInput.type,
+        color: parsedInput.color,
+      } as never)
+      .eq('id' as never, parsedInput.workerId)
+      .eq('business_id' as never, businessId)
+
+    if (error) throw new Error('[APP] 저장 못 했어요. 다시 눌러주세요')
+
+    revalidatePath('/dashboard/schedule')
+    revalidatePath('/dashboard/contractors')
+    return { success: true }
+  })
+
 // 직원/도급사 삭제
 export const deleteWorkerAction = action
   .schema(z.object({ workerId: z.string().uuid() }))

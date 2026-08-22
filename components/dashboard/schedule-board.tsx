@@ -17,14 +17,14 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { addDays, format, getDaysInMonth } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle2, Smartphone, CalendarDays, FileText, CalendarOff } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, Pencil, CheckCircle2, Smartphone, CalendarDays, FileText, CalendarOff } from 'lucide-react'
 import { getHolidayName } from '@/lib/holidays/kr'
 import Link from 'next/link'
 import { formatPhone } from '@/lib/format/phone'
 import { extractPersonName, customerFacingWorkerName } from '@/lib/workers/customer-facing-name'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
-import { assignBookingAction, assignBookingAndPropagateAction, addWorkerAction, deleteWorkerAction, updateBookingWorkersAction, clearHolidayVisitsAction } from '@/lib/actions/workers'
+import { assignBookingAction, assignBookingAndPropagateAction, addWorkerAction, updateWorkerAction, deleteWorkerAction, updateBookingWorkersAction, clearHolidayVisitsAction } from '@/lib/actions/workers'
 import { BookingDetailSheet, type AlimtalkSentAt } from '@/components/dashboard/booking-detail-sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -254,16 +254,40 @@ function DraggableBookingCard({
   )
 }
 
-// ── 직원 추가 다이얼로그 ─────────────────────────────────
+// ── 직원 등록·수정 다이얼로그 ────────────────────────────
+//
+// 등록과 수정이 같은 창이다. 칸이 똑같은데 창을 둘로 나누면
+// 사장님이 "어디서 고치더라"를 또 찾아야 한다.
 
-function AddWorkerDialog() {
+interface EditableWorker {
+  id: string
+  name: string
+  phone: string | null
+  type: string
+  color: string
+}
+
+function WorkerDialog({ worker }: { worker?: EditableWorker }) {
+  const isEdit = !!worker
   const [open, setOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [phone, setPhone] = useState('')
-  const [type, setType] = useState('employee')
-  const [color, setColor] = useState(WORKER_COLORS[0]!)
+  const [name, setName] = useState(worker?.name ?? '')
+  const [phone, setPhone] = useState(worker?.phone ?? '')
+  const [type, setType] = useState(worker?.type ?? 'employee')
+  const [color, setColor] = useState(worker?.color ?? WORKER_COLORS[0]!)
 
-  const { execute, isPending } = useAction(addWorkerAction, {
+  // 창을 열 때마다 지금 저장된 값에서 다시 시작한다
+  // (고치다 말고 닫았을 때 그 값이 남아 있으면 다음에 열었을 때 헷갈린다)
+  const resetToSaved = (nextOpen: boolean) => {
+    if (nextOpen && worker) {
+      setName(worker.name)
+      setPhone(worker.phone ?? '')
+      setType(worker.type)
+      setColor(worker.color)
+    }
+    setOpen(nextOpen)
+  }
+
+  const addWorker = useAction(addWorkerAction, {
     onSuccess: () => {
       toast.success('등록됐어요!')
       setOpen(false)
@@ -273,17 +297,44 @@ function AddWorkerDialog() {
     onError: ({ error }) => toast.error(error.serverError ?? '등록에 실패했어요'),
   })
 
+  const updateWorker = useAction(updateWorkerAction, {
+    onSuccess: () => {
+      toast.success('저장됐어요!')
+      setOpen(false)
+      window.location.replace(window.location.href)
+    },
+    onError: ({ error }) => toast.error(error.serverError ?? '저장 못 했어요. 다시 눌러주세요'),
+  })
+
+  const isPending = isEdit ? updateWorker.isPending : addWorker.isPending
+
+  const submit = () => {
+    const payload = { name: name.trim(), phone: phone || undefined, type, color }
+    if (worker) updateWorker.execute({ workerId: worker.id, ...payload })
+    else addWorker.execute(payload)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={resetToSaved}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs">
-          <UserPlus className="h-3.5 w-3.5" />
-          직원/도급사 추가
-        </Button>
+        {isEdit ? (
+          <button
+            type="button"
+            title="이름·연락처 고치기"
+            className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+        ) : (
+          <Button variant="outline" size="sm" className="gap-1.5 h-8 text-xs">
+            <UserPlus className="h-3.5 w-3.5" />
+            직원/도급사 추가
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>직원·도급사 등록</DialogTitle>
+          <DialogTitle>{isEdit ? '직원·도급사 수정' : '직원·도급사 등록'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-2">
           <div className="space-y-1.5">
@@ -363,9 +414,11 @@ function AddWorkerDialog() {
           <Button
             className="w-full h-11"
             disabled={isPending || !name.trim()}
-            onClick={() => execute({ name: name.trim(), phone: phone || undefined, type, color })}
+            onClick={submit}
           >
-            {isPending ? '등록 중...' : '등록하기'}
+            {isPending
+              ? (isEdit ? '저장 중...' : '등록 중...')
+              : (isEdit ? '저장하기' : '등록하기')}
           </Button>
         </div>
       </DialogContent>
@@ -793,7 +846,7 @@ export function ScheduleBoard({
               </Link>
             </Button>
           )}
-          <AddWorkerDialog />
+          <WorkerDialog />
         </div>
       </div>
 
@@ -919,7 +972,18 @@ export function ScheduleBoard({
                         )}
                       </div>
                       {row.id && (
-                        <DeleteWorkerButton workerId={row.id} workerName={row.label} />
+                        <div className="flex items-center shrink-0">
+                          <WorkerDialog
+                            worker={{
+                              id: row.id,
+                              name: row.label,
+                              phone: row.phone ?? null,
+                              type: row.type ?? 'employee',
+                              color: row.color,
+                            }}
+                          />
+                          <DeleteWorkerButton workerId={row.id} workerName={row.label} />
+                        </div>
                       )}
                     </div>
                     {row.id && (
