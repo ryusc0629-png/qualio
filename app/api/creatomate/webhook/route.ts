@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { sendPushToBusiness } from '@/lib/push/web-push'
 import { REEL_DONE, REEL_FAILED } from '@/lib/reel/queue'
 import { recordReelCharge } from '@/lib/reel/charges'
+import { archiveReelToStorage } from '@/lib/reel/archive'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 interface CreatomateWebhookPayload {
@@ -36,6 +37,25 @@ export async function POST(req: NextRequest) {
       .eq('reel_render_id' as never, payload.id)
       .select('id, business_id, booking_id')
       .maybeSingle() as { data: { id: string; business_id: string; booking_id: string } | null }
+
+    // ★Creatomate는 결과물을 30일만 보관하고 지운다. 바로 우리 스토리지로 옮겨 담는다.
+    //   옮기기 전에 위에서 이미 Creatomate 주소로 완료 처리를 해뒀기 때문에, 여기서
+    //   실패해도 영상이 사라지진 않는다(30일 안엔 그 주소가 살아 있다).
+    //   못 옮긴 건은 make-reels 크론이 매일 다시 시도한다.
+    if (report?.business_id) {
+      const archivedUrl = await archiveReelToStorage(db as unknown as SupabaseClient, {
+        businessId: report.business_id,
+        bookingId: report.booking_id,
+        renderId: payload.id,
+        sourceUrl: payload.url,
+      })
+      if (archivedUrl) {
+        await db
+          .from('reports')
+          .update({ reel_url: archivedUrl } as never)
+          .eq('id', report.id)
+      }
+    }
 
     // 완성됐다고 알려주지 않으면 대표가 대시보드를 열어볼 이유가 없다.
     // 알림이 실패해도 영상은 이미 만들어졌으므로 웹훅은 성공으로 응답한다.

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { renderReelForReport } from '@/lib/reel/render'
-import { REEL_QUEUED } from '@/lib/reel/queue'
+import { REEL_QUEUED, REEL_DONE } from '@/lib/reel/queue'
+import { archiveReelToStorage, isArchivedUrl } from '@/lib/reel/archive'
 
 // 대기열에 들어온 홍보 영상을 실제로 만든다.
 //
@@ -34,6 +35,14 @@ interface QueuedRow {
   id: string
   business_id: string
   reel_queued_at: string | null
+}
+
+interface DoneRow {
+  id: string
+  business_id: string
+  booking_id: string
+  reel_render_id: string | null
+  reel_url: string | null
 }
 
 export async function GET(request: NextRequest) {
@@ -86,10 +95,54 @@ export async function GET(request: NextRequest) {
 
   if (failures.length > 0) console.error('[Cron] 홍보 영상 제작 실패:', failures.join(' / '))
 
+  const archived = await archivePendingReels(db)
+
   return NextResponse.json({
     ok: true,
     made,
     skipped: rows.length - picked.length,
     failed: failures.length,
+    archived,
   })
+}
+
+/**
+ * 아직 Creatomate 주소를 보고 있는 완성 영상을 우리 스토리지로 옮긴다.
+ *
+ * ★Creatomate는 결과물을 30일만 보관하고 지운다. 옮기는 일은 웹훅에서 이미 하지만,
+ *   웹훅이 실패하거나(네트워크·타임아웃) 이 기능 이전에 만들어진 영상은 그대로 남는다.
+ *   그것들이 조용히 만료되면 마케팅 화면에 릴스는 보이는데 공유·내려받기가 죽는다.
+ *   하루 한 번 훑어 남은 것을 마저 옮긴다 — 30일 안에 몇 번이고 다시 시도할 수 있다.
+ */
+async function archivePendingReels(db: SupabaseClient): Promise<number> {
+  // 한 편이 8MB 안팎이라 한 번에 너무 많이 옮기면 함수 시간(300초)을 넘긴다
+  const ARCHIVE_PER_RUN = 20
+
+  const { data: done } = (await db
+    .from('reports')
+    .select('id, business_id, booking_id, reel_render_id, reel_url')
+    .eq('reel_status', REEL_DONE)
+    .not('reel_url', 'is', null)
+    .order('updated_at', { ascending: true })
+    .limit(200)) as { data: DoneRow[] | null }
+
+  const pending = (done ?? []).filter((r) => !isArchivedUrl(r.reel_url)).slice(0, ARCHIVE_PER_RUN)
+  if (pending.length === 0) return 0
+
+  let moved = 0
+  for (const row of pending) {
+    const url = await archiveReelToStorage(db, {
+      businessId: row.business_id,
+      bookingId: row.booking_id,
+      renderId: row.reel_render_id ?? row.id,
+      sourceUrl: row.reel_url!,
+    })
+    if (url) {
+      await db.from('reports').update({ reel_url: url } as never).eq('id', row.id)
+      moved++
+    }
+  }
+
+  console.log(`[Cron] 홍보 영상 보관 — ${moved}/${pending.length}편을 우리 스토리지로 옮겼어요`)
+  return moved
 }
