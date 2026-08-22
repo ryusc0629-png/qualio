@@ -32,11 +32,13 @@ export type LockupVisit = {
 }
 
 export interface TodayLockupData {
-  hasContracts: boolean // 문단속을 켠 정기계약이 하나라도 있는지
+  hasContracts: boolean // 오늘 지켜볼 계약(문단속 또는 작업 항목)이 하나라도 있는지
   visits: LockupVisit[]
   durationById: Map<string, number>
   // 계약별 작업 체크리스트 항목
   checklistByContract: Map<string, ChecklistItem[]>
+  // 계약별 문단속 사용 여부 — 상태 판정이 갈린다(computeVisitStatus 주석 참고)
+  lockupById: Map<string, boolean>
 }
 
 // 오늘(KST) 하루 범위의 UTC ISO 문자열
@@ -54,24 +56,35 @@ export async function getTodayLockupData(
   db: SupabaseClient,
   businessId: string,
 ): Promise<TodayLockupData> {
-  // 1) 문단속 필요 계약 (작업 체크리스트 항목도 함께)
+  // 1) 오늘 지켜볼 계약 — 문단속을 켰거나, 작업 항목을 정해둔 계약.
+  //    ⚠️예전엔 requires_lockup=true만 가져왔다. 그래서 문단속은 안 쓰고 작업 항목만 정한 현장은
+  //      '오늘 현장 현황'에 아예 안 떴고, 직원이 올린 항목 사진을 사장님이 볼 화면이 없었다.
+  //      두 기능은 독립이다 — 하나만 켜도 오늘 현황에 나와야 한다.
   const { data: contractsRaw } = (await db
     .from('contracts')
-    .select('id, expected_duration_minutes, checklist_items' as never)
-    .eq('business_id', businessId)
-    .eq('requires_lockup' as never, true)) as unknown as {
-    data: { id: string; expected_duration_minutes: number | null; checklist_items: ChecklistItem[] | null }[] | null
+    .select('id, expected_duration_minutes, checklist_items, requires_lockup' as never)
+    .eq('business_id', businessId)) as unknown as {
+    data: {
+      id: string
+      expected_duration_minutes: number | null
+      checklist_items: ChecklistItem[] | null
+      requires_lockup: boolean | null
+    }[] | null
   }
-  const contracts = contractsRaw ?? []
+  const contracts = (contractsRaw ?? []).filter(
+    (c) => c.requires_lockup === true || (c.checklist_items?.length ?? 0) > 0,
+  )
   const durationById = new Map(
     contracts.map((c) => [c.id, c.expected_duration_minutes ?? LOCKUP_DEFAULT_DURATION_MINUTES]),
   )
   const checklistByContract = new Map(
     contracts.map((c) => [c.id, c.checklist_items ?? []]),
   )
+  // 문단속을 켠 계약인지 — 안 켠 곳은 마감 사진이 없어 '미마감'으로 판정하면 안 된다
+  const lockupById = new Map(contracts.map((c) => [c.id, c.requires_lockup === true]))
 
   if (durationById.size === 0) {
-    return { hasContracts: false, visits: [], durationById, checklistByContract }
+    return { hasContracts: false, visits: [], durationById, checklistByContract, lockupById }
   }
 
   // 2) 오늘 문단속 현장 방문
@@ -89,18 +102,36 @@ export async function getTodayLockupData(
     .not('status', 'in', '("cancelled","no_show")')
     .order('scheduled_at', { ascending: true })) as unknown as { data: LockupVisit[] | null }
 
-  return { hasContracts: true, visits: data ?? [], durationById, checklistByContract }
+  return { hasContracts: true, visits: data ?? [], durationById, checklistByContract, lockupById }
 }
 
 // 방문 하나의 상태 판정 (마감됨 / 미도착 / 작업 중 / 미마감 확인 필요)
+//
+// ⚠️ 문단속을 안 켠 현장(작업 항목만 쓰는 곳)은 도착·마감 사진을 아예 안 올린다
+//    (checkin_at·checkout_at은 그 사진을 올릴 때만 찍힌다). 그대로 판정하면 종일 '미도착'으로
+//    떠서 화면이 거짓말을 한다. 그런 현장은 '작업 항목을 얼마나 채웠나'로 판정하고,
+//    마감 기한이 없으니 '미마감(overdue)'도 절대 붙이지 않는다.
 export function computeVisitStatus(
   v: LockupVisit,
   durationById: Map<string, number>,
   nowMs: number,
+  opts?: { lockupById?: Map<string, boolean>; checklistByContract?: Map<string, ChecklistItem[]> },
 ): LockupVisitStatus {
+  const cid = v.contract_id ?? ''
+  const usesLockup = opts?.lockupById ? opts.lockupById.get(cid) === true : true
+
+  if (!usesLockup) {
+    const items = opts?.checklistByContract?.get(cid) ?? []
+    if (items.length === 0) return v.checkout_at ? 'done' : 'not_arrived'
+    const photos = v.checklist_photos ?? {}
+    const filled = items.filter((it) => (photos[it.id] ?? []).length > 0).length
+    if (filled === 0) return 'not_arrived'
+    return filled === items.length ? 'done' : 'working'
+  }
+
   if (v.checkout_at) return 'done'
   if (!v.checkin_at) return 'not_arrived'
-  const dur = durationById.get(v.contract_id ?? '') ?? LOCKUP_DEFAULT_DURATION_MINUTES
+  const dur = durationById.get(cid) ?? LOCKUP_DEFAULT_DURATION_MINUTES
   const deadline = new Date(v.checkin_at).getTime() + (dur + LOCKUP_BUFFER_MINUTES) * 60 * 1000
   return nowMs >= deadline ? 'overdue' : 'working'
 }
@@ -116,11 +147,12 @@ export function summarizeLockup(
   visits: LockupVisit[],
   durationById: Map<string, number>,
   nowMs: number,
+  opts?: { lockupById?: Map<string, boolean>; checklistByContract?: Map<string, ChecklistItem[]> },
 ): LockupSummary {
   let done = 0
   let overdue = 0
   for (const v of visits) {
-    const s = computeVisitStatus(v, durationById, nowMs)
+    const s = computeVisitStatus(v, durationById, nowMs, opts)
     if (s === 'done') done += 1
     else if (s === 'overdue') overdue += 1
   }

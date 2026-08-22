@@ -191,7 +191,11 @@ export function ContractLockupCell({
               <p className="text-xs text-muted-foreground leading-relaxed">
                 이 현장에 갈 때마다 해야 할 일을 적어두세요. 직원 휴대폰에 그대로 뜨고,
                 <b className="text-foreground/70"> 항목마다 사진을 올려야 &lsquo;작업 완료&rsquo;를 누를 수 있어요.</b>
-                {' '}빠뜨리는 걸 막고, 거래처에 보낼 사진도 저절로 모입니다. 비워두면 사용 안 해요.
+                {/* ⚠️'거래처에 보낼 사진도 모인다'고 적었다가 뺐다 — 월간 보고서엔 아직 안 실린다.
+                    (사장님이 2026-08-19에 월간 보고서의 '작업 사진' 절을 없애기로 했고, 이 사진을
+                     어떤 형태로 실을지는 따로 정해야 한다) 못 하는 걸 적어두지 말 것. */}
+                {' '}빠뜨리는 걸 막고, 사장님은 <b className="text-foreground/70">홈 → 오늘 현장</b>에서
+                항목별 사진을 확인할 수 있어요. 비워두면 사용 안 해요.
               </p>
 
               {items.length > 0 && (

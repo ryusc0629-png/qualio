@@ -46,7 +46,7 @@ export default async function AttendancePage() {
   const businessId = profile.business_id
 
   // 오늘 문단속 현장 데이터 (공용 로직 — 홈 카드와 동일한 계산)
-  const { hasContracts, visits, durationById, checklistByContract } = await getTodayLockupData(db, businessId)
+  const { hasContracts, visits, durationById, checklistByContract, lockupById } = await getTodayLockupData(db, businessId)
 
   // 담당자 이름 맵
   const { data: workers } = await db
@@ -61,7 +61,8 @@ export default async function AttendancePage() {
   const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000)
   const now = Date.now()
   /* eslint-enable react-hooks/purity */
-  const withStatus = visits.map((v) => ({ v, s: computeVisitStatus(v, durationById, now) }))
+  // 문단속을 안 켠 현장은 작업 항목 진행으로 판정한다 — 안 넘기면 종일 '미도착'으로 뜬다
+  const withStatus = visits.map((v) => ({ v, s: computeVisitStatus(v, durationById, now, { lockupById, checklistByContract }) }))
   const doneCount = withStatus.filter((x) => x.s === 'done').length
   const overdueCount = withStatus.filter((x) => x.s === 'overdue').length
 
@@ -86,9 +87,10 @@ export default async function AttendancePage() {
       {!hasContracts ? (
         <div className="rounded-lg border border-dashed p-12 text-center space-y-2">
           <Lock className="h-10 w-10 mx-auto text-muted-foreground/50" />
-          <p className="text-sm text-muted-foreground">아직 문단속 현장이 없어요</p>
+          <p className="text-sm text-muted-foreground">아직 지켜볼 현장이 없어요</p>
           <p className="text-xs text-muted-foreground">
-            정기계약 화면에서 현장의 &lsquo;문단속&rsquo;을 켜면 여기에 도착·마감 현황이 나타나요
+            고객 관리에서 정기계약의 &lsquo;문단속&rsquo;을 켜거나 &lsquo;현장에서 할 일&rsquo;을 정하면
+            여기에 오늘 현황이 나타나요
           </p>
         </div>
       ) : (

@@ -369,7 +369,10 @@ export default async function DashboardPage() {
 
   // 오늘 문단속 현장 현황 — 사이드바에서 내린 대신 홈 카드로 노출 (문제 있을 때만 눈에 띔)
   const lockupData = await getTodayLockupData(db as unknown as SupabaseClient, businessId)
-  const lockup = summarizeLockup(lockupData.visits, lockupData.durationById, Date.now())
+  const lockup = summarizeLockup(lockupData.visits, lockupData.durationById, Date.now(), {
+    lockupById: lockupData.lockupById,
+    checklistByContract: lockupData.checklistByContract,
+  })
 
   // 자동 글쓰기가 재료 부족으로 멈춰 있는지 — 마케팅 메뉴를 안 들어가면 모르니 홈에서도 알린다
   const autoPostReadiness = await checkAutoPostReadiness(db as unknown as SupabaseClient, businessId)
@@ -390,9 +393,9 @@ export default async function DashboardPage() {
     <Link href="/dashboard/attendance">
       <div className="flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2.5 hover:border-primary/40 transition-colors">
         <Lock className="h-3.5 w-3.5 text-primary shrink-0" />
-        <span className="text-xs text-muted-foreground">오늘 현장 문단속</span>
+        <span className="text-xs text-muted-foreground">오늘 현장</span>
         <span className="text-xs font-semibold">
-          {lockup.total}곳 중 <span className="text-emerald-600">{lockup.done}곳 마감</span>
+          {lockup.total}곳 중 <span className="text-emerald-600">{lockup.done}곳 완료</span>
         </span>
         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 ml-auto shrink-0" />
       </div>
