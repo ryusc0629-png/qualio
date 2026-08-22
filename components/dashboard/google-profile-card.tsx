@@ -81,10 +81,14 @@ export async function GoogleProfileCard({ businessId }: { businessId: string }) 
       auto: true,
       title: '손님 후기 5개 받기',
       why: '후기가 5개는 있어야 AI가 우리를 후보로 봐요. 작업이 끝난 손님에게 후기 부탁 문자가 자동으로 나가고 있어요.',
+      // ⚠️ 이건 '구글에 올라간 후기 수'가 아니라 '후기 부탁을 받고 구글로 넘어간 손님 수'다.
+      //    구글에 실제로 글을 썼는지는 우리가 알 수 없다(구글 계정 연동이 없다).
+      //    "지금 0개"라고만 쓰면 구글 후기를 세고 있는 것처럼 읽혀서 문구를 정확히 바꿨다.
+      //    → Places API로 실제 후기 수(user_ratings_total)를 읽어오면 그때 진짜 개수로 바꿀 것.
       now:
         googleReviews >= GOOGLE_REVIEW_TARGET
-          ? `${googleReviews}개 — 다 채웠어요`
-          : `지금 ${googleReviews}개 · ${GOOGLE_REVIEW_TARGET - googleReviews}개 남았어요`,
+          ? `구글로 보낸 손님 ${googleReviews}명 — 다 채웠어요`
+          : `구글로 보낸 손님 ${googleReviews}명 · ${GOOGLE_REVIEW_TARGET - googleReviews}명 남았어요`,
     },
     {
       key: 'rating',
@@ -120,7 +124,12 @@ export async function GoogleProfileCard({ businessId }: { businessId: string }) 
         </p>
       </div>
 
-      {/* 진행 막대 — 칸이 하나씩 켜지는 게 보여야 계속하게 된다 */}
+      {/* 진행 막대 — 칸이 하나씩 켜지는 게 보여야 계속하게 된다.
+          ⚠️ '맞춰졌어요'가 아니라 '해두셨어요'다. 이 목록은 구글을 들여다보고 판정하는 게 아니라
+             사장님이 직접 하고 표시하는 것이다. 우리가 확인한 것처럼 말하지 말 것.
+          ⛔구글 Places API로 실제 값을 읽어오지 말 것 — 2026-08-22 대표 판단.
+            "아무리 소액이라도 굳이 매일 측정해줄 필요 없다. 그럴 거면 네이버 스마트플레이스도
+             매일 체크해줘야 한다. 그냥 하도록 시키기만 하면 된다." */}
       <div>
         <div className="flex gap-1.5">
           {steps.map((s) => (
@@ -128,7 +137,7 @@ export async function GoogleProfileCard({ businessId }: { businessId: string }) 
           ))}
         </div>
         <p className="text-xs text-muted-foreground mt-1.5">
-          {doneCount === steps.length ? '다 채웠어요! 🎉' : `${steps.length}개 중 ${doneCount}개 맞춰졌어요`}
+          {doneCount === steps.length ? '다 해두셨어요! 🎉' : `${steps.length}가지 중 ${doneCount}가지 해두셨어요`}
         </p>
       </div>
 
