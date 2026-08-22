@@ -143,14 +143,19 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
 
   // 방문 — 예전엔 '어디서 들어오나'라는 별도 상자였다. 방문만 따로 보면 사장님이 할 수 있는 일이 없어
   // (1,000명이 왔다는데 그래서 뭘 하나) 같은 표의 맨 왼쪽 열로 내렸다. 오른쪽 끝 매출이 주인공이다.
+  // ★채널 태그(?ch=)가 붙어 있으면 그 채널로 센다 — 접속 경로(referrer)보다 우선.
+  //   사장님이 광고 랜딩 URL에 직접 심어둔 표식이라 추정보다 정확하다.
+  //   ⚠️이 순서를 뒤집으면 유료 광고가 '검색으로 온 손님'에 섞인다.
+  //     (구글 검색광고 22건이 source='google'이라 무료 검색으로 세어지고 있었다)
   const knownChannelKeys = new Set(ALL_CHANNELS.map((c) => c.key))
+  const isSearchSource = (s: string) => isAiSource(s) || ['google', 'naver', 'daum'].includes(s)
   for (const p of pageViewsResult.data ?? []) {
-    if (isAiSource(p.source) || ['google', 'naver', 'daum'].includes(p.source)) bump(SEARCH_KEY, { visits: 1 })
-    else bump(p.channel && knownChannelKeys.has(p.channel) ? p.channel : DIRECT_KEY, { visits: 1 })
+    if (p.channel && knownChannelKeys.has(p.channel)) bump(p.channel, { visits: 1 })
+    else if (isSearchSource(p.source)) bump(SEARCH_KEY, { visits: 1 })
+    else bump(DIRECT_KEY, { visits: 1 })
   }
   for (const v of (postViewsResult.data ?? []) as { source: string; viewed_at: string }[]) {
-    const searched = isAiSource(v.source) || ['google', 'naver', 'daum'].includes(v.source)
-    bump(searched ? SEARCH_KEY : DIRECT_KEY, { visits: 1 })
+    bump(isSearchSource(v.source) ? SEARCH_KEY : DIRECT_KEY, { visits: 1 })
   }
 
   // 검색으로 온 손님의 월별 추이 + 그 달 발행한 글 수 — "글을 쓰면 손님이 는다"를 눈으로 보여준다
@@ -169,12 +174,16 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
     trendBuckets.push({ label: `${d.getUTCMonth() + 1}월`, searched: 0, published: postsByMonth[key] ?? 0 })
   }
   const tallyTrend = (source: string, at: string | null) => {
-    if (!at) return
-    if (!isAiSource(source) && !['google', 'naver', 'daum'].includes(source)) return
+    if (!at || !isSearchSource(source)) return
     const idx = trendIndex.get(at.slice(0, 7))
     if (idx !== undefined) trendBuckets[idx].searched++
   }
-  for (const p of pageViewsResult.data ?? []) tallyTrend(p.source, p.viewed_at)
+  // 채널 태그가 붙은 방문(=광고·홍보 링크로 들어온 것)은 이 막대에서 뺀다.
+  // 광고로 데려온 손님을 '검색이 스스로 데려온 손님'으로 세면 안 된다.
+  for (const p of pageViewsResult.data ?? []) {
+    if (p.channel && knownChannelKeys.has(p.channel)) continue
+    tallyTrend(p.source, p.viewed_at)
+  }
   for (const v of (postViewsResult.data ?? []) as { source: string; viewed_at: string }[]) tallyTrend(v.source, v.viewed_at)
   const trendMax = trendBuckets.reduce((m, x) => Math.max(m, x.searched), 0)
 
@@ -376,11 +385,14 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
              "글을 쓰면 손님이 는다"를 보여주는 게 이 그래프의 일이라, 그 업체에서 사라지면 안 된다. */}
       {trendBuckets.length >= 2 && (
         <div className="mt-4 border-t pt-4 space-y-3">
+          {/* ⛔'광고비 0원'을 되살리지 말 것 — 유료 광고를 돌리는 업체에겐 사실이 아니다.
+              (다트클린만 해도 네이버 파워링크·구글 검색광고를 함께 쓰고 있다)
+              아래 막대는 광고·홍보 링크(?ch=)로 들어온 방문을 빼고 센 것이다. */}
           <p className="text-xs text-muted-foreground">
-            💚 광고비 <b className="text-foreground/80">0원</b> —{' '}
+            🔍 <b className="text-foreground/80">광고 없이</b> 검색으로 찾아온 손님 —{' '}
             {trendMax === 0
-              ? '아직 검색으로 들어온 방문이 없어요. 글이 색인되면 여기에 쌓여요'
-              : '글이 쌓일수록 검색으로 찾아오는 손님이 늘어요'}
+              ? '아직 없어요. 글이 검색에 잡히면 여기에 쌓여요'
+              : '글이 쌓일수록 늘어요'}
           </p>
           <div className="flex items-end justify-between gap-2 pt-1">
             {trendBuckets.map((m) => {
