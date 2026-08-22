@@ -1,7 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { MapPin, Clock, ChevronRight, Briefcase, CalendarClock } from 'lucide-react'
+import { MapPin, Clock, ChevronRight, Briefcase, CalendarClock, CalendarDays } from 'lucide-react'
 import { WorkerPushToggle } from '@/components/field/worker-push-toggle'
 
 // workers 테이블 타입 (Supabase 타입 아직 미생성)
@@ -103,11 +103,15 @@ export default async function FieldDashboard({ params }: Props) {
 
   const jobs = bookings ?? []
 
-  // 내일 일정 — 직원이 전날 미리 파악하도록 (전날 알림에서 이 화면으로 온다)
+  // 앞으로 일정 — 내일부터 7일치를 한 번에 가져온다.
+  // 전날 알림(매일)과 이번 주 알림(일요일)이 모두 이 화면으로 오기 때문에, 알림에 "이번 주 5곳"이라
+  // 적혔는데 화면엔 내일까지만 있으면 직원이 알림을 믿지 않게 된다. 범위를 알림과 맞춘다.
   const kstTomorrow = new Date(kstNow.getTime() + 24 * 60 * 60 * 1000)
   const tomorrowStr = kstTomorrow.toISOString().slice(0, 10)
   const tomorrowStart = new Date(`${tomorrowStr}T00:00:00+09:00`).toISOString()
-  const tomorrowEnd = new Date(`${tomorrowStr}T23:59:59+09:00`).toISOString()
+  const kstWeekEnd = new Date(kstNow.getTime() + 7 * 24 * 60 * 60 * 1000)
+  const weekEndStr = kstWeekEnd.toISOString().slice(0, 10)
+  const tomorrowEnd = new Date(`${weekEndStr}T23:59:59+09:00`).toISOString()
 
   const { data: tomorrowBookings } = assignedIds.length > 0
     ? await (db
@@ -131,10 +135,32 @@ export default async function FieldDashboard({ params }: Props) {
         .not('status', 'in', '("cancelled","no_show")')
         .order('scheduled_at', { ascending: true }) as unknown as Promise<{ data: BookingRow[] | null }>)
 
-  const tomorrowJobs = tomorrowBookings ?? []
+  const upcomingJobs = tomorrowBookings ?? []
   // 표시는 실제 시각(now)에 Asia/Seoul을 적용한다. kstNow(이미 +9h)에 다시 timeZone을 주면
   // 이중 보정(+18h)되어 자정 부근에서 하루 밀려 보인다.
   const tomorrowDateDisplay = new Date(now.getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', timeZone: 'Asia/Seoul' })
+
+  // 내일은 오늘처럼 카드로 크게, 모레 이후는 날짜별 한 줄로 — 오늘 할 일이 묻히지 않게.
+  const tomorrowDateKey = new Date(now.getTime() + 24 * 60 * 60 * 1000).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' })
+  const dateKeyOf = (iso: string) => new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' })
+  const tomorrowJobs = upcomingJobs.filter((j) => dateKeyOf(j.scheduled_at) === tomorrowDateKey)
+  const laterJobs = upcomingJobs.filter((j) => dateKeyOf(j.scheduled_at) !== tomorrowDateKey)
+
+  // 모레 이후를 날짜별로 묶는다 (조회가 이미 시간순이라 순서 그대로 유지됨)
+  const laterByDate: { dateKey: string; label: string; jobs: BookingRow[] }[] = []
+  for (const job of laterJobs) {
+    const key = dateKeyOf(job.scheduled_at)
+    const last = laterByDate[laterByDate.length - 1]
+    if (last && last.dateKey === key) {
+      last.jobs.push(job)
+    } else {
+      laterByDate.push({
+        dateKey: key,
+        label: new Date(job.scheduled_at).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short', timeZone: 'Asia/Seoul' }),
+        jobs: [job],
+      })
+    }
+  }
 
   const statusLabel: Record<string, string> = {
     confirmed:   '예정',
@@ -222,9 +248,28 @@ export default async function FieldDashboard({ params }: Props) {
     <div className="min-h-dvh bg-gray-50">
       {/* 헤더 */}
       <div className="bg-white border-b px-4 py-4 sticky top-0 z-10">
-        <p className="text-xs text-muted-foreground">{businessName}</p>
-        <h1 className="text-lg font-bold mt-0.5">{worker.name}님의 오늘 일정</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{dateDisplay}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">{businessName}</p>
+            <h1 className="text-lg font-bold mt-0.5">{worker.name}님의 오늘 일정</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">{dateDisplay}</p>
+          </div>
+
+          {/* 한 달 전체 보기 — 쉬는 날을 미리 잡으려면 오늘 화면만으론 알 수 없다 */}
+          <Link
+            href={`/field/${workerId}/schedule`}
+            className="shrink-0 h-11 px-3 inline-flex items-center gap-1.5 rounded-lg border text-sm font-medium"
+          >
+            <CalendarDays className="h-4 w-4" />
+            달력
+          </Link>
+        </div>
+      </div>
+
+      {/* 알림 켜기 안내 — 아직 안 켠 직원에게만, 일정보다 위에 보인다.
+          아래에만 두면 직원이 일정만 보고 화면을 닫아 아무도 켜지 않는다. */}
+      <div className="px-4 pt-3 empty:hidden">
+        <WorkerPushToggle workerId={workerId} slot="onboarding" />
       </div>
 
       {/* 요약 — 남은 작업(파랑) vs 완료(초록) 색상 구분 */}
@@ -267,9 +312,43 @@ export default async function FieldDashboard({ params }: Props) {
           </div>
         )}
 
-        {/* 앱 알림 켜기 — 클레임 처리 요청 등을 폰으로 받기 (직원 종속 핵심 길목) */}
-        <div className="pt-2">
-          <WorkerPushToggle workerId={workerId} />
+        {/* 모레 이후 7일 — 오늘 할 일이 묻히지 않게 날짜별 한 줄로만 */}
+        {laterByDate.length > 0 && (
+          <div className="pt-5">
+            <div className="flex items-center gap-2 mb-2">
+              <CalendarDays className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">이번 주 남은 일정</h2>
+              <span className="text-xs text-muted-foreground">({laterJobs.length}건)</span>
+            </div>
+            <div className="rounded-xl border bg-white divide-y">
+              {laterByDate.map((day) => (
+                <div key={day.dateKey} className="px-4 py-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-1.5">{day.label}</p>
+                  <div className="space-y-1.5">
+                    {day.jobs.map((job) => (
+                      <Link
+                        key={job.id}
+                        href={`/field/${workerId}/${job.id}`}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        <span className="font-medium shrink-0">{formatTime(job.scheduled_at)}</span>
+                        <span className="truncate">{job.customer_name}</span>
+                        {job.service_address && (
+                          <span className="truncate text-muted-foreground">· {job.service_address}</span>
+                        )}
+                        <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0" />
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 알림 관리 — 이미 켠 직원에게만 (테스트·끄기). 안 켰으면 위쪽 안내가 대신 보인다. */}
+        <div className="pt-2 empty:hidden">
+          <WorkerPushToggle workerId={workerId} slot="manage" />
         </div>
       </div>
     </div>

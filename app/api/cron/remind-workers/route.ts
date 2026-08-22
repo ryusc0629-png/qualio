@@ -27,6 +27,18 @@ function formatKstTime(iso: string): string {
   })
 }
 
+// 주간 알림에서 날짜를 부르는 말. 내일이면 그냥 "내일", 그 뒤면 "8월 26일(수)".
+function formatKstDayLabel(iso: string, tomorrowStartMs: number): string {
+  const ms = new Date(iso).getTime()
+  if (ms < tomorrowStartMs + 24 * 60 * 60 * 1000) return '내일'
+  return new Date(iso).toLocaleDateString('ko-KR', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+    timeZone: 'Asia/Seoul',
+  })
+}
+
 export async function GET(request: NextRequest) {
   // daily-maintenance self-fetch는 authorization·x-cron-secret·?secret 모두 전달한다.
   const secret = process.env.CRON_SECRET
@@ -48,7 +60,14 @@ export async function GET(request: NextRequest) {
   tomorrowKST.setUTCDate(nowKST.getUTCDate() + 1)
   tomorrowKST.setUTCHours(0, 0, 0, 0)
   const rangeStart = new Date(tomorrowKST.getTime() - 9 * 60 * 60 * 1000)
-  const rangeEnd = new Date(rangeStart.getTime() + 24 * 60 * 60 * 1000)
+
+  // 일요일(KST)에는 내일 하루가 아니라 한 주치(월~일)를 한 번에 알린다.
+  // 주 중반에만 일정이 있는 직원·도급사도 미리 인력을 잡을 수 있어야 하기 때문.
+  // 알림은 어차피 하루 한 번이므로 일요일엔 '이번 주' 알림 하나로 대체된다 — 두 번 오지 않는다.
+  // nowKST는 이미 +9시간 보정된 값이라 요일은 getUTCDay()로 읽어야 KST 요일이 된다.
+  const isWeeklyDay = nowKST.getUTCDay() === 0
+  const spanDays = isWeeklyDay ? 7 : 1
+  const rangeEnd = new Date(rangeStart.getTime() + spanDays * 24 * 60 * 60 * 1000)
 
   const { data: bookings, error } = (await looseDb
     .from('bookings')
@@ -105,14 +124,19 @@ export async function GET(request: NextRequest) {
     // 주소는 앞부분만 짧게 (푸시 본문이 너무 길지 않게)
     const place = first.service_address?.split(' ').slice(0, 3).join(' ') ?? '현장'
 
-    const body =
-      jobs.length === 1
+    const dayLabel = formatKstDayLabel(first.scheduled_at, rangeStart.getTime())
+
+    const body = isWeeklyDay
+      ? jobs.length === 1
+        ? `이번 주는 ${dayLabel} ${time} ${place} 한 곳이에요`
+        : `이번 주 ${jobs.length}곳 예정이에요. 첫 일정은 ${dayLabel} ${time} ${place}`
+      : jobs.length === 1
         ? `내일 ${time} ${place} — ${first.customer_name ?? '고객'}님 현장이에요`
         : `내일 ${jobs.length}곳 예정이에요. 첫 일정은 ${time} ${place}`
 
     try {
       await sendPushToWorker(workerId, {
-        title: '내일 일정 미리 알림 🧹',
+        title: isWeeklyDay ? '이번 주 일정 미리 알림 🧹' : '내일 일정 미리 알림 🧹',
         body,
         url: `/field/${workerId}`,
         // 같은 tag → 매일 새 알림이 쌓이지 않고 최신 것으로 갱신
@@ -124,7 +148,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  console.log(`[Cron] remind-workers — 푸시: ${pushed}명 / 내일 예약: ${tomorrowBookings.length}건`)
+  const scope = isWeeklyDay ? '이번 주' : '내일'
+  console.log(`[Cron] remind-workers — 푸시: ${pushed}명 / ${scope} 예약: ${tomorrowBookings.length}건`)
 
-  return NextResponse.json({ workers: pushed, bookings: tomorrowBookings.length })
+  return NextResponse.json({ scope, workers: pushed, bookings: tomorrowBookings.length })
 }
