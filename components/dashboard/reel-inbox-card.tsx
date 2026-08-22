@@ -21,6 +21,16 @@ interface PortfolioReelRow {
   reel_url: string | null
   reel_queued_at: string | null
   reel_error: string | null
+  instagram_content: string | null
+  instagram_hashtags: string[] | null
+  source_report_id: string | null
+}
+
+/** 인스타에 그대로 붙여넣을 한 덩이로 합친다 — 본문 + 해시태그 */
+function toCaption(body: string | null, tags: string[] | null): string | undefined {
+  if (!body) return undefined
+  const tagLine = (tags ?? []).map((t) => (t.startsWith('#') ? t : `#${t}`)).join(' ')
+  return tagLine ? `${body}\n\n${tagLine}` : body
 }
 
 interface ReelRow {
@@ -49,7 +59,7 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
   // 시공 사례로 만든 릴스도 같은 목록에 보여준다 — 만든 방법이 달라도 사장님에겐 같은 '홍보 영상'이다
   const { data: postRows } = (await db
     .from('biz_posts' as never)
-    .select('id, title, reel_status, reel_url, reel_queued_at, reel_error' as never)
+    .select('id, title, reel_status, reel_url, reel_queued_at, reel_error, instagram_content, instagram_hashtags, source_report_id' as never)
     .eq('business_id' as never, businessId)
     .in('reel_status' as never, ['queued', 'processing', 'done', 'failed'])
     .order('reel_queued_at' as never, { ascending: false, nullsFirst: false })
@@ -71,6 +81,23 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
   const waiting = rows.filter((r) => r.reel_status !== 'done')
   const postsDone = posts.filter((p) => p.reel_status === 'done' && p.reel_url)
   const postsWaiting = posts.filter((p) => p.reel_status !== 'done')
+
+  // 작업보고서로 만든 릴스의 캡션 — 그 보고서에서 승인된 시공 사례가 있으면 그 글을 쓴다.
+  // ⛔릴스용 캡션을 따로 또 만들지 말 것(같은 내용을 두 번 만들면 돈만 두 번 나간다).
+  const reportIds = rows.map((r) => r.id)
+  const captionByReport = new Map<string, string>()
+  if (reportIds.length > 0) {
+    const { data: linked } = (await db
+      .from('biz_posts' as never)
+      .select('source_report_id, instagram_content, instagram_hashtags' as never)
+      .in('source_report_id' as never, reportIds)) as {
+      data: { source_report_id: string; instagram_content: string | null; instagram_hashtags: string[] | null }[] | null
+    }
+    for (const row of linked ?? []) {
+      const cap = toCaption(row.instagram_content, row.instagram_hashtags)
+      if (cap) captionByReport.set(row.source_report_id, cap)
+    }
+  }
 
   // 고객 이름을 붙여야 어느 현장인지 안다
   const bookingIds = rows.map((r) => r.booking_id)
@@ -106,9 +133,12 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
         </div>
       </div>
 
-      {/* 무료분이 얼마나 남았는지 · 이번 달 추가로 쓴 게 얼마인지.
-          결제창을 또 띄우지 않고 다음 정기결제에 얹히므로, 얼마가 붙는지는 미리 보여야 한다. */}
-      <div className="rounded-lg bg-muted/40 border px-3 py-2.5 text-xs space-y-1">
+      {/* 얼마나 남았는지 · 한 편에 얼마인지 · 왜 한 편 더 만들 만한지.
+          결제창을 또 띄우지 않고 다음 정기결제에 얹히므로, 얼마가 붙는지는 미리 보여야 한다.
+          ⚠️여기 문구에 '매출이 오른다' 같은 성과 보장을 쓰지 말 것 — 우리는 릴스가 매출로
+             이어졌는지 측정하지 못한다(유입 귀속이 안 붙어 있다). 대신 값을 비교하고,
+             사장님이 실제로 할 일이 얼마나 적은지를 말한다. 둘 다 사실이라 흔들리지 않는다. */}
+      <div className="rounded-lg bg-muted/40 border px-3 py-2.5 text-xs space-y-1.5">
         {!Number.isFinite(usage.freeLeft) ? (
           <p className="text-muted-foreground">본사 계정이라 제한 없이 만들 수 있어요</p>
         ) : usage.freeLeft > 0 ? (
@@ -119,11 +149,21 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
         ) : (
           <p className="text-muted-foreground">
             무료 {REEL_FREE_QUOTA}편을 다 쓰셨어요. 이제 한 편에{' '}
-            <span className="font-semibold text-foreground">{REEL_UNIT_PRICE.toLocaleString()}원</span>이에요
+            <span className="font-semibold text-foreground">{REEL_UNIT_PRICE.toLocaleString()}원</span>
+            <span className="text-muted-foreground"> (부가세 별도)</span>
           </p>
         )}
+
+        {/* 왜 한 편 더 만들 만한가 — 값 비교와 '할 일이 적다'는 사실만 쓴다 */}
+        <p className="text-muted-foreground leading-relaxed">
+          영상 한 편을 대행사에 맡기면 보통 <span className="font-medium text-foreground">7~10만원</span>이에요.
+          여기서는 <span className="font-medium text-foreground">{REEL_UNIT_PRICE.toLocaleString()}원</span>이고,
+          사장님이 하실 일은 <span className="font-medium text-foreground">영상을 올리는 것</span>뿐이에요.
+          촬영본은 폰 안에 있으면 아무 일도 하지 않아요.
+        </p>
+
         {usage.pendingCount > 0 && (
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground border-t pt-1.5">
             이번 달 {usage.pendingCount}편 ·{' '}
             <span className="font-semibold text-foreground">
               {usage.pendingAmount.toLocaleString()}원
@@ -151,12 +191,20 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
               reportId={r.id}
               url={r.reel_url!}
               label={names.get(r.booking_id) ?? '현장'}
+              caption={captionByReport.get(r.id)}
             />
           ))}
 
           {/* 시공 사례로 만든 것 — 만든 방법만 다를 뿐 사장님에겐 같은 홍보 영상이다 */}
           {postsDone.map((p) => (
-            <ReelDoneItem key={p.id} reportId={p.id} url={p.reel_url!} label={p.title} source="portfolio" />
+            <ReelDoneItem
+              key={p.id}
+              reportId={p.id}
+              url={p.reel_url!}
+              label={p.title}
+              source="portfolio"
+              caption={toCaption(p.instagram_content, p.instagram_hashtags)}
+            />
           ))}
 
           {postsWaiting.map((p) => (
@@ -207,7 +255,10 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
       )}
 
       {/* 작업보고서가 없어도 만들 수 있는 길 — 예전에 찍어둔 영상, 예약을 안 쓰는 업체 */}
-      <div className="border-t pt-3">
+      <div className="border-t pt-3 space-y-2">
+        <p className="text-xs text-muted-foreground">
+          지난 현장에서 찍어둔 영상이 있으면 지금 한 편 더 만들 수 있어요. 예약이나 작업 보고서가 없어도 돼요.
+        </p>
         <ReelFromClipsButton businessId={businessId} serviceNames={serviceNames} />
       </div>
 

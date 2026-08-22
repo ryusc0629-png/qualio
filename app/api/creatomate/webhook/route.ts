@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     // 알림이 실패해도 영상은 이미 만들어졌으므로 웹훅은 성공으로 응답한다.
     if (hit) {
       // 완성된 편만 이용 기록에 남긴다(무료분이면 0원). 실패한 건엔 돈을 물리지 않는다.
-      await recordReelCharge(db as unknown as SupabaseClient, hit.businessId, hit.id)
+      await recordReelCharge(db as unknown as SupabaseClient, hit.businessId, hit.id, hit.table)
 
       try {
         // 보고서에서 온 것은 고객 이름을, 시공 사례에서 온 것은 사례 제목을 쓴다

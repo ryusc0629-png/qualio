@@ -64,14 +64,20 @@ export async function getReelUsage(db: SupabaseClient, businessId: string): Prom
  * 완성된 영상 한 편을 기록한다. 무료분이 남았으면 0원, 아니면 정가.
  *
  * ★완성됐을 때만 부른다 — 실패한 건에 돈을 물리면 안 된다.
- * ★보고서당 한 번만 기록된다(unique). 다시 만들어도 두 번 물리지 않는다.
+ * ★한 건당 한 번만 기록된다(unique). 다시 만들어도 두 번 물리지 않는다.
+ *
+ * 재료는 두 곳에서 온다 — 작업보고서(reports)와 시공 사례(biz_posts).
+ * 🔴예전엔 report_id 한 칸뿐이었고 거기 reports FK가 걸려 있어서, 시공 사례로 만든 영상은
+ *   insert가 FK 위반으로 실패했다. 그 실패는 catch에서 로그만 남기게 돼 있어(영상 제작을
+ *   막지 않으려고) **아무도 모르게 요금이 안 붙었다**. 반드시 어느 쪽인지 갈라서 넣을 것.
  *
  * 실패해도 영상은 이미 만들어졌으므로 부르는 쪽을 막지 않는다.
  */
 export async function recordReelCharge(
   db: SupabaseClient,
   businessId: string,
-  reportId: string,
+  sourceId: string,
+  sourceTable: 'reports' | 'biz_posts' = 'reports',
 ): Promise<void> {
   try {
     const { count } = await db
@@ -84,9 +90,13 @@ export async function recordReelCharge(
 
     const { error } = await db
       .from('reel_charges')
-      .insert({ business_id: businessId, report_id: reportId, amount })
+      .insert(
+        sourceTable === 'reports'
+          ? { business_id: businessId, report_id: sourceId, amount }
+          : { business_id: businessId, post_id: sourceId, amount },
+      )
 
-    // 같은 보고서로 이미 기록돼 있으면(다시 만들기) 조용히 넘어간다 — 두 번 물리지 않는다
+    // 같은 건으로 이미 기록돼 있으면(다시 만들기) 조용히 넘어간다 — 두 번 물리지 않는다
     if (error && !error.message?.includes('duplicate')) {
       console.error('[Reel] 이용 기록 실패:', error)
     }

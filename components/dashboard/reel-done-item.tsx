@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useAction } from 'next-safe-action/hooks'
 import { toast } from 'sonner'
-import { Play, SkipForward } from 'lucide-react'
+import { Play, SkipForward, Copy, Check } from 'lucide-react'
 import { ReelShareButtons } from './reel-share-buttons'
 import { dismissReelAction } from '@/lib/actions/reports'
 
@@ -20,11 +20,27 @@ interface Props {
   label: string
   /** 어디서 만든 영상인가 — 시공 사례로 만든 것은 '치우기'가 아직 없다 */
   source?: 'report' | 'portfolio'
+  /** 인스타에 그대로 붙여넣을 캡션(해시태그 포함). 없으면 버튼을 안 그린다 */
+  caption?: string
 }
 
-export function ReelDoneItem({ reportId, url, label, source = 'report' }: Props) {
+export function ReelDoneItem({ reportId, url, label, source = 'report', caption }: Props) {
   // 썸네일을 누르면 그 자리에서 큰 화면으로 재생된다 — '미리보기' 버튼을 따로 찾을 필요가 없다
   const [playing, setPlaying] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  // 영상만 있으면 사장님이 올릴 때 글을 직접 써야 한다. 캡션까지 손에 쥐여준다.
+  const copyCaption = async () => {
+    if (!caption) return
+    try {
+      await navigator.clipboard.writeText(caption)
+      setCopied(true)
+      toast.success('캡션을 복사했어요. 인스타에 붙여넣으세요')
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.error('복사하지 못했어요. 아래 글을 길게 눌러 복사해주세요')
+    }
+  }
 
   const { execute: dismiss, isPending: isDismissing } = useAction(dismissReelAction, {
     onSuccess: () => toast.success('목록에서 치웠어요'),
@@ -69,6 +85,16 @@ export function ReelDoneItem({ reportId, url, label, source = 'report' }: Props)
       )}
 
       <ReelShareButtons url={url} label={label} />
+
+      {caption && (
+        <button
+          type="button"
+          onClick={copyCaption}
+          className="w-full flex items-center justify-center gap-1.5 h-11 rounded-lg text-sm font-medium border bg-white hover:bg-muted transition-colors"
+        >
+          {copied ? <><Check className="h-4 w-4 text-emerald-600" />복사했어요</> : <><Copy className="h-4 w-4" />올릴 글 복사하기</>}
+        </button>
+      )}
 
       {source === 'report' && (
       <button

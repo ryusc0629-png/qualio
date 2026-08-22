@@ -112,8 +112,15 @@ export async function GET(request: NextRequest) {
     const result = row.from === 'portfolio'
       ? await renderReelForPortfolio(db, row.id)
       : await renderReelForReport(db, row.id)
-    if (result.ok) made++
-    else failures.push(`${row.id}: ${result.reason}`)
+    if (result.ok) {
+      made++
+      // 영상만 주면 사장님이 인스타에 올릴 때 캡션을 직접 써야 한다. 같이 만들어 둔다.
+      // ⚠️여기서 만드는 이유: 사장님이 버튼을 누른 순간에 하면 그만큼 화면이 멈춘다.
+      //   어차피 제작에 20~40초를 쓰는 자리라 여기 얹는 게 사용자에겐 공짜다.
+      if (row.from === 'portfolio') await ensureCaption(db, row.id)
+    } else {
+      failures.push(`${row.id}: ${result.reason}`)
+    }
   }
 
   if (failures.length > 0) console.error('[Cron] 홍보 영상 제작 실패:', failures.join(' / '))
@@ -127,6 +134,43 @@ export async function GET(request: NextRequest) {
     failed: failures.length,
     archived,
   })
+}
+
+/**
+ * 시공 사례로 만든 영상에 인스타 캡션이 없으면 만들어 둔다.
+ *
+ * 작업보고서에서 온 영상은 시공 사례를 승인할 때 이미 캡션이 만들어진다(portfolio.ts).
+ * 여기서는 '갖고 있는 영상으로 만들기'로 들어온 건만 채운다.
+ * 실패해도 영상은 그대로 나간다 — 캡션은 곁들이지 영상의 조건이 아니다.
+ */
+async function ensureCaption(db: SupabaseClient, postId: string): Promise<void> {
+  try {
+    const { data: post } = (await db
+      .from('biz_posts')
+      .select('id, business_id, title, content, instagram_content')
+      .eq('id', postId)
+      .maybeSingle()) as {
+      data: { id: string; business_id: string; title: string; content: string; instagram_content: string | null } | null
+    }
+    if (!post || post.instagram_content) return
+
+    const { data: business } = (await db
+      .from('businesses')
+      .select('name, address')
+      .eq('id', post.business_id)
+      .maybeSingle()) as { data: { name: string; address: string | null } | null }
+    if (!business) return
+
+    const { generateAndSaveChannelContent } = await import('@/lib/ai/channel-content')
+    await generateAndSaveChannelContent(db as never, post.id, {
+      businessName: business.name,
+      address: business.address,
+      geoTitle: post.title,
+      geoContent: post.content,
+    })
+  } catch (err) {
+    console.error('[Cron] 캡션 생성 실패:', err)
+  }
 }
 
 /**
