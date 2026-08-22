@@ -448,6 +448,7 @@ const STICKY_LABEL_COL: CSSProperties = {
 }
 
 export function ScheduleBoard({
+  businessId,
   workers,
   bookings: initialBookings,
   weekStart,
@@ -1017,6 +1018,7 @@ export function ScheduleBoard({
       {/* 예약 상세 Sheet */}
       <BookingDetailSheet
         booking={selectedBooking}
+        businessId={businessId}
         workers={workers}
         onClose={() => setSelectedBookingId(null)}
         onWorkersChange={handleSheetWorkersChange}
