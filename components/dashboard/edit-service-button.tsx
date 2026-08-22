@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -184,16 +184,20 @@ function TierItemsEditor({
   const t = TIER_TONE[tone]
 
   // 중복 없이 항목 추가 (직접 입력·다른 서비스 공통)
-  const addItem = useCallback((raw: string) => {
+  // ⚠️useCallback을 쓰지 않는다. 이 프로젝트는 React Compiler가 켜져 있어서,
+  //   손으로 memo를 걸면 컴파일러가 "기존 memo를 보존할 수 없다"며 이 컴포넌트를
+  //   통째로 최적화에서 건너뛴다. 맡기는 쪽이 더 잘하고 더 안전하다.
+  //   (둘 다 이 컴포넌트 안 핸들러에서만 쓰여 밖으로 새지 않는다)
+  const addItem = (raw: string) => {
     const v = raw.trim()
     if (!v || items.includes(v)) return
     onChange([...items, v])
-  }, [items, onChange])
+  }
 
-  const add = useCallback(() => {
+  const add = () => {
     addItem(inputVal)
     setInputVal('')
-  }, [inputVal, addItem])
+  }
 
   // 아직 안 담긴 서비스만 드롭다운에 노출
   const pickable = pullServices.filter((s) => !items.includes(s.name))

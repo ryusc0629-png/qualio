@@ -62,7 +62,6 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
       </a>
     ) : null
 
-  const SideLogo = () => (data.logoUrl ? <img className="side-logo" src={data.logoUrl} alt={name} /> : null)
 
   return (
     <>
@@ -113,7 +112,7 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
         {showOwner && owner && (
           <section className="page">
             <div className="side">
-              <SideLogo />
+              {data.logoUrl ? <img className="side-logo" src={data.logoUrl} alt={name} /> : null}
               <div className="side-title">{C.ownerSideTitle}</div>
               <div className="rule" />
               {owner.photo
@@ -191,7 +190,7 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
         {/* ── 4. 대상 공간 (핵심, 항상) ──────────── */}
         <section className="page">
           <div className="side">
-            <SideLogo />
+            {data.logoUrl ? <img className="side-logo" src={data.logoUrl} alt={name} /> : null}
             <div className="side-title">{category.sideTitle}</div>
             <div className="rule" />
             {category.sideLines.map((l, i) => <p key={i}><Rich text={t(l)} /></p>)}
@@ -218,7 +217,7 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
         {showServices && (
           <section className="page">
             <div className="side">
-              <SideLogo />
+              {data.logoUrl ? <img className="side-logo" src={data.logoUrl} alt={name} /> : null}
               <div className="side-title">{C.servicesSideTitle}</div>
               <div className="rule" />
               {C.servicesSideLines.map((l, i) => <p key={i}><Rich text={t(l)} /></p>)}
@@ -244,7 +243,7 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
         {sections.principles && (
           <section className="page">
             <div className="side">
-              <SideLogo />
+              {data.logoUrl ? <img className="side-logo" src={data.logoUrl} alt={name} /> : null}
               <div className="side-title">매일 똑같이{'\n'}꼼꼼한 청소가{'\n'}차이를 만듭니다</div>
               <div className="rule" />
               <p>청소는 누구나 할 수 있습니다. 하지만 <b>일정한 퀄리티로 꾸준히 유지하는 것</b>은 아무나 할 수 없습니다.</p>
@@ -308,7 +307,7 @@ export function PrintProposal({ data, qrDataUrl, variant = 'internal' }: Props) 
         {sections.process && (
           <section className="page">
             <div className="side">
-              <SideLogo />
+              {data.logoUrl ? <img className="side-logo" src={data.logoUrl} alt={name} /> : null}
               <div className="side-title">{C.processSideTitle}</div>
               <div className="rule" />
               {C.processSideLines.map((l, i) => <p key={i}><Rich text={t(l)} /></p>)}

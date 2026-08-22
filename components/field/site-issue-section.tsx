@@ -20,6 +20,68 @@ import { Camera, X, Plus, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-re
 
 type Photo = { url: string; uploading: boolean }
 
+// ⚠️컴포넌트 '밖'에 둔다. 부모 안에서 만들면 렌더할 때마다 새 컴포넌트 타입이 되어
+// React가 이 영역을 통째로 다시 그린다(파일 입력·포커스가 초기화됨).
+// upload는 부모의 함수라 props로 받는다.
+function PhotoRow({
+  label, hint, photos, setter, inputRef, kind, upload,
+}: {
+  label: string; hint: string; photos: Photo[]
+  setter: React.Dispatch<React.SetStateAction<Photo[]>>
+  inputRef: React.RefObject<HTMLInputElement | null>; kind: string
+  upload: (files: FileList, setter: React.Dispatch<React.SetStateAction<Photo[]>>, kind: string) => void
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium">{label} <span className="font-normal text-muted-foreground">{hint}</span></p>
+      <div className="flex flex-wrap gap-2">
+        {photos.map((p, i) => (
+          <div key={p.url || `up-${i}`} className="relative w-16 h-16 rounded-lg overflow-hidden border bg-muted">
+            {p.uploading ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={p.url} alt={label} className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setter((prev) => prev.filter((x) => x.url !== p.url))}
+                  className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
+                >
+                  <X className="h-3 w-3 text-white" />
+                </button>
+              </>
+            )}
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="w-16 h-16 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-0.5"
+        >
+          <Camera className="h-4 w-4 text-muted-foreground" />
+          <span className="text-[10px] text-muted-foreground">추가</span>
+        </button>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files?.length) upload(e.target.files, setter, kind)
+          e.target.value = ''
+        }}
+      />
+    </div>
+    )
+}
+
+
 interface Issue {
   id: string
   title: string
@@ -149,61 +211,6 @@ function IssueForm({ workerId, businessId, bookingId, onDone, onCancel }: Props 
     if (urls.length < list.length) toast.error(`사진 ${list.length - urls.length}장을 못 올렸어요`)
   }
 
-  const PhotoRow = ({
-    label, hint, photos, setter, inputRef, kind,
-  }: {
-    label: string; hint: string; photos: Photo[]
-    setter: React.Dispatch<React.SetStateAction<Photo[]>>
-    inputRef: React.RefObject<HTMLInputElement | null>; kind: string
-  }) => (
-    <div className="space-y-1.5">
-      <p className="text-xs font-medium">{label} <span className="font-normal text-muted-foreground">{hint}</span></p>
-      <div className="flex flex-wrap gap-2">
-        {photos.map((p, i) => (
-          <div key={p.url || `up-${i}`} className="relative w-16 h-16 rounded-lg overflow-hidden border bg-muted">
-            {p.uploading ? (
-              <div className="w-full h-full flex items-center justify-center">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={p.url} alt={label} className="w-full h-full object-cover" />
-                <button
-                  type="button"
-                  onClick={() => setter((prev) => prev.filter((x) => x.url !== p.url))}
-                  className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center"
-                >
-                  <X className="h-3 w-3 text-white" />
-                </button>
-              </>
-            )}
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          className="w-16 h-16 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-0.5"
-        >
-          <Camera className="h-4 w-4 text-muted-foreground" />
-          <span className="text-[10px] text-muted-foreground">추가</span>
-        </button>
-      </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          if (e.target.files?.length) upload(e.target.files, setter, kind)
-          e.target.value = ''
-        }}
-      />
-    </div>
-  )
-
   const submit = () => {
     if (!title.trim()) {
       toast.error('무슨 일인지 한 줄로 적어주세요')
@@ -232,7 +239,7 @@ function IssueForm({ workerId, businessId, bookingId, onDone, onCancel }: Props 
         />
       </div>
 
-      <PhotoRow label="특이사항 사진" hint="(선택)" photos={problemPhotos} setter={setProblemPhotos} inputRef={problemRef} kind="before" />
+      <PhotoRow label="특이사항 사진" hint="(선택)" photos={problemPhotos} setter={setProblemPhotos} inputRef={problemRef} kind="before" upload={upload} />
 
       <div className="space-y-1.5">
         <p className="text-xs font-medium">자세한 내용 <span className="font-normal text-muted-foreground">(선택)</span></p>
@@ -256,7 +263,7 @@ function IssueForm({ workerId, businessId, bookingId, onDone, onCancel }: Props 
         />
       </div>
 
-      <PhotoRow label="결과 사진" hint="(선택)" photos={resultPhotos} setter={setResultPhotos} inputRef={resultRef} kind="after" />
+      <PhotoRow label="결과 사진" hint="(선택)" photos={resultPhotos} setter={setResultPhotos} inputRef={resultRef} kind="after" upload={upload} />
 
       {/* 급한 건만 알림이 간다 — 전부 알리면 알림이 흔해져 정작 급한 걸 놓친다 */}
       <label className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3">
