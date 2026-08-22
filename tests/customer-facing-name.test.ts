@@ -21,9 +21,14 @@ describe('도급사 상호는 고객에게 나가지 않는다', () => {
       .toBe('정소영 실장님')
   })
 
-  it('직원은 직함을 지어내지 않는다', () => {
-    expect(customerFacingWorkerName('류승찬', '다트클린')).toBe('류승찬님')
+  // 이름만 덜렁 부르면 현장에서 일하는 사람이 가장 낮게 불린다(사장님 지적 8-22)
+  it('직원은 직함이 없으면 매니저로 채운다', () => {
+    expect(customerFacingWorkerName('류승찬', '다트클린')).toBe('류승찬 매니저님')
+  })
+
+  it('적어둔 직함은 직원에게도 그대로 존중한다', () => {
     expect(customerFacingWorkerName('김준휘 반장', '거북클린케어')).toBe('김준휘 반장님')
+    expect(customerFacingWorkerName('류승찬 실장', '다트클린')).toBe('류승찬 실장님')
   })
 
   it('사람 이름이 없으면 업체명으로 대체한다 — 추측해서 내보내지 않는다', () => {
@@ -50,7 +55,7 @@ describe('도급사 상호는 고객에게 나가지 않는다', () => {
   })
 
   it("'님'을 두 번 붙이지 않는다", () => {
-    expect(customerFacingWorkerName('박기호님', '아찌클린')).toBe('박기호님')
+    expect(customerFacingWorkerName('박기호님', '아찌클린')).toBe('박기호 매니저님')
     expect(customerFacingWorkerName('김성현 팀장님', '다트클린')).toBe('김성현 팀장님')
   })
 })

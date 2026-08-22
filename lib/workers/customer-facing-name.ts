@@ -32,8 +32,14 @@ const TITLES = [
   '이사', '대표', '사장', '기사', '선생', '매니저',
 ]
 
-/** 도급사에 직함이 안 적혀 있을 때 붙이는 기본 직함 */
+// 직함이 안 적혀 있을 때 붙이는 기본 직함.
+//
+// 이름만 덜렁 부르면 현장에서 일하는 사람이 가장 낮게 불린다(사장님 지적 2026-08-22).
+// 청소·홈케어 업계에서 '매니저'가 가장 널리 쓰이고, '여사님·아줌마' 같은 낮춰 부르는
+// 말과 가장 멀다. 도급사는 우리 팀으로 보여야 하므로 '팀장'.
+// ⚠️이름 칸에 직함을 적어뒀으면 그게 우선이다 — 여기 값은 안 적었을 때만 쓴다.
 const CONTRACTOR_TITLE = '팀장'
+const EMPLOYEE_TITLE   = '매니저'
 
 /**
  * 이름 칸에서 사람 이름만 뽑아낸다. 못 뽑으면 null.
@@ -74,9 +80,10 @@ function writtenTitle(raw: string | null | undefined): string | null {
  * 고객에게 보낼 담당자 표기를 만든다.
  *
  * - 리멤버클린 김성현 팀장님 (도급사) → 김성현 팀장님
- * - 리멤버클린 김성현      (도급사) → 김성현 팀장님   ← 도급사는 직함을 팀장으로 채운다
- * - 박기호               (직원)   → 박기호님
- * - 베이스케어            (도급사) → 다트클린 담당자   ← 사람 이름이 없으면 업체명으로
+ * - 리멤버클린 김성현      (도급사) → 김성현 팀장님   ← 도급사는 팀장으로 채운다
+ * - 류승찬               (직원)   → 류승찬 매니저님  ← 직원은 매니저로 채운다
+ * - 류승찬 실장           (직원)   → 류승찬 실장님   ← 적어둔 직함이 우선
+ * - 베이스케어            (도급사) → 다트클린 담당자  ← 사람 이름이 없으면 업체명으로
  *
  * 알림톡은 빈 값을 거부하므로 어떤 경우에도 빈 문자열을 돌려주지 않는다.
  */
@@ -90,7 +97,7 @@ export function customerFacingWorkerName(
   const person = extractPersonName(rawName)
   if (!person) return fallback
 
-  // 적어둔 직함이 있으면 존중하고, 도급사인데 없으면 팀장으로 채운다
-  const title = writtenTitle(rawName) ?? (opts.isContractor ? CONTRACTOR_TITLE : null)
-  return title ? `${person} ${title}님` : `${person}님`
+  // 적어둔 직함이 있으면 그대로 존중하고, 없으면 기본 직함을 붙인다
+  const title = writtenTitle(rawName) ?? (opts.isContractor ? CONTRACTOR_TITLE : EMPLOYEE_TITLE)
+  return `${person} ${title}님`
 }
