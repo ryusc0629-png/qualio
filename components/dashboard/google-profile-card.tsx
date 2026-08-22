@@ -16,11 +16,13 @@ import { GoogleHelpButton } from './google-help-button'
 // 그래서 (1) 말을 사장님 말로 바꾸고 (2) '지금 할 일' 하나만 크게 띄우고
 // (3) 맡기는 길을 먼저 보여준다. 나머지는 접어 둔다.
 
+// 사장님이 직접 눌러 표시하는 항목들 (businesses.gbp_checklist)
+// ⛔rating(별점)은 뺐다 — 눌러서 만드는 게 아니라 후기가 쌓이면 따라오는 결과다.
+//   기존에 저장된 rating 값은 무시된다(지우지 않아도 안 읽으면 그만).
 interface ChecklistState {
   open?: boolean
   hours?: boolean
   category?: boolean
-  rating?: boolean
 }
 
 interface Step {
@@ -61,6 +63,10 @@ export async function GoogleProfileCard({ businessId }: { businessId: string }) 
   const checks = biz?.gbp_checklist ?? {}
   const onMap = !!biz?.google_place_url
 
+  // 순서 = 하기 쉬운 것부터 (2026-08-22 대표 지시).
+  // 첫 칸이 빨리 켜져야 계속한다. 손이 많이 가는 '업종 바꾸기'를 앞에 두면 거기서 멈춘다.
+  // ⛔'별점 4.5점 넘기기'를 되살리지 말 것 — "별점은 당연히 높게 받는 거니까" 할 일이 아니다.
+  //   (후기가 쌓이면 따라 올라가는 결과지, 사장님이 눌러서 만드는 항목이 아니었다)
   const steps: Step[] = [
     {
       key: 'onmap',
@@ -70,10 +76,16 @@ export async function GoogleProfileCard({ businessId }: { businessId: string }) 
       why: '네이버에 스마트플레이스가 있는 것처럼, 구글에도 우리 가게를 올려두는 곳이 있어요. 챗지피티는 여기 올라온 가게 중에서 답을 골라요.',
     },
     {
-      key: 'category',
-      done: !!checks.category,
-      title: '업종을 ‘청소전문업체’로 바꾸기',
-      why: '지금 위에 뜨는 업체들은 전부 이 업종으로 돼 있어요. 다르게 돼 있으면 같은 검색에서 뒤로 밀립니다.',
+      key: 'hours',
+      done: !!checks.hours,
+      title: '영업 시간 넣기',
+      why: 'AI가 답할 때 “영업 중 · 오후 10시 종료”처럼 같이 보여줘요. 안 넣으면 후보에서 빠집니다.',
+    },
+    {
+      key: 'open',
+      done: !!checks.open,
+      title: '‘영업 중’으로 되어 있기',
+      why: '예전에 등록해둔 게 폐업·휴업으로 남아 있으면 아무리 잘해도 후보에서 빠져요.',
     },
     {
       key: 'reviews',
@@ -91,27 +103,19 @@ export async function GoogleProfileCard({ businessId }: { businessId: string }) 
           : `구글로 보낸 손님 ${googleReviews}명 · ${GOOGLE_REVIEW_TARGET - googleReviews}명 남았어요`,
     },
     {
-      key: 'rating',
-      done: !!checks.rating,
-      title: '별점 4.5점 넘기기',
-      why: '별점이 낮으면 후기가 많아도 후보에서 빠져요. 후기가 쌓이면 대개 같이 올라갑니다.',
-    },
-    {
-      key: 'hours',
-      done: !!checks.hours,
-      title: '영업 시간 넣기',
-      why: 'AI가 답할 때 “영업 중 · 오후 10시 종료”처럼 같이 보여줘요. 안 넣으면 후보에서 빠집니다.',
-    },
-    {
-      key: 'open',
-      done: !!checks.open,
-      title: '‘영업 중’으로 되어 있기',
-      why: '예전에 등록해둔 게 폐업·휴업으로 남아 있으면 아무리 잘해도 후보에서 빠져요.',
+      // 손이 제일 많이 가는 것(구글 비즈니스 프로필에 들어가 분류를 바꿔야 함) — 그래서 맨 뒤
+      key: 'category',
+      done: !!checks.category,
+      title: '업종을 ‘청소전문업체’로 바꾸기',
+      why: '지금 위에 뜨는 업체들은 전부 이 업종으로 돼 있어요. 다르게 돼 있으면 같은 검색에서 뒤로 밀립니다.',
     },
   ]
 
   const doneCount = steps.filter((s) => s.done).length
-  const current = steps.find((s) => !s.done) ?? null
+  // '지금 할 일'은 사장님이 실제로 손댈 수 있는 것부터 고른다.
+  // 후기 모으기(auto)는 우리가 알아서 하는 거라 여기 걸리면 "하실 일 없습니다"만 뜨고,
+  // 정작 사장님이 해야 할 것이 아래 목록으로 밀려 안 보인다.
+  const current = steps.find((s) => !s.done && !s.auto) ?? steps.find((s) => !s.done) ?? null
   const rest = steps.filter((s) => s !== current)
 
   return (

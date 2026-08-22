@@ -6,8 +6,10 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
 // 구글 비즈니스 프로필 점검 항목 체크 — 구글 쪽 데이터라 우리가 자동으로 읽을 수 없어
-// 사장님이 한 번 확인하고 켜 두는 값이다. (Places 키가 들어오면 자동 조회로 대체 가능)
-const GBP_KEYS = ['open', 'hours', 'category', 'rating']
+// 사장님이 한 번 확인하고 켜 두는 값이다.
+// ⛔Places API 자동 조회로 대체하지 말 것 — 2026-08-22 대표 판단(그럴 거면 네이버도 매일 봐야 한다).
+// ⛔'rating'(별점)을 되살리지 말 것 — 눌러서 만드는 게 아니라 후기가 쌓이면 따라오는 결과다.
+const GBP_KEYS = ['open', 'hours', 'category']
 
 const schema = z.object({
   key: z.string().refine((v) => GBP_KEYS.includes(v), '알 수 없는 항목입니다'),
