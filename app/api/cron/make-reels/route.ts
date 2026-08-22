@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
       // 영상만 주면 사장님이 인스타에 올릴 때 캡션을 직접 써야 한다. 같이 만들어 둔다.
       // ⚠️여기서 만드는 이유: 사장님이 버튼을 누른 순간에 하면 그만큼 화면이 멈춘다.
       //   어차피 제작에 20~40초를 쓰는 자리라 여기 얹는 게 사용자에겐 공짜다.
-      if (row.from === 'portfolio') await ensureCaption(db, row.id)
+      await ensureCaption(db, row.id, row.from ?? 'report')
     } else {
       failures.push(`${row.id}: ${result.reason}`)
     }
@@ -137,40 +137,119 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * 시공 사례로 만든 영상에 인스타 캡션이 없으면 만들어 둔다.
+ * 영상에 붙는 채널 문구가 없으면 만들어 둔다.
  *
- * 작업보고서에서 온 영상은 시공 사례를 승인할 때 이미 캡션이 만들어진다(portfolio.ts).
- * 여기서는 '갖고 있는 영상으로 만들기'로 들어온 건만 채운다.
- * 실패해도 영상은 그대로 나간다 — 캡션은 곁들이지 영상의 조건이 아니다.
+ * ★소스가 무엇이든 영상에는 반드시 문구가 붙어야 한다.
+ * 🔴예전엔 작업보고서 영상의 문구를 '그 보고서에서 승인된 시공 사례'에서 가져왔다. 그런데
+ *   사례 승인은 별개 흐름이라 대부분 안 돼 있어서, 채널 버튼이 아예 안 그려졌다(운영 확인).
+ *   ⛔문구를 남의 흐름에 의존시키지 말 것.
+ *
+ * 여기서 만드는 이유: 사장님이 버튼을 누른 순간에 하면 그만큼 화면이 멈춘다.
+ * 어차피 제작에 20~40초를 쓰는 자리라 여기 얹는 게 사용자에겐 공짜다.
+ * 실패해도 영상은 그대로 나간다 — 문구는 곁들이지 영상의 조건이 아니다.
  */
-async function ensureCaption(db: SupabaseClient, postId: string): Promise<void> {
+async function ensureCaption(
+  db: SupabaseClient,
+  id: string,
+  from: 'report' | 'portfolio',
+): Promise<void> {
   try {
-    const { data: post } = (await db
-      .from('biz_posts')
-      .select('id, business_id, title, content, instagram_content')
-      .eq('id', postId)
-      .maybeSingle()) as {
-      data: { id: string; business_id: string; title: string; content: string; instagram_content: string | null } | null
-    }
-    if (!post || post.instagram_content) return
+    if (from === 'portfolio') {
+      const { data: post } = (await db
+        .from('biz_posts')
+        .select('id, business_id, title, content, instagram_content')
+        .eq('id', id)
+        .maybeSingle()) as {
+        data: { id: string; business_id: string; title: string; content: string; instagram_content: string | null } | null
+      }
+      if (!post || post.instagram_content) return
 
-    const { data: business } = (await db
-      .from('businesses')
-      .select('name, address')
-      .eq('id', post.business_id)
-      .maybeSingle()) as { data: { name: string; address: string | null } | null }
+      const business = await loadBusiness(db, post.business_id)
+      if (!business) return
+
+      const { generateAndSaveChannelContent } = await import('@/lib/ai/channel-content')
+      await generateAndSaveChannelContent(db as never, post.id, {
+        businessName: business.name,
+        address: business.address,
+        geoTitle: post.title,
+        geoContent: post.content,
+      })
+      return
+    }
+
+    // 작업보고서 — 보고서에 적힌 내용으로 문구를 만들어 reports.reel_caption에 담는다
+    const { data: report } = (await db
+      .from('reports')
+      .select('id, business_id, booking_id, notes, care_advice, preventive_note, ai_report_data, reel_caption')
+      .eq('id', id)
+      .maybeSingle()) as {
+      data: {
+        id: string
+        business_id: string
+        booking_id: string
+        notes: string | null
+        care_advice: string | null
+        preventive_note: string | null
+        ai_report_data: { beforeStatus?: string; workDetails?: string; afterResult?: string } | null
+        reel_caption: unknown
+      } | null
+    }
+    if (!report || report.reel_caption) return
+
+    const business = await loadBusiness(db, report.business_id)
     if (!business) return
 
-    const { generateAndSaveChannelContent } = await import('@/lib/ai/channel-content')
-    await generateAndSaveChannelContent(db as never, post.id, {
+    const { data: booking } = (await db
+      .from('bookings')
+      .select('customer_name, service_address, memo')
+      .eq('id', report.booking_id)
+      .maybeSingle()) as { data: { customer_name: string | null; service_address: string | null; memo: string | null } | null }
+
+    const body = [
+      report.ai_report_data?.beforeStatus,
+      report.ai_report_data?.workDetails ?? report.notes,
+      report.ai_report_data?.afterResult,
+      report.preventive_note,
+      report.care_advice,
+    ].filter(Boolean).join('\n')
+
+    // 재료가 너무 없으면 지어내게 된다 — 그럴 바엔 문구를 안 만든다
+    if (body.trim().length < 20) return
+
+    const { generateSocialContent } = await import('@/lib/ai/social-content')
+    const c = await generateSocialContent({
       businessName: business.name,
-      address: business.address,
-      geoTitle: post.title,
-      geoContent: post.content,
+      address: booking?.service_address ?? business.address,
+      geoTitle: `${booking?.customer_name ?? '현장'} 청소 작업`,
+      geoContent: body,
     })
+
+    await db
+      .from('reports')
+      .update({
+        reel_caption: {
+          searchTitle: c.naverTitle,
+          searchTags: c.naverTags,
+          body: c.instagram,
+          bodyTags: c.instagramHashtags,
+        },
+      } as never)
+      .eq('id', id)
   } catch (err) {
-    console.error('[Cron] 캡션 생성 실패:', err)
+    console.error('[Cron] 채널 문구 생성 실패:', err)
   }
+}
+
+async function loadBusiness(
+  db: SupabaseClient,
+  businessId: string,
+): Promise<{ name: string; address: string | null } | null> {
+  const { data } = (await db
+    .from('businesses')
+    .select('name, address')
+    .eq('id', businessId)
+    .maybeSingle()) as { data: { name: string; address: string | null } | null }
+  return data
 }
 
 /**

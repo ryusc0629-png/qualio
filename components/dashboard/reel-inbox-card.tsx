@@ -1,5 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { Film, Clock, Download } from 'lucide-react'
+import { Film, Clock } from 'lucide-react'
 import { ReelDoneItem } from './reel-done-item'
 import { buildReelCaptions } from '@/lib/reel/channel-captions'
 import { ReelFromClipsButton } from './reel-from-clips-button'
@@ -54,6 +54,8 @@ interface ReelRow {
   reel_queued_at: string | null
   reel_error: string | null
   booking_id: string
+  /** 영상에 붙는 채널 문구 — 크론이 제작 직후 채운다 */
+  reel_caption: { searchTitle?: string; searchTags?: string[]; body?: string; bodyTags?: string[] } | null
 }
 
 const fmtDate = (iso: string) =>
@@ -64,7 +66,7 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
 
   const { data } = (await db
     .from('reports')
-    .select('id, reel_status, reel_url, reel_queued_at, reel_error, booking_id')
+    .select('id, reel_status, reel_url, reel_queued_at, reel_error, booking_id, reel_caption')
     .eq('business_id', businessId)
     .in('reel_status', ['queued', 'processing', 'done', 'failed'])
     .order('reel_queued_at', { ascending: false, nullsFirst: false })
@@ -95,20 +97,6 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
   const waiting = rows.filter((r) => r.reel_status !== 'done')
   const postsDone = posts.filter((p) => p.reel_status === 'done' && p.reel_url)
   const postsWaiting = posts.filter((p) => p.reel_status !== 'done')
-
-  // 작업보고서로 만든 릴스의 캡션 — 그 보고서에서 승인된 시공 사례가 있으면 그 글을 쓴다.
-  // ⛔릴스용 캡션을 따로 또 만들지 말 것(같은 내용을 두 번 만들면 돈만 두 번 나간다).
-  const reportIds = rows.map((r) => r.id)
-  const captionByReport = new Map<string, CaptionSource>()
-  if (reportIds.length > 0) {
-    const { data: linked } = (await db
-      .from('biz_posts' as never)
-      .select('source_report_id, naver_title, naver_tags, instagram_content, instagram_hashtags' as never)
-      .in('source_report_id' as never, reportIds)) as {
-      data: ({ source_report_id: string } & CaptionSource)[] | null
-    }
-    for (const row of linked ?? []) captionByReport.set(row.source_report_id, row)
-  }
 
   // 고객 이름을 붙여야 어느 현장인지 안다
   const bookingIds = rows.map((r) => r.booking_id)
@@ -202,7 +190,12 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
               reportId={r.id}
               url={r.reel_url!}
               label={names.get(r.booking_id) ?? '현장'}
-              captions={captionsOf(captionByReport.get(r.id))}
+              captions={buildReelCaptions({
+                searchTitle: r.reel_caption?.searchTitle ?? null,
+                searchTags: r.reel_caption?.searchTags ?? null,
+                body: r.reel_caption?.body ?? null,
+                bodyTags: r.reel_caption?.bodyTags ?? null,
+              })}
             />
           ))}
 
@@ -273,12 +266,7 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
         <ReelFromClipsButton businessId={businessId} serviceNames={serviceNames} />
       </div>
 
-      {(done.length > 0 || postsDone.length > 0) && (
-        <p className="flex items-start gap-1.5 text-xs text-muted-foreground border-t pt-3">
-          <Download className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-          영상을 내려받아 인스타그램·틱톡에 올리시면 돼요. 글은 아래 &lsquo;글 만들기&rsquo;에서 뽑을 수 있어요.
-        </p>
-      )}
+
     </div>
   )
 }
