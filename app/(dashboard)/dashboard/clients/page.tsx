@@ -158,7 +158,7 @@ function buildHref(params: ListParams) {
   if (params.sort && params.sort !== 'ltv_desc') p.set('sort', params.sort)
   if (params.show_archived === '1') p.set('show_archived', '1')
   if (params.show_dormant === '1') p.set('show_dormant', '1')
-  if (params.all === '1') p.set('all', '1')
+  if (params.all) p.set('all', params.all)
   if (params.q) p.set('q', params.q)
   const qs = p.toString()
   return `/dashboard/clients${qs ? '?' + qs : ''}`
@@ -168,9 +168,15 @@ function buildHref(params: ListParams) {
 // 고객이 300명이면 카드 300장을 그대로 그리던 것이 목록이 안 보이는 진짜 원인이었다.
 const LIST_LIMIT = 20
 
-// 마지막 거래가 이만큼 지나면 '지난 고객'으로 접어둔다.
-// 청소는 재구매 주기가 길어 90일로는 살아 있는 고객까지 접힌다(재방문 대기열이 90일 기준).
-const DORMANT_AFTER_DAYS = 180
+// 마지막 거래가 이만큼 지나면 '지난 고객'으로 접어둔다. 거래 성격에 따라 다르다.
+//
+// 개인 일회성은 짧게 — 사장님 판단: "어차피 재구매 확률이 낮고 주기가 길다. 작업 마치면
+// 일주일만 보관해도 된다." 완료 직후 며칠은 보고서 발송·후기 요청 같은 뒷일이 남으므로
+// 0일이 아니라 7일로 둔다(그 사이 예약이 잡히면 열린 일감이 되어 애초에 안 접힌다).
+//
+// 거래처(법인)와 계약을 해본 곳은 길게 — 재계약·업셀 여지가 있어 눈에 두고 본다.
+const DORMANT_ONEOFF_DAYS = 7
+const DORMANT_CONTRACT_DAYS = 180
 
 // ── 페이지 ────────────────────────────────────────────────
 
@@ -184,7 +190,9 @@ export default async function ClientsPage({
   const activeTab = ['individual', 'company'].includes(type ?? '') ? type! : 'all'
   const showArchived = show_archived === '1'
   const showDormant = show_dormant === '1'
-  const showAll = all === '1'
+  // 어느 구획을 펼쳤는지 — 개인 '더 보기'를 눌렀다고 거래처·지난 고객까지 펼쳐지면 안 된다
+  const expanded = new Set((all ?? '').split(',').filter(Boolean))
+  const isExpanded = (key: string) => expanded.has(key)
   // 검색 중에는 지난 고객도 결과에 나와야 한다 — 찾으려고 친 이름이 접혀 있으면 검색이 고장 난 것처럼 보인다
   const isSearching = searchQuery.length > 0
 
@@ -375,43 +383,7 @@ export default async function ClientsPage({
   // 전환된 거래처 중 지금 영업(정기계약 업셀 등) 진행 중인 곳 — 자동 배지와 별개로 손으로 지정한 것
   const companyInSales = companyCustomers.filter(c => isActiveSalesStage(c.sales_stage))
 
-  // ── 거래 중 / 지난 고객 ──
-  //
-  // 고객은 지우지 않으니 영구히 쌓인다. 청소 한 번 받고 끝난 손님이 몇 년치 모이면
-  // 정작 이번 달에 손댈 곳이 그 사이에 묻힌다. 마지막 거래를 기준으로 갈라
-  // 기본 목록에는 '거래 중'만 두고, 지난 고객은 접어둔다(지우는 게 아니다).
-  //
-  // ⛔ 사장님이 손으로 '완료' 표시를 하게 만들지 말 것 — 안 누르면 아무 효과가 없고,
-  //    누르는 일 자체가 새 업무가 된다. 이미 쌓인 방문 기록에서 자동으로 갈린다.
-  // (서버 컴포넌트라 요청마다 서버에서 한 번만 실행 — 브라우저 재렌더와 무관)
-  // eslint-disable-next-line react-hooks/purity
-  const dormantCutoff = new Date(Date.now() - DORMANT_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString()
-
-  function lastDealAt(c: CustomerRow): string {
-    const lastVisit = c.phone ? (bookingMap[normalizePhone(c.phone)]?.lastDate ?? '') : ''
-    // 방문 이력이 없으면 등록일을 마지막 접점으로 본다(문의만 받고 안 온 손님도 언젠간 접힌다)
-    return lastVisit || c.created_at
-  }
-
-  function isDormant(c: CustomerRow): boolean {
-    // 정기계약이 살아 있으면 방문이 뜸해도 거래 중이다
-    if ((contractMap[c.id] ?? []).some(k => k.status === 'active')) return false
-    // 지금 영업 중으로 손수 지정해둔 곳도 접지 않는다
-    if (isActiveSalesStage(c.sales_stage)) return false
-    return lastDealAt(c) < dormantCutoff
-  }
-
-  // 검색 중에는 가르지 않는다 — 찾으려는 사람이 접혀 있으면 검색이 고장 난 것처럼 보인다
-  const splitDormant = (list: CustomerRow[]) =>
-    isSearching
-      ? { live: list, dormant: [] as CustomerRow[] }
-      : { live: list.filter(c => !isDormant(c)), dormant: list.filter(isDormant) }
-
-  const { live: individualLive, dormant: individualDormant } = splitDormant(individualCustomers)
-  const { live: companyLive, dormant: companyDormant } = splitDormant(companyCustomers)
-  const dormantCount = individualDormant.length + companyDormant.length
-
-  // ── 진행 중 / 완료 ──
+  // ── 열린 일감 ──
   //
   // 잡버·서비스타이탄은 '고객'과 '일감'을 절대 같은 목록에 안 섞는다. 고객은 영구히 남는
   // 주소록이고, 완료되는 건 고객이 아니라 그 사람에게 걸린 일감(Job)이다. 우리 화면은
@@ -419,9 +391,12 @@ export default async function ClientsPage({
   //
   // 그래서 페이지를 새로 만들어 옮기는 대신(⛔7월에 두 페이지를 하나로 합친 이유가 있다)
   // 같은 화면 안에서 '열린 일감이 있는가'로 갈라 생김새를 다르게 한다.
+  //
   // 오늘(KST) 0시 — 오늘 예정된 방문은 아직 안 끝난 일이므로 열린 일감에 든다
+  // (서버 컴포넌트라 요청마다 서버에서 한 번만 실행 — 브라우저 재렌더와 무관)
   // eslint-disable-next-line react-hooks/purity
-  const todayKST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const nowMs = Date.now()
+  const todayKST = new Date(nowMs + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const todayStartKST = new Date(`${todayKST}T00:00:00+09:00`).toISOString()
   const openWorkPhones = new Set(
     ((openBookings ?? []) as { customer_phone: string | null; scheduled_at: string | null }[])
@@ -441,10 +416,55 @@ export default async function ClientsPage({
     return openWorkPhones.has(key) || pendingQuotePhones.has(key)
   }
 
+  // ── 거래 중 / 지난 고객 ──
+  //
+  // 고객은 지우지 않으니 영구히 쌓인다. 청소 한 번 받고 끝난 손님이 몇 년치 모이면
+  // 정작 이번 달에 손댈 곳이 그 사이에 묻힌다. 마지막 거래를 기준으로 갈라
+  // 기본 목록에는 '거래 중'만 두고, 지난 고객은 접어둔다(지우는 게 아니다).
+  //
+  // ⛔ 사장님이 손으로 '완료' 표시를 하게 만들지 말 것 — 안 누르면 아무 효과가 없고,
+  //    누르는 일 자체가 새 업무가 된다. 이미 쌓인 방문 기록에서 자동으로 갈린다.
+  const oneOffCutoff = new Date(nowMs - DORMANT_ONEOFF_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  const contractCutoff = new Date(nowMs - DORMANT_CONTRACT_DAYS * 24 * 60 * 60 * 1000).toISOString()
+
+  function lastDealAt(c: CustomerRow): string {
+    const lastVisit = c.phone ? (bookingMap[normalizePhone(c.phone)]?.lastDate ?? '') : ''
+    // 방문 이력이 없으면 등록일을 마지막 접점으로 본다(문의만 받고 안 온 손님도 언젠간 접힌다)
+    return lastVisit || c.created_at
+  }
+
+  function isDormant(c: CustomerRow): boolean {
+    // 지금 영업 중으로 손수 지정해둔 곳은 접지 않는다
+    if (isActiveSalesStage(c.sales_stage)) return false
+    // 열린 일감이 있으면 접지 않는다 — 정기계약·예정 방문·대기 견적.
+    // 작업이 끝나도 보고서 발송·후기 요청 같은 뒷일이 남으므로 완충 기간(아래)을 둔다.
+    if (hasOpenWork(c)) return false
+    // 짧게 접는 건 '개인 일회성'뿐이다.
+    // ⚠️거래처(법인)는 계약이 아직 없어도 오래 둔다 — 한 번 대청소하고 몇 달 뒤 정기로
+    //   넘어가는 게 B2B 영업 동선이라, 일주일 만에 접으면 영업 대상이 통째로 사라진다.
+    const keepLong = c.type === 'recurring' || (contractMap[c.id] ?? []).length > 0
+    return lastDealAt(c) < (keepLong ? contractCutoff : oneOffCutoff)
+  }
+
+  // 검색 중에는 가르지 않는다 — 찾으려는 사람이 접혀 있으면 검색이 고장 난 것처럼 보인다
+  const splitDormant = (list: CustomerRow[]) =>
+    isSearching
+      ? { live: list, dormant: [] as CustomerRow[] }
+      : { live: list.filter(c => !isDormant(c)), dormant: list.filter(isDormant) }
+
+  const { live: individualLive, dormant: individualDormant } = splitDormant(individualCustomers)
+  const { live: companyLive, dormant: companyDormant } = splitDormant(companyCustomers)
+  // 지난 고객은 최근에 끝난 순으로 — 다시 부를 곳을 찾는 자리라 금액순은 뜻이 없다
+  const byRecentDeal = (a: CustomerRow, b: CustomerRow) => lastDealAt(b).localeCompare(lastDealAt(a))
+  const dormantList = [...individualDormant, ...companyDormant].sort(byRecentDeal)
+  const dormantCount = dormantList.length
+
+  // ── 진행 중 / 완료 ──
   const individualActive = individualLive.filter(hasOpenWork)
-  const individualDone = individualLive.filter(c => !hasOpenWork(c))
+  // 완료 목록은 '언제 끝났나'를 보는 자리 — 전체 정렬(금액순)이 아니라 최근 완료순으로 고정한다
+  const individualDone = individualLive.filter(c => !hasOpenWork(c)).sort(byRecentDeal)
   const companyActive = companyLive.filter(hasOpenWork)
-  const companyDone = companyLive.filter(c => !hasOpenWork(c))
+  const companyDone = companyLive.filter(c => !hasOpenWork(c)).sort(byRecentDeal)
 
   // 완료된 곳은 카드가 아니라 한 줄로 — 목록에서 눈이 안 걸리게 확실히 낮춘다.
   // 지우거나 다른 페이지로 보내지 않는다. 이름을 누르면 이력·견적서가 그대로 있다.
@@ -523,10 +543,12 @@ export default async function ClientsPage({
     sort,
     show_archived: showArchived ? '1' : undefined,
     show_dormant: showDormant ? '1' : undefined,
-    all: showAll ? '1' : undefined,
+    all: expanded.size > 0 ? [...expanded].join(',') : undefined,
     q: searchQuery || undefined,
   }
   const href = (overrides: ListParams = {}) => buildHref({ ...currentParams, ...overrides })
+  // 누른 구획만 펼친다 — 이미 펼친 구획은 그대로 유지
+  const expandHref = (key: string) => href({ all: [...new Set([...expanded, key])].join(',') })
 
   const totalLtv = (completedBookings ?? []).reduce((s, b) => s + (b.final_price ?? 0), 0)
   const monthlyRecurring = ((contracts ?? []) as unknown as ContractRow[]).filter(c => c.status === 'active').reduce((s, c) => s + c.contract_price, 0)
@@ -727,7 +749,7 @@ export default async function ClientsPage({
               <p className="text-xs text-muted-foreground">고객 링크를 공유하면 견적 요청이 자동으로 들어와요</p>
             </div>
           ) : (
-            individualActive.slice(0, showAll ? undefined : LIST_LIMIT).map((customer) => {
+            individualActive.slice(0, isExpanded('ind') ? undefined : LIST_LIMIT).map((customer) => {
               const booking = customer.phone ? bookingMap[normalizePhone(customer.phone)] : undefined
               const customerContracts = contractMap[customer.id] ?? []
               const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
@@ -831,9 +853,9 @@ export default async function ClientsPage({
               )
             })
           )}
-          {!showAll && individualActive.length > LIST_LIMIT && (
+          {!isExpanded('ind') && individualActive.length > LIST_LIMIT && (
             <Link
-              href={href({ all: '1' })}
+              href={expandHref('ind')}
               className="block w-full text-center text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-xl py-3"
             >
               나머지 {individualActive.length - LIST_LIMIT}명 더 보기
@@ -847,10 +869,10 @@ export default async function ClientsPage({
                 완료 ({individualDone.length}명) · 다음 일정이 없는 곳이에요
               </p>
               <div className="rounded-xl border bg-muted/20 divide-y">
-                {individualDone.slice(0, showAll ? undefined : LIST_LIMIT).map(doneRow)}
+                {individualDone.slice(0, isExpanded('ind_done') ? undefined : LIST_LIMIT).map(doneRow)}
               </div>
-              {!showAll && individualDone.length > LIST_LIMIT && (
-                <Link href={href({ all: '1' })} className="block w-full text-center text-xs text-muted-foreground hover:text-foreground mt-1.5">
+              {!isExpanded('ind_done') && individualDone.length > LIST_LIMIT && (
+                <Link href={expandHref('ind_done')} className="block w-full text-center text-xs text-muted-foreground hover:text-foreground mt-1.5">
                   나머지 {individualDone.length - LIST_LIMIT}명 더 보기
                 </Link>
               )}
@@ -947,7 +969,7 @@ export default async function ClientsPage({
           {companyActive.length > 0 && (
             <div className="mt-3 space-y-2">
               <p className="text-xs text-muted-foreground px-1">등록된 거래처</p>
-              {companyActive.slice(0, showAll ? undefined : LIST_LIMIT).map((customer) => {
+              {companyActive.slice(0, isExpanded('co') ? undefined : LIST_LIMIT).map((customer) => {
                 const customerContracts = contractMap[customer.id] ?? []
                 const activeContract = customerContracts.find((c) => c.status === 'active') ?? null
                 const hasAnyContract = customerContracts.length > 0
@@ -1047,9 +1069,9 @@ export default async function ClientsPage({
                   </div>
                 )
               })}
-              {!showAll && companyActive.length > LIST_LIMIT && (
+              {!isExpanded('co') && companyActive.length > LIST_LIMIT && (
                 <Link
-                  href={href({ all: '1' })}
+                  href={expandHref('co')}
                   className="block w-full text-center text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-xl py-3"
                 >
                   나머지 {companyActive.length - LIST_LIMIT}곳 더 보기
@@ -1065,10 +1087,10 @@ export default async function ClientsPage({
                 완료 ({companyDone.length}곳) · 다음 일정이 없는 곳이에요
               </p>
               <div className="rounded-xl border bg-muted/20 divide-y">
-                {companyDone.slice(0, showAll ? undefined : LIST_LIMIT).map(doneRow)}
+                {companyDone.slice(0, isExpanded('co_done') ? undefined : LIST_LIMIT).map(doneRow)}
               </div>
-              {!showAll && companyDone.length > LIST_LIMIT && (
-                <Link href={href({ all: '1' })} className="block w-full text-center text-xs text-muted-foreground hover:text-foreground mt-1.5">
+              {!isExpanded('co_done') && companyDone.length > LIST_LIMIT && (
+                <Link href={expandHref('co_done')} className="block w-full text-center text-xs text-muted-foreground hover:text-foreground mt-1.5">
                   나머지 {companyDone.length - LIST_LIMIT}곳 더 보기
                 </Link>
               )}
@@ -1164,7 +1186,7 @@ export default async function ClientsPage({
                 다시 부르고 싶은 곳이 있으면 이름을 눌러 이력을 보고 연락하세요.
               </p>
               {[...individualDormant, ...companyDormant]
-                .slice(0, showAll ? undefined : LIST_LIMIT)
+                .slice(0, isExpanded('dormant') ? undefined : LIST_LIMIT)
                 .map((customer) => {
                   const last = lastDealAt(customer)
                   return (
@@ -1186,9 +1208,9 @@ export default async function ClientsPage({
                     </div>
                   )
                 })}
-              {!showAll && dormantCount > LIST_LIMIT && (
+              {!isExpanded('dormant') && dormantCount > LIST_LIMIT && (
                 <Link
-                  href={href({ all: '1' })}
+                  href={expandHref('dormant')}
                   className="block w-full text-center text-xs text-muted-foreground hover:text-foreground border border-dashed rounded-xl py-3"
                 >
                   나머지 {dormantCount - LIST_LIMIT}명 더 보기
