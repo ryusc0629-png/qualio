@@ -102,6 +102,15 @@ export function ReelDoneItem({ reportId, url, label, source = 'report', captions
     } catch {
       toast.warning('문구 복사가 안 됐어요. 채널을 연 뒤 다시 눌러주세요')
     }
+
+    // ★폰에서 앱으로 넘기려면 **같은 탭으로 이동**해야 한다.
+    //   새 탭(window.open)으로 열면 iOS·안드로이드가 App Links를 안 걸어 브라우저에 머문다.
+    //   ⚠️떠나기 전에 안내를 읽을 시간을 준다 — 바로 넘어가면 '글쓰기(+) → 클립'을 못 보고
+    //     앱만 열린 채 사장님이 뭘 눌러야 할지 모른다.
+    if (isPhone && c.preferApp) {
+      setTimeout(() => { window.location.href = c.openUrl }, 1800)
+      return
+    }
     window.open(c.openUrl, '_blank', 'noopener')
   }
 
@@ -160,6 +169,12 @@ export function ReelDoneItem({ reportId, url, label, source = 'report', captions
           <p className="text-xs text-muted-foreground">
             저장한 뒤 올릴 곳을 누르세요. 문구는 자동으로 복사돼요
           </p>
+          {/* 네이버 클립만 경로가 안 뻔하다 — 나머지 셋은 눌러보면 아는 동작이라 안 적는다 */}
+          {captions.some((c) => c.key === 'naver_clip') && (
+            <p className="text-[11px] text-muted-foreground">
+              네이버 클립은 <b>블로그 앱</b>에서 글쓰기(+) → <b>클립</b>으로 올려요
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-1.5">
             {captions.map((c) => (
               <button

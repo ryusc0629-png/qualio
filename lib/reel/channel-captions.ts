@@ -20,6 +20,14 @@ export interface ReelChannelCaption {
   openUrl: string
   /** 어디에 붙이는지 한 줄 */
   hint: string
+  /**
+   * 폰에서 앱으로 넘어가야 하는 채널인가.
+   * ⚠️새 탭(window.open)으로 열면 iOS·안드로이드가 앱으로 넘겨주지 않는다(App Links가 안 걸림).
+   *   같은 탭으로 이동해야 앱이 깔려 있을 때 앱이 열린다.
+   * ⛔`naverblog://` 같은 커스텀 스킴을 추측해서 쓰지 말 것 — 공식 문서를 찾지 못했고,
+   *   등록 안 된 스킴이면 폰에 "페이지를 열 수 없음" 오류창이 떠서 비테크 사장님이 막힌다.
+   */
+  preferApp?: boolean
 }
 
 interface Source {
@@ -73,7 +81,10 @@ export function buildReelCaptions(src: Source): ReelChannelCaption[] {
 
   // ── 검색으로 찾는 곳 — 제목이 곧 검색어다 ──
   if (title) {
+    // 유튜브는 설명란이 넉넉해 태그를 많이 넣어도 되지만,
+    // ⚠️네이버 클립은 해시태그가 **최대 5개**다(2026-08-22 대표 확인). 넘기면 등록이 안 된다.
     const searchTags = hash(src.searchTags, 10)
+    const clipTags = hash(src.searchTags, 5)
 
     // 유튜브는 제목/설명이 따로라 한 덩이로 주되 어디에 넣는지 표시해준다.
     // #Shorts는 세로 영상을 쇼츠로 확실히 태우기 위해 우리가 붙인다.
@@ -94,9 +105,11 @@ export function buildReelCaptions(src: Source): ReelChannelCaption[] {
     out.push({
       key: 'naver_clip',
       label: '네이버 클립',
-      text: searchTags ? `${title}\n\n${searchTags}` : title,
+      text: clipTags ? `${title}\n\n${clipTags}` : title,
       openUrl: 'https://m.blog.naver.com/',
       hint: '블로그 앱 → 글쓰기(+) → 클립 → 발행할 때 링크 태그 걸기',
+      // 폰에 블로그 앱이 깔려 있으면 앱으로 넘어간다(같은 탭 이동이라야 걸린다)
+      preferApp: true,
     })
   }
 
