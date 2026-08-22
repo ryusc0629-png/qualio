@@ -34,8 +34,10 @@ export function MonthlyReportShare({ businessId, customerId, customerName }: Mon
 
   return (
     <div className="flex gap-2">
+      {/* 사장님이 직접 여는 미리보기라 preview=1을 붙인다 — 계좌 미등록 같은 내부 안내가 여기서만 뜬다.
+          아래 '링크 복사'는 붙이지 않는다(거래처가 받는 링크는 깨끗한 서류여야 함) */}
       <a
-        href={path}
+        href={`${path}&preview=1`}
         target="_blank"
         rel="noreferrer"
         className="flex-1 inline-flex items-center justify-center gap-1.5 h-11 rounded-xl border border-emerald-200 bg-emerald-50 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"

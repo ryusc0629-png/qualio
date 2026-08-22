@@ -1,10 +1,15 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import { CircleAlert, CalendarClock } from 'lucide-react'
+import { CircleAlert, CalendarClock, Receipt } from 'lucide-react'
 import { ReportPhotoSection } from '../../report/[reportId]/report-photos'
 import { PrintReportButton } from './print-button'
 import { DocPage, DocHeader, DocMeta, DocLede, DocSignature } from '@/components/report/document'
 import { formatFrequency } from '@/lib/utils/frequency'
+import { formatDate, toMarketYmd } from '@/lib/format/datetime'
+import { formatMoney } from '@/lib/format/money'
+import { buildMonthlyCharge, type ChargeContract } from '@/lib/reports/monthly-charge'
+import { loadOneOffJobs } from '@/lib/reports/one-off-jobs'
 import {
   buildMonthlySummary,
   buildHeadline,
@@ -39,19 +44,23 @@ function formatShortDate(iso: string): string {
 
 interface PageProps {
   params: Promise<{ businessId: string; customerId: string }>
-  searchParams: Promise<{ month?: string }>
+  searchParams: Promise<{ month?: string; preview?: string }>
 }
 
 export default async function MonthlyReportPage({ params, searchParams }: PageProps) {
   const { businessId, customerId } = await params
-  const { month } = await searchParams
+  const { month, preview } = await searchParams
   const range = monthRange(month)
+  // 사장님이 보내기 전에 직접 여는 미리보기(?preview=1) — 여기서만 '계좌 미등록' 같은 내부 안내를 띄운다.
+  // 거래처가 받는 링크에는 이 파라미터가 없어 그대로 깨끗한 서류가 나간다.
+  const isOwnerPreview = preview === '1'
 
   const db = createServiceClient()
 
   // 업체 + 고객(거래처) — 둘 다 같은 업체 소속인지 확인
   const [{ data: business }, { data: customer }] = await Promise.all([
-    db.from('businesses').select('name, phone, logo_url, favicon_url' as never).eq('id', businessId).maybeSingle() as unknown as Promise<{ data: { name: string; phone: string | null; logo_url: string | null; favicon_url: string | null } | null }>,
+    // payment_account = 설정 > 사업자 정보의 '정산(입금) 계좌' — 이번 달 청구 절의 입금 계좌로 그대로 쓴다
+    db.from('businesses').select('name, phone, logo_url, favicon_url, payment_account' as never).eq('id', businessId).maybeSingle() as unknown as Promise<{ data: { name: string; phone: string | null; logo_url: string | null; favicon_url: string | null; payment_account: string | null } | null }>,
     db
       .from('customers')
       .select('id, name, phone, address')
@@ -126,22 +135,44 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
 
   }
 
-  // 계약 정보 — 이 고객의 계약 중 진행 중인 것 우선. 작업 항목(체크리스트)도 함께.
+  // 계약 정보 — 머리말(서비스·주기)과 '이번 달 청구' 금액에 함께 쓴다.
+  // 기간·금액 이력까지 읽는 이유: 청구액은 '지금 금액'이 아니라 '그 달에 유효했던 금액'이어야 한다.
   const { data: contracts } = (await db
     .from('contracts')
-    .select('service_type, frequency, contract_price, status' as never)
+    .select('id, service_type, frequency, contract_price, status, start_date, end_date, price_history' as never)
     .eq('business_id', businessId)
     .eq('customer_id', customerId)) as unknown as {
-    data:
-      | {
-          service_type: string | null
-          frequency: string
-          contract_price: number
-          status: string
-        }[]
-      | null
+    data: ChargeContract[] | null
   }
   const contract = (contracts ?? []).find((c) => c.status === 'active') ?? (contracts ?? [])[0] ?? null
+
+  // 사장님이 이 달 청구 금액을 직접 적었으면 그 값을 쓴다(일할 방식이 업체마다 달라서).
+  // 발송 대기열(monthly_report_dispatches)에 적어둔 값 — 없으면 자동 계산값.
+  const { data: dispatchRow } = (await (db as unknown as SupabaseClient)
+    .from('monthly_report_dispatches')
+    .select('charge_amount')
+    .eq('business_id', businessId)
+    .eq('customer_id', customerId)
+    .eq('period', range.key)
+    .maybeSingle()) as unknown as { data: { charge_amount: number | null } | null }
+
+  // 그 달 일회성 추가 작업 중 아직 못 받은 건 — 계약분 아래에 한 줄씩 합산한다
+  const oneOffByCustomer = await loadOneOffJobs(
+    db as unknown as SupabaseClient,
+    businessId,
+    [customerId],
+    range.key,
+  )
+
+  // 이번 달 청구 — 그 달에 살아 있던 계약이 없으면 null이고, 문서에 절 자체를 그리지 않는다
+  const charge = buildMonthlyCharge({
+    contracts: contracts ?? [],
+    billingMonth: range.key,
+    customerId,
+    issuedYmd: toMarketYmd(),
+    overrideTotal: dispatchRow?.charge_amount ?? null,
+    oneOffJobs: oneOffByCustomer.get(customerId) ?? [],
+  })
 
   // 이번 달 접수된 문제·클레임 — 담당자가 가장 먼저 보는 항목이다.
   // (이 거래처의 이번 달 방문에 붙은 건만)
@@ -206,6 +237,7 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
   })
 
   const cycleLabel = contract?.frequency ? formatFrequency(contract.frequency) : null
+  const paymentAccount = business.payment_account?.trim() ?? ''
 
   return (
     <DocPage action={<PrintReportButton />}>
@@ -217,17 +249,15 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
         title={`${range.label} 작업 보고서`}
         docNo={`MR-${range.label.replace(/[^0-9]/g, '')}`}
       />
+      {/* ⚠️ 머리말에 있던 '월 금액'은 뺐다(2026-08-22). 그 값은 계약의 '지금 금액'이라,
+             지난 달 보고서를 다시 열면 그때 받은 금액이 아니라 오늘 금액이 찍혔다.
+             금액은 아래 '이번 달 청구' 한 곳에서만 말한다 — 그 달에 유효했던 금액으로.
+             ⛔ 여기에 금액 줄을 되살리지 말 것. */}
       <DocMeta
         items={[
           { k: '거래처', v: customer.name },
           { k: '서비스', v: contract?.service_type ?? '정기 청소' },
           { k: '주기', v: cycleLabel && cycleLabel !== '—' ? cycleLabel : '' },
-          {
-            k: '월 금액',
-            v: contract && contract.contract_price > 0
-              ? `${contract.contract_price.toLocaleString('ko-KR')}원 (부가세 별도)`
-              : '',
-          },
         ]}
       />
 
@@ -434,6 +464,64 @@ export default async function MonthlyReportPage({ params, searchParams }: PagePr
           </div>
         )}
 
+        {/* ── 이번 달 청구 — 문서 맨 끝, 서명 바로 앞 ──────────────────────
+             왜 여기인가: 담당자는 "이런 일을 했다"를 다 읽고 마지막에 "그래서 얼마"를 본다.
+             왜 링크가 아니라 금액·계좌를 문서에 박는가: 이 한 장이 그대로 결재에 올라가야 한다.
+             링크만 두면 종이로 뽑는 순간 죽고, 담당자는 청구서를 다시 찾아야 한다.
+             ⚠️ 금액은 계약(그 달 유효 금액) 한 곳에서만 나온다 — lib/reports/monthly-charge.ts */}
+        {charge && (paymentAccount ? (
+          <Section icon={<Receipt className="h-4 w-4" />} title="이번 달 청구">
+            <div className="divide-y divide-slate-100 border-y border-slate-200">
+              <ChargeRow k="청구 대상" v={`${range.label}분`} />
+              <ChargeRow k="청구번호" v={charge.invoiceNo} />
+              {/* 계약이 하나면 위 '청구 대상'과 겹치므로 금액을 또 적지 않는다.
+                  여러 개면 무엇에 대한 돈인지 계약별로 보여야 담당자가 알아본다.
+                  ⚠️ 사장님이 금액을 직접 적은 달은 계약별 금액을 감춘다 — 줄 합이 총액과 안 맞는다. */}
+              {charge.rows.length === 1 ? (
+                <ChargeRow k="내역" v={charge.rows[0].label} note={charge.rows[0].note} />
+              ) : (
+                charge.rows.map((r, i) => (
+                  <ChargeRow
+                    key={i}
+                    k={r.label}
+                    v={charge.adjusted ? '' : formatMoney(r.amount)}
+                    note={r.note}
+                  />
+                ))
+              )}
+            </div>
+
+            <div className="mt-4 flex items-end justify-between gap-4 border-y-2 border-slate-900 py-4">
+              <span className="text-[13px] font-semibold text-slate-600">청구 금액</span>
+              <div className="text-right">
+                <p className="text-[26px] leading-none font-bold tabular-nums text-slate-900">
+                  {formatMoney(charge.total)}
+                </p>
+                <p className="mt-1.5 text-[11px] text-slate-400">부가세 별도</p>
+              </div>
+            </div>
+
+            <div className="mt-4 border-2 border-slate-900 px-4 py-3.5">
+              <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-slate-500">입금 계좌</p>
+              <p className="text-[15px] font-bold text-slate-900 break-keep">{paymentAccount}</p>
+              <p className="mt-1.5 text-[12.5px] text-slate-600">
+                {formatDate(charge.dueYmd)}까지 입금해 주세요.
+              </p>
+            </div>
+          </Section>
+        ) : isOwnerPreview ? (
+          // 계좌가 없으면 청구서 구실을 못 한다. 거래처엔 절 자체를 안 보내고, 사장님에게만 알린다.
+          <div className="mt-8 rounded-lg border-2 border-red-300 bg-red-50 p-4 print:hidden">
+            <p className="text-[13px] font-bold text-red-700">
+              입금 계좌가 없어서 &lsquo;이번 달 청구&rsquo;가 빠진 채로 나가요
+            </p>
+            <p className="mt-1 text-[13px] leading-6 text-red-700">
+              설정 &gt; 사업자 정보의 &lsquo;정산(입금) 계좌&rsquo;를 채우면 이 자리에 {formatMoney(charge.total)} 청구가 들어가요.
+              거래처가 받는 보고서에는 이 빨간 안내가 보이지 않아요.
+            </p>
+          </div>
+        ) : null)}
+
         <DocSignature
           businessName={business.name}
           businessPhone={business.phone}
@@ -452,6 +540,22 @@ function Metric({ value, label, accent = false }: { value: string; label: string
         {value}
       </p>
       <p className="mt-1 text-[12px] text-slate-500">{label}</p>
+    </div>
+  )
+}
+
+// 청구 절의 한 줄 — 이름/값. components/report/document.tsx 의 DocRows와 같은 결.
+// note는 한 달을 다 채우지 못한 달의 근거('4일 시작 · 30일 중 27일') — 담당자가 금액을 납득하게 한다.
+function ChargeRow({ k, v, note }: { k: string; v: string; note?: string }) {
+  return (
+    <div className="flex items-start justify-between gap-6 py-2.5">
+      <div className="min-w-0">
+        <span className="text-[12px] text-slate-500">{k}</span>
+        {note && <p className="mt-0.5 text-[11px] text-slate-400">{note}</p>}
+      </div>
+      {v && (
+        <span className="min-w-0 break-words text-right text-[13px] font-medium tabular-nums text-slate-900">{v}</span>
+      )}
     </div>
   )
 }

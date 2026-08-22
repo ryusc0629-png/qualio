@@ -8,7 +8,9 @@ import {
   sendMonthlyReportAction,
   skipMonthlyReportAction,
   markCustomerRequestDoneAction,
+  setMonthlyReportChargeAction,
 } from '@/lib/actions/monthly-reports'
+import { formatMoney } from '@/lib/format/money'
 
 /** 이번 달 현장에서 고객이 추가로 부탁한 것 — 보내기 전에 처리 여부를 표시한다 */
 export interface ReviewRequest {
@@ -18,6 +20,16 @@ export interface ReviewRequest {
   done: boolean
 }
 
+/** 이번 달 청구 — 계약이 없는 거래처는 null(일회성 작업은 작업 보고서에서 청구한다) */
+export interface ReviewCharge {
+  /** 실제 나갈 금액 */
+  amount: number
+  /** 계약 기준 자동 계산값 — 사장님이 고쳤다가 되돌릴 때 쓴다 */
+  autoAmount: number
+  /** 한 달을 다 못 채운 달의 근거 — '4일 시작 · 30일 중 27일' */
+  note: string | null
+}
+
 export interface ReviewItem {
   id: string
   customerId: string
@@ -25,6 +37,7 @@ export interface ReviewItem {
   period: string // 'YYYY-MM'
   completedVisits: number
   requests: ReviewRequest[]
+  charge: ReviewCharge | null
 }
 
 function periodLabel(period: string): string {
@@ -38,6 +51,67 @@ function dayLabel(iso: string): string {
     day: 'numeric',
     timeZone: 'Asia/Seoul',
   })
+}
+
+/**
+ * 이번 달 청구 금액 — 보내기 전에 확인하고, 다르면 그 자리에서 고친다.
+ *
+ * 왜 고칠 수 있어야 하나: 계약이 9월 4일에 시작하면 9월분은 한 달 치가 아니다.
+ * 일수로 나눈 값을 미리 채워두지만, 일할 방식은 업체마다 다르다
+ * (방문 횟수로 나누거나, 첫 달은 안 받거나, 만원 단위로 맞추거나).
+ *
+ * 저장 버튼을 따로 두지 않는다 — 칸을 벗어나면 저장하고 알려준다.
+ * (보내기 전 마지막 화면이라 버튼이 하나 더 늘면 무엇을 눌러야 할지 헷갈린다)
+ */
+function ChargeField({ dispatchId, charge, period }: { dispatchId: string; charge: ReviewCharge; period: string }) {
+  const [text, setText] = useState(String(charge.amount))
+  // 마지막으로 저장된 금액 — 같은 값으로 다시 저장하지 않게(칸을 스쳐도 토스트가 뜨면 시끄럽다)
+  const [savedAmount, setSavedAmount] = useState(charge.amount)
+
+  const { execute, isPending } = useAction(setMonthlyReportChargeAction, {
+    onSuccess: () => toast.success('이번 달 청구 금액을 저장했어요'),
+    onError: ({ error }) => toast.error(error.serverError ?? '금액을 저장하지 못했어요'),
+  })
+
+  const commit = () => {
+    const digits = text.replace(/[^0-9]/g, '')
+    const next = digits === '' ? charge.autoAmount : Number(digits)
+    setText(String(next))
+    if (next === savedAmount) return
+    setSavedAmount(next)
+    // 자동 계산값과 같아지면 저장값을 지워 계약을 다시 따라가게 한다
+    execute({ dispatchId, amount: next === charge.autoAmount ? null : next })
+  }
+
+  const isAdjusted = charge.amount !== charge.autoAmount
+
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <div className="flex items-center justify-between gap-3">
+        <label htmlFor={`charge-${dispatchId}`} className="text-sm font-medium">
+          {periodLabel(period)} 청구 금액
+        </label>
+        <div className="flex items-center gap-1.5">
+          <input
+            id={`charge-${dispatchId}`}
+            value={text}
+            inputMode="numeric"
+            disabled={isPending}
+            onChange={(e) => setText(e.target.value)}
+            onBlur={commit}
+            className="h-10 w-36 rounded-md border border-border px-3 text-right text-sm font-semibold tabular-nums focus:border-emerald-400 focus:outline-none disabled:opacity-50"
+          />
+          <span className="text-sm text-muted-foreground">원</span>
+        </div>
+      </div>
+      <p className="mt-1.5 text-xs leading-5 text-muted-foreground">
+        {charge.note
+          ? `${charge.note} — 다르면 고쳐주세요`
+          : '계약 월 금액이에요. 이번 달만 다르면 고쳐주세요'}
+        {isAdjusted && ` (계산대로면 ${formatMoney(charge.autoAmount)})`}
+      </p>
+    </div>
+  )
 }
 
 /**
@@ -153,10 +227,15 @@ function ReviewRow({
       {/* 현장 요청 처리 체크 — 미리보기보다 위에 둔다(보고 나서 고치면 다시 봐야 한다) */}
       <RequestChecklist requests={item.requests} />
 
+      {/* 이번 달 청구 금액 — 이것도 미리보기 전에. 고친 금액이 보고서에 그대로 들어간다 */}
+      {item.charge && <ChargeField dispatchId={item.id} charge={item.charge} period={item.period} />}
+
       {/* 미리보기 / 링크 복사 */}
       <div className="flex gap-2">
+        {/* 보내기 전 사장님이 보는 미리보기 — preview=1이라 계좌 미등록 같은 내부 안내가 뜬다.
+            '링크 복사'(위 url 그대로)에는 붙지 않아 거래처에는 깨끗한 서류가 간다 */}
         <a
-          href={url}
+          href={`${url}&preview=1`}
           target="_blank"
           rel="noreferrer"
           className="flex-1 inline-flex items-center justify-center gap-1.5 h-11 rounded-lg border border-emerald-200 bg-emerald-50 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"

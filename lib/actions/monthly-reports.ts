@@ -6,6 +6,9 @@ import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { sendMonthlyReportAlimtalk } from '@/lib/kakao/alimtalk'
+import { buildMonthlyCharge, type ChargeContract } from '@/lib/reports/monthly-charge'
+import { loadOneOffJobs } from '@/lib/reports/one-off-jobs'
+import { toMarketYmd } from '@/lib/format/datetime'
 
 async function getBusinessId() {
   const authClient = await createClient()
@@ -23,6 +26,39 @@ async function getBusinessId() {
   return { db, businessId: profile.business_id }
 }
 
+// 이번 달 청구 금액을 사장님이 직접 정한다.
+//
+// 왜 필요한가: 계약이 달 중간에 시작·종료하면 그 달은 한 달 치가 아니다.
+// 우리는 일수로 나눈 값을 기본으로 보여주지만, 일할 방식은 업체마다 다르다
+// (방문 횟수로 나누거나, 첫 달은 아예 안 받거나, 만원 단위로 맞추거나).
+// null을 보내면 다시 자동 계산값으로 돌아간다.
+export const setMonthlyReportChargeAction = action
+  .schema(
+    z.object({
+      dispatchId: z.string().uuid(),
+      // 0원도 뜻이 있다 — '이 달은 청구 안 함'
+      amount: z.number().int().min(0).max(2_000_000_000).nullable(),
+    }),
+  )
+  .action(async ({ parsedInput }) => {
+    const { db, businessId } = await getBusinessId()
+    const looseDb = db as unknown as SupabaseClient
+
+    const { error } = await looseDb
+      .from('monthly_report_dispatches')
+      .update({ charge_amount: parsedInput.amount })
+      .eq('id', parsedInput.dispatchId)
+      .eq('business_id', businessId)
+
+    if (error) {
+      console.error('[MonthlyReport] 청구 금액 저장 실패:', error)
+      throw new Error('[APP] 금액을 저장하지 못했어요. 다시 눌러주세요')
+    }
+
+    revalidatePath('/dashboard/monthly-reports')
+    return { success: true }
+  })
+
 // 리포트 발송 처리(사장님이 검토 후 '발송' 클릭)
 //
 // 템플릿(SOLAPI_TEMPLATE_ID_MONTHLY_REPORT)이 설정돼 있으면 거래처에 알림톡을 보내고,
@@ -37,7 +73,7 @@ export const sendMonthlyReportAction = action
 
     const { data: dispatch } = await looseDb
       .from('monthly_report_dispatches')
-      .select('status, period, completed_visits, customer_id, customers!customer_id(name, phone), businesses!business_id(name)')
+      .select('status, period, completed_visits, charge_amount, customer_id, customers!customer_id(name, phone), businesses!business_id(name)')
       .eq('id', parsedInput.dispatchId)
       .eq('business_id', businessId)
       .maybeSingle() as unknown as {
@@ -45,6 +81,7 @@ export const sendMonthlyReportAction = action
           status: string
           period: string
           completed_visits: number | null
+          charge_amount: number | null
           customer_id: string
           customers: { name: string | null; phone: string | null } | { name: string | null; phone: string | null }[] | null
           businesses: { name: string } | { name: string }[] | null
@@ -87,9 +124,32 @@ export const sendMonthlyReportAction = action
       throw new Error('[APP] 지금은 카톡으로 보낼 수 없어요. 잠시 후 다시 눌러주세요')
     }
 
+    // ★보낸 순간의 청구 금액을 박아둔다.
+    // 안 박아두면 나중에 계약 금액을 고치거나 우리가 계산 규칙을 손볼 때,
+    // 이미 보낸 보고서를 거래처가 다시 열면 숫자가 달라진다(= 받은 청구서가 바뀐다).
+    let frozenCharge = dispatch.charge_amount
+    if (frozenCharge == null) {
+      const { data: contractRows } = (await looseDb
+        .from('contracts')
+        .select('id, service_type, frequency, contract_price, status, start_date, end_date, price_history')
+        .eq('business_id', businessId)
+        .eq('customer_id', dispatch.customer_id)) as unknown as { data: ChargeContract[] | null }
+
+      const oneOff = await loadOneOffJobs(looseDb, businessId, [dispatch.customer_id], dispatch.period)
+
+      frozenCharge =
+        buildMonthlyCharge({
+          contracts: contractRows ?? [],
+          billingMonth: dispatch.period,
+          customerId: dispatch.customer_id,
+          issuedYmd: toMarketYmd(),
+          oneOffJobs: oneOff.get(dispatch.customer_id) ?? [],
+        })?.total ?? null
+    }
+
     const { error } = await looseDb
       .from('monthly_report_dispatches')
-      .update({ status: 'sent', sent_at: new Date().toISOString() })
+      .update({ status: 'sent', sent_at: new Date().toISOString(), charge_amount: frozenCharge })
       .eq('id', parsedInput.dispatchId)
       .eq('business_id', businessId)
 

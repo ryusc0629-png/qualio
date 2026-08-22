@@ -3,7 +3,9 @@ import { notFound } from 'next/navigation'
 import { ReportPhotoSection } from './report-photos'
 import { CareReminderOptIn } from './care-reminder-optin'
 import { canSendMarketingSms } from '@/lib/reengagement/consent'
-import { formatDate } from '@/lib/format/datetime'
+import { formatDate, toMarketYmd } from '@/lib/format/datetime'
+import { formatMoney } from '@/lib/format/money'
+import { buildInvoiceNumber, invoiceDueYmd, toBillingMonth } from '@/lib/quote/invoice'
 import {
   DocPage, DocHeader, DocMeta, DocLede, DocSection, DocText, DocSignature,
 } from '@/components/report/document'
@@ -78,14 +80,18 @@ export default async function ReportPage({
     .select(`
       id, notes, created_at,
       bookings!booking_id(
+        id,
         customer_name,
         customer_phone,
         scheduled_at,
         service_address,
         selected_tier,
+        contract_id,
+        final_price,
+        paid_amount,
         quotes!quote_id(cleaning_type, space_size)
       ),
-      businesses!business_id(name, phone, naver_place_url, logo_url, favicon_url)
+      businesses!business_id(name, phone, naver_place_url, logo_url, favicon_url, payment_account)
     `)
     .eq('id', reportId)
     .eq('business_id', businessId)
@@ -112,13 +118,17 @@ export default async function ReportPage({
   const biz     = Array.isArray(report.businesses) ? report.businesses[0] : report.businesses
   const quote   = Array.isArray(booking?.quotes) ? booking?.quotes[0] : booking?.quotes
 
-  const bizInfo = biz as { name: string; phone: string | null; naver_place_url: string | null; logo_url: string | null; favicon_url: string | null } | null
+  const bizInfo = biz as { name: string; phone: string | null; naver_place_url: string | null; logo_url: string | null; favicon_url: string | null; payment_account: string | null } | null
   const bookingInfo = booking as {
+    id: string
     customer_name: string | null
     customer_phone: string | null
     scheduled_at: string | null
     service_address: string | null
     selected_tier: string | null
+    contract_id: string | null
+    final_price: number | null
+    paid_amount: number | null
   } | null
   const quoteInfo = quote as { cleaning_type: string | null; space_size: number | null } | null
 
@@ -169,6 +179,44 @@ export default async function ReportPage({
   ]
 
   const docNo = `WR-${report.created_at.slice(2, 4)}${report.created_at.slice(5, 7)}${report.created_at.slice(8, 10)}-${reportId.slice(0, 4).toUpperCase()}`
+
+  // ── 이번 작업 청구 ─────────────────────────────────────────────────────
+  // 일회성 작업은 이 보고서가 곧 청구서가 된다(정기는 월간 보고서가 한 달치를 모아 청구).
+  //
+  // ⛔ 정기 방문(contract_id 있음)에는 절대 그리지 않는다 — 월정액을 이미 월간 보고서로
+  //    청구하는데 방문마다 청구가 또 나가면 이중 청구로 읽힌다. (정기 예약은 final_price도 0)
+  // ⛔ 이미 받은 돈에는 그리지 않는다 — 받은 돈에 "입금해 주세요"가 나가면 사고다.
+  //    ★이 판정은 이미 있는 흐름과 정확히 맞물린다: 완료 처리하면 기본이 '전액 받음'이고
+  //     (lib/actions/bookings.ts·field.ts), 현장에서 '계산서 청구'로 마감한 건만 paid_amount=0으로
+  //     남는다. 즉 '나중에 입금받을 건'에만 청구가 붙는다. 현장 결제 건은 영수증이 그 역할을 한다.
+  // ⛔ 계좌가 없으면 그리지 않는다 — 어디로 넣으라는 건지 모르는 청구는 없느니만 못하다.
+  //
+  // ★정기 거래처의 '추가 작업'도 여기서 청구된다(현금이 급한 곳은 월말까지 못 기다린다).
+  //  월말까지 입금이 없으면 그 건이 월간 보고서 청구에 한 줄로 다시 실린다 — 이중 청구가 아니라
+  //  미수 재청구다. 입금돼 수금 처리되면(paid_amount) 월간에서 자동으로 빠진다.
+  //  ⛔ 이 절을 없애지 말 것. 없애면 '작업하고 바로 청구'하는 길이 사라진다.
+  const totalPrice = bookingInfo?.final_price ?? 0
+  const paidAmount = bookingInfo?.paid_amount ?? 0
+  const unpaid = totalPrice - paidAmount
+  const paymentAccount = bizInfo?.payment_account?.trim() ?? ''
+  const showCharge =
+    !bookingInfo?.contract_id && totalPrice > 0 && unpaid > 0 && paymentAccount !== ''
+  const chargeIssuedYmd = toMarketYmd()
+  const chargeNo = showCharge
+    ? buildInvoiceNumber({
+        quoteNumber: null,
+        quoteId: bookingInfo!.id,
+        isOneOff: true,
+        billingMonth: toBillingMonth(chargeIssuedYmd),
+      })
+    : ''
+  const chargeDueYmd = showCharge
+    ? invoiceDueYmd({
+        issuedYmd: chargeIssuedYmd,
+        isOneOff: true,
+        billingMonth: toBillingMonth(chargeIssuedYmd),
+      })
+    : ''
 
   // 01·02·03… 은 실제 읽는 순서다. 사진과 본문 절에 이어서 번호를 매긴다.
   let no = 0
@@ -245,6 +293,57 @@ export default async function ReportPage({
               {careDueLabel}쯤 다시 점검해 보시길 권해드립니다. 그때 저희가 먼저 연락드리겠습니다.
             </p>
           )}
+        </DocSection>
+      )}
+
+      {/* ── 이번 작업 청구 — 문서 끝, 판촉·후기보다 앞 ─────────────────────
+           일회성 작업은 이 한 장이 작업 보고이자 청구서다. 담당자가 그대로 결재에 올린다.
+           금액은 예약에 적힌 값(final_price)이고, 일부만 받았으면 잔금만 청구한다. */}
+      {showCharge && (
+        <DocSection no={nextNo()} title="이번 작업 청구">
+          <div className="divide-y divide-slate-100 border-y border-slate-200">
+            <div className="flex items-start justify-between gap-6 py-2.5">
+              <span className="shrink-0 text-[12px] text-slate-500">청구번호</span>
+              <span className="text-right text-[13px] font-medium tabular-nums text-slate-900">{chargeNo}</span>
+            </div>
+            {/* 선금을 받은 건만 총액·받은 금액을 밝힌다. 전액 미수면 줄이 늘기만 한다 */}
+            {paidAmount > 0 && (
+              <>
+                <div className="flex items-start justify-between gap-6 py-2.5">
+                  <span className="shrink-0 text-[12px] text-slate-500">작업 금액</span>
+                  <span className="text-right text-[13px] font-medium tabular-nums text-slate-900">
+                    {formatMoney(totalPrice)}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-6 py-2.5">
+                  <span className="shrink-0 text-[12px] text-slate-500">받은 금액</span>
+                  <span className="text-right text-[13px] font-medium tabular-nums text-slate-900">
+                    − {formatMoney(paidAmount)}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="mt-4 flex items-end justify-between gap-4 border-y-2 border-slate-900 py-4">
+            <span className="text-[13px] font-semibold text-slate-600">
+              {paidAmount > 0 ? '남은 금액' : '청구 금액'}
+            </span>
+            <div className="text-right">
+              <p className="text-[26px] leading-none font-bold tabular-nums text-slate-900">
+                {formatMoney(unpaid)}
+              </p>
+              <p className="mt-1.5 text-[11px] text-slate-400">부가세 별도</p>
+            </div>
+          </div>
+
+          <div className="mt-4 border-2 border-slate-900 px-4 py-3.5">
+            <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-slate-500">입금 계좌</p>
+            <p className="text-[15px] font-bold text-slate-900 break-keep">{paymentAccount}</p>
+            <p className="mt-1.5 text-[12.5px] text-slate-600">
+              {formatDate(chargeDueYmd)}까지 입금해 주세요.
+            </p>
+          </div>
         </DocSection>
       )}
 
