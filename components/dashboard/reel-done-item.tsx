@@ -18,9 +18,11 @@ interface Props {
   reportId: string
   url: string
   label: string
+  /** 어디서 만든 영상인가 — 시공 사례로 만든 것은 '치우기'가 아직 없다 */
+  source?: 'report' | 'portfolio'
 }
 
-export function ReelDoneItem({ reportId, url, label }: Props) {
+export function ReelDoneItem({ reportId, url, label, source = 'report' }: Props) {
   // 썸네일을 누르면 그 자리에서 큰 화면으로 재생된다 — '미리보기' 버튼을 따로 찾을 필요가 없다
   const [playing, setPlaying] = useState(false)
 
@@ -68,6 +70,7 @@ export function ReelDoneItem({ reportId, url, label }: Props) {
 
       <ReelShareButtons url={url} label={label} />
 
+      {source === 'report' && (
       <button
         type="button"
         disabled={isDismissing}
@@ -81,6 +84,7 @@ export function ReelDoneItem({ reportId, url, label }: Props) {
         <SkipForward className="h-3 w-3" />
         다 올렸어요 · 목록에서 치우기
       </button>
+      )}
     </div>
   )
 }

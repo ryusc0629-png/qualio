@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { Film, Clock, Download } from 'lucide-react'
 import { ReelDoneItem } from './reel-done-item'
+import { ReelFromClipsButton } from './reel-from-clips-button'
 import { ReelMakeNowButton } from './reel-make-now-button'
 import { ReelAutoRefresh } from './reel-auto-refresh'
 import { getReelUsage } from '@/lib/reel/charges'
@@ -12,6 +13,15 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // 왜 대표 화면에 있나: 홍보는 대표의 일이다. 현장 직원에게 '만들기' 버튼을 누르고
 // 1분을 기다리게 하는 건 그냥 일이 하나 느는 것이고, 무엇을 올릴지 고르는 것도 대표의 판단이다.
 // 현장은 찍어서 올리기만 하고, 완성된 영상은 여기 쌓인다.
+
+interface PortfolioReelRow {
+  id: string
+  title: string
+  reel_status: string | null
+  reel_url: string | null
+  reel_queued_at: string | null
+  reel_error: string | null
+}
 
 interface ReelRow {
   id: string
@@ -36,11 +46,31 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
     .order('reel_queued_at', { ascending: false, nullsFirst: false })
     .limit(12)) as { data: ReelRow[] | null }
 
+  // 시공 사례로 만든 릴스도 같은 목록에 보여준다 — 만든 방법이 달라도 사장님에겐 같은 '홍보 영상'이다
+  const { data: postRows } = (await db
+    .from('biz_posts' as never)
+    .select('id, title, reel_status, reel_url, reel_queued_at, reel_error' as never)
+    .eq('business_id' as never, businessId)
+    .in('reel_status' as never, ['queued', 'processing', 'done', 'failed'])
+    .order('reel_queued_at' as never, { ascending: false, nullsFirst: false })
+    .limit(12)) as { data: PortfolioReelRow[] | null }
+
   const usage = await getReelUsage(db as unknown as SupabaseClient, businessId)
 
+  // 등록된 서비스 이름 — '갖고 있는 영상으로 만들기'에서 고르게 한다
+  const { data: services } = await db
+    .from('service_items')
+    .select('name')
+    .eq('business_id', businessId)
+    .order('name')
+  const serviceNames = Array.from(new Set((services ?? []).map((s) => s.name as string))).slice(0, 12)
+
   const rows = data ?? []
+  const posts = postRows ?? []
   const done = rows.filter((r) => r.reel_status === 'done' && r.reel_url)
   const waiting = rows.filter((r) => r.reel_status !== 'done')
+  const postsDone = posts.filter((p) => p.reel_status === 'done' && p.reel_url)
+  const postsWaiting = posts.filter((p) => p.reel_status !== 'done')
 
   // 고객 이름을 붙여야 어느 현장인지 안다
   const bookingIds = rows.map((r) => r.booking_id)
@@ -57,7 +87,9 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
 
   // 만드는 중인 게 있을 때만 화면을 스스로 갱신한다 —
   // 완성 알림은 폰으로 가는데 PC 화면이 '만드는 중'에 멈춰 있으면 고장 난 것처럼 보인다
-  const pending = rows.some((r) => r.reel_status === 'processing' || r.reel_status === 'queued')
+  const pending = [...rows, ...posts].some(
+    (r) => r.reel_status === 'processing' || r.reel_status === 'queued',
+  )
 
   return (
     <div className="rounded-xl border bg-card p-5 space-y-4">
@@ -101,11 +133,14 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
         )}
       </div>
 
-      {rows.length === 0 ? (
+      {rows.length === 0 && posts.length === 0 ? (
         <div className="rounded-lg border border-dashed py-8 text-center space-y-2">
           <p className="text-sm text-muted-foreground">아직 만들어진 홍보 영상이 없어요</p>
           <p className="text-xs text-muted-foreground">
             현장에서 작업 보고서에 영상을 올리면 다음 날 여기에 도착해요
+          </p>
+          <p className="text-xs text-muted-foreground">
+            예전에 찍어둔 영상이 있으면 아래 버튼으로 지금 만들 수 있어요
           </p>
         </div>
       ) : (
@@ -117,6 +152,32 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
               url={r.reel_url!}
               label={names.get(r.booking_id) ?? '현장'}
             />
+          ))}
+
+          {/* 시공 사례로 만든 것 — 만든 방법만 다를 뿐 사장님에겐 같은 홍보 영상이다 */}
+          {postsDone.map((p) => (
+            <ReelDoneItem key={p.id} reportId={p.id} url={p.reel_url!} label={p.title} source="portfolio" />
+          ))}
+
+          {postsWaiting.map((p) => (
+            <div key={p.id} className="flex items-center gap-3 rounded-lg border border-dashed p-3">
+              <div className="w-16 h-24 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                <Clock className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{p.title}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {p.reel_status === 'processing'
+                    ? '만드는 중이에요'
+                    : p.reel_status === 'failed'
+                      ? '못 만들었어요'
+                      : '곧 만들어져요'}
+                </p>
+                {p.reel_status === 'failed' && p.reel_error && (
+                  <p className="text-[11px] text-rose-600 mt-1 break-words">{p.reel_error}</p>
+                )}
+              </div>
+            </div>
           ))}
 
           {waiting.map((r) => (
@@ -145,7 +206,12 @@ export async function ReelInboxCard({ businessId }: { businessId: string }) {
         </div>
       )}
 
-      {done.length > 0 && (
+      {/* 작업보고서가 없어도 만들 수 있는 길 — 예전에 찍어둔 영상, 예약을 안 쓰는 업체 */}
+      <div className="border-t pt-3">
+        <ReelFromClipsButton businessId={businessId} serviceNames={serviceNames} />
+      </div>
+
+      {(done.length > 0 || postsDone.length > 0) && (
         <p className="flex items-start gap-1.5 text-xs text-muted-foreground border-t pt-3">
           <Download className="h-3.5 w-3.5 mt-0.5 shrink-0" />
           영상을 내려받아 인스타그램·틱톡에 올리시면 돼요. 글은 아래 &lsquo;글 만들기&rsquo;에서 뽑을 수 있어요.

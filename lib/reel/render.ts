@@ -74,6 +74,35 @@ export type RenderOutcome =
   | { ok: false; reason: string }
 
 /**
+ * 홍보 영상의 '재료' — 어디서 왔든 이 모양으로 맞춰서 넘긴다.
+ *
+ * 재료는 두 곳에서 온다:
+ *   ① 작업보고서(reports) — 현장이 찍어 올린 영상 + 보고서에 적힌 사실
+ *   ② 시공 사례(biz_posts) — 예전에 찍어둔 영상 + 사례 글에 적힌 내용
+ * ②가 필요한 이유: reports.booking_id가 NOT NULL이라 예약 없이는 보고서를 못 만든다.
+ * 릴스만 쓰려는 업체에게 가짜 예약을 만들게 하면 매출·건수 통계가 오염된다.
+ */
+export interface ReelMaterial {
+  /** 상태를 기록할 테이블 — 'reports' 또는 'biz_posts' */
+  table: 'reports' | 'biz_posts'
+  id: string
+  businessId: string
+  /** 나레이션 파일을 담을 폴더 이름(업체 폴더 아래). 보고서는 예약 id, 시공 사례는 글 id */
+  folderKey: string
+  clipUrls: string[]
+  clipDurations: number[]
+  beforePhotoUrl?: string
+  afterPhotoUrl?: string
+  /** 대본 재료 — 비어 있으면 고정 문구로 넘어간다 */
+  cleaningType: string
+  beforeStatus: string
+  workDetails: string
+  afterResult: string
+  siteNote: string
+  careAdvice: string
+}
+
+/**
  * 보고서 하나로 홍보 영상 제작을 요청한다.
  *
  * 성공하면 reel_status를 'processing'으로 바꾸고, 완성 알림은 Creatomate 웹훅이 받는다.
@@ -93,35 +122,9 @@ export async function renderReelForReport(
 
   if (!report) return { ok: false, reason: '보고서 없음' }
 
-  const markFailed = async (reason: string): Promise<RenderOutcome> => {
-    await db.from('reports').update({ reel_status: REEL_FAILED } as never).eq('id', reportId)
-    return { ok: false, reason }
-  }
-
-  // 영상은 1개만 있어도 만든다 — 3개를 못 채워서 아예 못 만드는 것보단 낫다
-  const clipUrls = (report.work_clip_urls ?? []).filter(Boolean)
-  if (clipUrls.length === 0) return markFailed('작업 중 영상 없음')
-
-  // 클립 길이는 영상을 고를 때 브라우저에서 읽어 저장해둔 값이다.
-  // 예전 보고서엔 없을 수 있는데, 그때는 다 비슷한 길이로 본다.
-  const durations = report.work_clip_durations ?? []
-  const clips = clipUrls.map((url, i) => ({
-    url,
-    duration: durations[i] && durations[i] > 0 ? durations[i] : DEFAULT_CLIP_SECONDS,
-  }))
-
   const photos = report.report_photos ?? []
   const before = photos.filter((p) => p.type === 'before').sort((a, b) => a.sort_order - b.sort_order)[0]
   const after = photos.filter((p) => p.type === 'after').sort((a, b) => a.sort_order - b.sort_order)[0]
-  if (!before) return markFailed('작업 전 사진 없음')
-  if (!after) return markFailed('작업 후 사진 없음')
-
-  const { data: business } = (await db
-    .from('businesses')
-    .select('name, phone')
-    .eq('id', report.business_id)
-    .maybeSingle()) as { data: { name: string; phone: string | null } | null }
-  if (!business) return markFailed('업체 정보 없음')
 
   // 서비스명 (대본 맥락용)
   let cleaningType = '청소 서비스'
@@ -140,19 +143,114 @@ export async function renderReelForReport(
     if (quote?.cleaning_type) cleaningType = quote.cleaning_type as string
   }
 
+  return renderReelFromMaterial(db, {
+    table: 'reports',
+    id: reportId,
+    businessId: report.business_id,
+    folderKey: report.booking_id,
+    clipUrls: (report.work_clip_urls ?? []).filter(Boolean),
+    clipDurations: report.work_clip_durations ?? [],
+    beforePhotoUrl: before?.url,
+    afterPhotoUrl: after?.url,
+    cleaningType,
+    beforeStatus: report.ai_report_data?.beforeStatus ?? booking?.memo ?? '',
+    workDetails: report.ai_report_data?.workDetails ?? report.notes ?? '',
+    afterResult: report.ai_report_data?.afterResult ?? '',
+    siteNote: report.preventive_note ?? booking?.memo ?? '',
+    careAdvice: report.care_advice ?? '',
+  })
+}
+
+/** 시공 사례 한 건으로 홍보 영상 제작을 요청한다 (작업보고서 없이). */
+export async function renderReelForPortfolio(
+  db: SupabaseClient,
+  postId: string,
+): Promise<RenderOutcome> {
+  const { data: post } = (await db
+    .from('biz_posts')
+    .select(
+      'id, business_id, title, content, summary, before_image_urls, after_image_urls, work_clip_urls, work_clip_durations',
+    )
+    .eq('id', postId)
+    .maybeSingle()) as {
+    data: {
+      id: string
+      business_id: string
+      title: string
+      content: string
+      summary: string | null
+      before_image_urls: string[] | null
+      after_image_urls: string[] | null
+      work_clip_urls: string[] | null
+      work_clip_durations: number[] | null
+    } | null
+  }
+
+  if (!post) return { ok: false, reason: '시공 사례 없음' }
+
+  // 사례 글이 곧 대본 재료다. 사장님에게 따로 글을 쓰게 하지 않는다 —
+  // 이미 있는 데이터를 쓴다는 원칙(2026-08-21 대표 결정)을 그대로 지킨다.
+  return renderReelFromMaterial(db, {
+    table: 'biz_posts',
+    id: postId,
+    businessId: post.business_id,
+    folderKey: postId,
+    clipUrls: (post.work_clip_urls ?? []).filter(Boolean),
+    clipDurations: post.work_clip_durations ?? [],
+    beforePhotoUrl: post.before_image_urls?.[0],
+    afterPhotoUrl: post.after_image_urls?.[0],
+    cleaningType: post.title,
+    beforeStatus: post.summary ?? '',
+    workDetails: post.content ?? '',
+    afterResult: '',
+    siteNote: '',
+    careAdvice: '',
+  })
+}
+
+/** 재료가 어디서 왔든 여기서부터는 같다 — 대본 → 음성 → 합성 요청. */
+async function renderReelFromMaterial(
+  db: SupabaseClient,
+  m: ReelMaterial,
+): Promise<RenderOutcome> {
+  const markFailed = async (reason: string): Promise<RenderOutcome> => {
+    await db.from(m.table).update({ reel_status: REEL_FAILED, reel_error: reason } as never).eq('id', m.id)
+    return { ok: false, reason }
+  }
+
+  // 영상은 1개만 있어도 만든다 — 3개를 못 채워서 아예 못 만드는 것보단 낫다
+  if (m.clipUrls.length === 0) return markFailed('작업 중 영상 없음')
+
+  // 클립 길이는 영상을 고를 때 브라우저에서 읽어 저장해둔 값이다.
+  // 기록이 없으면 다 비슷한 길이로 본다.
+  const clips = m.clipUrls.map((url, i) => ({
+    url,
+    duration: m.clipDurations[i] && m.clipDurations[i] > 0 ? m.clipDurations[i] : DEFAULT_CLIP_SECONDS,
+  }))
+
+  if (!m.beforePhotoUrl) return markFailed('작업 전 사진 없음')
+  if (!m.afterPhotoUrl) return markFailed('작업 후 사진 없음')
+
+  const { data: business } = (await db
+    .from('businesses')
+    .select('name, phone')
+    .eq('id', m.businessId)
+    .maybeSingle()) as { data: { name: string; phone: string | null } | null }
+  if (!business) return markFailed('업체 정보 없음')
+
   try {
-    // 오늘 보고서에 실제로 적힌 것만으로 나레이션 대본을 만든다
+    // 실제로 적힌 것만으로 나레이션 대본을 만든다
     const { generateReelScript } = await import('@/lib/ai/reel-script')
     const draft = await generateReelScript({
-      cleaningType,
-      beforeStatus: report.ai_report_data?.beforeStatus ?? booking?.memo ?? '',
-      workDetails: report.ai_report_data?.workDetails ?? report.notes ?? '',
-      afterResult: report.ai_report_data?.afterResult ?? '',
-      siteNote: report.preventive_note ?? booking?.memo ?? '',
-      careAdvice: report.care_advice ?? '',
+      cleaningType: m.cleaningType,
+      beforeStatus: m.beforeStatus,
+      workDetails: m.workDetails,
+      afterResult: m.afterResult,
+      siteNote: m.siteNote,
+      careAdvice: m.careAdvice,
     })
 
-    // 문장을 하나씩 음성으로 만들고 그 mp3의 '실제' 길이를 자막 길이로 삼는다.
+    // 문장을 하나씩 음성으로 만들고 그 wav의 '실제' 길이를 자막 길이로 삼는다.
     // 합성이 안 되면 추정값 그대로 무음 영상을 만든다.
     const { synthesizeLines } = await import('@/lib/ai/narration')
     const stamp = Date.now()
@@ -164,7 +262,7 @@ export async function renderReelForReport(
     if (spoken) {
       const uploaded: string[] = []
       for (const [i, clip] of spoken.entries()) {
-        const path = `${report.business_id}/${report.booking_id}/narration/${stamp}-${i}.wav`
+        const path = `${m.businessId}/${m.folderKey}/narration/${stamp}-${i}.wav`
         const { error: upErr } = await db.storage
           .from('report-photos')
           .upload(path, clip.wav, { contentType: 'audio/wav', upsert: true })
@@ -191,9 +289,9 @@ export async function renderReelForReport(
     const { requestReelRender } = await import('@/lib/creatomate/client')
 
     const renderId = await requestReelRender({
-      beforePhotoUrl: before.url,
+      beforePhotoUrl: m.beforePhotoUrl,
       clips,
-      afterPhotoUrl: after.url,
+      afterPhotoUrl: m.afterPhotoUrl,
       businessName: business.name,
       businessPhone: business.phone,
       lines,
@@ -203,9 +301,9 @@ export async function renderReelForReport(
     })
 
     await db
-      .from('reports')
-      .update({ reel_status: REEL_PROCESSING, reel_render_id: renderId } as never)
-      .eq('id', reportId)
+      .from(m.table)
+      .update({ reel_status: REEL_PROCESSING, reel_render_id: renderId, reel_error: null } as never)
+      .eq('id', m.id)
 
     return { ok: true, renderId }
   } catch (err) {
