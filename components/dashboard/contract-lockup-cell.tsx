@@ -55,12 +55,16 @@ export function ContractLockupCell({
     onError: ({ error }) => toast.error(error.serverError ?? '다시 시도해주세요'),
   })
 
+  // '작업 항목' 배지로 열었으면 그 입력칸에 바로 커서를 둔다 — 스크롤해 찾게 만들지 않는다
+  const [focusChecklist, setFocusChecklist] = useState(false)
+
   // 다이얼로그 열 때 현재 값으로 초기화
-  const openDialog = () => {
+  const openDialog = (toChecklist = false) => {
     setChecked(requiresLockup)
     setDuration(expectedDurationMinutes ?? 120)
     setItems(checklistItems)
     setNewLabel('')
+    setFocusChecklist(toChecklist)
     setOpen(true)
   }
 
@@ -77,28 +81,44 @@ export function ContractLockupCell({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={openDialog}
-        className={[
-          'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
-          requiresLockup
-            ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-            : 'bg-muted text-muted-foreground hover:bg-muted/70',
-        ].join(' ')}
-      >
-        <Lock className="h-3 w-3" />
-        {requiresLockup
-          ? `필요 · ${durationLabel(expectedDurationMinutes ?? 120)}`
-          : '안 함'}
-        {checklistItems.length > 0 && (
-          <span className="ml-0.5 inline-flex items-center gap-0.5 text-[10px] text-emerald-700">
-            <ListChecks className="h-3 w-3" />
-            {checklistItems.length}
-          </span>
-        )}
-        <ChevronDown className="h-3 w-3 opacity-60" />
-      </button>
+      {/* 배지 두 개 — 문단속과 작업 항목을 따로 보여준다.
+          예전엔 자물쇠 배지 하나에 '안 함'만 적혀 있어서, 거기를 눌러야 작업 항목이 나온다는 걸
+          알 방법이 없었다. 실제로 운영 DB에서 계약 4건 중 작업 항목을 설정한 곳이 0건,
+          항목 사진이 올라온 방문도 385건 중 0건이었다 — 기능은 있는데 문이 안 보였다.
+          ⚠️두 배지 모두 같은 창을 연다(설정은 한 곳에서). ⛔새 폼을 따로 만들지 말 것. */}
+      <span className="inline-flex flex-wrap items-center gap-1">
+        <button
+          type="button"
+          onClick={() => openDialog()}
+          className={[
+            'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+            requiresLockup
+              ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+              : 'bg-muted text-muted-foreground hover:bg-muted/70',
+          ].join(' ')}
+        >
+          <Lock className="h-3 w-3" />
+          {requiresLockup
+            ? `문단속 · ${durationLabel(expectedDurationMinutes ?? 120)}`
+            : '문단속 안 함'}
+          <ChevronDown className="h-3 w-3 opacity-60" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => openDialog(true)}
+          className={[
+            'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
+            checklistItems.length > 0
+              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+              : 'bg-muted text-muted-foreground hover:bg-muted/70',
+          ].join(' ')}
+        >
+          <ListChecks className="h-3 w-3" />
+          {checklistItems.length > 0 ? `작업 항목 ${checklistItems.length}개` : '작업 항목 추가'}
+          <ChevronDown className="h-3 w-3 opacity-60" />
+        </button>
+      </span>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
@@ -156,10 +176,12 @@ export function ContractLockupCell({
             <div className="space-y-2 border-t pt-4">
               <div className="flex items-center gap-1.5">
                 <ListChecks className="h-4 w-4 text-emerald-600" />
-                <p className="text-sm font-semibold">작업 항목 (사진으로 확인)</p>
+                <p className="text-sm font-semibold">이 현장에서 할 일 (작업 매뉴얼)</p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                직원이 각 항목마다 사진을 올려야 &lsquo;작업 완료&rsquo;를 누를 수 있어요. 비워두면 사용 안 함.
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                이 현장에 갈 때마다 해야 할 일을 적어두세요. 직원 휴대폰에 그대로 뜨고,
+                <b className="text-foreground/70"> 항목마다 사진을 올려야 &lsquo;작업 완료&rsquo;를 누를 수 있어요.</b>
+                {' '}빠뜨리는 걸 막고, 거래처에 보낼 사진도 저절로 모입니다. 비워두면 사용 안 해요.
               </p>
 
               {items.length > 0 && (
@@ -183,6 +205,9 @@ export function ContractLockupCell({
 
               <div className="flex gap-1.5 pt-1">
                 <Input
+                  // '작업 항목' 배지로 열었을 때만 자동 포커스 — 문단속으로 열었는데 여기로
+                  // 화면이 끌려가면 사장님이 뭘 하려던 건지 잃는다
+                  ref={(el) => { if (el && focusChecklist) { el.focus(); el.scrollIntoView({ block: 'center' }) } }}
                   value={newLabel}
                   onChange={(e) => setNewLabel(e.target.value)}
                   onKeyDown={(e) => {

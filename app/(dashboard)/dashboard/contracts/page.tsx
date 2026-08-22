@@ -159,7 +159,8 @@ export default async function ContractsPage() {
                 <th className="text-left px-4 py-3 font-medium">시작일</th>
                 <th className="text-left px-4 py-3 font-medium">종료일</th>
                 <th className="text-left px-4 py-3 font-medium">다음 방문</th>
-                <th className="text-center px-4 py-3 font-medium">문단속</th>
+                {/* 이 칸에 문단속 배지와 작업 항목 배지가 함께 들어간다 */}
+                <th className="text-center px-4 py-3 font-medium">현장 설정</th>
                 <th className="text-center px-4 py-3 font-medium">상태</th>
                 <th className="text-center px-4 py-3 font-medium">수정</th>
               </tr>
