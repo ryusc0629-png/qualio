@@ -146,6 +146,14 @@ export async function GoogleProfileCard({ businessId }: { businessId: string }) 
         </p>
       </div>
 
+      {/* 맡기기 — ★카드 전체(구글 지도 정리)를 맡는 것이지 특정 항목 하나가 아니다.
+          예전엔 이 블록이 '지금 할 일' 카드 안에 있어서, 마치 그 항목만 대행하는 것처럼 보였다
+          (사장님 질문: "왜 업종 바꾸기만 대행 요청으로 되어 있나요?"). 그래서 카드 수준으로 올렸다.
+          ⛔'지금 할 일' 안으로 되돌리지 말 것. */}
+      {current && (
+        <GoogleHelpButton requestStatus={req?.status ?? null} />
+      )}
+
       {/* 지금 할 일 — 한 번에 하나만. 여러 개를 한꺼번에 보여주면 아무것도 안 하게 된다 */}
       {current && (
         <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/60 p-4 space-y-3">
@@ -161,40 +169,53 @@ export async function GoogleProfileCard({ businessId }: { businessId: string }) 
             <p className="text-sm text-emerald-900 bg-white/70 rounded-lg px-3 py-2.5">
               이건 저희가 알아서 모으고 있어요. <b>따로 하실 일 없습니다.</b>
             </p>
+          ) : current.byLink ? (
+            // 구글 주소를 설정에 넣으면 저절로 켜지는 항목 — 누를 버튼을 두면 안 된다(값이 안 맞아짐)
+            <div className="space-y-2 text-sm">
+              <p className="text-emerald-900/80">
+                다 만드셨으면 <b>설정 → 후기 채널</b>에 구글 주소를 넣어주세요. 그러면 이 줄이 저절로 채워져요.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href="/dashboard/settings"
+                  className="inline-flex h-12 items-center rounded-lg border-2 border-emerald-600 bg-white px-4 text-sm font-bold text-emerald-700 hover:bg-emerald-50"
+                >
+                  설정 열기
+                </a>
+                <a
+                  href="https://business.google.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-12 items-center rounded-lg border px-4 text-sm font-medium hover:bg-slate-50"
+                >
+                  구글에서 열기 →
+                </a>
+              </div>
+            </div>
           ) : (
             <div className="space-y-2">
-              <GoogleHelpButton requestStatus={req?.status ?? null} />
-              {!req && (
-                <details className="text-sm">
-                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                    직접 해볼게요
-                  </summary>
-                  <div className="mt-2 rounded-lg bg-white border p-3 space-y-2">
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      구글에 로그인한 뒤 <b>비즈니스 프로필</b>에서 우리 가게를 찾아 고치면 돼요.
-                      가게가 없으면 새로 만들 수 있어요. 중간에 막히시면 위 버튼을 눌러주세요.
-                    </p>
-                    <a
-                      href="https://business.google.com/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex h-10 items-center rounded-lg border px-3 text-sm font-medium hover:bg-slate-50"
-                    >
-                      구글에서 열기 →
-                    </a>
-                    {current.byLink ? (
-                      <p className="text-xs text-muted-foreground pt-1">
-                        다 만드셨으면 <b>설정 → 후기 채널</b>에 구글 주소를 넣어주세요. 그러면 이 줄이 저절로 채워져요.{' '}
-                        <a href="/dashboard/settings" className="text-emerald-700 underline">설정 열기</a>
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground pt-1">
-                        다 하셨으면 아래 목록에서 그 줄의 동그라미를 눌러 표시해 주세요.
-                      </p>
-                    )}
-                  </div>
-                </details>
-              )}
+              {/* ★이미 해둔 일을 표시할 자리. 이게 없으면 '지금 할 일'에 올라온 항목은
+                  목록에서 빠져 누를 동그라미가 없어 영영 다음 칸으로 못 넘어간다. */}
+              <GbpCheckToggle itemKey={current.key} done={false} label={current.title} variant="button" />
+              <details className="text-sm">
+                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                  아직 안 했어요 — 어떻게 하나요?
+                </summary>
+                <div className="mt-2 rounded-lg bg-white border p-3 space-y-2">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    구글에 로그인한 뒤 <b>비즈니스 프로필</b>에서 우리 가게를 찾아 고치면 돼요.
+                    가게가 없으면 새로 만들 수 있어요. 중간에 막히시면 위 <b>대신 해드릴게요</b>를 눌러주세요.
+                  </p>
+                  <a
+                    href="https://business.google.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-10 items-center rounded-lg border px-3 text-sm font-medium hover:bg-slate-50"
+                  >
+                    구글에서 열기 →
+                  </a>
+                </div>
+              </details>
             </div>
           )}
         </div>
