@@ -4,8 +4,8 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { generateVisitsForContract, type ContractForGen } from '@/lib/recurring/generate'
 
 // Vercel Cron(daily-maintenance에서 호출): 매일 실행.
-// 활성 정기계약을 순회하며 롤링 윈도우(오늘+60일)까지 방문을 일정에 자동 생성한다.
-// 매일 한 칸씩 윈도우가 전진해 계약이 살아있는 동안 계속 방문이 채워진다.
+// 활성 정기계약을 순회하며 롤링 윈도우(오늘+1년, lib/recurring/generate.ts의 HORIZON_DAYS)까지
+// 방문을 일정에 자동 생성한다. 매일 한 칸씩 윈도우가 전진해 계약이 살아있는 동안 계속 채워진다.
 
 export const maxDuration = 120
 export const dynamic = 'force-dynamic'

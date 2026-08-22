@@ -1,13 +1,20 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { computeVisitDates } from './visit-dates'
-import { isHoliday } from '@/lib/holidays/kr'
+import { isHoliday, KR_HOLIDAY_LAST_YEAR } from '@/lib/holidays/kr'
 
 // 정기계약 → 미래 방문(bookings) 자동 생성. 계약 등록 시 + 매일 크론에서 호출한다.
 // last_generated_until 커서로 멱등 보장 — 이미 생성한 날짜 이후만 새로 만들어,
 // 사장님이 일정에서 지운 방문을 다음 실행 때 되살리지 않는다.
 
-const HORIZON_DAYS = 60 // 오늘부터 60일치를 미리 깔아둔다 (크론이 매일 한 칸씩 전진)
+// 오늘부터 1년치를 미리 깔아둔다 (크론이 매일 한 칸씩 전진).
+//
+// 예전엔 60일이었다. 그런데 직원·사장님 달력에서 딱 60일째부터 화면이 통째로 비어,
+// "그날부터 일이 없다"로 읽혔다(2026-08-22 실제로 10월 22일부터 빈 달력). 정기계약은
+// 이미 정해진 약속이라 1년 뒤 날짜도 지금 계산할 수 있고, 휴가는 두 달 앞이 아니라
+// 반년 앞을 보고 잡는다. 계약을 고치거나 멈추면 미래 방문을 쓸어내고 다시 까는 정리
+// 로직이 lib/actions/contracts.ts에 이미 있어, 기간을 늘려도 유령 일정은 남지 않는다.
+const HORIZON_DAYS = 365
 const DEFAULT_VISIT_TIME = '09:00' // 계약에 시간 미지정 시 — 오전 9시로 깔고 사장님이 일정에서 조정
 
 // 계약의 visit_time("HH:mm")을 안전하게 정규화. 없거나 형식이 이상하면 기본값(09:00).
@@ -55,7 +62,19 @@ export async function generateVisitsForContract(
 
   const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000)
   const todayStr = ymd(nowKST)
-  const horizonStr = ymd(addDays(nowKST, HORIZON_DAYS))
+  let horizonStr = ymd(addDays(nowKST, HORIZON_DAYS))
+
+  // 공휴일 표(lib/holidays/kr.ts)는 손으로 채운 표라 KR_HOLIDAY_LAST_YEAR까지만 있다.
+  // 그 뒤 날짜는 공휴일인지 알 수 없으므로, '공휴일엔 안 감' 계약이라면 표가 닿는 데까지만
+  // 깔고 멈춘다. 모르는 해를 평일로 단정해서 설날·추석에 방문을 깔아버리면,
+  // 사장님도 직원도 그게 잘못 깔린 줄 모른 채 그날 현장에 간다.
+  const skipHolidays = contract.skip_holidays !== false
+  if (skipHolidays && Number(horizonStr.slice(0, 4)) > KR_HOLIDAY_LAST_YEAR) {
+    horizonStr = `${KR_HOLIDAY_LAST_YEAR}-12-31`
+    console.error(
+      `[Recurring] 공휴일 표가 ${KR_HOLIDAY_LAST_YEAR}년까지라 일정 생성을 ${horizonStr}에서 멈춥니다. lib/holidays/kr.ts에 다음 해 공휴일을 채워주세요.`,
+    )
+  }
 
   // 생성 시작점: 마지막 생성일 다음날, 없으면 max(계약 시작일, 오늘) — 과거 방문은 만들지 않음
   let fromStr: string
@@ -73,8 +92,13 @@ export async function generateVisitsForContract(
 
   // 공휴일엔 안 가는 계약이면(기본값) 그날은 아예 만들지 않는다 — 나중에 지우는 것보다 안 만드는 게 확실하다.
   // 커서는 그대로 전진하므로, 건너뛴 공휴일이 다음 실행에서 되살아나지 않는다.
-  const skipHolidays = contract.skip_holidays !== false
-  const dates = computeVisitDates(contract.frequency, fromStr, toStr).filter(
+  // ★상한은 반드시 윈도우 길이보다 넉넉해야 한다. computeVisitDates의 기본 상한은 120건인데,
+  //   주5일 계약은 1년이면 260건이라 120에서 잘린다. 그런데 아래에서 커서(last_generated_until)는
+  //   toStr(1년 뒤)까지 전진하므로, 잘린 뒷부분은 다음 실행에서도 다시 만들어지지 않는다
+  //   — 달력이 조용히 5개월쯤에서 끊긴 채 아무도 모르게 된다.
+  //   하루 한 번 방문이 최대치이므로 윈도우 일수 + 여유로 잡는다.
+  const maxVisits = HORIZON_DAYS + 35
+  const dates = computeVisitDates(contract.frequency, fromStr, toStr, maxVisits).filter(
     (d) => !(skipHolidays && isHoliday(d)),
   )
   if (dates.length === 0) {
