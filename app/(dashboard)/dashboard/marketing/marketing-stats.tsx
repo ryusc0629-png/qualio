@@ -19,7 +19,7 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
   const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1)).toISOString()
   const periodLabel = `최근 ${months}개월`
 
-  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, pageViewsResult, funnelResult, contractsResult, b2bQuotesResult] = await Promise.all([
+  const [quotesResult, bookingsResult, postViewsResult, monthlyPostsResult, pageViewsResult, contractsResult, b2bQuotesResult] = await Promise.all([
     // 견적 신청 (기간 내) — 테스트 견적 제외용으로 id·is_test 조회
     db
       .from('quotes')
@@ -57,13 +57,6 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
       .eq('business_id' as never, businessId)
       .gte('viewed_at' as never, periodStart) as unknown as Promise<{ data: { source: string; channel: string | null; viewed_at: string }[] | null }>,
 
-    // 견적 퍼널 이벤트 — 문의 폼 완주율(시작 → 제출) 품질 신호용. 타입 미반영이라 단언 사용
-    db
-      .from('quote_funnel_events' as never)
-      .select('session_id, event_type' as never)
-      .eq('business_id' as never, businessId)
-      .gte('created_at' as never, periodStart) as unknown as Promise<{ data: { session_id: string; event_type: string }[] | null }>,
-
     // 정기계약 — 이 기간에 발생한 계약(정기청소) 매출 집계용. 방문 예약은 0원 저장이라
     // 예약 합계에 안 잡히므로 계약을 따로 더해야 실제 '퀄리오로 만든 매출'이 된다.
     db
@@ -86,8 +79,16 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
   const testQuoteIds = new Set(quoteRows.filter((q) => q.is_test).map((q) => q.id))
   const formQuoteCount = quoteRows.filter((q) => !q.is_test).length
 
-  const bookingRows = ((bookingsResult.data ?? []) as { final_price: number | null; status: string; quote_id: string | null }[])
-    .filter((b) => !(b.quote_id && testQuoteIds.has(b.quote_id)))
+  const allBookingRows = (bookingsResult.data ?? []) as { final_price: number | null; status: string; quote_id: string | null }[]
+  const bookingRows = allBookingRows.filter((b) => !(b.quote_id && testQuoteIds.has(b.quote_id)))
+
+  // 테스트 견적(사장님 본인 번호로 들어온 견적)에서 이어진 예약은 위에서 빠졌다.
+  // 그 금액이 크면 "매출이 왜 이것밖에 안 되지?"가 되므로, 얼마가 빠졌는지 화면에 밝힌다.
+  // (실제로 809만원짜리 두 건이 조용히 빠져 있어 숫자가 고장난 것처럼 보였다)
+  const excludedTestBookings = allBookingRows.filter(
+    (b) => b.quote_id && testQuoteIds.has(b.quote_id) && (b.final_price ?? 0) > 0,
+  )
+  const excludedTestRevenue = excludedTestBookings.reduce((sum, b) => sum + (b.final_price ?? 0), 0)
   // 견적(문의 폼·견적서)에서 이어진 예약만 — 2층 '견적 → 예약' 전환 퍼널용
   const quoteBookingRows = bookingRows.filter((b) => b.quote_id !== null)
   const formBookingCount = quoteBookingRows.length
@@ -128,16 +129,6 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
   const contractRows = (contractsResult.data ?? []) as unknown as ContractLike[]
   const contractRevenue = contractRevenueSince(contractRows, periodStart)
   const totalRevenue = bookingRevenue + contractRevenue
-
-  // ── 품질 신호: 문의 폼 완주율(시작 → 제출) ──
-  // 다단계 견적 계산기는 은퇴했고 전환은 문의 폼(hero-lead-form)이 담당 → step_completed·address_entered는
-  // 더 이상 안 쌓인다. 그래서 현재 폼에서 실제로 발생하는 form_started → quote_submitted로 완주율을 잰다.
-  const funnelEvents = funnelResult.data ?? []
-  const sessionsOf = (type: string) =>
-    new Set(funnelEvents.filter((e) => e.event_type === type).map((e) => e.session_id)).size
-  const startedSessions = sessionsOf('form_started')
-  const submittedSessions = sessionsOf('quote_submitted')
-  const completionRate = startedSessions > 0 ? Math.round((submittedSessions / startedSessions) * 100) : 0
 
   // ── 진단: 유입 경로(검색·AI·직접) — 사이트 전체(블로그+공개 페이지) 합산 ──
   const views = postViewsResult.data ?? []
@@ -238,6 +229,14 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
             아직 이 기간에 매출이 없어요. 예약이 확정되거나 정기계약이 잡히면 여기에 매출이 쌓여요.
           </p>
         )}
+        {/* 테스트 견적으로 빠진 금액을 밝힌다 — 조용히 빼면 사장님은 숫자가 틀린 줄 안다.
+            ⚠️ 지금은 '테스트 표시를 푸는' 화면이 없어서 되돌리는 방법을 안내하지 않는다.
+               (없는 방법을 알려주면 사장님이 찾다가 못 찾는다) */}
+        {excludedTestRevenue > 0 && (
+          <p className="mt-3 rounded-lg bg-white/60 border border-emerald-100 px-3 py-2 text-xs text-emerald-900/80 leading-relaxed">
+            사장님 번호로 들어온 <b>견적 {excludedTestBookings.length}건(₩{excludedTestRevenue.toLocaleString('ko-KR')})</b>은 시험용으로 보고 뺐어요
+          </p>
+        )}
         <p className="mt-3 pt-3 border-t border-emerald-100 text-xs text-emerald-900/60 leading-relaxed">
           이 기간에 잡힌 예약(확정·진행·완료)과 정기계약의 매출 합계예요. 정기계약은 월정액 × 이 기간의 개월 수로 쌓여요. 퀄리오에서 관리하는 실제 매출이에요.
         </p>
@@ -297,16 +296,13 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
                 광고비 <b>0원</b> — 자동 포스팅만으로 검색·AI가 스스로 데려온 손님이에요
               </p>
             </div>
-            <div className="grid grid-cols-3 divide-x">
+            {/* 검색을 한 칸으로 합친다 — AI(ChatGPT)와 일반 검색을 가르는 건 우리 관심사지 사장님 관심사가 아니다.
+                따로 두면 아직 작은 AI 숫자만 눈에 띄어, 정작 큰 '검색으로 온 손님' 전체가 작아 보인다. */}
+            <div className="grid grid-cols-2 divide-x">
               <div className="px-2 py-4 text-center">
-                <p className="text-xl font-bold text-emerald-600">{aiViews.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground mt-1">AI 검색</p>
-                <p className="text-[10px] text-muted-foreground/70 mt-0.5">ChatGPT·Perplexity</p>
-              </div>
-              <div className="px-2 py-4 text-center">
-                <p className="text-xl font-bold text-blue-600">{seoViews.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground mt-1">일반 검색</p>
-                <p className="text-[10px] text-muted-foreground/70 mt-0.5">네이버·구글·다음</p>
+                <p className="text-xl font-bold text-emerald-600">{(aiViews + seoViews).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">검색으로 온 손님</p>
+                <p className="text-[10px] text-muted-foreground/70 mt-0.5">네이버·구글·ChatGPT 등</p>
               </div>
               <div className="px-2 py-4 text-center">
                 <p className="text-xl font-bold text-slate-500">{directOtherViews.toLocaleString()}</p>
@@ -378,19 +374,15 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
                       <div key={m.label} className="group/bar relative flex-1 flex flex-col items-center gap-1.5 min-w-0">
                         {total > 0 && (
                           <div className="pointer-events-none absolute bottom-full left-1/2 mb-1 -translate-x-1/2 z-10 hidden group-hover/bar:block whitespace-nowrap rounded-lg bg-slate-900 px-2.5 py-1.5 text-[11px] font-medium text-white shadow-lg">
-                            <span className="text-emerald-300">AI {m.ai.toLocaleString()}</span>
-                            <span className="text-white/40"> · </span>
-                            <span className="text-blue-300">검색 {m.seo.toLocaleString()}</span>
+                            검색으로 {total.toLocaleString()}명
                           </div>
                         )}
                         <span className="text-[11px] font-bold tabular-nums text-foreground">
                           {total > 0 ? total.toLocaleString() : ''}
                         </span>
                         <div className="w-full h-24 flex items-end">
-                          <div className="w-full rounded-t overflow-hidden flex flex-col justify-end min-h-0" style={{ height: `${heightPct}%` }}>
-                            {m.ai > 0 && <div className="w-full bg-emerald-500" style={{ height: `${(m.ai / total) * 100}%` }} />}
-                            {m.seo > 0 && <div className="w-full bg-blue-500" style={{ height: `${(m.seo / total) * 100}%` }} />}
-                          </div>
+                          {/* 한 색으로 — AI/일반을 나눠 칠하면 색 두 개를 설명할 범례가 또 필요해진다 */}
+                          <div className="w-full rounded-t bg-emerald-500" style={{ height: `${heightPct}%` }} />
                         </div>
                         <span className="text-[11px] text-muted-foreground">{m.label}</span>
                         <span className="text-[10px] text-muted-foreground/70 tabular-nums">
@@ -400,39 +392,16 @@ export async function MarketingStats({ businessId, months }: MarketingStatsProps
                     )
                   })}
                 </div>
-                <div className="flex items-center gap-3 text-[11px] text-muted-foreground pt-2 border-t">
-                  <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-emerald-500" />AI 검색</span>
-                  <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-500" />일반 검색</span>
-                  <span className="text-muted-foreground/70">· 아래 숫자는 그 달 발행한 글 수</span>
-                </div>
+                <p className="text-[11px] text-muted-foreground/70 pt-2 border-t">
+                  아래 숫자는 그 달 발행한 글 수예요
+                </p>
               </div>
             )}
           </div>
 
-          {/* 품질 신호 — 문의 폼 완주율(시작 대비 제출). 우리판 '체류시간' */}
-          {startedSessions > 0 && (
-            <div className="rounded-xl border bg-white overflow-hidden">
-              <div className="px-5 py-3 border-b bg-slate-50">
-                <p className="font-semibold text-sm">문의 폼 완주율</p>
-                <p className="text-xs text-muted-foreground mt-0.5">폼을 열어본 사람 중 실제로 문의를 보낸 비율</p>
-              </div>
-              <div className="p-5">
-                <div className="flex items-baseline gap-2">
-                  <p className="text-3xl font-bold text-primary">{completionRate}%</p>
-                  <p className="text-sm text-muted-foreground">
-                    시작 {startedSessions}명 중 <b className="text-foreground">{submittedSessions}명</b> 제출
-                  </p>
-                </div>
-                <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(completionRate, 100)}%` }} />
-                </div>
-                <p className="text-[11px] text-muted-foreground/80 pt-3 leading-relaxed">
-                  네이버의 ‘체류시간’처럼, 문의 폼을 끝까지 채우는 비율이 우리 폼의 설득력을 보여주는 품질 신호예요.
-                  낮으면 폼이 길거나 어렵진 않은지 점검해요.
-                </p>
-              </div>
-            </div>
-          )}
+          {/* '문의 폼 완주율'은 뺐다 — 다단계 견적 계산기 시절 '어느 단계에서 멈췄나'를 찾던 지표인데,
+              지금은 한 화면짜리 문의 폼이라 멈춘 지점을 알려주지 못한다. 비율만 보여선 할 수 있는 일이 없다.
+              ⛔되살리지 말 것. 이탈 지점을 다시 보고 싶다면 폼이 다시 여러 단계가 된 뒤에. */}
         </div>
       </details>
     </div>

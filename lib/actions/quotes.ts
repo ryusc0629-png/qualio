@@ -358,6 +358,43 @@ export const calculateAndCreateQuoteAction = publicAction
   })
 
 
+// 예약까지 간 견적은 더 이상 '테스트'가 아니다 — 자동으로 표시를 푼다.
+//
+// 왜 버튼이 아니라 자동인가: 사장님 번호로 들어온 견적을 테스트로 자동 제외하는 규칙 때문에,
+// 사장님이 손님 옆에서 본인 폰으로 폼을 대신 채워주면 그 매출이 통계에서 통째로 사라졌다.
+// 되돌리는 버튼을 두면 그만큼 고객사가 누를 것이 늘고 실수도 는다 → 시스템이 판단한다.
+//
+// ⚠️ 예약 연락처까지 업체 번호면 사장님 본인 테스트가 맞으므로 그대로 둔다.
+//    (본사 계정의 테스트 예약 4건이 실제로 예약 단계에서도 업체 번호로 들어와 있다)
+async function clearTestFlagIfRealCustomer(
+  db: ReturnType<typeof createServiceClient>,
+  quoteId: string,
+  businessId: string,
+  bookingPhone: string | null | undefined,
+) {
+  const onlyDigits = (p: string | null | undefined) => (p ?? '').replace(/[^0-9]/g, '')
+  const custDigits = onlyDigits(bookingPhone)
+  if (!custDigits) return
+
+  const { data: business } = await db
+    .from('businesses')
+    .select('phone')
+    .eq('id', businessId)
+    .maybeSingle() as unknown as { data: { phone: string | null } | null }
+
+  // 업체 번호와 같으면 사장님 본인 테스트 — 건드리지 않는다
+  if (onlyDigits(business?.phone) === custDigits) return
+
+  const { error } = await db
+    .from('quotes')
+    .update({ is_test: false } as never)
+    .eq('id', quoteId)
+    .eq('business_id', businessId)
+
+  // 표시 해제 실패가 예약을 막으면 안 된다(부가 작업)
+  if (error) console.error('[Quotes] 테스트 표시 자동 해제 실패:', error)
+}
+
 // Step 2: 예약 확정 (플랜 선택 + 개인정보 입력)
 const createBookingSchema = z.object({
   quote_id: z.string().uuid('올바른 견적 정보가 아닙니다'),
@@ -427,6 +464,9 @@ export const createBookingAction = publicAction
     } as never).select('id').single()
 
     if (bookingError || !newBooking) throw new Error('[APP] 예약 생성에 실패했습니다')
+
+    // 손님이 직접 예약까지 마쳤다 — 업체 번호가 아니면 테스트 표시를 푼다(매출이 통계에 잡히도록)
+    await clearTestFlagIfRealCustomer(db, quote.id, quote.business_id, parsedInput.customer_phone)
 
     // 대표에게 앱 푸시 — "새 예약이 잡혔어요" (실패해도 예약 처리는 정상)
     // 알림 클릭 시 해당 예약 날짜의 일정으로 이동 + 예약 상세 시트 자동 오픈
@@ -745,6 +785,9 @@ export const confirmBookingFromQuoteAction = authAction
     } as never).select('id').single() as unknown as { data: { id: string } | null; error: unknown }
 
     if (bookingError || !newBooking) throw new Error('[APP] 예약 생성에 실패했습니다')
+
+    // 업체가 직접 예약을 확정했다 — 손님 번호면 테스트 표시를 푼다(매출이 통계에 잡히도록)
+    await clearTestFlagIfRealCustomer(db, quote.id, quote.business_id, quote.customer_phone)
 
     // 견적 상태 → booked
     await db

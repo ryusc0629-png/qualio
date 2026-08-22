@@ -165,15 +165,15 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
         방문 수가 아니라 <b>계약으로 이어지는</b> 채널이 진짜 성과예요 — 여기에 힘을 몰아주세요
       </p>
 
-      {/* 전화 문의 — 폼을 안 채우고 바로 전화하는 손님. 예전엔 아예 안 잡히던 숫자다. */}
+      {/* 전화 버튼 누름 — 아래 표의 '전화 문의' 채널과는 다른 숫자라 표에 넣지 않고 여기 한 줄로만 둔다.
+          (표에 '전화' 열로 같이 두었더니 같은 손님이 두 번 세어지는 것처럼 보였다) */}
       {totalPhoneClicks > 0 && (
         <div className="mb-4 rounded-lg border bg-muted/30 px-4 py-3">
           <p className="text-sm">
             📞 이 기간에 <b>{totalPhoneClicks}명</b>이 홈페이지·견적서에서 <b>전화 버튼</b>을 눌렀어요
           </p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            버튼을 누른 숫자예요 — 실제로 통화까지 됐는지는 알 수 없어요. 전화를 받으시면 고객 등록 때
-            &lsquo;어떻게 알고 오셨어요?&rsquo;를 골라주셔야 매출까지 이어집니다
+            전화를 받으시면 고객 등록 때 &lsquo;어떻게 알고 오셨어요?&rsquo;를 골라주세요. 그래야 아래 표에 매출까지 이어집니다
           </p>
         </div>
       )}
@@ -199,10 +199,9 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
         </div>
       ) : (
         <>
-          {/* 헤더 */}
-          <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 px-3 pb-2 text-[11px] font-medium text-muted-foreground">
+          {/* 헤더 — 전화 버튼 클릭은 위 안내 한 줄로 빠졌다(채널이 아니라 행동이라 열로 두면 중복처럼 읽힘) */}
+          <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto] gap-3 px-3 pb-2 text-[11px] font-medium text-muted-foreground">
             <span>채널</span>
-            <span className="w-14 text-right">전화</span>
             <span className="w-14 text-right">문의</span>
             <span className="w-16 text-right">예약·계약</span>
             <span className="w-24 text-right">매출</span>
@@ -214,7 +213,7 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
               return (
                 <div
                   key={key || 'direct'}
-                  className="rounded-lg border bg-muted/20 px-3 py-2.5 sm:grid sm:grid-cols-[1fr_auto_auto_auto_auto] sm:items-center sm:gap-3"
+                  className="rounded-lg border bg-muted/20 px-3 py-2.5 sm:grid sm:grid-cols-[1fr_auto_auto_auto] sm:items-center sm:gap-3"
                 >
                   {/* 채널명 */}
                   <div className="flex items-center gap-2 min-w-0">
@@ -227,16 +226,14 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
                     )}
                   </div>
 
-                  {/* 모바일: 4개 지표를 한 줄로 / 데스크탑: 각 칼럼 */}
-                  <div className="mt-2 grid grid-cols-4 gap-2 sm:mt-0 sm:contents">
+                  {/* 모바일: 3개 지표를 한 줄로 / 데스크탑: 각 칼럼 */}
+                  <div className="mt-2 grid grid-cols-3 gap-2 sm:mt-0 sm:contents">
                     <div className="text-center sm:w-14 sm:text-right">
-                      <p className={`text-sm font-bold tabular-nums ${a.phoneClicks > 0 ? '' : 'text-muted-foreground'}`}>
-                        {a.phoneClicks > 0 ? a.phoneClicks : '—'}
+                      {/* 문의 0은 '없었다'가 아니라 '폼을 안 거치고 바로 계약'인 경우가 많아 —로 둔다
+                          (전화로 바로 계약한 손님이 '문의 0 · 계약 1'로 보여 고장난 것처럼 읽혔다) */}
+                      <p className={`text-sm font-bold tabular-nums ${a.inquiries > 0 ? '' : 'text-muted-foreground'}`}>
+                        {a.inquiries > 0 ? a.inquiries : '—'}
                       </p>
-                      <p className="text-[10px] text-muted-foreground sm:hidden">전화</p>
-                    </div>
-                    <div className="text-center sm:w-14 sm:text-right">
-                      <p className="text-sm font-bold tabular-nums">{a.inquiries}</p>
                       <p className="text-[10px] text-muted-foreground sm:hidden">문의</p>
                     </div>
                     <div className="text-center sm:w-16 sm:text-right">
@@ -256,8 +253,9 @@ export async function ChannelPerformanceCard({ businessId, months }: ChannelPerf
           </div>
 
           <p className="mt-3 text-[11px] text-muted-foreground leading-relaxed">
+            {/* '전화'를 예시에서 뺐다 — 표에 '전화 문의' 채널이 따로 있어서, 같은 손님이 양쪽에 잡히는 것처럼 읽혔다 */}
             {hasChannelData
-              ? "'직접·기타'는 채널 링크 없이 들어온 문의예요 — 전화·소개·직접 등록 등. 채널별 링크를 더 많이 쓸수록 정확해져요."
+              ? "'직접·기타'는 아직 유입 경로를 안 고른 문의예요. 고객 등록 때 '어떻게 알고 오셨어요?'를 골라주시면 해당 채널로 옮겨집니다."
               : "아직 채널 링크로 들어온 문의가 없어요. 위 '채널별 홍보 링크'를 붙이면 채널이 구분돼 쌓여요."}
           </p>
         </>
