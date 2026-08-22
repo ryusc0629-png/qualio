@@ -42,6 +42,8 @@ import {
 interface Worker {
   id: string
   name: string
+  /** 도급사 상호 — 내부 구분용. 고객에게 나가는 문구에는 쓰지 않는다 */
+  company_name?: string | null
   type: string
   color: string
   phone: string | null
@@ -262,6 +264,7 @@ function DraggableBookingCard({
 interface EditableWorker {
   id: string
   name: string
+  companyName: string | null
   phone: string | null
   type: string
   color: string
@@ -271,6 +274,7 @@ function WorkerDialog({ worker }: { worker?: EditableWorker }) {
   const isEdit = !!worker
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(worker?.name ?? '')
+  const [companyName, setCompanyName] = useState(worker?.companyName ?? '')
   const [phone, setPhone] = useState(worker?.phone ?? '')
   const [type, setType] = useState(worker?.type ?? 'employee')
   const [color, setColor] = useState(worker?.color ?? WORKER_COLORS[0]!)
@@ -280,6 +284,7 @@ function WorkerDialog({ worker }: { worker?: EditableWorker }) {
   const resetToSaved = (nextOpen: boolean) => {
     if (nextOpen && worker) {
       setName(worker.name)
+      setCompanyName(worker.companyName ?? '')
       setPhone(worker.phone ?? '')
       setType(worker.type)
       setColor(worker.color)
@@ -309,7 +314,14 @@ function WorkerDialog({ worker }: { worker?: EditableWorker }) {
   const isPending = isEdit ? updateWorker.isPending : addWorker.isPending
 
   const submit = () => {
-    const payload = { name: name.trim(), phone: phone || undefined, type, color }
+    const payload = {
+      name: name.trim(),
+      // 직원으로 바꿨다면 상호는 비운다 — 안 보이는 칸에 옛 값이 남으면 정산에서 튀어나온다
+      companyName: type === 'contractor' ? (companyName.trim() || undefined) : '',
+      phone: phone || undefined,
+      type,
+      color,
+    }
     if (worker) updateWorker.execute({ workerId: worker.id, ...payload })
     else addWorker.execute(payload)
   }
@@ -337,40 +349,7 @@ function WorkerDialog({ worker }: { worker?: EditableWorker }) {
           <DialogTitle>{isEdit ? '직원·도급사 수정' : '직원·도급사 등록'}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-2">
-          <div className="space-y-1.5">
-            <Label className="text-xs">이름 (필수)</Label>
-            <Input
-              placeholder="홍길동"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="h-10"
-            />
-            {/* 상호를 적어도 막지 않는다 — 도급사는 정산 때문에 상호로 적는 게 맞다.
-                대신 '고객에게는 이렇게 나간다'를 저장 전에 이 자리에서 보여준다.
-                (예전 예시 문구가 '홍길동 또는 청소파트너'였고, 실제로 도급사 상호가 등록돼
-                 후기 요청 알림톡에 그대로 실려 나갔다 — 2026-08-22) */}
-            {name.trim() && (
-              <p className="text-[11px] text-muted-foreground leading-relaxed">
-                고객에게는{' '}
-                <span className="font-semibold text-foreground">
-                  {extractPersonName(name)
-                    ? customerFacingWorkerName(name, '', { isContractor: type === 'contractor' })
-                    : '업체명'}
-                </span>
-                {extractPersonName(name) ? '으로 나가요' : '으로 나가요 (사람 이름을 못 찾았어요)'}
-              </p>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">연락처</Label>
-            <Input
-              placeholder="010-1234-5678"
-              inputMode="tel"
-              value={phone}
-              onChange={(e) => setPhone(formatPhone(e.target.value))}
-              className="h-10"
-            />
-          </div>
+          {/* 유형이 맨 위 — 도급사를 골라야 상호 칸이 나오므로 순서가 이래야 자연스럽다 */}
           <div className="space-y-1.5">
             <Label className="text-xs">유형</Label>
             <div className="flex gap-2">
@@ -393,6 +372,60 @@ function WorkerDialog({ worker }: { worker?: EditableWorker }) {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* 상호는 도급사에만 있다. 직원에겐 이 칸이 아예 안 나와 칸 수가 늘지 않는다.
+              ★상호와 이름을 한 칸에 같이 적게 뒀더니 그 값이 고객 문구로 나갔다(2026-08-22).
+                칸을 나눠 두면 섞일 일이 없다 — 상호는 우리끼리, 이름은 고객에게. */}
+          {type === 'contractor' && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">상호</Label>
+              <Input
+                placeholder="예: 한빛클린"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="h-10"
+              />
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                우리끼리 구분하고 정산·도급 계약서에 쓰는 이름이에요. 고객에게는 안 보여요
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">
+              {type === 'contractor' ? '현장 담당자 이름 (필수)' : '이름 (필수)'}
+            </Label>
+            <Input
+              placeholder="홍길동"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="h-10"
+            />
+            {/* 칸을 나눴어도 이름 칸에 상호를 적는 일은 생긴다.
+                저장 전에 '고객에게는 이렇게 나간다'를 그대로 보여준다 */}
+            {name.trim() && (
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                고객에게는{' '}
+                <span className="font-semibold text-foreground">
+                  {extractPersonName(name)
+                    ? customerFacingWorkerName(name, '', { isContractor: type === 'contractor' })
+                    : '업체명'}
+                </span>
+                {extractPersonName(name) ? '으로 나가요' : '으로 나가요 (사람 이름을 못 찾았어요)'}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">연락처</Label>
+            <Input
+              placeholder="010-1234-5678"
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => setPhone(formatPhone(e.target.value))}
+              className="h-10"
+            />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">캘린더 색상</Label>
@@ -585,11 +618,13 @@ export function ScheduleBoard({
   // rows: 미배정 + 각 worker
   const rows: Array<{
     id: string | null; label: string; color: string
+    companyName?: string | null
     phone?: string | null; type?: string; contractSigned?: boolean
   }> = [
     { id: null, label: '미배정', color: '#94a3b8' },
     ...workers.map((w) => ({
       id: w.id, label: w.name, color: w.color, phone: w.phone, type: w.type,
+      companyName: w.company_name ?? null,
       contractSigned: !!w.contract_signed_at,
     })),
   ]
@@ -947,8 +982,10 @@ export function ScheduleBoard({
                       <div className="min-w-0 flex-1">
                         <p className="text-xs font-semibold truncate">{row.label}</p>
                         {row.type && (
-                          <p className="text-[10px] text-muted-foreground">
+                          <p className="text-[10px] text-muted-foreground truncate">
                             {row.type === 'employee' ? '직원' : '도급사'}
+                            {/* 상호는 여기서만 보인다 — 사장님이 어느 팀인지 구분하는 값 */}
+                            {row.companyName && ` · ${row.companyName}`}
                           </p>
                         )}
                         {/* 도급사는 표준 계약 여부를 한눈에 — 안 쓴 곳이 눈에 띄어야 챙기게 된다 */}
@@ -977,6 +1014,7 @@ export function ScheduleBoard({
                             worker={{
                               id: row.id,
                               name: row.label,
+                              companyName: row.companyName ?? null,
                               phone: row.phone ?? null,
                               type: row.type ?? 'employee',
                               color: row.color,

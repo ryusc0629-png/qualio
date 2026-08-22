@@ -13,6 +13,8 @@ export const dynamic = 'force-dynamic'
 type ContractorRow = {
   id: string
   name: string
+  /** 도급사 상호 — 이 화면은 회사와 맺은 계약을 다루므로 상호를 앞세운다 */
+  company_name: string | null
   phone: string | null
   color: string
   contract_data: SubcontractorContractData | null
@@ -36,7 +38,7 @@ export default async function ContractorsPage() {
 
   const { data } = await db
     .from('workers' as never)
-    .select('id, name, phone, color, contract_data, contract_signed_at')
+    .select('id, name, company_name, phone, color, contract_data, contract_signed_at')
     .eq('business_id' as never, businessId)
     .eq('type' as never, 'contractor')
     .eq('is_active' as never, true)
@@ -101,7 +103,7 @@ export default async function ContractorsPage() {
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold truncate">{c.name}</p>
+                      <p className="font-semibold truncate">{c.company_name || c.name}</p>
                       <span
                         className={[
                           'text-[11px] font-semibold px-2 py-0.5 rounded-full',

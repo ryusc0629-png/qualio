@@ -42,6 +42,8 @@ async function getPlanId(
 export const addWorkerAction = action
   .schema(z.object({
     name:  z.string().min(1, '이름을 입력해주세요').max(20),
+    // 도급사 상호 — 내부 구분·정산·도급 계약서용. 고객 문구에는 절대 안 쓴다
+    companyName: z.string().max(40).optional(),
     phone: z.string().optional(),
     type:  z.string().refine((v) => ['employee', 'contractor'].includes(v), '유형을 선택해주세요'),
     color: z.string().min(4).max(7),
@@ -64,11 +66,12 @@ export const addWorkerAction = action
     }
 
     const { error } = await db.from('workers' as never).insert({
-      business_id: businessId,
-      name:        parsedInput.name,
-      phone:       parsedInput.phone || null,
-      type:        parsedInput.type,
-      color:       parsedInput.color,
+      business_id:  businessId,
+      name:         parsedInput.name,
+      company_name: parsedInput.companyName?.trim() || null,
+      phone:        parsedInput.phone || null,
+      type:         parsedInput.type,
+      color:        parsedInput.color,
     } as never)
 
     if (error) throw new Error('[APP] 등록에 실패했습니다')
@@ -85,6 +88,7 @@ export const updateWorkerAction = action
   .schema(z.object({
     workerId: z.string().uuid(),
     name:  z.string().min(1, '이름을 입력해주세요').max(20),
+    companyName: z.string().max(40).optional(),
     phone: z.string().optional(),
     type:  z.string().refine((v) => ['employee', 'contractor'].includes(v), '유형을 선택해주세요'),
     color: z.string().min(4).max(7),
@@ -96,10 +100,11 @@ export const updateWorkerAction = action
     const { error } = await db
       .from('workers' as never)
       .update({
-        name:  parsedInput.name,
-        phone: parsedInput.phone || null,
-        type:  parsedInput.type,
-        color: parsedInput.color,
+        name:         parsedInput.name,
+        company_name: parsedInput.companyName?.trim() || null,
+        phone:        parsedInput.phone || null,
+        type:         parsedInput.type,
+        color:        parsedInput.color,
       } as never)
       .eq('id' as never, parsedInput.workerId)
       .eq('business_id' as never, businessId)

@@ -34,6 +34,8 @@ export interface ContractorSettlement {
 type WorkerRow = {
   id: string
   name: string
+  /** 도급사 상호 — 장부 메모에 쓴다 */
+  company_name: string | null
   color: string | null
   contract_data: SubcontractorContractData | null
   contract_signed_at: string | null
@@ -82,7 +84,7 @@ export async function loadContractorSettlements(
   const [workersRes, bookingsRes, contractsRes, postedRes] = await Promise.all([
     db
       .from('workers' as never)
-      .select('id, name, color, contract_data, contract_signed_at')
+      .select('id, name, company_name, color, contract_data, contract_signed_at')
       .eq('business_id' as never, businessId)
       .eq('type' as never, 'contractor')
       .eq('is_active' as never, true)
@@ -232,7 +234,8 @@ export async function loadContractorSettlements(
     const oneOff = oneOffByWorker.get(w.id) ?? []
     return {
       workerId: w.id,
-      workerName: w.name,
+      // 장부·정산은 내부 기록이라 상호로 적는 게 알아보기 쉽다
+      workerName: w.company_name || w.name,
       color: w.color ?? '#64748b',
       hasContract: !!w.contract_data,
       signed: !!w.contract_signed_at,

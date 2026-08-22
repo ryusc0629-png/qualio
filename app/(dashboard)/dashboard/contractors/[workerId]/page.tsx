@@ -26,6 +26,8 @@ function stripTitle(name: string): string {
 type WorkerRow = {
   id: string
   name: string
+  /** 도급사 상호 — 계약서의 '을'은 사람이 아니라 이 회사다 */
+  company_name: string | null
   phone: string | null
   type: string
   contract_data: SubcontractorContractData | null
@@ -64,7 +66,7 @@ export default async function ContractorContractPage({
   const [workerResult, businessResult] = await Promise.all([
     db
       .from('workers' as never)
-      .select('id, name, phone, type, contract_data, contract_signed_at')
+      .select('id, name, company_name, phone, type, contract_data, contract_signed_at')
       .eq('id' as never, workerId)
       .eq('business_id' as never, businessId)
       .maybeSingle() as unknown as Promise<{ data: WorkerRow | null }>,
@@ -100,7 +102,8 @@ export default async function ContractorContractPage({
       phone:   biz?.phone ? formatPhone(biz.phone) : '',
     },
     partyB: {
-      company: worker.name,
+      // 계약 상대는 사람이 아니라 회사다 — 상호를 적어뒀으면 그걸 쓴다
+      company: worker.company_name || worker.name,
       ceo:     '',
       address: '',
       phone:   worker.phone ? formatPhone(worker.phone) : '',
@@ -114,7 +117,7 @@ export default async function ContractorContractPage({
           <ChevronLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-bold truncate">{worker.name} 도급 계약서</h1>
+          <h1 className="text-lg font-bold truncate">{worker.company_name || worker.name} 도급 계약서</h1>
           <p className="text-xs text-muted-foreground">
             빈칸만 채우면 표준 계약서가 완성돼요
           </p>
@@ -125,7 +128,7 @@ export default async function ContractorContractPage({
 
       <ContractForm
         workerId={worker.id}
-        workerName={worker.name}
+        workerName={worker.company_name || worker.name}
         initial={initial}
         signedAt={worker.contract_signed_at}
         hasSaved={!!worker.contract_data}
