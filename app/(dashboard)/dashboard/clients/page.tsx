@@ -785,13 +785,29 @@ export default async function ClientsPage({
                       {/* 마지막 방문은 재방문 판단에 바로 쓰이는 값이라 접지 않는다 — '자세히'와 같은 줄에 둔다 */}
                       <ClientRowDetails
                         hasDetails={Boolean(customer.phone || customer.address || activeContract)}
-                        summary={lastVisitDate ? (
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Calendar className="h-3 w-3 shrink-0" />
-                            마지막 방문 {new Date(lastVisitDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', timeZone: 'Asia/Seoul' })}
-                            {bookingCount > 1 && ` · 총 ${bookingCount}회`}
-                          </span>
-                        ) : null}
+                        summary={(
+                          <>
+                            {lastVisitDate && (
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Calendar className="h-3 w-3 shrink-0" />
+                                마지막 방문 {new Date(lastVisitDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', timeZone: 'Asia/Seoul' })}
+                                {bookingCount > 1 && ` · 총 ${bookingCount}회`}
+                              </span>
+                            )}
+                            {/* 작업 항목을 아직 안 정한 정기계약만 접힌 줄에 올린다.
+                                '자세히'를 눌러야 나오면 비테크 사장님은 못 찾는다(실사용 0건이었다).
+                                정하고 나면 여기서 사라지고 '자세히' 안으로 들어간다 — 잔소리로 남기지 않는다. */}
+                            {activeContract && (activeContract.checklist_items ?? []).length === 0 && (
+                              <ContractLockupCell
+                                contractId={activeContract.id}
+                                requiresLockup={activeContract.requires_lockup ?? false}
+                                expectedDurationMinutes={activeContract.expected_duration_minutes ?? null}
+                                checklistItems={[]}
+                                only="checklist"
+                              />
+                            )}
+                          </>
+                        )}
                       >
                           {customer.phone && (
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -1009,9 +1025,21 @@ export default async function ClientsPage({
                         <ClientRowDetails
                           hasDetails={Boolean(customer.phone || customer.address || activeContract)}
                           summary={activeContract ? (
-                            <span className="text-xs text-muted-foreground">
-                              {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
-                            </span>
+                            <>
+                              <span className="text-xs text-muted-foreground">
+                                {activeContract.service_type} · {formatFrequency(activeContract.frequency)}
+                              </span>
+                              {/* 위 거래처 카드와 같은 이유 — 안 정한 계약만 접힌 줄에 올린다 */}
+                              {(activeContract.checklist_items ?? []).length === 0 && (
+                                <ContractLockupCell
+                                  contractId={activeContract.id}
+                                  requiresLockup={activeContract.requires_lockup ?? false}
+                                  expectedDurationMinutes={activeContract.expected_duration_minutes ?? null}
+                                  checklistItems={[]}
+                                  only="checklist"
+                                />
+                              )}
+                            </>
                           ) : null}
                         >
                             {customer.phone && (

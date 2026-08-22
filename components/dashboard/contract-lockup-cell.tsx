@@ -33,6 +33,11 @@ interface Props {
   requiresLockup: boolean
   expectedDurationMinutes: number | null
   checklistItems?: ChecklistItem[]
+  /**
+   * 'checklist' — 작업 항목 배지 하나만 그린다.
+   * 접힌 카드 줄('자세히' 옆)에 올려 두려고 만든 것. 펼쳐야만 보이면 사장님이 못 찾는다.
+   */
+  only?: 'checklist'
 }
 
 export function ContractLockupCell({
@@ -40,6 +45,7 @@ export function ContractLockupCell({
   requiresLockup,
   expectedDurationMinutes,
   checklistItems = [],
+  only,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [checked, setChecked] = useState(requiresLockup)
@@ -87,6 +93,7 @@ export function ContractLockupCell({
           항목 사진이 올라온 방문도 385건 중 0건이었다 — 기능은 있는데 문이 안 보였다.
           ⚠️두 배지 모두 같은 창을 연다(설정은 한 곳에서). ⛔새 폼을 따로 만들지 말 것. */}
       <span className="inline-flex flex-wrap items-center gap-1">
+        {only !== 'checklist' && (
         <button
           type="button"
           onClick={() => openDialog()}
@@ -103,6 +110,7 @@ export function ContractLockupCell({
             : '문단속 안 함'}
           <ChevronDown className="h-3 w-3 opacity-60" />
         </button>
+        )}
 
         <button
           type="button"
@@ -111,11 +119,13 @@ export function ContractLockupCell({
             'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
             checklistItems.length > 0
               ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-              : 'bg-muted text-muted-foreground hover:bg-muted/70',
+              : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100',
           ].join(' ')}
         >
           <ListChecks className="h-3 w-3" />
-          {checklistItems.length > 0 ? `작업 항목 ${checklistItems.length}개` : '작업 항목 추가'}
+          {/* 비어 있을 때 회색이 아니라 초록 테두리 — 접힌 줄에서 눈에 띄어야 누른다.
+              설정하고 나면 이 배지는 접힌 줄에서 사라지고 '자세히' 안으로 들어간다(잔소리 안 남김) */}
+          {checklistItems.length > 0 ? `작업 항목 ${checklistItems.length}개` : '현장에서 할 일 정하기'}
           <ChevronDown className="h-3 w-3 opacity-60" />
         </button>
       </span>
