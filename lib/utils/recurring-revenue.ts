@@ -1,5 +1,4 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { parseFrequency } from '@/lib/utils/frequency'
 
 // 정기 계약 매출을 월 단위로 환산해 합산한다.
 //
@@ -8,18 +7,19 @@ import { parseFrequency } from '@/lib/utils/frequency'
 //   써야 하므로 공용으로 뺐다. 두 곳이 각자 계산하면 사장님 화면의 요금과
 //   청구 금액이 어긋난다.
 
-const WEEKS_PER_MONTH = 4.345
-
 /**
- * 계약 1건의 월 환산 금액.
- * frequency는 JSON({type, count})이며 주 단위는 월 4.345회로 환산한다.
- * 레거시·불명 값은 contract_price를 월값으로 본다(보수적).
+ * 계약 1건의 월 금액.
+ *
+ * ★contract_price는 **이미 월정액**이다 — 입력 폼 라벨이 "월 계약금액"이고,
+ *   월간 청구서(lib/reports/monthly-charge.ts)·매출 집계(lib/utils/ltv.ts)·
+ *   도급 정산(lib/finance/*)이 전부 이 값을 그대로 쓴다.
+ *
+ * ⛔frequency를 곱하지 말 것. "주 5일 들어가는 현장"은 방문 횟수를 뜻하지
+ *   "주에 190만원"이 아니다. 2026-08-22까지 lib/admin/metrics.ts가 이걸 곱하고 있어
+ *   본사 지표의 정기 매출이 **17배** 부풀어 있었다(실제 252만원 → 4,334만원).
  */
-export function monthlyContractValue(contractPrice: number, frequencyRaw: string | null): number {
-  const f = frequencyRaw ? parseFrequency(frequencyRaw) : null
-  if (!f) return contractPrice
-  if (f.type === 'weekly') return Math.round(contractPrice * f.count * WEEKS_PER_MONTH)
-  return contractPrice * f.count
+export function monthlyContractValue(contractPrice: number, _frequencyRaw?: string | null): number {
+  return contractPrice
 }
 
 export interface ContractLike {
