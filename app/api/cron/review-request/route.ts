@@ -5,7 +5,13 @@ import { randomBytes } from 'crypto'
 
 // Vercel Cron: 매일 01:00 UTC (KST 오전 10시) 실행
 // D+1: 작업 완료 후 다음날 후기 요청 알림톡 발송 (인증 페이지 링크 포함)
-// D+3: 미응답 고객에게 팔로업 1회 재발송
+//
+// ⛔D+3 재발송을 되살리지 말 것 (2026-08-22 결정).
+//   같은 템플릿을 문구도 그대로 이틀 뒤에 한 번 더 보내는 완전 중복이었다.
+//   일회성 고객은 청소 한 번에 카톡을 이미 여러 통 받고, 그중 후기 요청은
+//   고객이 원해서 받는 메시지가 아니다. 조르는 횟수를 늘리는 대신 한 번만 보낸다.
+//   (auto_review_followup_sent_at 컬럼과 review_claims.is_followup은 지난 발송
+//    기록이라 그대로 둔다 — 읽기만 하고 새로 쓰지 않는다)
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://qualio.co.kr'
 
@@ -62,31 +68,16 @@ export async function GET(request: NextRequest) {
   const d1Start = new Date(yesterdayKST.getTime() - 9 * 60 * 60 * 1000)
   const d1End   = new Date(d1Start.getTime() + 24 * 60 * 60 * 1000)
 
-  const d3Start = new Date(d1Start.getTime() - 2 * 24 * 60 * 60 * 1000)
-  const d3End   = new Date(d3Start.getTime() + 24 * 60 * 60 * 1000)
-
-  const [d1Result, d3Result] = await Promise.all([
-    db
-      .from('bookings')
-      .select('id, business_id, contract_id, worker_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), workers!worker_id(name, type), businesses!business_id(name, phone, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)')
-      .eq('status', 'completed')
-      // 정기계약 방문은 제외 — 매 방문마다 후기를 조르면 거래처가 피로해진다.
-      // (주 5회 현장이면 후기 요청이 매 평일 나간다) 후기는 일회성 작업에만 요청한다.
-      .is('contract_id', null)
-      .gte('scheduled_at', d1Start.toISOString())
-      .lt('scheduled_at', d1End.toISOString())
-      .is('auto_review_sent_at', null),
-
-    db
-      .from('bookings')
-      .select('id, business_id, contract_id, worker_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), workers!worker_id(name, type), businesses!business_id(name, phone, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)')
-      .eq('status', 'completed')
-      .is('contract_id', null)   // 위와 같은 이유 — 정기계약 방문은 후기 요청 대상이 아니다
-      .gte('scheduled_at', d3Start.toISOString())
-      .lt('scheduled_at', d3End.toISOString())
-      .not('auto_review_sent_at', 'is', null)
-      .is('auto_review_followup_sent_at', null),
-  ])
+  const d1Result = await db
+    .from('bookings')
+    .select('id, business_id, contract_id, worker_id, customer_name, customer_phone, scheduled_at, quotes!quote_id(cleaning_type), workers!worker_id(name, type), businesses!business_id(name, phone, google_place_url, naver_place_url, danggeun_review_url, kakao_place_url, active_review_platform, review_reward_type, review_reward_description)')
+    .eq('status', 'completed')
+    // 정기계약 방문은 제외 — 매 방문마다 후기를 조르면 거래처가 피로해진다.
+    // (주 5회 현장이면 후기 요청이 매 평일 나간다) 후기는 일회성 작업에만 요청한다.
+    .is('contract_id', null)
+    .gte('scheduled_at', d1Start.toISOString())
+    .lt('scheduled_at', d1End.toISOString())
+    .is('auto_review_sent_at', null)
 
   interface BookingRow {
     id: string
@@ -101,7 +92,7 @@ export async function GET(request: NextRequest) {
     businesses: BizInfo | BizInfo[] | null
   }
 
-  async function sendReview(booking: BookingRow, isFollowup: boolean): Promise<boolean> {
+  async function sendReview(booking: BookingRow): Promise<boolean> {
     const biz   = Array.isArray(booking.businesses) ? booking.businesses[0] : booking.businesses
     const quote = Array.isArray(booking.quotes) ? booking.quotes[0] : booking.quotes
 
@@ -118,7 +109,8 @@ export async function GET(request: NextRequest) {
         business_id:   booking.business_id,
         customer_phone: booking.customer_phone,
         token,
-        is_followup:   isFollowup,
+        is_followup:   false,   // 재발송을 없앴으므로 항상 1차다. 컬럼은 지난 기록 때문에 남겨둔다
+
         worker_id:     booking.worker_id,   // 성과 집계용 — 그 현장의 담당 기사
       } as never)
 
@@ -134,11 +126,10 @@ export async function GET(request: NextRequest) {
         rewardText:    rewardSentence(biz),
       })
 
-      const updateField = isFollowup
-        ? { auto_review_followup_sent_at: new Date().toISOString() }
-        : { auto_review_sent_at: new Date().toISOString() }
-
-      await db.from('bookings').update(updateField).eq('id', booking.id)
+      await db
+        .from('bookings')
+        .update({ auto_review_sent_at: new Date().toISOString() })
+        .eq('id', booking.id)
       return true
     } catch (err) {
       console.error(`[Cron] review-request 발송 실패 booking=${booking.id}:`, err)
@@ -148,47 +139,13 @@ export async function GET(request: NextRequest) {
 
   let d1Sent = 0, d1Skipped = 0
   for (const booking of (d1Result.data ?? [])) {
-    const ok = await sendReview(booking as unknown as BookingRow, false)
+    const ok = await sendReview(booking as unknown as BookingRow)
     ok ? d1Sent++ : d1Skipped++
   }
 
-  // 이미 후기를 남긴 고객에게 "후기 남겨주세요"를 또 보내지 않는다.
-  // 발송 기록(auto_review_followup_sent_at)만 보고 재발송하면, 정성껏 써준 고객이
-  // 3일 뒤에 같은 부탁을 또 받는다 — 가장 아껴야 할 고객을 귀찮게 하는 셈.
-  const d3Candidates = (d3Result.data ?? []) as unknown as BookingRow[]
-  const claimedBookingIds = new Set<string>()
-  if (d3Candidates.length > 0) {
-    const { data: claimed } = await db
-      .from('review_claims')
-      .select('booking_id')
-      .in('booking_id', d3Candidates.map((b) => b.id))
-      .not('claimed_at', 'is', null)
-    for (const row of (claimed ?? []) as { booking_id: string }[]) {
-      claimedBookingIds.add(row.booking_id)
-    }
-  }
-
-  let d3Sent = 0, d3Skipped = 0, d3AlreadyReviewed = 0
-  for (const booking of d3Candidates) {
-    if (claimedBookingIds.has(booking.id)) {
-      // 후기를 남긴 고객 — 재발송하지 않되, 다시 후보로 잡히지 않게 발송 기록만 남긴다
-      await db
-        .from('bookings')
-        .update({ auto_review_followup_sent_at: new Date().toISOString() } as never)
-        .eq('id', booking.id)
-      d3AlreadyReviewed++
-      continue
-    }
-    const ok = await sendReview(booking, true)
-    ok ? d3Sent++ : d3Skipped++
-  }
-
-  console.log(
-    `[Cron] review-request — D+1: ${d1Sent}건 / D+3: ${d3Sent}건 (이미 후기 남김 ${d3AlreadyReviewed}건 제외)`
-  )
+  console.log(`[Cron] review-request — D+1: ${d1Sent}건 발송 / ${d1Skipped}건 건너뜀`)
 
   return NextResponse.json({
     d1: { sent: d1Sent, skipped: d1Skipped },
-    d3: { sent: d3Sent, skipped: d3Skipped, alreadyReviewed: d3AlreadyReviewed },
   })
 }

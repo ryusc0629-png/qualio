@@ -1,0 +1,64 @@
+[
+  {
+    "templateId": "KA01TP260721042212994EhBsUI6SX5Z",
+    "name": "재방문 유도",
+    "status": "REJECTED",
+    "categoryCode": "999999",
+    "messageType": "BA",
+    "emphasizeType": "NONE",
+    "content": "[#{업체명}] 다시 찾아주세요\n\n#{고객명}님, 오랜만이에요. #{업체명}입니다.\n그동안 공간 관리는 잘 되고 계신가요?\n필요하실 때 편하게 견적 받아보세요.",
+    "buttons": [
+      {
+        "buttonType": "WL",
+        "buttonName": "견적 신청하기",
+        "linkMo": "https://qualio.co.kr/q/#{링크}",
+        "linkPc": "https://qualio.co.kr/q/#{링크}",
+        "linkAnd": null,
+        "linkIos": null,
+        "chatExtra": null,
+        "targetOut": true
+      }
+    ]
+  },
+  {
+    "templateId": "KA01TP260721040125726D1rxKS4rTnr",
+    "name": "견적 발송",
+    "status": "APPROVED",
+    "categoryCode": "999999",
+    "messageType": "BA",
+    "emphasizeType": "NONE",
+    "content": "[#{업체명}] 견적을 보내드려요\n\n#{고객명}님, 요청하신 견적입니다.\n\n▪ 서비스: #{서비스명}#{평수}\n▪ 희망일: #{희망날짜}\n\n· 기본: #{기본가}원\n· 추천: #{추천가}원\n· 프리미엄: #{프리미엄가}원\n\n아래 링크에서 확인하고 예약하실 수 있어요.\n#{예약링크}\n\n문의: #{업체연락처}",
+    "buttons": []
+  },
+  {
+    "templateId": "KA01TP260721041002417cEWnXLo14Im",
+    "name": "리뷰 요청",
+    "status": "APPROVED",
+    "categoryCode": "999999",
+    "messageType": "BA",
+    "emphasizeType": "NONE",
+    "content": "[#{업체명}] 오늘 작업은 어떠셨나요?\n\n#{고객명}님, #{서비스명} 이용해 주셔서 감사합니다.\n소중한 후기를 남겨주시면 큰 힘이 됩니다.",
+    "buttons": [
+      {
+        "buttonType": "WL",
+        "buttonName": "리뷰 남기기",
+        "linkMo": "https://qualio.co.kr/review/#{리뷰토큰}",
+        "linkPc": "https://qualio.co.kr/review/#{리뷰토큰}",
+        "linkAnd": null,
+        "linkIos": null,
+        "chatExtra": null,
+        "targetOut": true
+      }
+    ]
+  },
+  {
+    "templateId": "KA01TP260721035241879jr8Vn1ZShYk",
+    "name": "예약 확정",
+    "status": "APPROVED",
+    "categoryCode": "999999",
+    "messageType": "BA",
+    "emphasizeType": "NONE",
+    "content": "[#{업체명}] 예약이 확정되었어요\n\n안녕하세요, #{업체명}입니다.\n아래 내용으로 예약이 확정되었습니다.\n\n▪ 서비스: #{서비스명}\n▪ 일시: #{예약일시}\n▪ 주소: #{서비스주소}\n▪ 선택 플랜: #{선택플랜}\n▪ 결제 예정 금액: #{최종금액}원\n\n문의: #{업체연락처}",
+    "buttons": []
+  }
+]
