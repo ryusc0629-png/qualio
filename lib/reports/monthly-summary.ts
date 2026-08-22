@@ -8,6 +8,11 @@ export interface VisitLike {
   worker_id: string | null
   checkin_at?: string | null
   checkout_at?: string | null
+  // ⛔작업 체크리스트 사진 — 거래처 보고서에 싣지 말 것(2026-08-22 대표 확정).
+  //   "체크리스트는 근태 관리일 뿐이다. 사장이 현장 직원의 업무를 파악할 뿐이고,
+  //    고객사는 알 필요가 없다. 고객은 원하는 청소 결과만 얻으면 된다."
+  //   사장님이 보는 곳은 홈 → 오늘 현장(/dashboard/attendance) 하나뿐이다.
+  //   여기 타입에 남아 있는 건 방문 행을 통째로 받기 때문이고, 집계에 쓰지 않는다.
   checklist_photos?: Record<string, string[]> | null
 }
 
