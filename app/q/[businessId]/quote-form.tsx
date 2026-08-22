@@ -954,7 +954,8 @@ export function QuoteForm({ businessId, businessName, businessLogoUrl, services,
                   placeholder="직접 입력 (예: 33)"
                   value={customSpace}
                   onChange={(e) => setCustomSpace(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSpaceCustom()}
+                  // 한글 조합 중 엔터는 무시 — 안 막으면 마지막 글자가 한 번 더 들어간다
+                  onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleSpaceCustom()}
                   className="h-12 rounded-2xl border-border"
                 />
                 <button
@@ -1028,7 +1029,7 @@ export function QuoteForm({ businessId, businessName, businessLogoUrl, services,
                 placeholder="홍길동"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleName()}
+                onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleName()}
                 autoFocus
                 className="h-12 rounded-2xl border-border"
               />
@@ -1051,7 +1052,7 @@ export function QuoteForm({ businessId, businessName, businessLogoUrl, services,
                 inputMode="numeric"
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
-                onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+                onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && handleSubmit()}
                 autoFocus
                 className="h-12 rounded-2xl border-border"
               />

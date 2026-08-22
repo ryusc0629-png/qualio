@@ -221,7 +221,11 @@ export function ContractLockupCell({
                   value={newLabel}
                   onChange={(e) => setNewLabel(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+                    // ⚠️한글 조합 중 엔터는 무시한다.
+                    // '화장실 바닥 청소'를 치고 엔터를 누르면, IME가 마지막 글자('소')를 확정하려고
+                    // 보내는 엔터와 진짜 엔터가 연달아 들어와 항목이 두 개 생겼다
+                    // ('화장실 바닥 청소' + '소'). isComposing이면 아직 확정 전이라는 뜻이다.
+                    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                       e.preventDefault()
                       addItem()
                     }

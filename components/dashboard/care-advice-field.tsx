@@ -209,7 +209,8 @@ export function CareAdviceField({
                   value={customName}
                   onChange={(e) => setCustomName(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); addCustom() }
+                    // 한글 조합 중 엔터는 무시 — 안 막으면 마지막 글자가 한 번 더 들어간다
+                    if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); addCustom() }
                     if (e.key === 'Escape') setCustomOpen(false)
                   }}
                   placeholder="예: 방충망 교체"

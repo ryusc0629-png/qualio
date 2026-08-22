@@ -129,7 +129,8 @@ export function CredentialsSection({
               value={certDraft}
               onChange={(e) => setCertDraft(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
+                // 한글 조합 중 엔터는 무시 — 안 막으면 마지막 글자가 한 번 더 들어간다
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                   e.preventDefault()
                   addCert()
                 }

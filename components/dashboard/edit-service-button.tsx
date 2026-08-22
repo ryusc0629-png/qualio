@@ -75,7 +75,7 @@ function VariantSelector({
             placeholder="직접 입력"
             value={newInput}
             onChange={(e) => onNewInputChange(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onAdd() } }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); onAdd() } }}
             className="h-7 text-xs w-28"
           />
           {newInput.trim() && (
@@ -289,7 +289,7 @@ function TierItemsEditor({
           placeholder={placeholder}
           value={inputVal}
           onChange={(e) => setInputVal(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); add() } }}
           className="h-8 text-xs bg-white"
         />
         <Button type="button" variant="outline" size="sm" onMouseDown={(e) => e.preventDefault()} onClick={add} className="h-8 shrink-0 text-xs px-3 bg-white">
