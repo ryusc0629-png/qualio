@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, Check, X, Phone, MapPin, Globe, Bug } from 'lucide-react'
 import { getBusinessDetail } from '@/lib/admin/business-detail'
 import { betaBadgeLabel } from '@/lib/config/beta'
+import { ResetPasswordButton } from './reset-password-button'
 
 // 항상 최신 상태로 본다(CS 통화 중에 보는 화면이라 캐시 금지)
 export const dynamic = 'force-dynamic'
@@ -61,8 +62,15 @@ export default async function AdminBusinessDetailPage({
         <p className="mt-1 text-xs text-muted-foreground">
           {detail.ownerName ?? '대표자명 없음'} · {detail.ownerEmail ?? '이메일 없음'} · {formatDate(detail.createdAt)} 가입
         </p>
-        <p className="mt-1 text-[11px] text-muted-foreground">읽기 전용 화면이에요. 여기서는 고객사 데이터를 고칠 수 없어요.</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">고객사 데이터는 못 고쳐요. 계정 잠김을 푸는 것만 아래에서 할 수 있어요.</p>
       </div>
+
+      {/* 비밀번호 잊음 — CS 전화에서 가장 급한 건. 원문은 알 수 없으니 임시 비번을 만들어 불러준다 */}
+      <ResetPasswordButton
+        businessId={detail.businessId}
+        businessName={detail.name}
+        ownerEmail={detail.ownerEmail}
+      />
 
       {/* 연락 수단 — 통화 중 바로 누를 수 있게 */}
       <div className="flex flex-wrap gap-2">

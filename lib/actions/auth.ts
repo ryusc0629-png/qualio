@@ -117,3 +117,36 @@ export async function logoutAction() {
   await supabase.auth.signOut()
   return { success: true }
 }
+
+// 비밀번호 변경 — 로그인한 사장님이 직접 바꾼다.
+//
+// 왜 '지금 쓰는 비밀번호'를 다시 받나: Supabase는 세션만 있으면 바꿔준다. 그러면 사장님이
+// 로그인된 폰·PC를 잠깐 두고 자리를 비운 사이 남이 비밀번호를 바꿔 계정을 통째로 가져갈 수 있다.
+// 한 번 더 확인하는 게 맞다.
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, '지금 쓰는 비밀번호를 입력해주세요'),
+  newPassword: z.string().min(6, '새 비밀번호는 6자 이상으로 정해주세요'),
+})
+
+export const changePasswordAction = action
+  .schema(changePasswordSchema)
+  .action(async ({ parsedInput: { currentPassword, newPassword } }) => {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user?.email) throw new Error('[APP] 로그인이 필요합니다')
+
+    // 지금 비밀번호가 맞는지 확인 (틀리면 여기서 끝)
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword,
+    })
+    if (verifyError) throw new Error('[APP] 지금 쓰는 비밀번호가 맞지 않아요')
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) {
+      console.error('[Auth] 비밀번호 변경 실패:', error)
+      throw new Error('[APP] 비밀번호를 바꾸지 못했어요. 잠시 후 다시 시도해주세요')
+    }
+
+    return { success: true }
+  })

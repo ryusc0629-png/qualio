@@ -7,6 +7,7 @@ import { GeoPanel } from '@/components/dashboard/geo-panel'
 import { CopyLinkButton } from '@/components/dashboard/copy-link-button'
 import { PushNotificationToggle } from '@/components/dashboard/push-notification-toggle'
 import { CollapsibleSection } from './collapsible-section'
+import { PasswordSection } from './password-section'
 import { CustomDomainSection } from '@/components/dashboard/custom-domain-section'
 import { HelpRequestCard } from '@/components/dashboard/help-request-card'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -193,6 +194,14 @@ export default async function SettingsPage() {
         seoStaleAt={business.seo_stale_at ?? null}
       />
       </div>
+      </CollapsibleSection>
+
+      {/* 계정 — 비밀번호 변경. 잊었을 때는 본사가 임시 비밀번호를 만들어 준다(원문은 아무도 못 본다) */}
+      <CollapsibleSection
+        title="로그인 비밀번호"
+        description="로그인할 때 쓰는 비밀번호를 바꿔요."
+      >
+        <PasswordSection />
       </CollapsibleSection>
 
       {/* 내 주소(도메인) 연결 — 홈페이지를 사장님 소유 주소로 띄운다 */}
