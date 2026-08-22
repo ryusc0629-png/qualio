@@ -62,6 +62,11 @@ export const loginAction = action
       throw new Error('[APP] 지금은 로그인이 안 돼요. 잠시 후 다시 시도해주세요')
     }
 
+    // 임시 비밀번호로 들어온 계정은 곧장 '새 비밀번호 정하기'로 — 대시보드를 스쳐가지 않게 한다
+    if (data.user.app_metadata?.must_change_password) {
+      return { redirectTo: '/new-password' }
+    }
+
     // 업체 등록 여부 확인 — 서비스 롤로 조회 (로그인 직후 세션 쿠키 타이밍 문제 방지)
     const db = createServiceClient()
     const { data: profile } = await db
@@ -147,6 +152,33 @@ export const changePasswordAction = action
       console.error('[Auth] 비밀번호 변경 실패:', error)
       throw new Error('[APP] 비밀번호를 바꾸지 못했어요. 잠시 후 다시 시도해주세요')
     }
+
+    return { success: true }
+  })
+
+// 임시 비밀번호로 들어온 사장님이 새 비밀번호를 정하는 액션.
+// 여기선 '지금 쓰는 비밀번호'를 다시 묻지 않는다 — 방금 그 비밀번호로 로그인해 세션이 있고,
+// 한 번 더 물으면 종이에 적어둔 임시 비번을 또 옮겨 적게 만들어 실패만 늘어난다.
+export const setNewPasswordAction = action
+  .schema(z.object({ newPassword: z.string().min(6, '비밀번호는 6자 이상으로 정해주세요') }))
+  .action(async ({ parsedInput: { newPassword } }) => {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('[APP] 로그인이 필요합니다')
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) {
+      console.error('[Auth] 새 비밀번호 저장 실패:', error)
+      throw new Error('[APP] 저장하지 못했어요. 잠시 후 다시 시도해주세요')
+    }
+
+    // '새 비번 정해야 함' 표시를 지운다 — 안 지우면 로그인할 때마다 이 화면이 다시 뜬다.
+    // app_metadata는 본인이 못 고치므로 service_role로 지운다.
+    const admin = createServiceClient()
+    const { error: metaError } = await admin.auth.admin.updateUserById(user.id, {
+      app_metadata: { must_change_password: false },
+    })
+    if (metaError) console.error('[Auth] must_change_password 해제 실패:', metaError)
 
     return { success: true }
   })

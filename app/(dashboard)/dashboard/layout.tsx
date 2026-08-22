@@ -21,6 +21,10 @@ export default async function DashboardLayout({
 
   if (!user) redirect('/login')
 
+  // 임시 비밀번호로 들어온 계정은 새 비밀번호부터 정하게 한다.
+  // 설정 화면을 찾아가라고 하면 아무도 안 간다 — 임시 비번을 그대로 쓰다 다음에 또 잊는다.
+  if (user.app_metadata?.must_change_password) redirect('/new-password')
+
   // 업체 정보 조회: 서비스 롤 사용 (RLS 우회, 서버 전용)
   const db = createServiceClient()
   const { data: profile } = await db

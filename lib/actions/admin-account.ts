@@ -50,8 +50,11 @@ export const resetBusinessPasswordAction = adminAction
     if (!business?.owner_id) throw new Error('[APP] 이 업체의 대표 계정을 찾지 못했어요')
 
     const tempPassword = makeTempPassword()
+    // must_change_password: 임시 비밀번호로 로그인하면 대시보드 대신 '새 비밀번호 정하기'가 먼저 뜬다.
+    // ★app_metadata에 둔다 — user_metadata는 사용자가 스스로 지울 수 있어 안내가 사라진다.
     const { data: updated, error } = await db.auth.admin.updateUserById(business.owner_id, {
       password: tempPassword,
+      app_metadata: { must_change_password: true },
     })
 
     if (error || !updated?.user) {

@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { isPlatformHost, stripWww, getAppHost } from '@/lib/domains/host'
 
 // 인증이 필요한 경로 (미로그인 시 /login으로 리디렉션)
-const protectedRoutes = ['/dashboard', '/onboarding']
+const protectedRoutes = ['/dashboard', '/onboarding', '/new-password']
 
 // 이미 로그인된 사용자가 접근하면 /dashboard로 리디렉션할 경로
 const authRoutes = ['/login', '/signup']
@@ -12,7 +12,7 @@ const authRoutes = ['/login', '/signup']
 // 대시보드·로그인 등 퀄리오 서비스 화면은 항상 퀄리오 도메인으로 돌려보낸다.
 // (세션 쿠키가 퀄리오 도메인에 묶여 있어 고객사 도메인에서는 로그인 자체가 성립하지 않는다)
 const platformOnlyPrefixes = [
-  '/dashboard', '/onboarding', '/login', '/signup',
+  '/dashboard', '/onboarding', '/login', '/signup', '/new-password',
   '/admin', '/upgrade', '/pricing', '/academy', '/ops',
   '/biz', // 고객사 도메인에서 /biz/... 직접 접근 = 같은 내용이 두 주소로 열림 → 한쪽으로 모은다
 ]
