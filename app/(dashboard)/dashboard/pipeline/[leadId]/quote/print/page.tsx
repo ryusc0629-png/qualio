@@ -2,8 +2,10 @@ import type { Metadata } from 'next'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { PrintQuote } from './print-quote'
+import { toMarketYmd } from '@/lib/format/datetime'
 
-// 탭 제목/PDF 저장 파일명이 '무제'가 되지 않도록 서버에서 제목을 명시
+// 제목이 '무제'가 되지 않도록 하는 기본값.
+// 화면이 뜨면 PrintQuote가 '거래처명 + 보고 있는 문서'(예: 한빛치과 청구서)로 바꾼다 — PDF 파일명이 그 제목이다.
 export const metadata: Metadata = { title: '견적서·시방서' }
 
 export default async function QuotePrintPage({
@@ -65,6 +67,7 @@ export default async function QuotePrintPage({
       business={businessResult.data}
       variant="internal"
       publicToken={publicToken}
+      today={toMarketYmd()}
     />
   )
 }

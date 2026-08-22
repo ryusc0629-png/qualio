@@ -3,61 +3,17 @@
 import { useEffect, useState } from 'react'
 import { formatAreaWithBoth } from '@/lib/utils/area'
 import { buildStandardContractText } from '@/lib/contract/standard-contract'
+import { toMarketYmd } from '@/lib/format/datetime'
+import { billingMonthLabel, shiftMonth, toBillingMonth } from '@/lib/quote/invoice'
+import { QuoteItemsTable } from './quote-items'
+import { InvoiceDoc } from './invoice-doc'
+import { buildQuoteDocTitle } from './quote-doc-title'
+import type { QuoteDocKind } from './quote-doc-title'
+import type { Business, Lead, Quote, QuoteItem } from './quote-doc-types'
 
-interface QuoteItem {
-  name: string
-  unit: string
-  qty: number
-  unit_price: number
-}
-
-interface Lead {
-  id: string
-  company_name: string
-  contact_name: string | null
-  phone: string | null
-  address: string | null
-}
-
-interface Quote {
-  quote_number: string | null
-  valid_until: string | null
-  items: unknown
-  total_amount: number
-  tax_included: boolean
-  // 할인: 'rate'(할인율 %) | 'amount'(정액 원) | null(없음)
-  discount_type?: string | null
-  discount_value?: number | null
-  conditions: string | null
-  site_name: string | null
-  site_address: string | null
-  site_area: string | null
-  frequency: string | null
-  worker_count: number | null
-  spec_content: string | null
-  // 계약서 본문(사장님이 편집해 저장한 텍스트) — 없으면 표준 문안을 즉석 생성
-  contract_content?: string | null
-  // 정기(recurring) / 일회성(one_off) — 횟수 열 라벨 결정에 사용
-  job_type?: string | null
-  // 금액 입력 방식: itemized(항목별 계산) | lump(총액 직접). null=옛 견적(수량으로 추정)
-  amount_mode?: string | null
-  // 견적 최초 저장일 — 발행일/작성일로 사용(재열람해도 바뀌지 않게 저장값 기준)
-  created_at?: string | null
-}
-
-interface Business {
-  name: string
-  phone: string | null
-  address: string | null
-  // 을(수급자) 계약서 표기용 — 사업자 상호·사업자등록번호·대표명·입금 계좌 (신규 컬럼이라 optional)
-  legal_name?: string | null
-  business_number?: string | null
-  owner_name?: string | null
-  payment_account?: string | null
-}
-
-// both = 견적서+시방서 함께 / quote = 견적서만 / spec = 시방서만 / contract = 계약서만(사장님 전용)
-type DocMode = 'both' | 'quote' | 'spec' | 'contract'
+// both = 견적서+시방서 함께 / quote = 견적서만 / spec = 시방서만
+// contract = 계약서만(사장님 전용) / invoice = 청구서만
+type DocMode = QuoteDocKind
 
 interface Props {
   lead: Lead
@@ -72,6 +28,10 @@ interface Props {
   publicToken?: string | null
   // 처음 보여줄 문서 (공개 링크의 ?doc= 로 지정 가능)
   initialMode?: DocMode
+  // 오늘 날짜(KST 'YYYY-MM-DD') — 서버에서 계산해 내려준다(Vercel은 UTC라 서버·화면 날짜가 어긋날 수 있음)
+  today?: string
+  // 청구 대상 월 'YYYY-MM' (공개 링크의 ?m= 로 지정). 없으면 이번 달
+  initialBillingMonth?: string
 }
 
 // 발행일/작성일 — 견적 저장일(created_at)을 KST로 표시. 저장값이 없으면 오늘 날짜로 폴백.
@@ -83,7 +43,7 @@ function formatIssueDate(createdAt: string | null | undefined) {
   })
 }
 
-export function PrintQuote({ lead, quote, business, variant = 'internal', disableTracking = false, publicToken, initialMode = 'both' }: Props) {
+export function PrintQuote({ lead, quote, business, variant = 'internal', disableTracking = false, publicToken, initialMode = 'both', today, initialBillingMonth }: Props) {
   const items = (Array.isArray(quote.items) ? quote.items : []) as QuoteItem[]
   const isOneOff = quote.job_type === 'one_off'
 
@@ -118,22 +78,36 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
   const showUnitPriceCol = isOneOff && isItemized
 
   const hasSpec = !!quote.spec_content
+  // 사장님이 보는 화면인가 — 내부 미리보기(대시보드) 또는 공개 페이지의 본인 미리보기(?preview=1)
+  const isOwnerView = variant === 'internal' || disableTracking
   // 계약서 탭은 사장님 전용(내부·미리보기) + '표준 계약서 불러오기'로 저장한 계약서가 있을 때만 노출.
   // (아직 안 불러온 견적서엔 계약서 탭/자동 초안이 뜨지 않게 함)
-  const canContract = (variant === 'internal' || disableTracking) && !!quote.contract_content?.trim()
-  // 처음 보여줄 문서 — 시방서 지정(?doc=spec)이면 시방서, 그 외엔 견적서. ('둘 다'는 폐지)
-  const [mode, setMode] = useState<DocMode>(initialMode === 'spec' && hasSpec ? 'spec' : 'quote')
+  const canContract = isOwnerView && !!quote.contract_content?.trim()
+  // 청구서 탭은 사장님에게 항상 보이고, 고객에겐 사장님이 청구서 링크(?doc=invoice)를 보냈을 때만 보인다.
+  // (아직 견적 단계인 거래처가 견적서를 열었다가 '청구서'를 발견하면 벌써 돈을 내라는 줄 안다)
+  const canInvoice = isOwnerView || initialMode === 'invoice'
+  // 처음 보여줄 문서 — 시방서·청구서를 지정(?doc=)했으면 그것, 그 외엔 견적서. ('둘 다'는 폐지)
+  const [mode, setMode] = useState<DocMode>(
+    initialMode === 'spec' && hasSpec ? 'spec' : initialMode === 'invoice' ? 'invoice' : 'quote',
+  )
   const [copied, setCopied] = useState(false)
+
+  // 청구일(오늘) — 서버가 계산한 KST 날짜 우선. 없으면 화면에서 KST로 계산.
+  const issuedYmd = today ?? toMarketYmd()
+  // 청구 대상 월 — 정기는 매달 한 장씩 나가므로 사장님이 앞뒤 달로 옮길 수 있다(지난달치 뒤늦은 청구)
+  const [billingMonth, setBillingMonth] = useState(initialBillingMonth ?? toBillingMonth(issuedYmd))
 
   const showQuote = mode === 'both' || mode === 'quote'
   const showSpec = hasSpec && (mode === 'both' || mode === 'spec')
   const showContract = mode === 'contract'
+  const showInvoice = mode === 'invoice'
 
-  // 문서 선택 토글 옵션 (있는 문서만 노출)
+  // 문서 선택 토글 옵션 (있는 문서만 노출) — 실제 진행 순서대로 놓는다
   const modeOptions: [DocMode, string][] = [
     ['quote', '견적서'],
     ...(hasSpec ? ([['spec', '시방서']] as [DocMode, string][]) : []),
     ...(canContract ? ([['contract', '계약서']] as [DocMode, string][]) : []),
+    ...(canInvoice ? ([['invoice', '청구서']] as [DocMode, string][]) : []),
   ]
 
   const issueDate = formatIssueDate(quote.created_at)
@@ -154,9 +128,16 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
         conditions: quote.conditions,
       })
 
-  // 탭 제목/PDF 파일명은 서버 metadata('견적서·시방서')로 고정한다.
-  // (예전엔 여기서 document.title을 직접 바꿨는데, Next.js metadata와 충돌해
-  //  인쇄 시 탭 제목이 잠깐 '무제'로 깜빡였음 → 서버 제목만 쓰도록 제거)
+  // PDF 파일명 — 브라우저는 '문서 제목'을 그대로 저장 파일명으로 쓴다.
+  // '견적서·시방서'로 고정해두면 거래처마다 받은 파일이 전부 같은 이름이라 나중에 누구 것인지 못 찾고,
+  // 지금 보고 있는 문서가 청구서여도 파일명은 견적서로 남는다. → '한빛치과 청구서'처럼 붙인다.
+  //
+  // ⚠️ 예전에 인쇄 직전 제목이 '무제'로 깜빡인 사고가 있었다. 원인은 제목을 되돌리는 정리(cleanup)였다.
+  //    여기선 되돌리지 않는다(값만 덮어씀). 정리 코드를 다시 넣지 말 것.
+  const docTitle = buildQuoteDocTitle(lead.company_name, mode)
+  useEffect(() => {
+    document.title = docTitle
+  }, [docTitle])
 
   // 공개 링크로 고객이 열람하면 조회 기록 → 재열람 시 대표에게 알림
   useEffect(() => {
@@ -174,7 +155,12 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
     if (!publicToken) return
     const base = `${window.location.origin}/quote/${publicToken}`
     // 특정 문서만 보내고 싶으면 ?doc= 를 붙임 (둘 다는 파라미터 없음)
-    const url = mode === 'both' ? base : `${base}?doc=${mode}`
+    // 정기 청구서는 어느 달치인지까지 링크에 담아야 고객 화면에도 같은 달이 뜬다
+    const url = mode === 'both'
+      ? base
+      : mode === 'invoice' && !isOneOff
+        ? `${base}?doc=invoice&m=${billingMonth}`
+        : `${base}?doc=${mode}`
     try {
       await navigator.clipboard.writeText(url)
       setCopied(true)
@@ -211,6 +197,28 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
                 {label}
               </button>
             ))}
+          </div>
+        )}
+
+        {/* 청구 대상 월 — 정기계약은 매달 청구서가 한 장씩 나간다.
+            (달이 바뀌자마자 '지난달치'를 청구하는 일이 많아 앞뒤로 옮길 수 있어야 함) */}
+        {showInvoice && !isOneOff && isOwnerView && (
+          <div className="flex items-center rounded-lg border bg-white shadow-lg overflow-hidden text-sm font-medium">
+            <button
+              onClick={() => setBillingMonth((m) => shiftMonth(m, -1))}
+              className="px-3 py-2 text-gray-600 hover:bg-muted"
+              aria-label="이전 달"
+            >
+              ‹
+            </button>
+            <span className="px-2 py-2 tabular-nums">{billingMonthLabel(billingMonth)}</span>
+            <button
+              onClick={() => setBillingMonth((m) => shiftMonth(m, 1))}
+              className="px-3 py-2 text-gray-600 hover:bg-muted"
+              aria-label="다음 달"
+            >
+              ›
+            </button>
           </div>
         )}
 
@@ -285,58 +293,14 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
             </div>
           </div>
 
-          {/* 견적 항목 — 모바일: 한 항목씩 쌓아 보여주는 목록
-              좁은 화면에서 표를 쓰면 '서비스 내용' 칸이 한 글자 폭까지 눌려 글자가 세로로 쌓인다.
-              그래서 폰에서는 표를 버리고 '이름 / 조건 / 금액' 세 줄 구조로 보여준다. */}
-          <div className="mb-6 divide-y rounded-lg border sm:hidden print:hidden">
-            {items.map((item, idx) => (
-              <div key={idx} className="flex items-start justify-between gap-3 p-3">
-                <div className="min-w-0 flex-1">
-                  {/* 표의 No. 열과 같은 번호 — 폰에서도 몇 번째 항목인지 웹과 똑같이 셀 수 있게 */}
-                  <p className="font-semibold break-keep">
-                    <span className="mr-1 font-normal text-gray-400">{idx + 1}.</span>
-                    {item.name}
-                  </p>
-                  {/* 표의 열 제목(단위·횟수·단가)이 없는 화면이라 값 앞에 이름을 붙인다.
-                      그냥 '주'만 있으면 숫자가 빠진 것처럼 보임 */}
-                  <p className="mt-0.5 text-xs text-gray-500">
-                    {[
-                      item.unit ? `단위 ${item.unit}` : null,
-                      showCountCol ? `${countLabel} ${item.qty}` : null,
-                      showUnitPriceCol ? `단가 ${item.unit_price.toLocaleString()}원` : null,
-                    ].filter(Boolean).join(' · ')}
-                  </p>
-                </div>
-                <p className="shrink-0 font-bold tabular-nums">{lineTotal(item).toLocaleString()}원</p>
-              </div>
-            ))}
-          </div>
-
-          {/* 견적 항목 표 — 데스크탑·인쇄(A4)에서만. 인쇄물은 기존 서식을 그대로 유지한다 */}
-          <table className="hidden w-full border-collapse mb-6 text-sm sm:table print:table">
-            <thead>
-              <tr className="bg-gray-800 text-white">
-                <th className="py-2.5 px-3 text-left font-medium w-8">No.</th>
-                <th className="py-2.5 px-3 text-left font-medium">서비스 내용</th>
-                <th className="py-2.5 px-3 text-center font-medium w-16">단위</th>
-                {showCountCol && <th className="py-2.5 px-3 text-center font-medium w-16">{countLabel}</th>}
-                {showUnitPriceCol && <th className="py-2.5 px-3 text-right font-medium w-28">단가</th>}
-                <th className="py-2.5 px-3 text-right font-medium w-28">금액</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, idx) => (
-                <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                  <td className="py-2.5 px-3 text-gray-500">{idx + 1}</td>
-                  <td className="py-2.5 px-3 font-medium">{item.name}</td>
-                  <td className="py-2.5 px-3 text-center text-gray-600">{item.unit}</td>
-                  {showCountCol && <td className="py-2.5 px-3 text-center">{item.qty}</td>}
-                  {showUnitPriceCol && <td className="py-2.5 px-3 text-right tabular-nums">{item.unit_price.toLocaleString()}</td>}
-                  <td className="py-2.5 px-3 text-right tabular-nums font-medium">{lineTotal(item).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* 견적 항목 — 청구서와 같은 표를 쓴다 */}
+          <QuoteItemsTable
+            items={items}
+            countLabel={countLabel}
+            showCountCol={showCountCol}
+            showUnitPriceCol={showUnitPriceCol}
+            lineTotal={lineTotal}
+          />
 
           {/* 합계 */}
           <div className="flex justify-end">
@@ -418,6 +382,28 @@ export function PrintQuote({ lead, quote, business, variant = 'internal', disabl
               </div>
             </div>
           </div>
+        )}
+
+        {/* ── 청구서 (견적서와 같은 항목·금액으로 만드는 대금 청구 서류) ─────── */}
+        {showInvoice && (
+          <InvoiceDoc
+            lead={lead}
+            business={business}
+            quote={quote}
+            items={items}
+            isOneOff={isOneOff}
+            countLabel={countLabel}
+            showCountCol={showCountCol}
+            showUnitPriceCol={showUnitPriceCol}
+            lineTotal={lineTotal}
+            subtotal={subtotal}
+            discountAmount={discountAmount}
+            tax={tax}
+            total={total}
+            issuedYmd={issuedYmd}
+            billingMonth={billingMonth}
+            isOwnerView={isOwnerView}
+          />
         )}
 
         {/* ── 계약서 (사장님 전용, 고객 링크엔 비노출) ─────────────────────── */}

@@ -2,8 +2,10 @@ import type { Metadata } from 'next'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
 import { PrintQuote } from '@/app/(dashboard)/dashboard/pipeline/[leadId]/quote/print/print-quote'
+import { toMarketYmd } from '@/lib/format/datetime'
 
-// 탭 제목/PDF 저장 파일명이 '무제'가 되지 않도록 서버에서 제목을 명시
+// 제목이 '무제'가 되지 않도록 하는 기본값.
+// 화면이 뜨면 PrintQuote가 '거래처명 + 보고 있는 문서'(예: 한빛치과 청구서)로 바꾼다 — PDF 파일명이 그 제목이다.
 export const metadata: Metadata = { title: '견적서·시방서' }
 
 // 계약 중인 거래처(고객)용 견적서/시방서 미리보기 — 리드용 print 페이지와 동일 컴포넌트 재사용
@@ -47,11 +49,12 @@ export default async function CustomerQuotePrintPage({
     quoteId
       ? quoteQuery.eq('id', quoteId).maybeSingle()
       : quoteQuery.order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    // 계약서 '을' 정보·청구서 입금 계좌까지 함께 — 신규 컬럼이라 타입 단언으로 받는다
     db
       .from('businesses')
-      .select('name, phone, address')
+      .select('name, phone, address, legal_name, business_number, owner_name, payment_account' as never)
       .eq('id', profile.business_id)
-      .maybeSingle(),
+      .maybeSingle() as unknown as Promise<{ data: { name: string; phone: string | null; address: string | null; legal_name: string | null; business_number: string | null; owner_name: string | null; payment_account: string | null } | null }>,
   ])
 
   if (!customerResult.data || !quoteResult.data) notFound()
@@ -76,6 +79,7 @@ export default async function CustomerQuotePrintPage({
       business={businessResult.data}
       variant="internal"
       publicToken={publicToken}
+      today={toMarketYmd()}
     />
   )
 }
