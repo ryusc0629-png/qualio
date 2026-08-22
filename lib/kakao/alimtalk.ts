@@ -1,5 +1,6 @@
 import { SolapiMessageService } from 'solapi'
 import { formatDateTime } from '@/lib/format/datetime'
+import { customerFacingWorkerName } from '@/lib/workers/customer-facing-name'
 
 // 예약 확정 알림톡 발송 파라미터
 // 퀄리오 단일 채널로 모든 고객사 대신 발송 — 업체별 Solapi 가입 불필요
@@ -203,7 +204,9 @@ export interface ReviewRequestParams {
   businessName:  string
   cleaningType:  string
   reviewToken:   string           // 후기 인증 토큰. 링크는 템플릿이 https://qualio.co.kr/review/#{리뷰토큰} 형태로 갖고 있다
-  workerName?:   string | null    // 현장 담당자 이름 — 회사가 아니라 사람이 부탁해야 응답률이 오른다
+  // 현장 담당자 이름 — 회사가 아니라 사람이 부탁해야 응답률이 오른다.
+  // 단, 사람 이름으로 보일 때만 나간다(도급사 상호 유출 방지) — customerFacingWorkerName 참고
+  workerName?:   string | null
   rewardText?:   string | null    // 감사 선물 안내 한 줄. 없으면 그 줄이 비어서 나간다
 }
 
@@ -242,8 +245,10 @@ export async function sendReviewRequestAlimtalk(params: ReviewRequestParams): Pr
         // 알림톡 버튼 링크는 프로토콜(https://)과 도메인을 템플릿에 고정으로 박아야 한다.
         // 전체 주소를 변수로 넣으면 https://https://... 가 되고, 도메인을 변수로 두면 심사에서 반려된다.
         '#{리뷰토큰}': params.reviewToken,
-        // 담당자를 모르면 업체명으로 대체한다(빈 값은 알림톡 발송이 거부됨)
-        '#{담당자}':   params.workerName?.trim() || params.businessName,
+        // 담당자 표기는 여기서 한 번 더 거른다 — 발송 지점이 세 곳(수동·현장 마감·크론)이라
+        // 호출부에서 거르면 언젠가 한 곳이 빠진다. 마지막 관문에서 막는다.
+        // (2026-08-22: 도급팀 상호 '리멤버클린 …'이 이 자리로 나갔다)
+        '#{담당자}':   customerFacingWorkerName(params.workerName, params.businessName),
         // 선물이 없으면 공백 한 칸 — 빈 문자열은 변수 미치환으로 반려될 수 있다
         '#{혜택}':     params.rewardText?.trim() || ' ',
       },
@@ -312,7 +317,63 @@ export async function sendWorkCompleteAlimtalk(params: WorkCompleteParams): Prom
   })
 }
 
-// 영수증 알림톡 파라미터 (결제 완료 후 사장님이 직접 발송)
+// 결제 요청 알림톡 파라미터 (작업은 끝났고 아직 돈은 못 받은 시점)
+export interface PaymentRequestParams {
+  customerPhone: string
+  customerName:  string
+  businessName:  string
+  businessPhone: string | null
+  cleaningType:  string
+  workedAt:      string  // 작업일 ISO 문자열
+  amount:        number  // 청구 금액
+}
+
+// 결제 요청 알림톡 발송 — 현장 기사가 "결제 요청하기"를 누를 때
+//
+// ⚠️ 예전엔 이 자리에서 '영수증' 템플릿을 그대로 썼다. 그래서 돈을 받기도 전에
+//    고객에게 "결제가 완료되었습니다"가 나갔고, 함께 실린 영수증 링크는
+//    예약이 아직 in_progress라 404였다(영수증 페이지는 completed만 연다).
+//    청구와 증빙은 다른 문서다 — 템플릿을 갈라 두고 절대 섞지 말 것.
+// 보냈으면 true. 템플릿이 아직 준비되지 않았으면 false —
+// 호출한 쪽이 "보냈다"고 잘못 알리지 않도록 성공/미발송을 구분해서 돌려준다.
+export async function sendPaymentRequestAlimtalk(params: PaymentRequestParams): Promise<boolean> {
+  const apiKey     = process.env.SOLAPI_API_KEY
+  const apiSecret  = process.env.SOLAPI_API_SECRET
+  const sender     = process.env.SOLAPI_SENDER_PHONE
+  const templateId = process.env.SOLAPI_TEMPLATE_ID_PAYMENT_REQUEST
+  const pfId       = process.env.SOLAPI_KAKAO_PF_ID
+
+  if (!apiKey || !apiSecret || !sender || !templateId || !pfId) {
+    console.warn('[Alimtalk] PAYMENT_REQUEST 템플릿 미설정 — 발송 생략')
+    return false
+  }
+
+  const service = new SolapiMessageService(apiKey, apiSecret)
+
+  await service.sendOne({
+    to:   params.customerPhone,
+    from: sender,
+    type: 'ATA',
+    kakaoOptions: {
+      pfId,
+      templateId,
+      // 버튼 없는 템플릿이다 — 고객이 온라인으로 결제할 경로가 아직 없어서
+      // 링크를 붙이면 또 죽은 버튼이 된다. 금액만 정확히 알리고 수금은 현장에서 한다.
+      variables: {
+        '#{고객명}':     params.customerName,
+        '#{업체명}':     params.businessName,
+        '#{서비스명}':   params.cleaningType,
+        '#{작업일시}':   formatKoreanDate(params.workedAt),
+        '#{결제금액}':   params.amount.toLocaleString('ko-KR'),
+        '#{업체연락처}': params.businessPhone ?? '업체에 문의해 주세요',
+      },
+    },
+  })
+
+  return true
+}
+
+// 영수증 알림톡 파라미터 (수금이 기록된 뒤 자동 발송)
 export interface ReceiptParams {
   customerPhone:  string
   customerName:   string
@@ -324,7 +385,8 @@ export interface ReceiptParams {
   receiptUrl:     string  // 고객용 영수증 링크
 }
 
-// 영수증 알림톡 발송 — 작업 완료 후 사장님이 "영수증 발송" 버튼으로 수동 트리거
+// 영수증 알림톡 발송 — 수금이 기록되는 순간(현장 앱 '수금 완료') 자동으로 나간다.
+// 사장님이 따로 누를 버튼은 없다. 자동 발송이 실패했을 때만 예약 상세에서 다시 보낸다.
 export async function sendReceiptAlimtalk(params: ReceiptParams): Promise<void> {
   const apiKey     = process.env.SOLAPI_API_KEY
   const apiSecret  = process.env.SOLAPI_API_SECRET

@@ -21,6 +21,7 @@ import { ChevronLeft, ChevronRight, Phone, MapPin, UserPlus, Trash2, CheckCircle
 import { getHolidayName } from '@/lib/holidays/kr'
 import Link from 'next/link'
 import { formatPhone } from '@/lib/format/phone'
+import { looksLikePersonName } from '@/lib/workers/customer-facing-name'
 import { toast } from 'sonner'
 import { useAction } from 'next-safe-action/hooks'
 import { assignBookingAction, assignBookingAndPropagateAction, addWorkerAction, deleteWorkerAction, updateBookingWorkersAction, clearHolidayVisitsAction } from '@/lib/actions/workers'
@@ -288,11 +289,20 @@ function AddWorkerDialog() {
           <div className="space-y-1.5">
             <Label className="text-xs">이름 (필수)</Label>
             <Input
-              placeholder="홍길동 또는 청소파트너"
+              placeholder="홍길동"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="h-10"
             />
+            {/* 상호를 적어도 막지 않는다 — 도급사는 정산 때문에 상호로 적는 게 맞다.
+                대신 '그 이름은 고객에게 안 나간다'를 이 자리에서 알려준다.
+                (예전 예시 문구가 '홍길동 또는 청소파트너'였고, 실제로 도급사 상호가 등록돼
+                 후기 요청 알림톡에 그대로 실려 나갔다 — 2026-08-22) */}
+            {name.trim() && !looksLikePersonName(name) && (
+              <p className="text-[11px] text-amber-700 leading-relaxed">
+                이 이름은 우리끼리만 봐요. 고객에게 가는 안내에는 사장님 업체명으로 나갑니다
+              </p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">연락처</Label>
@@ -432,6 +442,7 @@ const STICKY_LABEL_COL: CSSProperties = {
 }
 
 export function ScheduleBoard({
+  businessId,
   workers,
   bookings: initialBookings,
   weekStart,
@@ -1001,6 +1012,7 @@ export function ScheduleBoard({
       {/* 예약 상세 Sheet */}
       <BookingDetailSheet
         booking={selectedBooking}
+        businessId={businessId}
         workers={workers}
         onClose={() => setSelectedBookingId(null)}
         onWorkersChange={handleSheetWorkersChange}

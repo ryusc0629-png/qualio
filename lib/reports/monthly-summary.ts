@@ -1,6 +1,8 @@
 // 거래처 월간 보고서 요약 계산 — 날짜 나열이 아니라 '이번 달 어땠는지'를 한눈에 만든다.
 // 페이지(서버 컴포넌트)는 화면 그리기에만 집중하고, 숫자 만드는 규칙은 전부 여기에 모은다.
 
+import { customerFacingWorkerNames } from '@/lib/workers/customer-facing-name'
+
 export interface VisitLike {
   id: string
   scheduled_at: string
@@ -137,9 +139,13 @@ export function buildMonthlySummary(input: {
     .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
     .map((v) => ({ date: v.scheduled_at, note: noteByBooking.get(v.id)! }))
 
-  const names = [...new Set(completed.map((v) => v.worker_id).filter(Boolean) as string[])]
-    .map((id) => workerNames.get(id))
-    .filter((n): n is string => Boolean(n))
+  // 담당 표기 — 이 문서는 거래처가 읽는다. 사람 이름으로 보이는 것만 남긴다.
+  // 도급팀을 상호로 등록해 둔 업체가 있어(2026-08-22 사고) 그대로 실으면 하청 사실이 드러난다.
+  // 전부 걸러지면 빈 배열이 되고, 문서는 '담당' 줄 자체를 그리지 않는다.
+  const names = customerFacingWorkerNames(
+    [...new Set(completed.map((v) => v.worker_id).filter(Boolean) as string[])]
+      .map((id) => workerNames.get(id)),
+  )
 
   // 문제·요청 — '처리됨'의 기준은 status가 resolved이거나 resolved_at이 찍힌 것
   const isResolved = (i: IssueLike) => i.status === 'resolved' || !!i.resolved_at
