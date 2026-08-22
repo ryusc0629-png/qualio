@@ -85,7 +85,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
 
     db
       .from('bookings' as never)
-      .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, worker_id, cancellation_reason, needs_review, review_reason, reschedule_requested_at, reschedule_requested_for, reschedule_note, contract_id, confirm_alimtalk_sent_at, reminder_sent_at, on_my_way_sent_at, quotes!quote_id(cleaning_type)')
+      .select('id, customer_name, customer_phone, service_address, scheduled_at, final_price, status, worker_id, cancellation_reason, needs_review, review_reason, reschedule_requested_at, reschedule_requested_for, reschedule_note, contract_id, confirm_alimtalk_sent_at, reminder_sent_at, on_my_way_sent_at, receipt_sent_at, quotes!quote_id(cleaning_type)')
       .eq('business_id' as never, businessId)
       .in('status' as never, ['confirmed', 'in_progress', 'completed', 'cancelled'])
       .gte('scheduled_at' as never, rangeFrom)
@@ -145,6 +145,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
     confirm_alimtalk_sent_at: string | null
     reminder_sent_at: string | null
     on_my_way_sent_at: string | null
+    receipt_sent_at: string | null
     quotes: { cleaning_type: string | null } | null
   }
   const bookings = ((bookingsResult as unknown as { data: RawBooking[] | null }).data) ?? []
@@ -272,6 +273,7 @@ export default async function SchedulePage({ searchParams }: PageProps) {
             onMyWay:  b.on_my_way_sent_at ?? null,
             report:   reportMap.get(b.id)?.reportSentAt ?? null,
             review:   reportMap.get(b.id)?.reviewSentAt ?? null,
+            receipt:  b.receipt_sent_at ?? null,
           },
         }))}
         weekStart={startYmd}

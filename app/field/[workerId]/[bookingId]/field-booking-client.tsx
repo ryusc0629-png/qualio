@@ -63,6 +63,8 @@ interface ReportProgress {
 interface Props {
   workerId: string
   businessId: string
+  /** 결제 요청 알림톡 템플릿이 준비됐는지 — 카카오 검수 전에는 버튼 대신 안내를 띄운다 */
+  paymentRequestReady: boolean
   booking: BookingData
   reportSentAt: string | null
   reportProgress: ReportProgress
@@ -84,7 +86,7 @@ interface Props {
   existingChecklistPhotos: Record<string, string[]>
 }
 
-export function FieldBookingClient({ workerId, businessId, booking, reportSentAt, reportProgress, notifyOnMyWay, onMyWaySentAt, requiresLockup, isRecurring, existingOpenPhotoUrls, existingLockupPhotoUrls, checkinAt, checkoutAt, checklistItems, existingChecklistPhotos, ownerMemo, customerNotes, openClaims = [] }: Props) {
+export function FieldBookingClient({ workerId, businessId, paymentRequestReady, booking, reportSentAt, reportProgress, notifyOnMyWay, onMyWaySentAt, requiresLockup, isRecurring, existingOpenPhotoUrls, existingLockupPhotoUrls, checkinAt, checkoutAt, checklistItems, existingChecklistPhotos, ownerMemo, customerNotes, openClaims = [] }: Props) {
   const [currentStatus, setCurrentStatus] = useState(booking.status)
   const [onMyWaySent, setOnMyWaySent] = useState(!!onMyWaySentAt)
   // 도착 사진 → 작업 자동 시작이 한 번만 실행되도록 (사진 여러 장 올려도 중복 시작 방지)
@@ -879,16 +881,22 @@ export function FieldBookingClient({ workerId, businessId, booking, reportSentAt
 
           {currentStatus === 'in_progress' && !isRecurring && !paymentRequested && (
             <div className="space-y-2">
-              <Button
-                size="lg"
-                className="w-full h-14 text-base gap-2"
-                disabled={isRequestingPayment || !booking.customerPhone}
-                onClick={() => requestPayment({ workerId, bookingId: booking.id })}
-              >
-                <CircleDollarSign className="h-5 w-5" />
-                {isRequestingPayment ? '발송 중...' : `결제 요청하기 · ${liveTotal.toLocaleString()}원`}
-              </Button>
-              {!booking.customerPhone && (
+              {paymentRequestReady ? (
+                <Button
+                  size="lg"
+                  className="w-full h-14 text-base gap-2"
+                  disabled={isRequestingPayment || !booking.customerPhone}
+                  onClick={() => requestPayment({ workerId, bookingId: booking.id })}
+                >
+                  <CircleDollarSign className="h-5 w-5" />
+                  {isRequestingPayment ? '발송 중...' : `결제 요청하기 · ${liveTotal.toLocaleString()}원`}
+                </Button>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  결제 요청 카톡은 지금 준비 중이에요 · 금액을 직접 알려주세요
+                </p>
+              )}
+              {paymentRequestReady && !booking.customerPhone && (
                 <p className="text-xs text-muted-foreground text-center">고객 연락처가 없어 결제 요청을 보낼 수 없어요</p>
               )}
               <button

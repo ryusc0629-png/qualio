@@ -389,8 +389,9 @@ export interface ReceiptParams {
   receiptUrl:     string  // 고객용 영수증 링크
 }
 
-// 영수증 알림톡 발송 — 수금이 기록되는 순간(현장 앱 '수금 완료') 자동으로 나간다.
-// 사장님이 따로 누를 버튼은 없다. 자동 발송이 실패했을 때만 예약 상세에서 다시 보낸다.
+// 영수증 알림톡 발송 — 고객이 요청했을 때 사장님이 예약 상세에서 직접 보낸다.
+// ⛔자동 발송으로 되돌리지 말 것: 바로 앞 '결제 요청' 카톡과 내용이 거의 같아 중복이고,
+//   일회성 고객은 이미 작업 당일에만 카톡을 4~5통 받는다(2026-08-22 결정).
 export async function sendReceiptAlimtalk(params: ReceiptParams): Promise<void> {
   const apiKey     = process.env.SOLAPI_API_KEY
   const apiSecret  = process.env.SOLAPI_API_SECRET

@@ -88,13 +88,18 @@ export default async function ReceiptPage({ params }: PageProps) {
       </DocLede>
 
       {/* 금액 — 이 문서의 결론이라 유일하게 크게 쓴다.
-          ⚠️ 금액은 항상 '부가세 별도(공급가액)'로 적는다. 사장님 결정(2026-08-18):
-             개인·법인마다 다르게 적으면 사장님도 고객도 헷갈린다. 하나로 고정. */}
+          ⛔ '부가세 별도'를 다시 넣지 말 것(2026-08-22 결정).
+             영수증은 앞으로 받을 돈이 아니라 '이미 받은 돈'을 적는 문서다. 여기에 부가세 별도를
+             붙이면 정산이 끝났는데도 더 받을 게 남았다는 뜻이 되어 사실과 어긋난다.
+             게다가 일회성 예약에는 B2B 견적서의 tax_included 같은 칸이 없어서, 이 금액이
+             부가세 포함인지 별도인지 시스템은 애초에 모른다 — 모르는 걸 단정해 적고 있었다.
+             받은 금액만 그대로 적으면 어떤 경우에도 참이 된다.
+          (청구 성격의 문서 — 견적서·청구서·작업 보고서 — 는 '앞으로 얼마'라서 부가세 안내가
+           실제 정보다. 거기서는 빼지 말 것.) */}
       <div className="mt-8 border-y-2 border-slate-900 py-5 flex items-end justify-between gap-4">
         <span className="text-[13px] font-semibold text-slate-600">결제 금액</span>
         <div className="text-right">
           <p className="text-[28px] leading-none font-bold text-slate-900 tabular-nums">{amountKr}원</p>
-          <p className="text-[11px] text-slate-400 mt-1.5">부가세 별도</p>
         </div>
       </div>
 

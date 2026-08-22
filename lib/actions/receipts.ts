@@ -5,7 +5,11 @@ import { action } from '@/lib/safe-action'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { sendReceiptAlimtalk } from '@/lib/kakao/alimtalk'
 
-// 사장님이 완료된 예약에 대해 영수증 발송을 트리거하는 액션
+// 영수증 보내기 — 고객이 달라고 할 때만.
+//
+// 자동 발송은 일부러 하지 않는다. 청소 한 번에 카톡이 이미 여러 통 나가고,
+// 영수증은 바로 앞 '결제 요청' 카톡과 내용이 거의 같아 중복이었다(2026-08-22 결정).
+// 유일한 발송 경로이고, 예약 상세에서 사장님이 직접 누른다.
 export const sendReceiptAction = action
   .schema(z.object({
     bookingId: z.string().uuid(),
@@ -68,6 +72,12 @@ export const sendReceiptAction = action
       paidAmount:    booking.final_price,
       receiptUrl,
     })
+
+    await db
+      .from('bookings')
+      .update({ receipt_sent_at: new Date().toISOString() } as never)
+      .eq('id', parsedInput.bookingId)
+      .eq('business_id', profile.business_id)
 
     return { success: true, receiptUrl }
   })

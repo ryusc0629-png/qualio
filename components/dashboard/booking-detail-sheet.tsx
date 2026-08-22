@@ -16,6 +16,7 @@ import { useAction } from 'next-safe-action/hooks'
 import { BookingItemsEditor } from '@/components/dashboard/booking-items-editor'
 import { AddClaimForm } from '@/components/dashboard/add-claim-form'
 import { ClaimsStatusButton } from '@/components/dashboard/claims-status-button'
+import { SendReceiptButton } from '@/components/dashboard/send-receipt-button'
 import {
   Sheet,
   SheetContent,
@@ -62,6 +63,7 @@ export interface AlimtalkSentAt {
   onMyWay:    string | null // 곧 도착해요
   report:     string | null // 작업 보고서
   review:     string | null // 후기 요청
+  receipt:    string | null // 영수증
 }
 
 interface Booking {
@@ -89,6 +91,7 @@ interface Booking {
 
 interface Props {
   booking: Booking | null
+  businessId: string
   workers: Worker[]
   onClose: () => void
   onWorkersChange: (bookingId: string, newWorkerIds: string[]) => void
@@ -204,6 +207,14 @@ function AlimtalkHistory({ booking }: { booking: Booking }) {
       pending: '보고서를 보낸 뒤에 보낼 수 있어요',
       hide: isCancelled || isRecurring,
     },
+    {
+      label: '영수증',
+      sentAt: a.receipt,
+      // 영수증은 자동 발송 대상이 아니다 — 보낸 적이 있을 때만 목록에 남긴다.
+      // 안 보낸 예약마다 '아직 안 나감'으로 뜨면 빠뜨린 일처럼 보인다.
+      pending: '',
+      hide: isCancelled || isRecurring || !a.receipt,
+    },
   ]
 
   const visible = rows.filter((r) => !r.hide)
@@ -250,6 +261,7 @@ function AlimtalkHistory({ booking }: { booking: Booking }) {
 
 export function BookingDetailSheet({
   booking,
+  businessId,
   workers,
   onClose,
   onWorkersChange,
@@ -278,6 +290,8 @@ export function BookingDetailSheet({
   const [localNeedsReview, setLocalNeedsReview]   = useState(false)
   // 기사 출발 알림 발송 여부
   const [onMyWaySent, setOnMyWaySent]             = useState(false)
+  // 이 시트에서 방금 영수증을 다시 보냈는지 — 새로고침 없이 버튼을 감추기 위해서
+  const [receiptSentLocally, setReceiptSentLocally] = useState(false)
 
   // booking이 바뀔 때마다 상태 초기화
   useEffect(() => {
@@ -287,6 +301,7 @@ export function BookingDetailSheet({
     setLiveTotal(booking?.final_price ?? 0)
     setLocalNeedsReview(booking?.needsReview ?? false)
     setOnMyWaySent(false)
+    setReceiptSentLocally(false)
   }, [booking?.id])
 
   // 언마운트 시 대기 중인 팀원 저장 타이머 정리
@@ -302,6 +317,10 @@ export function BookingDetailSheet({
   // 정기계약 방문 — 거래처에 나가는 카톡은 방문 전날 안내(계약에서 켠 경우)·초도 보고서·
   // 월간 보고서 세 가지뿐이라, 방문 단위 발송 버튼은 아예 보여주지 않는다.
   const isRecurringVisit = !!booking?.contract_id
+
+  // 영수증이 나간 시각 — 이 시트에서 방금 보낸 것도 즉시 반영한다
+  const receiptSentAt = booking?.alimtalk?.receipt
+    ?? (receiptSentLocally ? new Date().toISOString() : null)
 
   // 시간 변경 액션
   const { execute: saveTime, isPending: timePending } = useAction(updateBookingTimeAction, {
@@ -869,6 +888,7 @@ export function BookingDetailSheet({
                     // 이 시트에서 방금 보낸 건 새로고침 없이 즉시 반영한다
                     onMyWay: booking.alimtalk.onMyWay ?? (onMyWaySent ? new Date().toISOString() : null),
                     review:  booking.alimtalk.review  ?? (currentReviewSent ? new Date().toISOString() : null),
+                    receipt: receiptSentAt,
                   },
                 }}
               />
@@ -991,6 +1011,17 @@ export function BookingDetailSheet({
                       리뷰 요청 발송
                     </Button>
                   </>
+                )}
+
+                {/* 영수증은 자동으로 안 나간다 — 고객이 달라고 할 때만 여기서 보낸다.
+                    한 번 보내고 나면 위 '고객에게 보낸 카톡'에 기록으로 남고 이 버튼은 사라진다. */}
+                {!isRecurringVisit && !receiptSentAt && booking.customer_phone && (
+                  <SendReceiptButton
+                    bookingId={booking.id}
+                    businessId={businessId}
+                    customerPhone={booking.customer_phone}
+                    onSent={() => setReceiptSentLocally(true)}
+                  />
                 )}
 
                 {/* 리뷰 요청까지 완료 */}

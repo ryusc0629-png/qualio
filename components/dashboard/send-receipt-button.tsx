@@ -11,15 +11,21 @@ interface SendReceiptButtonProps {
   bookingId:      string
   businessId:     string
   customerPhone:  string | null
+  /** 발송에 성공했을 때 — 부모가 '보냄'으로 즉시 바꿀 수 있게 알린다 */
+  onSent?:        () => void
 }
 
-export function SendReceiptButton({ bookingId, businessId, customerPhone }: SendReceiptButtonProps) {
+// 영수증 '다시' 보내기 버튼.
+// 정상 경로에서는 현장 앱의 '수금 완료'가 영수증을 자동으로 보내므로 이 버튼은 뜨지 않는다.
+// 자동 발송이 실패해 아직 안 나간 예약에서만 나타나는 복구 수단이다.
+export function SendReceiptButton({ bookingId, businessId, customerPhone, onSent }: SendReceiptButtonProps) {
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
 
   const { execute, isPending } = useAction(sendReceiptAction, {
     onSuccess: ({ data }) => {
-      toast.success('영수증을 발송했어요!')
+      toast.success('영수증을 보냈어요!')
       if (data?.receiptUrl) setReceiptUrl(data.receiptUrl)
+      onSent?.()
     },
     onError: ({ error }) => toast.error(error.serverError ?? '발송에 실패했어요. 다시 눌러주세요'),
   })
@@ -38,7 +44,7 @@ export function SendReceiptButton({ bookingId, businessId, customerPhone }: Send
           onClick={() => execute({ bookingId })}
         >
           <Receipt className="h-3.5 w-3.5" />
-          {isPending ? '발송 중...' : '영수증 발송'}
+          {isPending ? '보내는 중...' : '영수증 보내기'}
         </Button>
         <a
           href={previewUrl}

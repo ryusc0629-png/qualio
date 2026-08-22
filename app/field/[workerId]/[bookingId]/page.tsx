@@ -149,6 +149,10 @@ export default async function FieldBookingPage({ params }: Props) {
     <FieldBookingClient
       workerId={workerId}
       businessId={worker.business_id}
+      // 결제 요청 알림톡 템플릿이 준비됐는지. 카카오 검수를 통과해 환경변수가 채워지기 전에는
+      // 버튼을 눌러도 카톡이 못 나가므로, 아예 띄우지 않고 이유를 한 줄로 알려준다.
+      // (예전엔 이 자리에서 '영수증' 템플릿을 대신 보내 "결제가 완료되었습니다"가 먼저 나갔다)
+      paymentRequestReady={!!process.env.SOLAPI_TEMPLATE_ID_PAYMENT_REQUEST}
       booking={{
         id: booking.id,
         customerName: booking.customer_name,
